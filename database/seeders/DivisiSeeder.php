@@ -21,8 +21,6 @@ class DivisiSeeder extends Seeder
 
         $divisis = [
             'tanpa divisi',
-            'akrilik',
-            'aksesoris',
         ];
 
         foreach ($divisis as $divisi) {

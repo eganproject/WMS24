@@ -256,6 +256,7 @@
                             <p class="hero-subtext">
                                 Didesain untuk admin yang perlu mengatur pengguna, role, menu, serta izin dengan cepat.
                                 Semua perubahan tercatat, transparan, dan siap dipresentasikan kapan saja.
+                                Digunakan oleh {{ config('app.name', 'Gudang 24') }} untuk menjaga akses operasional tetap konsisten.
                             </p>
                             <div class="stats-grid">
                                 <div class="stat-card">
@@ -323,7 +324,7 @@
                 </div>
 
                 <footer>
-                    <p>© {{ date('Y') }} {{ config('app.name', 'Aplikasi') }} — Access Control Platform.</p>
+                    <p>© {{ date('Y') }} {{ config('app.name', 'Aplikasi') }} — Access Control Platform. Digunakan oleh {{ config('app.name', 'Gudang 24') }}.</p>
                     <div style="display:flex; gap:10px; align-items:center;">
                         <a href="{{ route('login') }}">Login</a>
                         <span>•</span>

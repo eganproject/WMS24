@@ -30,10 +30,13 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
 
         $first = $rows->first();
         $headers = array_keys($first?->toArray() ?? []);
-        $required = ['sku', 'name', 'parent_category', 'category', 'description'];
-        if (array_diff($required, $headers)) {
+        $required = ['sku', 'name'];
+        $missing = array_diff($required, $headers);
+        if ($missing) {
+            $detected = implode(', ', array_filter($headers, fn ($h) => $h !== null && $h !== ''));
+            $detected = $detected !== '' ? $detected : '-';
             throw ValidationException::withMessages([
-                'file' => 'Header harus minimal: sku, name, parent_category, category, description (address, stock, safety_stock opsional)',
+                'file' => 'Header wajib: sku, name. Header terdeteksi: '.$detected.'. Pastikan header ada di baris pertama.',
             ]);
         }
 

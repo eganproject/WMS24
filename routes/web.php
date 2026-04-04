@@ -1,142 +1,306 @@
 <?php
 
+use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Admin\DashboardController;
-use App\Http\Controllers\Admin\Laporan\LaporanStokController;
-use App\Http\Controllers\Admin\Laporan\LaporanController;
-use App\Http\Controllers\Admin\ManajemenStok\InventoryController;
-use App\Http\Controllers\Admin\ManajemenStok\KartuStokController;
-use App\Http\Controllers\Admin\ManajemenStok\WarehouseStokController;
-use App\Http\Controllers\Admin\ManajemenStok\StockOpnameController;
-use App\Http\Controllers\Admin\ManajemenStok\AdjustmentController;
-use App\Http\Controllers\Admin\Masterdata\ItemCategoryController;
-use App\Http\Controllers\Admin\Masterdata\ItemController;
-use App\Http\Controllers\Admin\Masterdata\JabatanController;
-use App\Http\Controllers\Admin\Masterdata\MenuController;
-use App\Http\Controllers\Admin\Masterdata\PermissionController;
-use App\Http\Controllers\Admin\Masterdata\UomController;
-use App\Http\Controllers\Admin\Masterdata\UserController;
-use App\Http\Controllers\Admin\Masterdata\WarehouseController;
-use App\Http\Controllers\Admin\Masterdata\AssemblyRecipeController;
-use App\Http\Controllers\Admin\StokKeluar\PengeluaranBarangController;
-use App\Http\Controllers\Admin\StokKeluar\PermintaanBarangController;
-use App\Http\Controllers\Admin\StokMasuk\PengadaanController;
-use App\Http\Controllers\Admin\StokMasuk\PenerimaanBarangController;
-use App\Http\Controllers\Admin\StokMasuk\RequestTransferController;
-use App\Http\Controllers\Admin\RiwayatPengirimanController;
-
-use App\Http\Controllers\Admin\UserActivityController;
-use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\Admin\UserController as AdminUserController;
+use App\Http\Controllers\Admin\ItemStockController;
+use App\Http\Controllers\Admin\InboundController;
+use App\Http\Controllers\Admin\OutboundController;
+use App\Http\Controllers\Admin\StockMutationController;
+use App\Http\Controllers\Admin\StockOpnameController;
+use App\Http\Controllers\Admin\StockAdjustmentController;
+use App\Http\Controllers\Admin\DamagedGoodsController;
+use App\Http\Controllers\Admin\ResiImportController;
+use App\Http\Controllers\Admin\PickerTransitController;
+use App\Http\Controllers\Admin\PickingListController;
+use App\Http\Controllers\Admin\PickerHistoryController;
+use App\Http\Controllers\Admin\PackerHistoryController;
+use App\Http\Controllers\Admin\PackerScanExceptionController;
+use App\Http\Controllers\Admin\PackerPackingReportController;
+use App\Http\Controllers\Admin\PackerReportController;
+use App\Http\Controllers\Admin\PackerScanOutHistoryController;
+use App\Http\Controllers\Admin\PickerReportController;
+use App\Http\Controllers\Admin\LowStockReportController;
+use App\Http\Controllers\Admin\ActivityLogController;
+use App\Http\Controllers\Admin\StockOpnameReportController;
+use App\Http\Controllers\Admin\RoleController;
+use App\Http\Controllers\Admin\MenuController;
+use App\Http\Controllers\Admin\PermissionController;
+use App\Http\Controllers\Admin\DivisiController;
+use App\Http\Controllers\Admin\KurirController;
+use App\Http\Controllers\Mobile\StockOpnameMobileController;
+use App\Http\Controllers\Picker\PickerDashboardController;
+use App\Http\Controllers\Picker\PackerScanController;
+use App\Http\Controllers\Picker\PackerScanOutController;
+use App\Http\Controllers\Picker\PickingListMobileController;
+use App\Http\Controllers\Picker\PickerSessionController;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware('guest')->group(function () {
-    Route::get('/', [LoginController::class, 'showLoginForm'])->name('login');
-    Route::post('/', [LoginController::class, 'login']);
+Route::get('/', function () {
+    return redirect()->route('login');
 });
 
-Route::post('logout', [LoginController::class, 'logout'])->name('logout');
+// Basic health check route for debugging blank page on '/'
+Route::get('/healthz', function () {
+    return response('OK', 200);
+});
 
-Route::middleware(['auth', 'permission'])->group(function () {
-    Route::get('/admin/dashboard', [DashboardController::class, 'index'])->name('admin.dashboard');
-    Route::get('/admin/aktivitas-user', [UserActivityController::class, 'index'])->name('admin.user-activities.index');
+Route::get('/dashboard', [DashboardController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('dashboard');
 
-    Route::prefix('admin/masterdata')->name('admin.masterdata.')->group(function () {
-        Route::resource('jabatans', JabatanController::class);
-        Route::resource('users', UserController::class);
-        Route::resource('warehouses', WarehouseController::class);
-        Route::resource('menus', MenuController::class);
-        Route::resource('itemcategories', ItemCategoryController::class);
-        Route::resource('uoms', UomController::class);
-        Route::resource('items', ItemController::class);
-        Route::resource('assemblyrecipes', AssemblyRecipeController::class)->parameters([
-            'assemblyrecipes' => 'assemblyrecipe'
-        ]);
-        Route::post('items/check-sku', [ItemController::class, 'checkSkuUniqueness'])->name('items.checkSkuUniqueness');
+Route::middleware('auth')->group(function () {
+    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+});
 
-        Route::get('permissions', [PermissionController::class, 'index'])->name('permissions.index');
-        Route::post('permissions/update', [PermissionController::class, 'update'])->name('permissions.update');
-        Route::get('permissions/get-by-jabatan', [PermissionController::class, 'getPermissionsByJabatan'])->name('permissions.get_by_jabatan');
+Route::middleware('auth')->prefix('picker')->as('picker.')->group(function () {
+    Route::get('/dashboard', [PickerDashboardController::class, 'index'])->name('dashboard');
+    Route::get('/packer', [PackerScanController::class, 'index'])->name('packer.index');
+    Route::post('/packer/scan', [PackerScanController::class, 'scan'])->name('packer.scan');
+    Route::get('/scan-out', [PackerScanOutController::class, 'index'])->name('scan-out.index');
+    Route::post('/scan-out/scan', [PackerScanOutController::class, 'scan'])->name('scan-out.scan');
+    Route::get('/scan-out/history', [PackerScanOutController::class, 'history'])->name('scan-out.history');
+    Route::get('/scan-out/history/data', [PackerScanOutController::class, 'historyData'])->name('scan-out.history-data');
+    Route::get('/scan-out-v2', [PackerScanOutController::class, 'indexV2'])->name('scan-out-v2.index');
+    Route::get('/picking-list', [PickingListMobileController::class, 'index'])->name('picking-list.index');
+    Route::get('/picking-list/data', [PickingListMobileController::class, 'data'])->name('picking-list.data');
+    Route::get('/', [PickerSessionController::class, 'index'])->name('index');
+    Route::get('/current', [PickerSessionController::class, 'current'])->name('current');
+    Route::post('/start', [PickerSessionController::class, 'start'])->name('start');
+    Route::get('/items/search', [PickerSessionController::class, 'searchItems'])->name('items.search');
+    Route::post('/items', [PickerSessionController::class, 'storeItem'])->name('items.store');
+    Route::put('/items/{id}', [PickerSessionController::class, 'updateItem'])->name('items.update');
+    Route::delete('/items/{id}', [PickerSessionController::class, 'destroyItem'])->name('items.destroy');
+    Route::post('/scan-item', [PickerSessionController::class, 'scanItem'])->name('scan-item');
+    Route::post('/submit', [PickerSessionController::class, 'submit'])->name('submit');
+});
+
+Route::middleware('auth')->prefix('opname')->as('opname.')->group(function () {
+    Route::get('/', [StockOpnameMobileController::class, 'index'])->name('index');
+    Route::post('/batch', [StockOpnameMobileController::class, 'createBatch'])->name('batch.create');
+    Route::get('/batch/{code}', [StockOpnameMobileController::class, 'showBatch'])->name('batch.show');
+    Route::post('/batch/{code}/complete', [StockOpnameMobileController::class, 'completeBatch'])->name('batch.complete');
+    Route::get('/items/search', [StockOpnameMobileController::class, 'searchItems'])->name('items.search');
+    Route::post('/batch/{code}/items', [StockOpnameMobileController::class, 'storeItem'])->name('items.store');
+    Route::put('/batch/{code}/items/{id}', [StockOpnameMobileController::class, 'updateItem'])->name('items.update');
+    Route::delete('/batch/{code}/items/{id}', [StockOpnameMobileController::class, 'destroyItem'])->name('items.destroy');
+});
+
+require __DIR__.'/auth.php';
+
+// Admin area
+Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as('admin.')->group(function () {
+    Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/dashboard/kurir-detail', [DashboardController::class, 'kurirDetail'])->name('dashboard.kurir-detail');
+
+    Route::prefix('masterdata')->as('masterdata.')->group(function () {
+        // Users DataTables
+        Route::get('/users/data', [AdminUserController::class, 'data'])->name('users.data');
+        Route::post('/users/import', [AdminUserController::class, 'import'])->name('users.import');
+        // Users CRUD
+        Route::resource('users', AdminUserController::class)->except(['show'])->names('users');
+
+        // Roles DataTables
+        Route::get('/roles/data', [RoleController::class, 'data'])->name('roles.data');
+        // Roles CRUD
+        Route::resource('roles', RoleController::class)->except(['show'])->names('roles');
+
+        // Divisi
+        Route::get('/divisi/data', [DivisiController::class, 'data'])->name('divisi.data');
+        Route::resource('divisi', DivisiController::class)->except(['create','show','edit'])->names('divisi');
+
+        // Kurir
+        Route::get('/kurir/data', [KurirController::class, 'data'])->name('kurir.data');
+        Route::resource('kurir', KurirController::class)->except(['create','show','edit'])->names('kurir');
+
+        // Menus DataTables
+        Route::get('/menus/data', [MenuController::class, 'data'])->name('menus.data');
+        // Menus CRUD
+        Route::resource('menus', MenuController::class)->except(['show'])->names('menus');
+
+        // Categories (inheritance via parent)
+        Route::get('/categories/data', [\App\Http\Controllers\Admin\CategoryController::class, 'data'])->name('categories.data');
+        Route::resource('categories', \App\Http\Controllers\Admin\CategoryController::class)->except(['create','show','edit'])->names('categories');
+
+        // Items
+        Route::get('/items/data', [\App\Http\Controllers\Admin\ItemController::class, 'data'])->name('items.data');
+        Route::resource('items', \App\Http\Controllers\Admin\ItemController::class)->except(['create','show','edit'])->names('items');
+        Route::post('/items/import', [\App\Http\Controllers\Admin\ItemController::class, 'import'])->name('items.import');
+
+        // Stores
+        Route::get('/stores/data', [\App\Http\Controllers\Admin\StoreController::class, 'data'])->name('stores.data');
+        Route::resource('stores', \App\Http\Controllers\Admin\StoreController::class)->except(['create','show','edit'])->names('stores');
+
+        // Permissions management
+        Route::get('/permissions', [PermissionController::class, 'index'])->name('permissions.index');
+        Route::get('/permissions/{role}/edit', [PermissionController::class, 'edit'])->name('permissions.edit');
+        Route::put('/permissions/{role}', [PermissionController::class, 'update'])->name('permissions.update');
     });
 
-    Route::prefix('admin/stok-masuk')->name('admin.stok-masuk.')->group(function () {
-        Route::get('pengadaan/status-counts', [PengadaanController::class, 'getStatusCounts'])->name('pengadaan.status-counts');
-        Route::get('pengadaan/{stockInOrder}/details', [PengadaanController::class, 'details'])->name('pengadaan.details');
-        Route::get('pengadaan/{stockInOrder}/distributions', [PengadaanController::class, 'distributions'])->name('pengadaan.distributions');
-        Route::post('pengadaan/distributions/{distribution}/approve', [PengadaanController::class, 'approveDistribution'])->name('pengadaan.distributions.approve');
-        Route::get('pengadaan/distributions/{distribution}', [PengadaanController::class, 'showDistribution'])->name('pengadaan.distributions.show');
-        Route::post('pengadaan/distributions/{distribution}/update', [PengadaanController::class, 'updateDistribution'])->name('pengadaan.distributions.update');
-        Route::post('pengadaan/{stockInOrder}/save-distributions', [PengadaanController::class, 'saveDistributions'])->name('pengadaan.save-distributions');
-        Route::resource('pengadaan', PengadaanController::class)->parameter('pengadaan', 'stockInOrder');
-        Route::post('pengadaan/{stockInOrder}/update-status', [PengadaanController::class, 'updateStatus'])->name('pengadaan.updateStatus');
-        // Kirim Barang feature removed for Pengadaan: routes removed
+    Route::prefix('inventory')->as('inventory.')->group(function () {
+        // Item Stocks
+        Route::get('/item-stocks', [ItemStockController::class, 'index'])->name('item-stocks.index');
+        Route::get('/item-stocks/data', [ItemStockController::class, 'data'])->name('item-stocks.data');
+        Route::get('/item-stocks/export', [ItemStockController::class, 'export'])->name('item-stocks.export');
 
-        Route::get('penerimaan-barang/status-counts', [PenerimaanBarangController::class, 'getStatusCounts'])->name('penerimaan-barang.status-counts');
-        Route::get('penerimaan-barang/get-references', [PenerimaanBarangController::class, 'getReferences'])->name('penerimaan-barang.get-references');
-        Route::get('penerimaan-barang/get-reference-details', [PenerimaanBarangController::class, 'getReferenceDetails'])->name('penerimaan-barang.get-reference-details');
-        Route::get('penerimaan-barang/get-shipment-details', [PenerimaanBarangController::class, 'getShipmentDetails'])->name('penerimaan-barang.get-shipment-details');
-        Route::get('penerimaan-barang/get-shipments', [PenerimaanBarangController::class, 'getShipments'])->name('penerimaan-barang.get-shipments');
-        Route::get('penerimaan-barang/get-next-shipment-code', [PenerimaanBarangController::class, 'getNextShipmentCode'])->name('penerimaan-barang.get-next-shipment-code');
-        Route::get('penerimaan-barang/get-stock-in-orders', [PenerimaanBarangController::class, 'getStockInOrders'])->name('penerimaan-barang.get-stock-in-orders');
-        Route::resource('penerimaan-barang', PenerimaanBarangController::class)->parameter('penerimaan-barang', 'goodsReceipt');
-        Route::post('penerimaan-barang/{goodsReceipt}/complete', [PenerimaanBarangController::class, 'complete'])->name('penerimaan-barang.complete');
-        Route::get('penerimaan-barang/bukti/{goodsReceipt}', [PenerimaanBarangController::class, 'bukti'])->name('penerimaan-barang.bukti');
+        // Stock Mutations
+        Route::get('/stock-mutations', [StockMutationController::class, 'index'])->name('stock-mutations.index');
+        Route::get('/stock-mutations/data', [StockMutationController::class, 'data'])->name('stock-mutations.data');
+        Route::get('/stock-mutations/{id}', [StockMutationController::class, 'show'])->name('stock-mutations.show');
 
-        // Penerimaan Retur
-        Route::get('penerimaan-retur/status-counts', [\App\Http\Controllers\Admin\StokMasuk\ReturnReceiptController::class, 'getStatusCounts'])->name('penerimaan-retur.status-counts');
-        Route::resource('penerimaan-retur', \App\Http\Controllers\Admin\StokMasuk\ReturnReceiptController::class)->parameter('penerimaan-retur', 'penerimaan_retur');
-        Route::post('penerimaan-retur/{penerimaan_retur}/complete', [\App\Http\Controllers\Admin\StokMasuk\ReturnReceiptController::class, 'complete'])->name('penerimaan-retur.complete');
+        // Stock Opname
+        Route::get('/stock-opname', [StockOpnameController::class, 'index'])->name('stock-opname.index');
+        Route::get('/stock-opname/data', [StockOpnameController::class, 'data'])->name('stock-opname.data');
+        Route::post('/stock-opname', [StockOpnameController::class, 'store'])->name('stock-opname.store');
+        Route::get('/stock-opname/{id}', [StockOpnameController::class, 'show'])->name('stock-opname.show');
+        Route::get('/stock-opname/{id}/export', [StockOpnameController::class, 'export'])->name('stock-opname.export');
+        Route::post('/stock-opname/{id}/approve', [StockOpnameController::class, 'approve'])->name('stock-opname.approve');
+        Route::delete('/stock-opname/{id}', [StockOpnameController::class, 'destroy'])->name('stock-opname.destroy');
 
-        Route::get('request-transfer/status-counts', [RequestTransferController::class, 'getStatusCounts'])->name('request-transfer.status-counts');
-        Route::resource('request-transfer', RequestTransferController::class)->parameter('request-transfer', 'transferRequest');
-        Route::post('request-transfer/calculate-item-values', [RequestTransferController::class, 'calculateItemValues'])->name('request-transfer.calculate-item-values');
-        Route::get('request-transfer/get-items-by-warehouse/{warehouse_id}', [RequestTransferController::class, 'getItemsByWarehouse'])->name('request-transfer.get-items-by-warehouse');
+        // Stock Adjustments
+        Route::get('/stock-adjustments', [StockAdjustmentController::class, 'index'])->name('stock-adjustments.index');
+        Route::get('/stock-adjustments/data', [StockAdjustmentController::class, 'data'])->name('stock-adjustments.data');
+        Route::post('/stock-adjustments', [StockAdjustmentController::class, 'store'])->name('stock-adjustments.store');
+        Route::post('/stock-adjustments/import', [StockAdjustmentController::class, 'import'])->name('stock-adjustments.import');
+        Route::get('/stock-adjustments/{id}', [StockAdjustmentController::class, 'show'])->name('stock-adjustments.show');
+        Route::put('/stock-adjustments/{id}', [StockAdjustmentController::class, 'update'])->name('stock-adjustments.update');
+        Route::delete('/stock-adjustments/{id}', [StockAdjustmentController::class, 'destroy'])->name('stock-adjustments.destroy');
+        Route::post('/stock-adjustments/{id}/approve', [StockAdjustmentController::class, 'approve'])->name('stock-adjustments.approve');
+
+        // Damaged Goods
+        Route::get('/damaged-goods', [DamagedGoodsController::class, 'index'])->name('damaged-goods.index');
+        Route::get('/damaged-goods/data', [DamagedGoodsController::class, 'data'])->name('damaged-goods.data');
+        Route::post('/damaged-goods', [DamagedGoodsController::class, 'store'])->name('damaged-goods.store');
+        Route::get('/damaged-goods/{id}', [DamagedGoodsController::class, 'show'])->name('damaged-goods.show');
+        Route::put('/damaged-goods/{id}', [DamagedGoodsController::class, 'update'])->name('damaged-goods.update');
+        Route::delete('/damaged-goods/{id}', [DamagedGoodsController::class, 'destroy'])->name('damaged-goods.destroy');
+        Route::post('/damaged-goods/{id}/approve', [DamagedGoodsController::class, 'approve'])->name('damaged-goods.approve');
+
+        // Resi Import
+        Route::get('/resi-import', [ResiImportController::class, 'index'])->name('resi-import.index');
+        Route::get('/resi-import/data', [ResiImportController::class, 'data'])->name('resi-import.data');
+        Route::get('/resi-import/summary', [ResiImportController::class, 'summary'])->name('resi-import.summary');
+        Route::post('/resi-import/import', [ResiImportController::class, 'import'])->name('resi-import.import');
+        Route::post('/resi-import/cancel', [ResiImportController::class, 'cancel'])->name('resi-import.cancel');
+        Route::post('/resi-import/uncancel', [ResiImportController::class, 'uncancel'])->name('resi-import.uncancel');
+
+        // Picker Transit
+        Route::get('/picker-transit', [PickerTransitController::class, 'index'])->name('picker-transit.index');
+        Route::get('/picker-transit/data', [PickerTransitController::class, 'data'])->name('picker-transit.data');
+        Route::get('/picker-transit/packer-data', [PickerTransitController::class, 'dataPacker'])->name('picker-transit.packer-data');
+        Route::get('/picker-transit/export-picker', [PickerTransitController::class, 'exportPickerStatus'])->name('picker-transit.export-picker');
+        Route::get('/picker-transit/export-packer', [PickerTransitController::class, 'exportPackerStatus'])->name('picker-transit.export-packer');
+
+        // Picking List
+        Route::get('/picking-list', [PickingListController::class, 'index'])->name('picking-list.index');
+        Route::get('/picking-list/data', [PickingListController::class, 'data'])->name('picking-list.data');
+        Route::get('/picking-list/exceptions', [PickingListController::class, 'dataExceptions'])->name('picking-list.exceptions');
+        Route::get('/picking-list/export', [PickingListController::class, 'export'])->name('picking-list.export');
+        Route::post('/picking-list/add-qty', [PickingListController::class, 'storeQty'])->name('picking-list.store-qty');
+        Route::post('/picking-list/recalculate', [PickingListController::class, 'recalculate'])->name('picking-list.recalculate');
+        Route::post('/picking-list/exception-return', [PickingListController::class, 'returnException'])->name('picking-list.exception-return');
     });
 
-    Route::prefix('admin/stok-keluar')->name('admin.stok-keluar.')->group(function () {
-        Route::get('pengeluaran-barang/status-counts', [PengeluaranBarangController::class, 'getStatusCounts'])->name('pengeluaran-barang.status-counts');
-        Route::resource('pengeluaran-barang', PengeluaranBarangController::class)->parameter('pengeluaran-barang', 'pengeluaranBarang');
+    Route::prefix('inbound')->as('inbound.')->group(function () {
+        Route::get('/receipts', [InboundController::class, 'receipts'])->name('receipts.index');
+        Route::get('/receipts/data', [InboundController::class, 'receiptsData'])->name('receipts.data');
+        Route::post('/receipts', [InboundController::class, 'receiptsStore'])->name('receipts.store');
+        Route::post('/receipts/import', [InboundController::class, 'receiptsImport'])->name('receipts.import');
+        Route::get('/receipts/{id}', [InboundController::class, 'receiptsShow'])->name('receipts.show');
+        Route::put('/receipts/{id}', [InboundController::class, 'receiptsUpdate'])->name('receipts.update');
+        Route::delete('/receipts/{id}', [InboundController::class, 'receiptsDestroy'])->name('receipts.destroy');
+        Route::get('/receipts/{id}/detail', [InboundController::class, 'receiptsDetail'])->name('receipts.detail');
+        Route::post('/receipts/{id}/approve', [InboundController::class, 'receiptsApprove'])->name('receipts.approve');
 
-        Route::get('permintaan-barang/status-counts', [PermintaanBarangController::class, 'getStatusCounts'])->name('permintaan-barang.status-counts');
-        Route::resource('permintaan-barang', PermintaanBarangController::class)->only(['index', 'show'])->parameter('permintaan-barang', 'transferRequest');
-        Route::post('permintaan-barang/{transferRequest}/update-status', [PermintaanBarangController::class, 'updateStatus'])->name('permintaan-barang.updateStatus');
-        Route::post('permintaan-barang/{transferRequest}/create-shipment', [PermintaanBarangController::class, 'createShipment'])->name('permintaan-barang.createShipment');
-        Route::get('permintaan-barang/{transferRequest}/items-to-ship', [PermintaanBarangController::class, 'getItemsToShip'])->name('permintaan-barang.items-to-ship');
+        Route::get('/returns', [InboundController::class, 'returns'])->name('returns.index');
+        Route::get('/returns/data', [InboundController::class, 'returnsData'])->name('returns.data');
+        Route::post('/returns', [InboundController::class, 'returnsStore'])->name('returns.store');
+        Route::post('/returns/import', [InboundController::class, 'returnsImport'])->name('returns.import');
+        Route::get('/returns/{id}', [InboundController::class, 'returnsShow'])->name('returns.show');
+        Route::put('/returns/{id}', [InboundController::class, 'returnsUpdate'])->name('returns.update');
+        Route::delete('/returns/{id}', [InboundController::class, 'returnsDestroy'])->name('returns.destroy');
+        Route::get('/returns/{id}/detail', [InboundController::class, 'returnsDetail'])->name('returns.detail');
+        Route::post('/returns/{id}/approve', [InboundController::class, 'returnsApprove'])->name('returns.approve');
 
-        // Retur Out
-        Route::get('retur-out/status-counts', [\App\Http\Controllers\Admin\StokKeluar\ReturnOutController::class, 'getStatusCounts'])->name('retur-out.status-counts');
-        Route::resource('retur-out', \App\Http\Controllers\Admin\StokKeluar\ReturnOutController::class)->parameter('retur-out', 'retur_out');
-        Route::post('retur-out/{retur_out}/complete', [\App\Http\Controllers\Admin\StokKeluar\ReturnOutController::class, 'complete'])->name('retur-out.complete');
+        Route::get('/manuals', [InboundController::class, 'manuals'])->name('manuals.index');
+        Route::get('/manuals/data', [InboundController::class, 'manualsData'])->name('manuals.data');
+        Route::post('/manuals', [InboundController::class, 'manualsStore'])->name('manuals.store');
+        Route::post('/manuals/import', [InboundController::class, 'manualsImport'])->name('manuals.import');
+        Route::get('/manuals/{id}', [InboundController::class, 'manualsShow'])->name('manuals.show');
+        Route::put('/manuals/{id}', [InboundController::class, 'manualsUpdate'])->name('manuals.update');
+        Route::delete('/manuals/{id}', [InboundController::class, 'manualsDestroy'])->name('manuals.destroy');
+        Route::get('/manuals/{id}/detail', [InboundController::class, 'manualsDetail'])->name('manuals.detail');
+        Route::post('/manuals/{id}/approve', [InboundController::class, 'manualsApprove'])->name('manuals.approve');
     });
 
-    Route::prefix('admin/manajemen-stok')->name('admin.manajemenstok.')->group(function () {
-        Route::get('kartu-stok', [KartuStokController::class, 'index'])->name('kartustok.index');
-        Route::get('kartu-stok/export', [KartuStokController::class, 'export'])->name('kartustok.export');
-        Route::get('warehouse-stok', [WarehouseStokController::class, 'index'])->name('warehousestok.index');
-        Route::get('warehouse-stok/export', [WarehouseStokController::class, 'export'])->name('warehousestok.export');
-        Route::get('warehouse-stok/{warehouse}/{item}', [WarehouseStokController::class, 'show'])->name('warehousestok.show');
-        Route::get('warehouse-stok/{warehouse}/{item}/data', [WarehouseStokController::class, 'data'])->name('warehousestok.data');
-        Route::get('master-stok', [InventoryController::class, 'index'])->name('masterstok.index');
-        Route::get('stok-opname/system-stock', [StockOpnameController::class, 'getSystemStock'])->name('stok-opname.system-stock');
-        Route::post('stok-opname/{stok_opname}/update-status', [StockOpnameController::class, 'updateStatus'])->name('stok-opname.updateStatus');
-        Route::resource('stok-opname', StockOpnameController::class);
-        Route::resource('adjustment', AdjustmentController::class);
-        Route::post('adjustment/{adjustment}/update-status', [AdjustmentController::class, 'updateStatus'])->name('adjustment.updateStatus');
+    Route::prefix('outbound')->as('outbound.')->group(function () {
+        Route::get('/pickers', [OutboundController::class, 'pickers'])->name('pickers.index');
+        Route::get('/pickers/data', [OutboundController::class, 'pickersData'])->name('pickers.data');
+        Route::post('/pickers', [OutboundController::class, 'pickersStore'])->name('pickers.store');
+        Route::get('/pickers/{id}', [OutboundController::class, 'pickersShow'])->name('pickers.show');
+        Route::put('/pickers/{id}', [OutboundController::class, 'pickersUpdate'])->name('pickers.update');
+        Route::delete('/pickers/{id}', [OutboundController::class, 'pickersDestroy'])->name('pickers.destroy');
+        Route::get('/pickers/{id}/detail', [OutboundController::class, 'pickersDetail'])->name('pickers.detail');
+        Route::post('/pickers/{id}/approve', [OutboundController::class, 'pickersApprove'])->name('pickers.approve');
+
+        Route::get('/manuals', [OutboundController::class, 'manuals'])->name('manuals.index');
+        Route::get('/manuals/data', [OutboundController::class, 'manualsData'])->name('manuals.data');
+        Route::post('/manuals', [OutboundController::class, 'manualsStore'])->name('manuals.store');
+        Route::post('/manuals/import', [OutboundController::class, 'manualsImport'])->name('manuals.import');
+        Route::get('/manuals/{id}', [OutboundController::class, 'manualsShow'])->name('manuals.show');
+        Route::put('/manuals/{id}', [OutboundController::class, 'manualsUpdate'])->name('manuals.update');
+        Route::delete('/manuals/{id}', [OutboundController::class, 'manualsDestroy'])->name('manuals.destroy');
+        Route::get('/manuals/{id}/detail', [OutboundController::class, 'manualsDetail'])->name('manuals.detail');
+        Route::post('/manuals/{id}/approve', [OutboundController::class, 'manualsApprove'])->name('manuals.approve');
+
+        Route::get('/returns', [OutboundController::class, 'returns'])->name('returns.index');
+        Route::get('/returns/data', [OutboundController::class, 'returnsData'])->name('returns.data');
+        Route::post('/returns', [OutboundController::class, 'returnsStore'])->name('returns.store');
+        Route::post('/returns/import', [OutboundController::class, 'returnsImport'])->name('returns.import');
+        Route::get('/returns/{id}', [OutboundController::class, 'returnsShow'])->name('returns.show');
+        Route::put('/returns/{id}', [OutboundController::class, 'returnsUpdate'])->name('returns.update');
+        Route::delete('/returns/{id}', [OutboundController::class, 'returnsDestroy'])->name('returns.destroy');
+        Route::get('/returns/{id}/detail', [OutboundController::class, 'returnsDetail'])->name('returns.detail');
+        Route::post('/returns/{id}/approve', [OutboundController::class, 'returnsApprove'])->name('returns.approve');
+
+        Route::get('/picker-sessions', [PickerHistoryController::class, 'index'])->name('picker-sessions.index');
+        Route::get('/picker-sessions/data', [PickerHistoryController::class, 'data'])->name('picker-sessions.data');
+        Route::post('/picker-sessions/{id}/submit', [PickerHistoryController::class, 'submit'])->name('picker-sessions.submit');
+        Route::delete('/picker-sessions/{id}', [PickerHistoryController::class, 'destroy'])->name('picker-sessions.destroy');
+
+        Route::get('/packer-history', [PackerHistoryController::class, 'index'])->name('packer-history.index');
+        Route::get('/packer-history/data', [PackerHistoryController::class, 'data'])->name('packer-history.data');
+        Route::get('/packer-scan-outs', [PackerScanOutHistoryController::class, 'index'])->name('packer-scan-outs.index');
+        Route::get('/packer-scan-outs/data', [PackerScanOutHistoryController::class, 'data'])->name('packer-scan-outs.data');
+        Route::get('/packer-scan-exceptions', [PackerScanExceptionController::class, 'index'])->name('packer-scan-exceptions.index');
+        Route::get('/packer-scan-exceptions/data', [PackerScanExceptionController::class, 'data'])->name('packer-scan-exceptions.data');
+        Route::post('/packer-scan-exceptions', [PackerScanExceptionController::class, 'store'])->name('packer-scan-exceptions.store');
+        Route::put('/packer-scan-exceptions/{exception}', [PackerScanExceptionController::class, 'update'])->name('packer-scan-exceptions.update');
+        Route::delete('/packer-scan-exceptions/{exception}', [PackerScanExceptionController::class, 'destroy'])->name('packer-scan-exceptions.destroy');
+
+        Route::get('/picker-reports', [PickerReportController::class, 'index'])->name('picker-reports.index');
+        Route::get('/picker-reports/data', [PickerReportController::class, 'data'])->name('picker-reports.data');
+        Route::get('/picker-reports/detail', [PickerReportController::class, 'detail'])->name('picker-reports.detail');
+        Route::get('/picker-reports/sku', [PickerReportController::class, 'skuSummary'])->name('picker-reports.sku');
     });
 
-    Route::prefix('admin/transfer-gudang')->name('admin.transfergudang.')->group(function () {
-        Route::get('surat-jalan/{transferRequest}', [\App\Http\Controllers\Admin\TransferGudang\SuratJalanController::class, 'show'])->name('surat-jalan.show');
-    });
-
-    // Riwayat Pengiriman
-    Route::get('/admin/riwayat-pengiriman', [RiwayatPengirimanController::class, 'index'])->name('admin.riwayat-pengiriman.index');
-    Route::get('/admin/riwayat-pengiriman/status-counts', [RiwayatPengirimanController::class, 'getStatusCounts'])->name('admin.riwayat-pengiriman.status-counts');
-    Route::get('/admin/riwayat-pengiriman/{shipment}', [RiwayatPengirimanController::class, 'show'])->name('admin.riwayat-pengiriman.show');
-
-    Route::prefix('admin/laporan')->name('admin.laporan.')->group(function () {
-        Route::get('laporan-stok', [LaporanStokController::class, 'index'])->name('laporanstok.index');
-        Route::get('laporan-stok/menipis', [LaporanStokController::class, 'lowStockReport'])->name('laporanstok.menipis');
-        Route::get('laporan-pergerakan-barang', [LaporanController::class, 'laporanPergerakanBarang'])->name('pergerakanBarang');
-        Route::get('laporan-pergerakan-barang/data', [LaporanController::class, 'pergerakanBarangData'])->name('pergerakanBarang.data');
-        Route::get('laporan-transfer-gudang', [\App\Http\Controllers\Admin\Laporan\LaporanTransferGudangController::class, 'index'])->name('laporan-transfer-gudang');
-        Route::get('laporan-transfer-gudang/data', [\App\Http\Controllers\Admin\Laporan\LaporanTransferGudangController::class, 'transferGudangData'])->name('laporan-transfer-gudang.data');
+    Route::prefix('reports')->as('reports.')->group(function () {
+        Route::get('/activity-logs', [ActivityLogController::class, 'index'])->name('activity-logs.index');
+        Route::get('/activity-logs/data', [ActivityLogController::class, 'data'])->name('activity-logs.data');
+        Route::get('/activity-logs/{id}', [ActivityLogController::class, 'show'])->name('activity-logs.show');
+        Route::get('/packer-reports', [PackerReportController::class, 'index'])->name('packer-reports.index');
+        Route::get('/packer-reports/data', [PackerReportController::class, 'data'])->name('packer-reports.data');
+        Route::get('/packer-packing-reports', [PackerPackingReportController::class, 'index'])->name('packer-packing-reports.index');
+        Route::get('/packer-packing-reports/data', [PackerPackingReportController::class, 'data'])->name('packer-packing-reports.data');
+        Route::get('/packer-packing-reports/detail', [PackerPackingReportController::class, 'detail'])->name('packer-packing-reports.detail');
+        Route::get('/packer-packing-reports/search-resi', [PackerPackingReportController::class, 'searchResi'])->name('packer-packing-reports.search-resi');
+        Route::get('/low-stock', [LowStockReportController::class, 'index'])->name('low-stock.index');
+        Route::get('/low-stock/data', [LowStockReportController::class, 'data'])->name('low-stock.data');
+        Route::get('/stock-opname', [StockOpnameReportController::class, 'index'])->name('stock-opname.index');
+        Route::get('/stock-opname/data', [StockOpnameReportController::class, 'data'])->name('stock-opname.data');
+        Route::get('/stock-opname/sku-diff', [StockOpnameReportController::class, 'diffSku'])->name('stock-opname.diff-sku');
+        Route::get('/stock-opname/export', [StockOpnameReportController::class, 'export'])->name('stock-opname.export');
     });
 });

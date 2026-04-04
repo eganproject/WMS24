@@ -11,32 +11,31 @@ class StockOpname extends Model
 
     protected $fillable = [
         'code',
-        'warehouse_id',
-        'description',
-        'started_by',
-        'completed_by',
-        'start_date',
-        'completed_date',
+        'transacted_at',
+        'note',
         'status',
+        'completed_at',
+        'created_by',
+        'completed_by',
     ];
 
-    public function warehouse()
-    {
-        return $this->belongsTo(Warehouse::class);
-    }
-
-    public function startedBy()
-    {
-        return $this->belongsTo(User::class, 'started_by');
-    }
-
-    public function completedBy()
-    {
-        return $this->belongsTo(User::class, 'completed_by');
-    }
+    protected $casts = [
+        'transacted_at' => 'datetime',
+        'completed_at' => 'datetime',
+    ];
 
     public function items()
     {
-        return $this->hasMany(StockOpnameItem::class);
+        return $this->hasMany(StockOpnameItem::class, 'stock_opname_id');
+    }
+
+    public function creator()
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function completer()
+    {
+        return $this->belongsTo(User::class, 'completed_by');
     }
 }

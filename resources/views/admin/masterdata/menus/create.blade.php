@@ -1,94 +1,73 @@
-@extends('layouts.app')
-@push('toolbar')
-    @include('layouts.partials._toolbar', [
-        'title' => 'Menus',
-        'breadcrumbs' => ['Admin', 'Menus', 'Tambah Menu'],
-    ])
-@endpush
-@section('content')
-    <div class="content flex-row-fluid" id="kt_content">
+@extends('layouts.admin')
 
+@section('title', 'Tambah Menu')
+@section('page_title', 'Tambah Menu')
+
+@section('page_breadcrumbs')
+    <span class="text-muted">Home</span>
+    <span class="mx-2">-</span>
+    <span class="text-muted">Masterdata</span>
+    <span class="mx-2">-</span>
+    <span class="text-muted">Menus</span>
+    <span class="mx-2">-</span>
+    <span class="text-dark">Tambah</span>
+@endsection
+
+@section('content')
+<div class="content d-flex flex-column flex-column-fluid" id="kt_content">
+    <div class="container-fluid" id="kt_content_container">
         <div class="card">
-            <div class="card-header">
-                <h3 class="card-title">Tambah Menu</h3>
-            </div>
-            <div class="card-body">
-                <form action="{{ route('admin.masterdata.menus.store') }}" method="POST">
+            <div class="card-body py-6">
+                <form method="POST" action="{{ route('admin.masterdata.menus.store') }}" class="form">
                     @csrf
-                    <div class="fv-row mb-3 ">
-                        <label for="name" class="form-label required">Nama Menu</label>
-                        <input type="text" class="form-control form-control-solid" id="name" name="name"
-                            value="{{ old('name') }}" required>
+                    <div class="mb-10">
+                        <label class="form-label required">Nama</label>
+                        <input type="text" name="name" value="{{ old('name') }}" class="form-control @error('name') is-invalid @enderror form-control-solid" required />
+                        @error('name')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
-                    <div class="fv-row mb-3 ">
-                        <label for="url" class="form-label">URL</label>
-                        <input type="text" class="form-control form-control-solid" id="url" name="url"
-                            value="{{ old('url') }}">
+                    <div class="mb-10">
+                        <label class="form-label required">Slug</label>
+                        <input type="text" name="slug" value="{{ old('slug') }}" class="form-control @error('slug') is-invalid @enderror form-control-solid" required />
+                        @error('slug')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
-                    <div class="fv-row mb-3 ">
-                        <label for="icon" class="form-label">Ikon</label>
-                        <input type="text" class="form-control form-control-solid" id="icon" name="icon"
-                            value="{{ old('icon') }}">
+                    <div class="mb-10">
+                        <label class="form-label">Route</label>
+                        <input type="text" name="route" value="{{ old('route') }}" class="form-control @error('route') is-invalid @enderror form-control-solid" placeholder="cth: admin.masterdata.users.index" />
+                        @error('route')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
-                    <div class="fv-row mb-3 ">
-                        <label for="parent_id" class="form-label">Menu Induk</label>
-                        <select class="form-select form-select-solid fw-bolder select2-hidden-accessible" id="parent_id"
-                            name="parent_id" data-control="select2" data-placeholder="Pilih Menu Induk">
-                            <option value="">Pilih Menu Induk</option>
-                            @foreach ($parentMenus as $parentMenu)
-                                <option value="{{ $parentMenu->id }}"
-                                    {{ old('parent_id') == $parentMenu->id ? 'selected' : '' }}>{{ $parentMenu->name }}
-                                </option>
+                    <div class="mb-10">
+                        <label class="form-label">Icon</label>
+                        <input type="text" name="icon" value="{{ old('icon') }}" class="form-control @error('icon') is-invalid @enderror form-control-solid" />
+                        @error('icon')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+                    <div class="mb-10">
+                        <label class="form-label">Parent</label>
+                        <select name="parent_id" class="form-select @error('parent_id') is-invalid @enderror form-select-solid">
+                            <option value="">(Tidak ada)</option>
+                            @foreach($parents as $p)
+                                <option value="{{ $p->id }}" @selected(old('parent_id') == $p->id)>{{ $p->name }}</option>
                             @endforeach
                         </select>
+                        @error('parent_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
-                    <div class="fv-row mb-3 ">
-                        <label for="order" class="form-label required">Urutan</label>
-                        <input type="number" class="form-control form-control-solid" id="order" name="order"
-                            value="{{ old('order') }}" required>
+                    <div class="mb-10">
+                        <label class="form-label">Urutan</label>
+                        <input type="number" name="sort_order" value="{{ old('sort_order', 0) }}" class="form-control @error('sort_order') is-invalid @enderror form-control-solid" />
+                        @error('sort_order')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
-                    <div class="fv-row mb-3 form-check form-check-custom form-check-solid">
-                        <input class="form-check-input" type="checkbox" value="1" id="is_active" name="is_active"
-                            {{ old('is_active') ? 'checked' : '' }} />
-                        <label class="form-check-label" for="is_active">
-                            Aktif
-                        </label>
+                    <div class="form-check form-switch mb-10">
+                        <input class="form-check-input" type="checkbox" name="is_active" value="1" id="is_active" @checked(old('is_active', true))>
+                        <label class="form-check-label" for="is_active">Aktif</label>
                     </div>
-                    <button type="submit" class="btn btn-primary mt-3">Simpan</button>
+                    <div class="d-flex justify-content-end">
+                        <a href="{{ route('admin.masterdata.menus.index') }}" class="btn btn-light me-3">Batal</a>
+                        <button type="submit" class="btn btn-primary">Simpan</button>
+                    </div>
                 </form>
             </div>
         </div>
     </div>
+</div>
 @endsection
 
-
-@push('scripts')
-    <script>
-        $(document).ready(function() {
-            toastr.options = {
-                "closeButton": true,
-                "debug": false,
-                "newestOnTop": false,
-                "progressBar": true,
-                "positionClass": "toast-top-center",
-                "preventDuplicates": false,
-                "showDuration": "300",
-                "hideDuration": "1000",
-                "timeOut": "5000",
-                "extendedTimeOut": "1000",
-                "showEasing": "swing",
-                "hideEasing": "linear",
-                "showMethod": "fadeIn",
-                "hideMethod": "fadeOut"
-            };
-
-            @if (Session::has('success'))
-                toastr.success("{{ session('success') }}");
-            @endif
-
-            @if (Session::has('error'))
-                toastr.error("{{ session('error') }}");
-            @endif
-        });
-    </script>
-@endpush
+@include('layouts.partials.form-submit-confirmation')

@@ -3,6 +3,7 @@
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use App\Console\Commands\RecalculatePoLineFulfillment;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -10,16 +11,18 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
+    ->withCommands([
+        RecalculatePoLineFulfillment::class,
+    ])
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
-            'permission' => \App\Http\Middleware\PermissionMiddleware::class,
+            'activity.log' => \App\Http\Middleware\LogUserActivity::class,
+            'menu.permission' => \App\Http\Middleware\AuthorizeMenuPermission::class,
+            'restrict.picker' => \App\Http\Middleware\RestrictPickerAccess::class,
         ]);
 
-        // Redirect authenticated users who hit guest routes (e.g., "/")
-        // to the admin dashboard to avoid redirect loops.
-        \Illuminate\Auth\Middleware\RedirectIfAuthenticated::redirectUsing(
-            fn () => route('admin.dashboard')
-        );
+        $middleware->appendToGroup('web', 'restrict.picker');
+        $middleware->appendToGroup('web', 'activity.log');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

@@ -1,102 +1,74 @@
-@extends('layouts.app')
-@push('styles')
-    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css">
-@endpush
-@push('toolbar')
-    @include('layouts.partials._toolbar', [
-        'title' => 'Users',
-        'breadcrumbs' => ['Admin', 'Masterdata', 'Users', 'Tambah Users'],
-    ])
-@endpush
+@extends('layouts.admin')
+
+@section('title', 'Tambah User')
+@section('page_title', 'Tambah User')
+
+@section('page_breadcrumbs')
+    <span class="text-muted">Home</span>
+    <span class="mx-2">-</span>
+    <span class="text-muted">Masterdata</span>
+    <span class="mx-2">-</span>
+    <span class="text-muted">Users</span>
+    <span class="mx-2">-</span>
+    <span class="text-dark">Tambah</span>
+@endsection
+
 @section('content')
-    <div class="content flex-row-fluid" id="kt_content">
-        @if ($errors->any())
-            @php
-                dump($errors);
-            @endphp
-        @endif
+<div class="content d-flex flex-column flex-column-fluid" id="kt_content">
+    <div class="container-fluid" id="kt_content_container">
         <div class="card">
-            <div class="card-header">
-                <h3 class="card-title">Tambah User</h3>
-            </div>
-            <div class="card-body">
-                <form action="{{ route('admin.masterdata.users.store') }}" method="POST">
+            <div class="card-body py-6">
+                <form method="POST" action="{{ route('admin.masterdata.users.store') }}" class="form" enctype="multipart/form-data">
                     @csrf
-                    <div class="fv-row mb-3 ">
-                        <label for="name" class="form-label required">Nama</label>
-                        <input type="text" class="form-control form-control-solid" id="name" name="name"
-                            value="{{ old('name') }}" required>
-                       
+                    <div class="mb-10">
+                        <label class="form-label required">Nama</label>
+                        <input type="text" name="name" value="{{ old('name') }}" class="form-control @error('name') is-invalid @enderror form-control-solid" required />
+                        @error('name')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
-                    <div class="fv-row mb-3 ">
-                        <label for="email" class="form-label required">Email</label>
-                        <input type="email" class="form-control form-control-solid" id="email" name="email"
-                            value="{{ old('email') }}" required>
-                      
+                    <div class="mb-10">
+                        <label class="form-label required">Email</label>
+                        <input type="email" name="email" value="{{ old('email') }}" class="form-control @error('email') is-invalid @enderror form-control-solid" required />
+                        @error('email')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
-                    <div class="fv-row mb-3 ">
-                        <label for="password" class="form-label required">Password</label>
-                        <input type="password" class="form-control form-control-solid" id="password" name="password"
-                            required>
+                    <div class="mb-10">
+                        <label class="form-label required">Password</label>
+                        <input type="password" name="password" class="form-control @error('password') is-invalid @enderror form-control-solid" required />
+                        @error('password')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
-                    <div class="fv-row mb-3 ">
-                        <label for="jabatan_id" class="form-label required">Jabatan</label>
-                        <select class="form-select form-select-solid fw-bolder select2-hidden-accessible" id="jabatan_id"
-                            name="jabatan_id" data-control="select2" data-placeholder="Pilih opsi">
-                            <option></option>
-                            @foreach ($jabatans as $jabatan)
-                                <option value="{{ $jabatan->id }}">{{ $jabatan->name }}</option>
+                    <div class="mb-10">
+                        <label class="form-label">Roles</label>
+                        <select name="roles[]" class="form-select @error('roles') is-invalid @enderror form-select-solid" multiple data-control="select2" data-placeholder="Pilih Roles">
+                            @foreach($roles as $r)
+                                <option value="{{ $r->id }}" @selected(collect(old('roles', []))->contains($r->id))>{{ $r->name }}</option>
                             @endforeach
                         </select>
-                       
+                        @error('roles')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
-                    <div class="fv-row mb-3 ">
-                        <label for="warehouse_id" class="form-label">Gudang</label>
-                        <select class="form-select form-select-solid fw-bolder select2-hidden-accessible" id="warehouse_id"
-                            name="warehouse_id" data-control="select2" data-placeholder="Pilih Gudang (opsional)">
-                            <option value="">Semua / Tidak terikat</option>
-                            @foreach ($warehouses as $w)
-                                <option value="{{ $w->id }}" {{ old('warehouse_id') == $w->id ? 'selected' : '' }}>{{ $w->name }}</option>
+                    <div class="mb-10">
+                        <label class="form-label">Divisi</label>
+                        <select name="divisi_id" class="form-select @error('divisi_id') is-invalid @enderror form-select-solid" data-placeholder="Pilih Divisi">
+                            <option value="">- Pilih Divisi -</option>
+                            @foreach($divisis as $d)
+                                <option value="{{ $d->id }}" @selected(old('divisi_id') == $d->id)>{{ $d->name }}</option>
                             @endforeach
                         </select>
+                        @error('divisi_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
-                    <div class="d-flex justify-content-end mt-3">
-                        <a href="{{ route('admin.masterdata.users.index') }}" class="btn btn-light me-3">Kembali</a>
-                        <button type="submit" class="btn btn-primary">Submit</button>
+                    <div class="mb-10">
+                        <label class="form-label">Avatar</label>
+                        <input type="file" name="avatar" class="form-control @error('avatar') is-invalid @enderror form-control-solid" accept=".jpg,.jpeg,.png" />
+                        @error('avatar')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        <div class="form-text">Kosongkan untuk menggunakan avatar default.</div>
+                    </div>
+                    <div class="d-flex justify-content-end">
+                        <a href="{{ route('admin.masterdata.users.index') }}" class="btn btn-light me-3">Batal</a>
+                        <button type="submit" class="btn btn-primary">Simpan</button>
                     </div>
                 </form>
             </div>
         </div>
     </div>
+</div>
 @endsection
 
-@push('scripts')
-    <script>
-        $(document).ready(function() {
-            toastr.options = {
-                "closeButton": true,
-                "debug": false,
-                "newestOnTop": false,
-                "progressBar": true,
-                "positionClass": "toast-top-center",
-                "preventDuplicates": false,
-                "showDuration": "300",
-                "hideDuration": "1000",
-                "timeOut": "5000",
-                "extendedTimeOut": "1000",
-                "showEasing": "swing",
-                "hideEasing": "linear",
-                "showMethod": "fadeIn",
-                "hideMethod": "fadeOut"
-            };
-
-            @if (Session::has('success'))
-                toastr.success("{{ session('success') }}");
-            @endif
-
-            @if (Session::has('error'))
-                toastr.error("{{ session('error') }}");
-            @endif
-        });
-    </script>
-@endpush
+@include('layouts.partials.form-submit-confirmation')

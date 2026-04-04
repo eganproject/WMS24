@@ -1,207 +1,350 @@
 <!DOCTYPE html>
-<html lang="en">
-
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login | Cahaya Optima Karya</title>
-
-    <link rel="shortcut icon" href="/metronic/assets/media/logos/logo-demo2.png" />
-    <!-- Tailwind CSS via CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-
-    <!-- Google Fonts: Inter -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="shortcut icon" href="{{ asset('metronic/media/logos/favicon.png') }}" />
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>Gudang 29 | Login</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-
-    <!-- Feather Icons for eye icon -->
-    <script src="https://unpkg.com/feather-icons"></script>
-
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        /* Custom Styles & Animations */
+        :root {
+            --bg: #0b0c0f;
+            --card: #12141a;
+            --ink: #f8fafc;
+            --muted: #9aa4b2;
+            --accent: #22d3ee;
+            --accent-2: #a78bfa;
+            --ring: rgba(34, 211, 238, 0.3);
+            --shadow: 0 30px 60px rgba(0, 0, 0, 0.45);
+            --radius: 22px;
+        }
+
+        * { box-sizing: border-box; }
+
         body {
-            font-family: 'Inter', sans-serif;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
+            margin: 0;
+            font-family: 'Sora', sans-serif;
+            color: var(--ink);
+            background:
+                radial-gradient(700px 400px at 8% -10%, rgba(34, 211, 238, 0.18) 0%, rgba(34, 211, 238, 0) 55%),
+                radial-gradient(680px 380px at 100% 10%, rgba(167, 139, 250, 0.18) 0%, rgba(167, 139, 250, 0) 55%),
+                var(--bg);
+            min-height: 100svh;
         }
 
-        @keyframes gradient-animation {
-            0% {
-                background-position: 0% 50%;
-            }
-
-            50% {
-                background-position: 100% 50%;
-            }
-
-            100% {
-                background-position: 0% 50%;
-            }
+        .screen {
+            position: relative;
+            min-height: 100svh;
+            padding: 28px 18px 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
-        .animated-gradient {
-            background-size: 200% 200%;
-            animation: gradient-animation 15s ease infinite;
+        .ambient {
+            position: absolute;
+            inset: 0;
+            overflow: hidden;
+            pointer-events: none;
         }
 
-        @keyframes fadeInSlideUp {
-            from {
-                opacity: 0;
-                transform: translateY(30px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(2px);
+            opacity: 0.8;
+            animation: float 12s ease-in-out infinite;
         }
 
-        .form-container {
-            animation: fadeInSlideUp 0.8s ease-out forwards;
+        .orb--a {
+            width: 160px;
+            height: 160px;
+            background: radial-gradient(circle, rgba(34, 211, 238, 0.4), rgba(34, 211, 238, 0));
+            top: -40px;
+            left: -20px;
         }
 
-        /* Glassmorphism effect */
-        .glass-card {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(15px);
-            -webkit-backdrop-filter: blur(15px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+        .orb--b {
+            width: 220px;
+            height: 220px;
+            background: radial-gradient(circle, rgba(167, 139, 250, 0.35), rgba(167, 139, 250, 0));
+            bottom: -60px;
+            right: -40px;
+            animation-delay: -4s;
+        }
+
+        .orb--c {
+            width: 120px;
+            height: 120px;
+            background: radial-gradient(circle, rgba(56, 189, 248, 0.25), rgba(56, 189, 248, 0));
+            top: 30%;
+            right: 8%;
+            animation-delay: -8s;
+        }
+
+        .card {
+            width: min(420px, 100%);
+            background: var(--card);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            padding: 26px 22px 24px;
+            position: relative;
+            z-index: 2;
+            animation: rise 0.5s ease-out both;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 16px;
+        }
+
+        .logo {
+            width: 48px;
+            height: 48px;
+            border-radius: 14px;
+            background: linear-gradient(135deg, #111827, #1f2937);
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            display: grid;
+            place-items: center;
+            overflow: hidden;
+        }
+
+        .logo img {
+            width: 70%;
+            height: 70%;
+            object-fit: contain;
+            filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.35));
+        }
+
+        .brand h1 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        .brand p {
+            margin: 4px 0 0;
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        .alert {
+            background: rgba(34, 211, 238, 0.12);
+            color: #67e8f9;
+            border: 1px solid rgba(34, 211, 238, 0.3);
+            padding: 10px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            margin-bottom: 14px;
+        }
+
+        .form-row {
+            display: grid;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+
+        label {
+            font-size: 12px;
+            color: var(--muted);
+            font-weight: 600;
+        }
+
+        .input {
+            width: 100%;
+            padding: 12px 14px;
+            border-radius: 12px;
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            font-size: 14px;
+            outline: none;
+            transition: box-shadow 0.2s ease, border-color 0.2s ease;
+            background: rgba(15, 23, 42, 0.55);
+            color: var(--ink);
+        }
+
+        .input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 4px var(--ring);
+        }
+
+        .input.is-invalid {
+            border-color: #f87171;
+            box-shadow: 0 0 0 4px rgba(248, 113, 113, 0.2);
+        }
+
+        .error-text {
+            font-size: 12px;
+            color: #fca5a5;
+        }
+
+        .row-between {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+            gap: 12px;
+        }
+
+        .checkbox {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .checkbox input {
+            width: 16px;
+            height: 16px;
+            accent-color: var(--accent);
+        }
+
+        .link {
+            color: var(--accent);
+            text-decoration: none;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .submit-btn {
+            width: 100%;
+            border: none;
+            border-radius: 14px;
+            padding: 12px 16px;
+            font-size: 14px;
+            font-weight: 700;
+            color: #fff;
+            background: linear-gradient(135deg, #111827, #0f172a);
+            border: 1px solid rgba(34, 211, 238, 0.35);
+            box-shadow: 0 12px 24px rgba(2, 132, 199, 0.25);
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .submit-btn:active {
+            transform: translateY(1px);
+            box-shadow: 0 8px 16px rgba(2, 132, 199, 0.22);
+        }
+
+        .footer {
+            margin-top: 16px;
+            text-align: center;
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .footer a {
+            color: var(--accent-2);
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        @keyframes rise {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(16px); }
+        }
+
+        @media (min-width: 768px) {
+            .card { padding: 30px 28px 26px; }
+            .brand h1 { font-size: 20px; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .card, .orb { animation: none; }
         }
     </style>
 </head>
-
-<body class="bg-gray-900 text-white">
-
-    <div
-        class="min-h-screen flex items-center justify-center animated-gradient bg-gradient-to-br from-gray-900 via-slate-800 to-blue-900 p-4">
-
-        <div class="w-full max-w-6xl mx-auto grid lg:grid-cols-2 gap-10 items-center">
-
-            <!-- Left Side: Branding & Illustration -->
-            <div class="hidden lg:block text-center lg:text-left p-8">
-                <svg class="w-full h-auto mb-8" viewBox="0 0 500 300" xmlns="http://www.w3.org/2000/svg">
-                    <defs>
-                        <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" style="stop-color:rgb(59, 130, 246);stop-opacity:1" />
-                            <stop offset="100%" style="stop-color:rgb(129, 140, 248);stop-opacity:1" />
-                        </linearGradient>
-                        <linearGradient id="grad2" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" style="stop-color:rgb(236, 72, 153);stop-opacity:1" />
-                            <stop offset="100%" style="stop-color:rgb(168, 85, 247);stop-opacity:1" />
-                        </linearGradient>
-                    </defs>
-                    <path d="M50,250 C50,100 200,50 250,150 C300,250 450,200 450,50" stroke="url(#grad1)" fill="none"
-                        stroke-width="5" stroke-linecap="round">
-                        <animate attributeName="d" dur="10s" repeatCount="indefinite"
-                            values="M50,250 C50,100 200,50 250,150 C300,250 450,200 450,50; M50,50 C50,200 200,250 250,150 C300,50 450,100 450,250; M50,250 C50,100 200,50 250,150 C300,250 450,200 450,50" />
-                    </path>
-                    <path d="M50,150 C150,250 300,50 450,150" stroke="url(#grad2)" fill="none" stroke-width="5"
-                        stroke-linecap="round">
-                        <animate attributeName="d" dur="12s" repeatCount="indefinite"
-                            values="M50,150 C150,250 300,50 450,150; M50,150 C150,50 300,250 450,150; M50,150 C150,250 300,50 450,150" />
-                    </path>
-                </svg>
-                <h1 class="text-4xl font-bold tracking-tight text-white sm:text-5xl">
-                    Selamat Datang,
-                </h1>
-                <p class="mt-6 text-lg leading-8 text-gray-300">
-                    Masuk untuk mengelola dasbor Anda, menganalisis data, dan mengawasi semua aktivitas.
-                </p>
-            </div>
-
-            <!-- Right Side: Login Form -->
-            <div class="w-full max-w-md mx-auto form-container">
-                <div class="glass-card rounded-2xl shadow-2xl p-8 sm:p-10">
-                    <div class="text-center mb-8">
-                        <h2 class="text-2xl sm:text-3xl font-bold text-white">Sign In</h2>
-                        <p class="text-gray-400 mt-2">Silakan masukkan kredensial Anda</p>
-                    </div>
-
-                    <form method="POST" action="{{ route('login') }}" class="space-y-6">
-                        @csrf
-
-                        <!-- Email Address -->
-                        <div>
-                            <label for="email" class="block text-sm font-medium text-gray-300">Alamat Email</label>
-                            <div class="mt-2">
-                                <input id="email" name="email" type="email" autocomplete="email" required
-                                    value="{{ old('email') }}"
-                                    class="block w-full rounded-md border-0 py-3 px-4 bg-gray-700/50 text-white shadow-sm ring-1 ring-inset ring-gray-600 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6 transition-all duration-300 @error('email') ring-red-500 @enderror">
-                            </div>
-                            @error('email')
-                                <p class="mt-2 text-sm text-red-400">{{ $message }}</p>
-                            @enderror
-                        </div>
-
-                        <!-- Password -->
-                        <div>
-                            <div class="flex items-center justify-between">
-                                <label for="password" class="block text-sm font-medium text-gray-300">Password</label>
-
-                            </div>
-                            <div class="mt-2 relative">
-                                <input id="password" name="password" type="password" autocomplete="current-password"
-                                    required
-                                    class="block w-full rounded-md border-0 py-3 px-4 bg-gray-700/50 text-white shadow-sm ring-1 ring-inset ring-gray-600 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6 transition-all duration-300 @error('password') ring-red-500 @enderror">
-                                <button type="button" id="togglePassword"
-                                    class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-white">
-                                    <i data-feather="eye" class="h-5 w-5"></i>
-                                </button>
-                            </div>
-                            @error('password')
-                                <p class="mt-2 text-sm text-red-400">{{ $message }}</p>
-                            @enderror
-                        </div>
-
-                        <!-- Remember Me -->
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center">
-                                <input id="remember" name="remember" type="checkbox"
-                                    class="h-4 w-4 rounded border-gray-500 bg-gray-700 text-indigo-600 focus:ring-indigo-600">
-                                <label for="remember" class="ml-3 block text-sm text-gray-300">Ingat saya</label>
-                            </div>
-                        </div>
-
-                        <!-- Submit Button -->
-                        <div>
-                            <button type="submit"
-                                class="flex w-full justify-center rounded-md bg-indigo-600 px-3 py-3 text-sm font-semibold leading-6 text-white shadow-lg hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 transition-all duration-300 transform hover:scale-105">
-                                Masuk
-                            </button>
-                        </div>
-                    </form>
-
-
-                </div>
-            </div>
-        </div>
+<body>
+<div class="screen">
+    <div class="ambient">
+        <span class="orb orb--a"></span>
+        <span class="orb orb--b"></span>
+        <span class="orb orb--c"></span>
     </div>
 
-    <script>
-        // Initialize Feather Icons
-        feather.replace();
+    <main class="card">
+        <div class="brand">
+            <div class="logo">
+                <img src="{{ asset('metronic/media/logos/favicon.png') }}" alt="Gudang 29">
+            </div>
+            <div>
+                <h1>Login ke Gudang 29</h1>
+                <p>Masuk untuk mengelola stok, inbound, outbound, dan opname.</p>
+            </div>
+        </div>
 
-        // Password visibility toggle
-        const togglePassword = document.querySelector('#togglePassword');
-        const password = document.querySelector('#password');
+        @if (session('status'))
+            <div class="alert">{{ session('status') }}</div>
+        @endif
 
-        togglePassword.addEventListener('click', function(e) {
-            // toggle the type attribute
-            const type = password.getAttribute('type') === 'password' ? 'text' : 'password';
-            password.setAttribute('type', type);
+        <form method="POST" action="{{ route('login') }}">
+            @csrf
+            <div class="form-row">
+                <label for="email">Email</label>
+                <input
+                    id="email"
+                    class="input @error('email') is-invalid @enderror"
+                    type="email"
+                    name="email"
+                    value="{{ old('email') }}"
+                    required
+                    autofocus
+                    autocomplete="username"
+                >
+                @error('email')
+                    <div class="error-text">{{ $message }}</div>
+                @enderror
+            </div>
 
-            // toggle the eye icon
-            const icon = this.querySelector('i');
-            if (type === 'password') {
-                icon.setAttribute('data-feather', 'eye');
-            } else {
-                icon.setAttribute('data-feather', 'eye-off');
-            }
-            feather.replace(); // Re-render icons
-        });
-    </script>
+            <div class="form-row">
+                <label for="password">Password</label>
+                <input
+                    id="password"
+                    class="input @error('password') is-invalid @enderror"
+                    type="password"
+                    name="password"
+                    required
+                    autocomplete="current-password"
+                >
+                @error('password')
+                    <div class="error-text">{{ $message }}</div>
+                @enderror
+            </div>
 
+            <div class="row-between">
+                <label class="checkbox">
+                    <input type="checkbox" name="remember">
+                    Ingat saya
+                </label>
+                @if (Route::has('password.request'))
+                    <a class="link" href="{{ route('password.request') }}">Lupa password?</a>
+                @endif
+            </div>
+
+            <button type="submit" class="submit-btn">Masuk</button>
+        </form>
+
+        <div class="footer">
+            Belum punya akun?
+            @if (Route::has('register'))
+                <a href="{{ route('register') }}">Buat akun</a>
+            @else
+                Hubungi admin untuk akses
+            @endif
+        </div>
+    </main>
+</div>
 </body>
-
 </html>

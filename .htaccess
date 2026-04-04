@@ -1,12 +1,9 @@
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
-    # Serve existing files/directories from the root as-is
-    RewriteCond %{REQUEST_FILENAME} -f [OR]
-    RewriteCond %{REQUEST_FILENAME} -d
-    RewriteRule ^ - [L]
+    # If accessing public/ directly, do nothing
+    RewriteCond %{REQUEST_URI} !^/public/
 
-    # Forward everything else to /public (keeps Laravel defaults intact)
+    # Redirect everything else to public/
     RewriteRule ^(.*)$ public/$1 [L]
 </IfModule>
-

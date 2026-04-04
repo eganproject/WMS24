@@ -9,14 +9,7 @@ class Menu extends Model
 {
     use HasFactory;
 
-    protected $fillable = [
-        'name',
-        'url',
-        'icon',
-        'parent_id',
-        'order',
-        'is_active',
-    ];
+    protected $fillable = ['name','slug','route','icon','parent_id','sort_order','is_active'];
 
     public function parent()
     {
@@ -25,11 +18,14 @@ class Menu extends Model
 
     public function children()
     {
-        return $this->hasMany(Menu::class, 'parent_id')->orderBy('order');
+        return $this->hasMany(Menu::class, 'parent_id');
     }
 
-    public function permissions()
+    public function roles()
     {
-        return $this->hasMany(Permission::class);
+        return $this->belongsToMany(Role::class, 'permission_menu')
+            ->withPivot(['can_view','can_create','can_update','can_delete'])
+            ->withTimestamps();
     }
 }
+

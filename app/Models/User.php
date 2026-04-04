@@ -21,8 +21,8 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
-        'jabatan_id',
-        'warehouse_id',
+        'avatar',
+        'divisi_id',
     ];
 
     /**
@@ -48,13 +48,53 @@ class User extends Authenticatable
         ];
     }
 
-    public function jabatan()
+    public function roles()
     {
-        return $this->belongsTo(Jabatan::class);
+        return $this->belongsToMany(Role::class, 'role_user');
     }
 
-    public function warehouse()
+    public function divisi()
     {
-        return $this->belongsTo(Warehouse::class);
+        return $this->belongsTo(Divisi::class, 'divisi_id');
+    }
+
+    public static function defaultAvatar(): string
+    {
+        $choices = [
+            'metronic/media/avatars/150-1.jpg',
+            'metronic/media/avatars/150-10.jpg',
+            'metronic/media/avatars/150-11.jpg',
+            'metronic/media/avatars/150-12.jpg',
+            'metronic/media/avatars/150-13.jpg',
+            'metronic/media/avatars/150-14.jpg',
+            'metronic/media/avatars/150-15.jpg',
+            'metronic/media/avatars/150-16.jpg',
+            'metronic/media/avatars/150-17.jpg',
+            'metronic/media/avatars/150-18.jpg',
+            'metronic/media/avatars/150-19.jpg',
+            'metronic/media/avatars/150-2.jpg',
+            'metronic/media/avatars/150-20.jpg',
+            'metronic/media/avatars/150-21.jpg',
+            'metronic/media/avatars/150-22.jpg',
+            'metronic/media/avatars/150-23.jpg',
+            'metronic/media/avatars/150-24.jpg',
+            'metronic/media/avatars/150-25.jpg',
+            'metronic/media/avatars/150-26.jpg',
+            'metronic/media/avatars/150-3.jpg',
+            'metronic/media/avatars/150-4.jpg',
+            'metronic/media/avatars/150-5.jpg',
+            'metronic/media/avatars/150-6.jpg',
+            'metronic/media/avatars/150-7.jpg',
+            'metronic/media/avatars/150-8.jpg',
+            'metronic/media/avatars/150-9.jpg',
+        ];
+
+        return collect($choices)->shuffle()->first();
+    }
+
+    public function getAvatarUrlAttribute(): string
+    {
+        $path = $this->avatar ?: 'metronic/media/avatars/blank.png';
+        return asset($path);
     }
 }

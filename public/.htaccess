@@ -5,9 +5,6 @@
 
     RewriteEngine On
 
-    # Map /favicon.ico to the bundled PNG to support browsers that auto-request it
-    RewriteRule ^favicon\.ico$ metronic/assets/media/logos/logo-demo2.png [L]
-
     # Handle Authorization Header
     RewriteCond %{HTTP:Authorization} .
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]

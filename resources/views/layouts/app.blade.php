@@ -1,38 +1,36 @@
 <!DOCTYPE html>
-<html lang="en">
-<!--begin::Head-->
-@include('layouts.partials._head')
-<!--end::Head-->
-<!--begin::Body-->
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="csrf-token" content="{{ csrf_token() }}">
 
-<body id="kt_body" style="background-image: url(/metronic/assets/media/patterns/header-bg.jpg)"
-    class="header-fixed header-tablet-and-mobile-fixed toolbar-enabled">
-    <!--begin::Main-->
-    <!--begin::Root-->
-    <div class="d-flex flex-column flex-root">
-        <!--begin::Page-->
-        <div class="page d-flex flex-row flex-column-fluid">
-            <!--begin::Wrapper-->
-            <div class="wrapper d-flex flex-column flex-row-fluid" id="kt_wrapper">
-                @include('layouts.partials._header')
+        <title>{{ config('app.name', 'Laravel') }}</title>
 
-                <!--begin::Content-->
-                @stack('toolbar')
-                
-                <div id="kt_content_container" class="d-flex flex-column-fluid align-items-start container-xxl">
-                        @yield('content')
-                </div>
+        <!-- Fonts -->
+        <link rel="preconnect" href="https://fonts.bunny.net">
+        <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
 
-                @include('layouts.partials._footer')
-            </div>
-            <!--end::Wrapper-->
+        <!-- Scripts -->
+        @vite(['resources/css/app.css', 'resources/js/app.js'])
+    </head>
+    <body class="font-sans antialiased">
+        <div class="min-h-screen bg-gray-100">
+            @include('layouts.navigation')
+
+            <!-- Page Heading -->
+            @isset($header)
+                <header class="bg-white shadow">
+                    <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+                        {{ $header }}
+                    </div>
+                </header>
+            @endisset
+
+            <!-- Page Content -->
+            <main>
+                {{ $slot }}
+            </main>
         </div>
-        <!--end::Page-->
-        @include('layouts.partials._warehousename')
-    </div>
-    <!--end::Root-->
-    @include('layouts.partials._scripts')
-</body>
-<!--end::Body-->
-
+    </body>
 </html>

@@ -2,30 +2,33 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 
 class Item extends Model
 {
     use HasFactory;
 
     protected $fillable = [
-        'koli',
         'sku',
-        'uom_id',
-        'nama_barang',
-        'deskripsi',
-        'product_code',
-        'item_category_id',
+        'name',
+        'category_id',
+        'address',
+        'description',
+        'safety_stock',
     ];
 
-    public function uom()
+    protected $casts = [
+        'safety_stock' => 'integer',
+    ];
+
+    public function category()
     {
-        return $this->belongsTo(Uom::class);
+        return $this->belongsTo(Category::class, 'category_id');
     }
 
-    public function itemCategory()
+    public function stock()
     {
-        return $this->belongsTo(ItemCategory::class);
+        return $this->hasOne(ItemStock::class, 'item_id');
     }
 }

@@ -12,22 +12,25 @@ class StockOpnameItem extends Model
     protected $fillable = [
         'stock_opname_id',
         'item_id',
-        'system_quantity',
-        'system_koli',
-        'physical_quantity',
-        'physical_koli',
-        'discrepancy_quantity',
-        'discrepancy_koli',
-        'description',
+        'system_qty',
+        'counted_qty',
+        'adjustment',
+        'note',
+        'created_by',
     ];
 
-    public function stockOpname()
+    public function opname()
     {
-        return $this->belongsTo(StockOpname::class);
+        return $this->belongsTo(StockOpname::class, 'stock_opname_id');
     }
 
     public function item()
     {
-        return $this->belongsTo(Item::class);
+        return $this->belongsTo(Item::class, 'item_id');
+    }
+
+    public function creator()
+    {
+        return $this->belongsTo(User::class, 'created_by');
     }
 }

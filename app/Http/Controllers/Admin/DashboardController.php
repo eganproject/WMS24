@@ -3,202 +3,136 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Inventory;
-use App\Models\StockInOrder;
-use App\Models\StockOut;
-use App\Models\TransferRequest;
-use App\Models\StockMovement;
-use App\Models\GoodsReceipt;
-use App\Models\User;
-use App\Models\UserActivity;
-use App\Models\Warehouse;
+use App\Models\Kurir;
+use App\Models\PackerScanOut;
+use App\Models\Resi;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
     public function index()
     {
-        $user = Auth::user();
-        $warehouseId = $user->warehouse_id;
-        $lowThreshold = 10; // TODO: make configurable
-        $highThreshold = 1000; // TODO: make configurable
+        $today = now()->toDateString();
 
-        if ($warehouseId) {
-            // Data for users with a warehouse
-            $recentActivities = UserActivity::where('user_id', $user->id)
-                ->latest()
-                ->take(5)
-                ->get();
+        $totalResi = Resi::whereDate('tanggal_upload', $today)->count();
+        $totalScanOut = PackerScanOut::whereDate('scan_date', $today)->count();
+        $totalResiUpdatedAt = Resi::whereDate('tanggal_upload', $today)->max('updated_at');
+        $totalScanUpdatedAt = PackerScanOut::whereDate('scan_date', $today)->max('scanned_at');
+        $totalResiUpdated = $totalResiUpdatedAt ? Carbon::parse($totalResiUpdatedAt)->format('H:i') : '-';
+        $totalScanUpdated = $totalScanUpdatedAt ? Carbon::parse($totalScanUpdatedAt)->format('H:i') : '-';
 
-            // Stock-in today: sum only from movements linked to stock_in_order_items
-            $todayStockIn = StockMovement::where('warehouse_id', $warehouseId)
-                ->where('type', 'stock_in')
-                ->where('reference_type', 'stock_in_order_items')
-                ->whereDate('date', today())
-                ->sum('quantity');
+        $resiCounts = Resi::select('kurir_id', DB::raw('count(*) as total'))
+            ->whereDate('tanggal_upload', $today)
+            ->groupBy('kurir_id')
+            ->pluck('total', 'kurir_id')
+            ->toArray();
 
-            // Stock-out today: sum only from movements linked to stock_out_items
-            $todayStockOut = StockMovement::where('warehouse_id', $warehouseId)
-                ->where('type', 'stock_out')
-                ->where('reference_type', 'stock_out_items')
-                ->whereDate('date', today())
-                ->sum('quantity');
+        $scanCounts = PackerScanOut::select('kurir_id', DB::raw('count(*) as total'))
+            ->whereDate('scan_date', $today)
+            ->groupBy('kurir_id')
+            ->pluck('total', 'kurir_id')
+            ->toArray();
 
-            // Incoming transfers en route to this warehouse
-            $pendingTransfers = TransferRequest::where('to_warehouse_id', $warehouseId)
-                ->where('status', 'on_progress')
-                ->count();
+        $resiLatest = Resi::select('kurir_id', DB::raw('max(updated_at) as latest'))
+            ->whereDate('tanggal_upload', $today)
+            ->groupBy('kurir_id')
+            ->pluck('latest', 'kurir_id')
+            ->toArray();
 
-            // Stock reminders (warehouse scoped)
-            $zeroStockItems = Inventory::where('warehouse_id', $warehouseId)
-                ->where('quantity', '<=', 0)
-                ->count();
-            $lowStockItems = Inventory::where('warehouse_id', $warehouseId)
-                ->where('quantity', '>', 0)
-                ->where('quantity', '<=', $lowThreshold)
-                ->count();
-            $optimalStockItems = Inventory::where('warehouse_id', $warehouseId)
-                ->where('quantity', '>', $lowThreshold)
-                ->where('quantity', '<=', $highThreshold)
-                ->count();
-            $overStockItems = Inventory::where('warehouse_id', $warehouseId)
-                ->where('quantity', '>', $highThreshold)
-                ->count();
+        $scanLatest = PackerScanOut::select('kurir_id', DB::raw('max(scanned_at) as latest'))
+            ->whereDate('scan_date', $today)
+            ->groupBy('kurir_id')
+            ->pluck('latest', 'kurir_id')
+            ->toArray();
 
-            $stockChartData = $this->getStockChartData($warehouseId);
+        $kurirs = Kurir::orderBy('name')
+            ->get(['id', 'name'])
+            ->map(function ($kurir) use ($resiCounts, $scanCounts, $resiLatest, $scanLatest) {
+                $resiTotal = (int) ($resiCounts[$kurir->id] ?? 0);
+                $scanTotal = (int) ($scanCounts[$kurir->id] ?? 0);
+                $latestResi = $resiLatest[$kurir->id] ?? null;
+                $latestScan = $scanLatest[$kurir->id] ?? null;
+                $latestRaw = $latestResi && $latestScan
+                    ? (Carbon::parse($latestResi)->greaterThan(Carbon::parse($latestScan)) ? $latestResi : $latestScan)
+                    : ($latestResi ?: $latestScan);
+                $latestTime = $latestRaw ? Carbon::parse($latestRaw)->format('H:i') : '-';
+                return [
+                    'id' => $kurir->id,
+                    'name' => $kurir->name,
+                    'resi_total' => $resiTotal,
+                    'scan_total' => $scanTotal,
+                    'remaining' => max(0, $resiTotal - $scanTotal),
+                    'last_update' => $latestTime,
+                ];
+            });
 
-            // Stock summary (warehouse scoped)
-            $invScope = Inventory::where('warehouse_id', $warehouseId);
-            $totalSkus = (clone $invScope)->distinct('item_id')->count('item_id');
-
-            // Stock In status counts (warehouse scoped)
-            $stockInRequested = StockInOrder::where('warehouse_id', $warehouseId)->where('status', 'requested')->count();
-            $stockInShipped = StockInOrder::where('warehouse_id', $warehouseId)->where('status', 'on_progress')->count();
-            $stockInCompleted = StockInOrder::where('warehouse_id', $warehouseId)->where('status', 'completed')->count();
-
-            // Recent movements & low stock list
-            $recentMovements = StockMovement::with('item')
-                ->where('warehouse_id', $warehouseId)
-                ->latest('id')
-                ->take(5)
-                ->get();
-            $topLowStocks = Inventory::with('item')
-                ->where('warehouse_id', $warehouseId)
-                ->orderBy('quantity', 'asc')
-                ->take(5)
-                ->get();
-
-            return view('admin.dashboard.index', compact(
-                'user',
-                'recentActivities',
-                'todayStockIn',
-                'todayStockOut',
-                'pendingTransfers',
-                'lowStockItems',
-                'zeroStockItems',
-                'optimalStockItems',
-                'overStockItems',
-                'stockChartData',
-                'totalSkus',
-                'stockInRequested',
-                'stockInShipped',
-                'stockInCompleted',
-                'recentMovements',
-                'topLowStocks'
-            ));
-        } else {
-            // Data for users without a warehouse (system-wide)
-            $totalUsers = User::count();
-            $totalWarehouses = Warehouse::count();
-            $todayStockIn = StockMovement::where('type', 'stock_in')
-                ->where('reference_type', 'stock_in_order_items')
-                ->whereDate('date', today())
-                ->sum('quantity');
-            $todayStockOut = StockMovement::where('type', 'stock_out')
-                ->where('reference_type', 'stock_out_items')
-                ->whereDate('date', today())
-                ->sum('quantity');
-            $recentActivities = UserActivity::with('user')->latest()->take(5)->get();
-
-            // Stock reminders (system-wide)
-            $zeroStockItems = Inventory::where('quantity', '<=', 0)->count();
-            $lowStockItems = Inventory::where('quantity', '>', 0)->where('quantity', '<=', $lowThreshold)->count();
-            $optimalStockItems = Inventory::where('quantity', '>', $lowThreshold)->where('quantity', '<=', $highThreshold)->count();
-            $overStockItems = Inventory::where('quantity', '>', $highThreshold)->count();
-            $stockChartData = $this->getStockChartData(null);
-
-            // Stock summary (system-wide)
-            $totalSkus = Inventory::distinct('item_id')->count('item_id');
-
-            $stockInRequested = StockInOrder::where('status', 'requested')->count();
-            $stockInShipped = StockInOrder::where('status', 'on_progress')->count();
-            $stockInCompleted = StockInOrder::where('status', 'completed')->count();
-
-            $recentMovements = StockMovement::with('item')->latest('id')->take(5)->get();
-            $topLowStocks = Inventory::with('item')->orderBy('quantity', 'asc')->take(5)->get();
-
-            return view('admin.dashboard.index', compact(
-                'user',
-                'totalUsers',
-                'totalWarehouses',
-                'todayStockIn',
-                'todayStockOut',
-                'recentActivities',
-                'zeroStockItems',
-                'lowStockItems',
-                'optimalStockItems',
-                'overStockItems',
-                'stockChartData',
-                'totalSkus',
-                'stockInRequested',
-                'stockInShipped',
-                'stockInCompleted',
-                'recentMovements',
-                'topLowStocks'
-            ));
-        }
+        return view('admin.dashboard', [
+            'today' => $today,
+            'totalResi' => $totalResi,
+            'totalScanOut' => $totalScanOut,
+            'totalResiUpdated' => $totalResiUpdated,
+            'totalScanUpdated' => $totalScanUpdated,
+            'kurirs' => $kurirs,
+        ]);
     }
 
-    private function getStockChartData($warehouseId)
+    public function kurirDetail(Request $request)
     {
-        $dates = collect();
-        for ($i = 6; $i >= 0; $i--) {
-            $dates->push(today()->subDays($i)->toDateString());
-        }
+        $validated = $request->validate([
+            'kurir_id' => ['required', 'integer', 'exists:kurirs,id'],
+            'date' => ['nullable', 'date'],
+        ]);
 
-        // Use completed Goods Receipts to represent actual stock-in events
-        $stockInQuery = GoodsReceipt::where('status', GoodsReceipt::STATUS_COMPLETED)
-            ->whereBetween('completed_at', [today()->subDays(6), today()->endOfDay()]);
+        $date = Carbon::parse($validated['date'] ?? now())->toDateString();
+        $kurir = Kurir::query()->findOrFail((int) $validated['kurir_id'], ['id', 'name']);
 
-        $stockOutQuery = StockOut::whereBetween('date', [today()->subDays(6), today()->endOfDay()]);
+        $resis = Resi::query()
+            ->where('kurir_id', $kurir->id)
+            ->whereDate('tanggal_upload', $date)
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id')
+            ->get(['id', 'id_pesanan', 'no_resi', 'tanggal_upload', 'status']);
 
-        if ($warehouseId) {
-            $stockInQuery->where('warehouse_id', $warehouseId);
-            $stockOutQuery->where('warehouse_id', $warehouseId);
-        }
+        $scanOuts = PackerScanOut::query()
+            ->with('scanner:id,name')
+            ->whereDate('scan_date', $date)
+            ->whereIn('resi_id', $resis->pluck('id'))
+            ->orderByDesc('scanned_at')
+            ->get(['id', 'resi_id', 'scan_type', 'scan_code', 'scanned_at', 'scanned_by'])
+            ->unique('resi_id')
+            ->keyBy('resi_id');
 
-        $stockIn = $stockInQuery->select(DB::raw('DATE(completed_at) as date'), DB::raw('count(*) as count'))
-            ->groupBy(DB::raw('DATE(completed_at)'))
-            ->pluck('count', 'date');
+        $activeResis = $resis->filter(function ($resi) {
+            return ($resi->status ?? 'active') !== 'canceled';
+        })->values();
 
-        $stockOut = $stockOutQuery->select(DB::raw('DATE(date) as date'), DB::raw('count(*) as count'))
-            ->groupBy(DB::raw('DATE(date)'))
-            ->pluck('count', 'date');
+        $pendingResis = $activeResis->filter(function ($resi) use ($scanOuts) {
+            return !$scanOuts->has($resi->id);
+        })->values();
 
-        $chartData = [
-            'labels' => $dates->map(function ($date) {
-                return date('d M', strtotime($date));
-            }),
-            'stock_in' => $dates->map(function ($date) use ($stockIn) {
-                return $stockIn->get($date, 0);
-            }),
-            'stock_out' => $dates->map(function ($date) use ($stockOut) {
-                return $stockOut->get($date, 0);
-            }),
-        ];
+        $data = $pendingResis->map(function ($resi) {
+            return [
+                'id_pesanan' => $resi->id_pesanan ?? '-',
+                'no_resi' => $resi->no_resi ?? '-',
+                'status' => 'Belum Scan Out',
+                'tanggal_upload' => $resi->tanggal_upload
+                    ? Carbon::parse($resi->tanggal_upload)->format('Y-m-d')
+                    : '-',
+            ];
+        })->values();
 
-        return $chartData;
+        return response()->json([
+            'meta' => [
+                'kurir_name' => $kurir->name,
+                'date' => $date,
+                'total_resi' => $activeResis->count(),
+                'scanned_total' => $activeResis->count() - $pendingResis->count(),
+                'remaining_total' => $pendingResis->count(),
+                'canceled_total' => $resis->count() - $activeResis->count(),
+            ],
+            'data' => $data,
+        ]);
     }
 }

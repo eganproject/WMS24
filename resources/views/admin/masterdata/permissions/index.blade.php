@@ -1,178 +1,113 @@
-@extends('layouts.app')
+@extends('layouts.admin')
 
-@push('styles')
-    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css">
-@endpush
-
-@push('toolbar')
-    @include('layouts.partials._toolbar', [
-        'title' => 'Manajemen Hak Akses',
-        'breadcrumbs' => ['Admin', 'Masterdata', 'Hak Akses'],
-    ])
-@endpush
-
+@section('title', 'Masterdata - Permissions')
 @section('content')
-    <div class="content flex-row-fluid" id="kt_content">
-        <div class="card">
-            <div class="card-header border-0 pt-6">
-                <div class="card-title">
-                    <div class="d-flex align-items-center position-relative my-1">
-                        <select id="jabatan-filter" class="form-select form-select-solid" data-kt-select2="true">
-                            @foreach ($jabatans as $jabatan)
-                                <option value="{{ $jabatan->id }}">{{ $jabatan->name }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                </div>
+<div class="card">
+    <div class="card-header border-0 pt-6">
+        <div class="card-title">
+            <div class="d-flex align-items-center position-relative my-1">
+                <span class="svg-icon svg-icon-1 position-absolute ms-6">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+                        <rect opacity="0.5" x="17.0365" y="15.1223" width="8.15546" height="2" rx="1" transform="rotate(45 17.0365 15.1223)" fill="black" />
+                        <path d="M11 19C6.55556 19 3 15.4444 3 11C3 6.55556 6.55556 3 11 3C15.4444 3 19 6.55556 19 11C19 15.4444 15.4444 19 11 19ZM11 5C7.53333 5 5 7.53333 5 11C5 14.4667 7.53333 17 11 17C14.4667 17 17 14.4667 17 11C17 7.53333 14.4667 5 11 5Z" fill="black" />
+                    </svg>
+                </span>
+                <input type="text" class="form-control form-control-solid w-250px ps-14" placeholder="Search permissions" data-kt-filter="search" />
             </div>
-            <div class="card-body pt-4">
-                <div class="dataTables_wrapper dt-bootstrap4 no-footer">
-                    <div class="table-responsive min-h-500px">
-                        <table class="table align-middle table-row-dashed fs-6 gy-5">
-                            <thead>
-                                <tr>
-                                    <td colspan="6" class="fs-5 fw-bolder form-label mb-2">Akses Jabatan</td>
-                                </tr>
-                            </thead>
-                            <tbody id="permissions-table-body" class="text-gray-600 fw-bold">
-                                <!-- Permissions rows will be loaded here via AJAX -->
-                            </tbody>
-                        </table>
+        </div>
+        <div class="card-toolbar">
+            <div class="d-flex justify-content-end" data-kt-user-table-toolbar="base">
+                <button type="button" class="btn btn-light-primary me-3" data-kt-menu-trigger="click" data-kt-menu-placement="bottom-end">
+                    <span class="svg-icon svg-icon-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+                            <path d="M19.0759 3H4.72777C3.95892 3 3.47768 3.83148 3.86067 4.49814L8.56967 12.6949C9.17923 13.7559 9.5 14.9582 9.5 16.1819V19.5072C9.5 20.2189 10.2223 20.7028 10.8805 20.432L13.8805 19.1977C14.2553 19.0435 14.5 18.6783 14.5 18.273V13.8372C14.5 12.8089 14.8171 11.8056 15.408 10.964L19.8943 4.57465C20.3596 3.912 19.8856 3 19.0759 3Z" fill="black" />
+                        </svg>
+                    </span>
+                    Filter
+                </button>
+                <div class="menu menu-sub menu-sub-dropdown w-300px w-md-325px" data-kt-menu="true">
+                    <div class="px-7 py-5">
+                        <div class="fs-5 text-dark fw-bolder">Filter Options</div>
+                    </div>
+                    <div class="separator border-gray-200"></div>
+                    <div class="px-7 py-5">
+                        <div class="mb-10">
+                            <label class="form-label fs-6 fw-bold">User Count:</label>
+                            <select class="form-select form-select-solid fw-bolder" data-placeholder="Select option" data-allow-clear="true">
+                                <option></option>
+                                <option value="0">No Users</option>
+                                <option value="1-5">1 - 5 Users</option>
+                                <option value="6-10">6 - 10 Users</option>
+                            </select>
+                        </div>
+                        <div class="d-flex justify-content-end">
+                            <button type="reset" class="btn btn-light btn-active-light-primary me-2">Reset</button>
+                            <button type="submit" class="btn btn-primary">Apply</button>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+    <div class="card-body py-6">
+        <div class="table-responsive">
+            <table class="table align-middle table-row-dashed fs-6 gy-5" id="permissions_table">
+                <thead>
+                    <tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0">
+                        <th>ID</th>
+                        <th>Nama Role</th>
+                        <th>Slug</th>
+                        <th>Jumlah User</th>
+                        <th class="text-end">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($roles as $r)
+                        <tr>
+                            <td>{{ $r->id }}</td>
+                            <td>{{ $r->name }}</td>
+                            <td>{{ $r->slug }}</td>
+                            <td>{{ $r->users_count }}</td>
+                            <td class="text-end">
+                                <a href="#" class="btn btn-sm btn-light btn-active-light-primary" data-kt-menu-trigger="click" data-kt-menu-placement="bottom-end">
+                                    Actions
+                                    <span class="svg-icon svg-icon-5 m-0">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+                                            <path d="M11.4343 12.7344L7.25 8.55005C6.83579 8.13583 6.16421 8.13584 5.75 8.55005C5.33579 8.96426 5.33579 9.63583 5.75 10.05L11.2929 15.5929C11.6834 15.9835 12.3166 15.9835 12.7071 15.5929L18.25 10.05C18.6642 9.63584 18.6642 8.96426 18.25 8.55005C17.8358 8.13584 17.1642 8.13584 16.75 8.55005L12.5657 12.7344C12.2533 13.0468 11.7467 13.0468 11.4343 12.7344Z" fill="black"></path>
+                                        </svg>
+                                    </span>
+                                </a>
+                                <div class="menu menu-sub menu-sub-dropdown menu-column menu-rounded menu-gray-600 menu-state-bg-light-primary fw-bold fs-7 w-175px py-3" data-kt-menu="true">
+                                    <div class="menu-item px-3">
+                                        <a href="{{ route('admin.masterdata.permissions.edit', $r->id) }}" class="menu-link px-3">Atur Permission</a>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
 @endsection
 
 @push('scripts')
-    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-    <script>
-        $(document).ready(function() {
-            toastr.options = {
-                "closeButton": true,
-                "debug": false,
-                "newestOnTop": false,
-                "progressBar": true,
-                "positionClass": "toast-top-center",
-                "preventDuplicates": false,
-                "showDuration": "300",
-                "hideDuration": "1000",
-                "timeOut": "5000",
-                "extendedTimeOut": "1000",
-                "showEasing": "swing",
-                "hideEasing": "linear",
-                "showMethod": "fadeIn",
-                "hideMethod": "fadeOut"
-            };
-
-            @if (Session::has('success'))
-                toastr.success("{{ session('success') }}");
-            @endif
-
-            @if (Session::has('error'))
-                toastr.error("{{ session('error') }}");
-            @endif
-
-            function loadPermissions(jabatanId) {
-                axios.get(`{{ route('admin.masterdata.permissions.get_by_jabatan') }}?jabatan_id=${jabatanId}`)
-                    .then(function(response) {
-                        const permissions = response.data.permissions;
-                        const menus = response.data.menus;
-                        const jabatans = response.data.jabatans;
-                        let tableBody = $('#permissions-table-body');
-                        tableBody.empty();
-
-                        menus.forEach(function(menu) {
-                            tableBody.append(renderMenuPermissionRow(menu, 0, jabatans, permissions));
-                        });
-                    })
-                    .catch(function(error) {
-                        console.error(error);
-                        toastr.error('Gagal memuat hak akses.');
-                    });
-            }
-
-            function renderMenuPermissionRow(menu, level, jabatans, permissions) {
-                let row = `<tr>
-                    <td class="text-gray-800">${'--'.repeat(level)} ${menu.name}</td>`;
-
-                jabatans.forEach(function(jabatan) {
-                    let permission = permissions[jabatan.id + '-' + menu.id] || {};
-                    row +=
-                        `<td>
-                            <label class="form-check form-check-sm form-check-custom form-check-solid me-5 me-lg-20">
-                                <input class="form-check-input permission-checkbox" data-jabatan-id="${jabatan.id}" data-menu-id="${menu.id}" data-permission-type="can_create" ${permission.can_create ? 'checked' : ''} type="checkbox">
-                                <span class="form-check-label">Create</span>
-                            </label>								
-                        </td>
-                        <td>
-                             <label class="form-check form-check-sm form-check-custom form-check-solid me-5 me-lg-20">
-                                <input class="form-check-input permission-checkbox" data-jabatan-id="${jabatan.id}" data-menu-id="${menu.id}" data-permission-type="can_read" ${permission.can_read ? 'checked' : ''} type="checkbox">
-                                <span class="form-check-label">Read</span>
-                            </label>	
-                        </td>
-                        <td>
-                             <label class="form-check form-check-sm form-check-custom form-check-solid me-5 me-lg-20">
-                                <input class="form-check-input permission-checkbox"  data-jabatan-id="${jabatan.id}" data-menu-id="${menu.id}" data-permission-type="can_edit" ${permission.can_edit ? 'checked' : ''} type="checkbox">
-                                <span class="form-check-label">Update</span>
-                            </label>
-                        </td>
-                        <td>
-                             <label class="form-check form-check-sm form-check-custom form-check-solid me-5 me-lg-20">
-                                <input class="form-check-input permission-checkbox"  data-jabatan-id="${jabatan.id}" data-menu-id="${menu.id}" data-permission-type="can_delete" ${permission.can_delete ? 'checked' : ''} type="checkbox">
-                                <span class="form-check-label">Delete</span>
-                            </label>
-                        </td>
-                        <td>
-                             <label class="form-check form-check-sm form-check-custom form-check-solid me-5 me-lg-20">
-                                <input class="form-check-input permission-checkbox" data-jabatan-id="${jabatan.id}" data-menu-id="${menu.id}" data-permission-type="can_approve" ${permission.can_approve ? 'checked' : ''} type="checkbox">
-                                <span class="form-check-label">Approval</span>
-                            </label>
-                        </td>`;
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const searchInput = document.querySelector('[data-kt-filter="search"]');
+        if (searchInput) {
+            searchInput.addEventListener('keyup', (e) => {
+                const term = e.target.value.toLowerCase();
+                document.querySelectorAll('#permissions_table tbody tr').forEach(row => {
+                    const text = row.textContent.toLowerCase();
+                    row.style.display = text.includes(term) ? '' : 'none';
                 });
-
-                row += `</tr>`;
-
-                if (menu.children && menu.children.length > 0) {
-                    menu.children.forEach(function(child) {
-                        row += renderMenuPermissionRow(child, level + 1, jabatans, permissions);
-                    });
-                }
-
-                return row;
-            }
-
-            // Initial load
-            loadPermissions($('#jabatan-filter').val());
-
-            // Handle filter change
-            $('#jabatan-filter').on('change', function() {
-                loadPermissions($(this).val());
             });
-
-            // Handle checkbox change
-            $(document).on('change', '.permission-checkbox', function() {
-                const jabatanId = $(this).data('jabatan-id');
-                const menuId = $(this).data('menu-id');
-                const permissionType = $(this).data('permission-type');
-                const isChecked = $(this).is(':checked');
-
-                axios.post('{{ route('admin.masterdata.permissions.update') }}', {
-                        jabatan_id: jabatanId,
-                        menu_id: menuId,
-                        permission_type: permissionType,
-                        is_checked: isChecked
-                    })
-                    .then(function(response) {
-                        toastr.success('Hak akses berhasil diperbarui.');
-                    })
-                    .catch(function(error) {
-                        console.error(error);
-                        toastr.error('Terjadi kesalahan saat memperbarui hak akses.');
-                        $(this).prop('checked', !isChecked);
-                    });
-            });
-        });
-    </script>
+        }
+        if (window.KTMenu) {
+            KTMenu.createInstances();
+        }
+    });
+</script>
 @endpush

@@ -34,8 +34,10 @@ class PickerSessionController extends Controller
                 'submit' => route('picker.submit'),
                 'searchItems' => route('picker.items.search'),
                 'scanItem' => route('picker.scan-item'),
+                'pickingListData' => route('picker.picking-list.data'),
                 'logout' => route('logout'),
             ],
+            'today' => now()->toDateString(),
         ]);
     }
 

@@ -92,7 +92,9 @@
             </select>
             <input type="text" class="input" id="filter_search" placeholder="Cari SKU atau nama" autocomplete="off" />
             <select class="input" id="filter_per_page">
-                <option value="20" selected>20 per halaman</option>
+                <option value="5" selected>5 per halaman</option>
+                <option value="10">10 per halaman</option>
+                <option value="20">20 per halaman</option>
                 <option value="50">50 per halaman</option>
                 <option value="100">100 per halaman</option>
             </select>
@@ -183,7 +185,7 @@
         if (q) params.set('q', q);
         const laneId = el.lane?.value || '';
         if (laneId) params.set('lane_id', laneId);
-        const perPage = Number(el.perPage?.value || 20);
+        const perPage = Number(el.perPage?.value || 5);
         params.set('per_page', perPage);
         params.set('page', currentPage);
 

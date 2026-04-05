@@ -57,7 +57,7 @@ class PickingListMobileController extends Controller
         }
 
         $page = max(1, (int) $request->input('page', 1));
-        $perPage = (int) $request->input('per_page', 20);
+        $perPage = (int) $request->input('per_page', 5);
         $perPage = min(100, max(5, $perPage));
         $total = (clone $query)->count();
         $totalPages = (int) ceil($total / $perPage);

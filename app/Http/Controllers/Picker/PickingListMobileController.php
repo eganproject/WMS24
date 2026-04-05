@@ -13,13 +13,20 @@ class PickingListMobileController extends Controller
 {
     public function index()
     {
+        $authUser = auth()->user();
+        $divisiId = $authUser?->divisi_id;
+        $laneQuery = Lane::orderBy('code');
+        if ($divisiId !== null && (int) $divisiId !== 1) {
+            $laneQuery->where('divisi_id', (int) $divisiId);
+        }
+
         return view('picker.picking-list', [
             'routes' => [
                 'dashboard' => route('picker.dashboard'),
                 'data' => route('picker.picking-list.data'),
                 'logout' => route('logout'),
             ],
-            'lanes' => Lane::orderBy('code')->get(['id', 'code', 'name']),
+            'lanes' => $laneQuery->get(['id', 'code', 'name']),
             'today' => now()->toDateString(),
         ]);
     }
@@ -38,6 +45,14 @@ class PickingListMobileController extends Controller
             ->where('list_date', $date)
             ->orderBy('sku');
         $this->applyPackerExceptionFilter($query);
+
+        $authUser = $request->user();
+        $divisiId = $authUser?->divisi_id;
+        if ($divisiId !== null && (int) $divisiId !== 1) {
+            $query->whereHas('item.location.lane', function ($laneQ) use ($divisiId) {
+                $laneQ->where('divisi_id', (int) $divisiId);
+            });
+        }
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {

@@ -83,6 +83,7 @@
                                 <th>Tanggal</th>
                                 <th>SKU</th>
                                 <th>Nama</th>
+                                <th>Lane</th>
                                 <th class="text-end">Qty</th>
                                 <th class="text-end">Remaining</th>
                             </tr>
@@ -367,6 +368,7 @@
                 { data: 'date' },
                 { data: 'sku' },
                 { data: 'name' },
+                { data: 'lane' },
                 { data: 'qty', className: 'text-end' },
                 { data: 'remaining_qty', className: 'text-end' },
             ]

@@ -34,7 +34,7 @@ class PickingListController extends Controller
     public function data(Request $request)
     {
         $baseQuery = PickingList::query()
-            ->with('item')
+            ->with('item.location.lane')
             ->orderBy('list_date', 'desc')
             ->orderBy('sku');
         $this->applyPackerExceptionFilter($baseQuery);
@@ -71,10 +71,12 @@ class PickingListController extends Controller
 
         $data = $query->get()->map(function ($row) {
             $item = $row->item;
+            $lane = $item?->location?->lane;
             return [
                 'date' => $row->list_date?->format('Y-m-d') ?? '-',
                 'sku' => $row->sku ?? '-',
                 'name' => $item?->name ?? '-',
+                'lane' => $lane?->code ?? '-',
                 'qty' => (int) $row->qty,
                 'remaining_qty' => (int) $row->remaining_qty,
             ];

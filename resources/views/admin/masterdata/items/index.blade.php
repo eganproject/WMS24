@@ -300,6 +300,21 @@
         const importInput = document.getElementById('import_items_file');
         const importError = document.getElementById('error_import_file');
         const importSubmit = document.getElementById('btn_import_items_submit');
+        const notifyError = (message, title = 'Error') => {
+            if (window.AppSwal?.error) {
+                return window.AppSwal.error(message, title);
+            }
+            if (typeof Swal !== 'undefined') {
+                return Swal.fire(title, message || 'Terjadi kesalahan', 'error');
+            }
+            alert(message || 'Terjadi kesalahan');
+        };
+        const notifySuccess = (message, title = 'Berhasil') => {
+            if (typeof Swal !== 'undefined') {
+                return Swal.fire(title, message || 'Berhasil', 'success');
+            }
+            alert(message || 'Berhasil');
+        };
         const confirmAction = async () => {
             if (typeof Swal === 'undefined') {
                 return true;
@@ -530,27 +545,27 @@
                 try { json = JSON.parse(text); } catch (e) {
                     console.error('Invalid JSON', text);
                     closeSwal();
-                    if (typeof Swal !== 'undefined') Swal.fire('Error', 'Respons server tidak valid', 'error');
+                    notifyError('Respons server tidak valid');
                     return;
                 }
                 closeSwal();
                 if (!res.ok) {
                     if (json?.errors) {
                         const msg = Object.values(json.errors).flat().join(', ');
-                        Swal?.fire('Error', msg || 'Gagal import', 'error');
+                        notifyError(msg || 'Gagal import');
                     } else {
-                        Swal?.fire('Error', json.message || 'Gagal import', 'error');
+                        notifyError(json.message || 'Gagal import');
                     }
                     return;
                 }
-                Swal?.fire('Berhasil', `${json.message || 'Import selesai'} (created: ${json.created}, updated: ${json.updated})`, 'success');
+                notifySuccess(`${json.message || 'Import selesai'} (created: ${json.created}, updated: ${json.updated})`);
                 if (importInput) importInput.value = '';
                 importModal?.hide();
                 reloadTable();
             } catch (err) {
                 console.error(err);
                 closeSwal();
-                Swal?.fire('Error', 'Gagal import', 'error');
+                notifyError('Gagal import');
             }
         });
 
@@ -575,7 +590,7 @@
                 let json;
                 try { json = JSON.parse(text); } catch (parseErr) {
                     console.error('Invalid JSON', text);
-                    if (typeof Swal !== 'undefined') Swal.fire('Error', 'Respons server tidak valid', 'error');
+                    notifyError('Respons server tidak valid');
                     return;
                 }
                 if (!res.ok) {
@@ -584,17 +599,19 @@
                             const errEl = document.getElementById(`error_${key}`);
                             if (errEl) errEl.textContent = msgs.join(', ');
                         });
-                    } else if (typeof Swal !== 'undefined') {
-                        Swal.fire('Error', json.message || 'Gagal menyimpan item', 'error');
+                        const msg = Object.values(json.errors).flat().join(', ');
+                        if (msg) notifyError(msg);
+                    } else {
+                        notifyError(json.message || 'Gagal menyimpan item');
                     }
                     return;
                 }
-                if (typeof Swal !== 'undefined') Swal.fire('Berhasil', json.message || 'Berhasil', 'success');
+                notifySuccess(json.message || 'Berhasil');
                 modal?.hide();
                 reloadTable(true);
             } catch (err) {
                 console.error(err);
-                if (typeof Swal !== 'undefined') Swal.fire('Error', 'Gagal menyimpan item', 'error');
+                notifyError('Gagal menyimpan item');
             }
         });
 
@@ -668,24 +685,26 @@
                 let json;
                 try { json = JSON.parse(text); } catch (parseErr) {
                     console.error('Invalid JSON', text);
-                    if (typeof Swal !== 'undefined') Swal.fire('Error', 'Respons server tidak valid', 'error');
+                    notifyError('Respons server tidak valid');
                     return;
                 }
                 if (!res.ok) {
-                    if (typeof Swal !== 'undefined') Swal.fire('Error', json.message || 'Gagal menghapus item', 'error');
+                    notifyError(json.message || 'Gagal menghapus item');
                     return;
                 }
-                if (typeof Swal !== 'undefined') Swal.fire('Berhasil', json.message || 'Berhasil', 'success');
+                notifySuccess(json.message || 'Berhasil');
                 reloadTable();
             } catch (err) {
                 console.error(err);
-                if (typeof Swal !== 'undefined') Swal.fire('Error', 'Gagal menghapus item', 'error');
+                notifyError('Gagal menghapus item');
             }
         });
 
         document.getElementById('btn_export_items')?.addEventListener('click', () => {
             if (typeof Swal !== 'undefined') {
                 Swal.fire('Info', 'Fitur export belum diimplementasikan.', 'info');
+            } else {
+                alert('Fitur export belum diimplementasikan.');
             }
         });
     });

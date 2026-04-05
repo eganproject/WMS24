@@ -69,6 +69,7 @@ Route::middleware('auth')->prefix('picker')->as('picker.')->group(function () {
     Route::get('/picking-list', [PickingListMobileController::class, 'index'])->name('picking-list.index');
     Route::get('/picking-list/data', [PickingListMobileController::class, 'data'])->name('picking-list.data');
     Route::get('/', [PickerSessionController::class, 'index'])->name('index');
+    Route::get('/scan', [PickerSessionController::class, 'scan'])->name('scan');
     Route::get('/current', [PickerSessionController::class, 'current'])->name('current');
     Route::post('/start', [PickerSessionController::class, 'start'])->name('start');
     Route::get('/items/search', [PickerSessionController::class, 'searchItems'])->name('items.search');

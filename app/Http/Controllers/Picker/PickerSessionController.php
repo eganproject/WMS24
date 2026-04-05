@@ -26,6 +26,7 @@ class PickerSessionController extends Controller
             'session' => $session ? $this->serializeSession($session) : null,
             'routes' => [
                 'dashboard' => route('picker.dashboard'),
+                'scan' => route('picker.scan'),
                 'start' => route('picker.start'),
                 'current' => route('picker.current'),
                 'itemsStore' => route('picker.items.store'),
@@ -33,6 +34,28 @@ class PickerSessionController extends Controller
                 'itemsDestroy' => route('picker.items.destroy', ':id'),
                 'submit' => route('picker.submit'),
                 'searchItems' => route('picker.items.search'),
+                'scanItem' => route('picker.scan-item'),
+                'pickingListData' => route('picker.picking-list.data'),
+                'logout' => route('logout'),
+            ],
+            'today' => now()->toDateString(),
+        ]);
+    }
+
+    public function scan()
+    {
+        $session = $this->currentDraftSession();
+
+        return view('picker.scan', [
+            'session' => $session ? $this->serializeSession($session) : null,
+            'routes' => [
+                'input' => route('picker.index'),
+                'dashboard' => route('picker.dashboard'),
+                'start' => route('picker.start'),
+                'current' => route('picker.current'),
+                'itemsUpdate' => route('picker.items.update', ':id'),
+                'itemsDestroy' => route('picker.items.destroy', ':id'),
+                'submit' => route('picker.submit'),
                 'scanItem' => route('picker.scan-item'),
                 'pickingListData' => route('picker.picking-list.data'),
                 'logout' => route('logout'),

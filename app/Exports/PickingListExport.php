@@ -53,6 +53,20 @@ class PickingListExport implements FromCollection, WithHeadings, WithMapping, Sh
             $query->where('remaining_qty', '<=', 0);
         }
 
+        $laneId = $this->filters['lane_id'] ?? null;
+        if (!empty($laneId)) {
+            $query->whereHas('item.location.lane', function ($laneQ) use ($laneId) {
+                $laneQ->where('id', (int) $laneId);
+            });
+        } else {
+            $divisiId = $this->filters['divisi_id'] ?? null;
+            if (!empty($divisiId)) {
+                $query->whereHas('item.location.lane', function ($laneQ) use ($divisiId) {
+                    $laneQ->where('divisi_id', (int) $divisiId);
+                });
+            }
+        }
+
         return $query->get();
     }
 

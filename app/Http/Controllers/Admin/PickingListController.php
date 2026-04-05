@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Exports\PickingListExport;
+use App\Models\Divisi;
 use App\Models\Item;
+use App\Models\Lane;
 use App\Models\PickingList;
 use App\Models\PickingListException;
 use App\Models\PackerScanException;
@@ -23,6 +25,8 @@ class PickingListController extends Controller
         return view('admin.inventory.picking-list.index', [
             'dataUrl' => route('admin.inventory.picking-list.data'),
             'dataUrlExceptions' => route('admin.inventory.picking-list.exceptions'),
+            'divisis' => Divisi::orderBy('name')->get(['id', 'name']),
+            'lanes' => Lane::orderBy('code')->get(['id', 'code', 'name', 'divisi_id']),
             'today' => now()->toDateString(),
         ]);
     }
@@ -34,6 +38,8 @@ class PickingListController extends Controller
             ->orderBy('list_date', 'desc')
             ->orderBy('sku');
         $this->applyPackerExceptionFilter($baseQuery);
+        $this->applyDateFilter($baseQuery, $request);
+        $this->applyLaneDivisiFilter($baseQuery, $request);
         $recordsTotalQuery = clone $baseQuery;
 
         $search = trim((string) $request->input('q', ''));
@@ -45,8 +51,6 @@ class PickingListController extends Controller
                     });
             });
         }
-
-        $this->applyDateFilter($baseQuery, $request);
 
         $recordsTotal = (clone $recordsTotalQuery)->count();
         $summaryQuery = clone $baseQuery;
@@ -92,6 +96,8 @@ class PickingListController extends Controller
             ->orderBy('list_date', 'desc')
             ->orderBy('sku');
         $this->applyPackerExceptionFilter($baseQuery);
+        $this->applyDateFilter($baseQuery, $request);
+        $this->applyLaneDivisiFilter($baseQuery, $request);
         $recordsTotalQuery = clone $baseQuery;
 
         $search = trim((string) $request->input('q', ''));
@@ -103,8 +109,6 @@ class PickingListController extends Controller
                     });
             });
         }
-
-        $this->applyDateFilter($baseQuery, $request);
 
         $recordsTotal = (clone $recordsTotalQuery)->count();
         $recordsFiltered = (clone $baseQuery)->count();
@@ -382,6 +386,8 @@ class PickingListController extends Controller
             'q' => $request->input('q', ''),
             'date' => $request->input('date'),
             'status' => $request->input('status', ''),
+            'divisi_id' => $request->input('divisi_id'),
+            'lane_id' => $request->input('lane_id'),
         ];
 
         $date = $filters['date'] ?: now()->toDateString();
@@ -389,6 +395,77 @@ class PickingListController extends Controller
         $filename = "picking-list-{$date}-{$suffix}.xlsx";
 
         return Excel::download(new PickingListExport($filters), $filename);
+    }
+
+    public function print(Request $request)
+    {
+        $filters = [
+            'q' => trim((string) $request->input('q', '')),
+            'date' => $request->input('date'),
+            'status' => (string) $request->input('status', ''),
+            'divisi_id' => $request->input('divisi_id'),
+            'lane_id' => $request->input('lane_id'),
+        ];
+
+        $date = $filters['date'] ?: now()->toDateString();
+        try {
+            $date = Carbon::parse($date)->toDateString();
+        } catch (\Throwable) {
+            $date = now()->toDateString();
+        }
+
+        $query = PickingList::query()
+            ->with('item.location.lane.divisi')
+            ->orderBy('list_date', 'desc')
+            ->orderBy('sku');
+        $this->applyPackerExceptionFilter($query);
+
+        if ($filters['q'] !== '') {
+            $search = $filters['q'];
+            $query->where(function ($q) use ($search) {
+                $q->where('sku', 'like', "%{$search}%")
+                    ->orWhereHas('item', function ($itemQ) use ($search) {
+                        $itemQ->where('name', 'like', "%{$search}%");
+                    });
+            });
+        }
+
+        $query->where('list_date', $date);
+        $this->applyLaneDivisiFilter($query, $request);
+        $this->applyStatusFilter($query, $request);
+
+        $rows = $query->get()->map(function ($row) {
+            $item = $row->item;
+            $lane = $item?->location?->lane;
+            $divisi = $lane?->divisi;
+            return [
+                'date' => $row->list_date?->format('Y-m-d') ?? '-',
+                'sku' => $row->sku ?? '-',
+                'name' => $item?->name ?? '-',
+                'lane' => $lane?->code ?? '-',
+                'divisi' => $divisi?->name ?? '-',
+                'qty' => (int) $row->qty,
+                'remaining_qty' => (int) $row->remaining_qty,
+            ];
+        });
+
+        $divisiName = null;
+        $laneName = null;
+        if (!empty($filters['divisi_id'])) {
+            $divisiName = Divisi::where('id', (int) $filters['divisi_id'])->value('name');
+        }
+        if (!empty($filters['lane_id'])) {
+            $laneName = Lane::where('id', (int) $filters['lane_id'])->value('code');
+        }
+
+        return view('admin.inventory.picking-list.print', [
+            'rows' => $rows,
+            'date' => $date,
+            'status' => $filters['status'] ?: 'all',
+            'keyword' => $filters['q'] ?: '',
+            'divisiName' => $divisiName,
+            'laneName' => $laneName,
+        ]);
     }
 
     public function storeQty(Request $request)
@@ -559,5 +636,23 @@ class PickingListController extends Controller
     private function applyPackerExceptionFilter($query): void
     {
         $query->whereNotIn('sku', PackerScanException::query()->select('sku'));
+    }
+
+    private function applyLaneDivisiFilter($query, Request $request): void
+    {
+        $laneId = $request->input('lane_id');
+        if (!empty($laneId)) {
+            $query->whereHas('item.location.lane', function ($laneQ) use ($laneId) {
+                $laneQ->where('id', (int) $laneId);
+            });
+            return;
+        }
+
+        $divisiId = $request->input('divisi_id');
+        if (!empty($divisiId)) {
+            $query->whereHas('item.location.lane', function ($laneQ) use ($divisiId) {
+                $laneQ->where('divisi_id', (int) $divisiId);
+            });
+        }
     }
 }

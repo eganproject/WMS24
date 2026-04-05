@@ -18,17 +18,31 @@
             </div>
         </div>
         <div class="card-toolbar">
-            <div class="d-flex align-items-center gap-2">
+            <div class="d-flex flex-wrap align-items-center gap-2">
                 <input type="text" class="form-control form-control-solid w-150px" id="filter_date" placeholder="Tanggal" value="{{ $today ?? '' }}" />
                 <select class="form-select form-select-solid w-175px" id="filter_status">
                     <option value="">Semua Status</option>
                     <option value="ongoing">Dalam Proses</option>
                     <option value="done">Selesai</option>
                 </select>
+                <select class="form-select form-select-solid w-175px" id="filter_divisi">
+                    <option value="">Semua Divisi</option>
+                    @foreach($divisis as $divisi)
+                        <option value="{{ $divisi->id }}">{{ $divisi->name }}</option>
+                    @endforeach
+                </select>
+                <select class="form-select form-select-solid w-200px" id="filter_lane">
+                    <option value="">Semua Lane</option>
+                    @foreach($lanes as $lane)
+                        <option value="{{ $lane->id }}" data-divisi-id="{{ $lane->divisi_id }}">{{ $lane->code }} - {{ $lane->name }}</option>
+                    @endforeach
+                </select>
                 <button type="button" class="btn btn-light" id="filter_apply">Filter</button>
                 <button type="button" class="btn btn-light" id="filter_reset">Reset</button>
-                <button type="button" class="btn btn-light-warning" id="btn_recalculate_picking">Recalculate</button>
+                <div class="vr d-none d-md-block"></div>
+                <button type="button" class="btn btn-light" id="btn_print_picking_list">Print</button>
                 <button type="button" class="btn btn-light-primary" id="btn_export_picking_list">Export Excel</button>
+                <button type="button" class="btn btn-light-warning" id="btn_recalculate_picking">Recalculate</button>
                 <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modal_add_picking_qty">Tambah Qty</button>
             </div>
         </div>
@@ -208,6 +222,7 @@
     const dataUrl = '{{ $dataUrl }}';
     const dataUrlExceptions = '{{ $dataUrlExceptions }}';
     const exportUrl = '{{ route('admin.inventory.picking-list.export') }}';
+    const printUrl = '{{ route('admin.inventory.picking-list.print') }}';
     const recalcUrl = '{{ route('admin.inventory.picking-list.recalculate') }}';
     const addQtyUrl = '{{ route('admin.inventory.picking-list.store-qty') }}';
     const returnExceptionUrl = '{{ route('admin.inventory.picking-list.exception-return') }}';
@@ -220,10 +235,13 @@
         const searchInput = document.querySelector('[data-kt-filter="search"]');
         const dateEl = document.getElementById('filter_date');
         const statusEl = document.getElementById('filter_status');
+        const divisiEl = document.getElementById('filter_divisi');
+        const laneEl = document.getElementById('filter_lane');
         const filterApplyBtn = document.getElementById('filter_apply');
         const filterResetBtn = document.getElementById('filter_reset');
         const recalcBtn = document.getElementById('btn_recalculate_picking');
         const exportBtn = document.getElementById('btn_export_picking_list');
+        const printBtn = document.getElementById('btn_print_picking_list');
         const isSameDay = (value, compare) => {
             const a = (value || '').trim();
             const b = (compare || '').trim();
@@ -270,6 +288,28 @@
             addQtyDateInput.value = todayStr;
         }
         updateRecalcState();
+
+        const syncLaneOptions = () => {
+            if (!laneEl) return;
+            const divisiId = (divisiEl?.value || '').trim();
+            let hasSelected = false;
+            Array.from(laneEl.options).forEach((opt) => {
+                if (opt.value === '') {
+                    opt.hidden = false;
+                    return;
+                }
+                const laneDivisi = (opt.getAttribute('data-divisi-id') || '').trim();
+                const visible = divisiId === '' || laneDivisi === divisiId;
+                opt.hidden = !visible;
+                if (visible && opt.value === laneEl.value) {
+                    hasSelected = true;
+                }
+            });
+            if (!hasSelected && laneEl.value) {
+                laneEl.value = '';
+            }
+        };
+        syncLaneOptions();
 
         const resetAddQtyDate = () => {
             if (addQtyDatePicker) {
@@ -319,6 +359,8 @@
                     params.q = searchInput?.value || '';
                     if (dateEl?.value) params.date = dateEl.value;
                     if (statusEl?.value) params.status = statusEl.value;
+                    if (divisiEl?.value) params.divisi_id = divisiEl.value;
+                    if (laneEl?.value) params.lane_id = laneEl.value;
                 }
             },
             columns: [
@@ -341,6 +383,8 @@
                 data: function(params) {
                     params.q = searchInput?.value || '';
                     if (dateEl?.value) params.date = dateEl.value;
+                    if (divisiEl?.value) params.divisi_id = divisiEl.value;
+                    if (laneEl?.value) params.lane_id = laneEl.value;
                 }
             },
             columns: [
@@ -372,6 +416,11 @@
         filterApplyBtn?.addEventListener('click', reloadAll);
         dateEl?.addEventListener('change', updateRecalcState);
         statusEl?.addEventListener('change', reloadAll);
+        divisiEl?.addEventListener('change', () => {
+            syncLaneOptions();
+            reloadAll();
+        });
+        laneEl?.addEventListener('change', reloadAll);
         filterResetBtn?.addEventListener('click', () => {
             if (fpDate && todayStr) {
                 fpDate.setDate(todayStr, true);
@@ -380,6 +429,9 @@
             }
             if (searchInput) searchInput.value = '';
             if (statusEl) statusEl.value = '';
+            if (divisiEl) divisiEl.value = '';
+            if (laneEl) laneEl.value = '';
+            syncLaneOptions();
             updateRecalcState();
             reloadAll();
         });
@@ -390,8 +442,22 @@
             if (q) params.set('q', q);
             if (dateEl?.value) params.set('date', dateEl.value);
             if (statusEl?.value) params.set('status', statusEl.value);
+            if (divisiEl?.value) params.set('divisi_id', divisiEl.value);
+            if (laneEl?.value) params.set('lane_id', laneEl.value);
             const url = params.toString() ? `${exportUrl}?${params.toString()}` : exportUrl;
             window.location.href = url;
+        });
+
+        printBtn?.addEventListener('click', () => {
+            const params = new URLSearchParams();
+            const q = (searchInput?.value || '').trim();
+            if (q) params.set('q', q);
+            if (dateEl?.value) params.set('date', dateEl.value);
+            if (statusEl?.value) params.set('status', statusEl.value);
+            if (divisiEl?.value) params.set('divisi_id', divisiEl.value);
+            if (laneEl?.value) params.set('lane_id', laneEl.value);
+            const url = params.toString() ? `${printUrl}?${params.toString()}` : printUrl;
+            window.open(url, '_blank');
         });
 
         recalcBtn?.addEventListener('click', async () => {

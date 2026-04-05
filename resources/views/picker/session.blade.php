@@ -160,6 +160,15 @@
         <div class="results" id="search_results"></div>
     </div>
 
+    <div class="card" id="scan_card">
+        <div class="section-title">Scan SKU</div>
+        <div class="scan-row">
+            <input type="text" class="input" id="scan_code" placeholder="Scan / ketik SKU" autocomplete="off" />
+            <button type="button" class="primary-btn" id="btn_scan_add">Tambah</button>
+        </div>
+        <div class="status-line" id="scan_status">Siap scan</div>
+    </div>
+
     <div class="card">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
             <div style="font-weight:700;">Daftar Barang Dibawa</div>
@@ -208,11 +217,21 @@
         saveStatus: document.getElementById('save_status'),
         btnSubmit: document.getElementById('btn_submit'),
         searchCard: document.getElementById('search_card'),
+        scanCard: document.getElementById('scan_card'),
+        scanCode: document.getElementById('scan_code'),
+        scanStatus: document.getElementById('scan_status'),
+        btnScanAdd: document.getElementById('btn_scan_add'),
     };
 
     const setSaveStatus = (text, pending = false) => {
         el.saveStatus.textContent = text;
         el.saveStatus.style.color = pending ? '#f97316' : '#6b7280';
+    };
+
+    const setScanStatus = (text, pending = false) => {
+        if (!el.scanStatus) return;
+        el.scanStatus.textContent = text;
+        el.scanStatus.style.color = pending ? '#f97316' : '#6b7280';
     };
 
     const fetchJson = async (url, options = {}) => {
@@ -273,6 +292,7 @@
             el.btnStart.textContent = 'Mulai Input';
             el.btnSubmit.classList.add('disabled');
             el.searchCard.classList.add('disabled');
+            el.scanCard.classList.add('disabled');
             renderItems([]);
             return;
         }
@@ -286,6 +306,7 @@
         el.btnStart.textContent = isDraft ? 'Lanjutkan Input' : 'Mulai Sesi Baru';
         el.btnSubmit.classList.toggle('disabled', !isDraft);
         el.searchCard.classList.toggle('disabled', !isDraft);
+        el.scanCard.classList.toggle('disabled', !isDraft);
         renderItems(session.items || []);
     };
 
@@ -390,6 +411,40 @@
         }
     };
 
+    let scanPending = false;
+    const scanItem = async () => {
+        if (scanPending) return;
+        const code = (el.scanCode?.value || '').trim();
+        if (!code) return;
+        scanPending = true;
+        setScanStatus('Memproses scan...', true);
+        try {
+            const payload = new FormData();
+            payload.append('code', code);
+            const json = await fetchJson(routes.scanItem, {
+                method: 'POST',
+                body: payload,
+            });
+            state.session = json.session;
+            renderSession();
+            setSaveStatus(json.message || 'Item tersimpan');
+            setScanStatus('Item ditambahkan');
+            if (el.scanCode) {
+                el.scanCode.value = '';
+                el.scanCode.focus();
+            }
+        } catch (err) {
+            const message = err?.message || 'Gagal memproses scan';
+            setSaveStatus(message);
+            setScanStatus(message);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire('Error', message, 'error');
+            }
+        } finally {
+            scanPending = false;
+        }
+    };
+
     const updateItem = async (rowId, qty) => {
         if (!rowId) return;
         if (qty < 1) {
@@ -477,6 +532,17 @@
 
     el.btnStart.addEventListener('click', async () => {
         await startSession();
+    });
+
+    el.btnScanAdd?.addEventListener('click', async () => {
+        await scanItem();
+    });
+
+    el.scanCode?.addEventListener('keydown', async (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            await scanItem();
+        }
     });
 
     el.searchResults.addEventListener('click', async (e) => {

@@ -41,7 +41,7 @@ class PickingListMobileController extends Controller
         }
 
         $query = PickingList::query()
-            ->with('item')
+            ->with('item.location')
             ->where('list_date', $date)
             ->orderBy('sku');
         $this->applyPackerExceptionFilter($query);
@@ -85,9 +85,11 @@ class PickingListMobileController extends Controller
             ->take($perPage)
             ->get()
             ->map(function ($row) {
+            $address = $row->item?->location?->code ?? ($row->item?->address ?? '');
             return [
                 'sku' => $row->sku ?? '-',
                 'name' => $row->item?->name ?? '-',
+                'address' => $address,
                 'qty' => (int) $row->qty,
                 'remaining_qty' => (int) $row->remaining_qty,
             ];

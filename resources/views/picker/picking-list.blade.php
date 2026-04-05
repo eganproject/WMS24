@@ -26,6 +26,32 @@
         color: var(--muted);
         font-size: 11px;
     }
+    .address-line {
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+        margin-top: 4px;
+        font-size: 11px;
+        color: var(--muted);
+        line-height: 1.4;
+    }
+    .address-tag {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 6px;
+        border-radius: 999px;
+        font-size: 10px;
+        font-weight: 600;
+        background: rgba(15, 118, 110, 0.12);
+        color: var(--brand);
+        white-space: nowrap;
+    }
+    .address-text {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
     .qty-badge {
         background: rgba(15, 118, 110, 0.12);
         color: var(--brand);
@@ -162,10 +188,15 @@
         el.list.innerHTML = items.map((row) => {
             const qty = row.qty ?? 0;
             const remaining = row.remaining_qty ?? 0;
+            const address = row.address && row.address.trim() ? row.address : 'Belum diisi';
             return `
                 <div class="list-row">
                     <div>
                         <strong>${row.sku || '-'} • ${row.name || '-'}</strong>
+                        <div class="address-line">
+                            <span class="address-tag">Lokasi</span>
+                            <span class="address-text">${address}</span>
+                        </div>
                         <small>Total: ${qty} | Sisa: ${remaining}</small>
                     </div>
                     <div class="qty-badge">${remaining}</div>

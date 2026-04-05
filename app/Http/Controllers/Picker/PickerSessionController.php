@@ -195,7 +195,7 @@ class PickerSessionController extends Controller
             ], 500);
         }
 
-        $session->load('items.item');
+        $session->load('items.item.location');
 
         return response()->json([
             'session' => $this->serializeSession($session),
@@ -280,7 +280,7 @@ class PickerSessionController extends Controller
             ], 500);
         }
 
-        $session->load('items.item');
+        $session->load('items.item.location');
 
         return response()->json([
             'session' => $this->serializeSession($session),
@@ -302,7 +302,7 @@ class PickerSessionController extends Controller
                 ]);
             }
 
-            $session->load('items.item');
+            $session->load('items.item.location');
             if ($session->items->isEmpty()) {
                 throw ValidationException::withMessages([
                     'items' => 'Minimal 1 item diperlukan',
@@ -329,7 +329,7 @@ class PickerSessionController extends Controller
 
         return response()->json([
             'message' => 'Penginputan selesai',
-            'session' => $this->serializeSession($session->fresh('items.item')),
+            'session' => $this->serializeSession($session->fresh('items.item.location')),
         ]);
     }
 
@@ -338,11 +338,24 @@ class PickerSessionController extends Controller
         $search = trim((string) $request->input('q', ''));
         $query = Item::query();
         if ($search !== '') {
-            $query->where('sku', 'like', "%{$search}%");
+            $query->where(function ($q) use ($search) {
+                $q->where('sku', 'like', "%{$search}%")
+                    ->orWhere('name', 'like', "%{$search}%");
+            });
         }
 
-        $items = $query->orderBy('sku')
-            ->get(['id', 'sku', 'name', 'address']);
+        $items = $query->with('location')
+            ->orderBy('sku')
+            ->get(['id', 'sku', 'name', 'address', 'location_id'])
+            ->map(function ($item) {
+                $address = $item->location?->code ?? ($item->address ?? '');
+                return [
+                    'id' => $item->id,
+                    'sku' => $item->sku,
+                    'name' => $item->name,
+                    'address' => $address,
+                ];
+            });
 
         return response()->json([
             'items' => $items,
@@ -392,7 +405,7 @@ class PickerSessionController extends Controller
     private function currentDraftSession(): ?PickerSession
     {
         $today = now()->toDateString();
-        return PickerSession::with('items.item')
+        return PickerSession::with('items.item.location')
             ->where('user_id', auth()->id())
             ->where('status', 'draft')
             ->whereDate('started_at', $today)
@@ -502,7 +515,7 @@ class PickerSessionController extends Controller
             throw $e;
         }
 
-        $session->load('items.item');
+        $session->load('items.item.location');
 
         return $session;
     }
@@ -516,12 +529,13 @@ class PickerSessionController extends Controller
             'started_at' => $session->started_at?->format('Y-m-d H:i'),
             'submitted_at' => $session->submitted_at?->format('Y-m-d H:i'),
             'items' => $session->items->map(function ($row) {
+                $address = $row->item?->location?->code ?? ($row->item?->address ?? '');
                 return [
                     'id' => $row->id,
                     'item_id' => $row->item_id,
                     'sku' => $row->item?->sku ?? '',
                     'name' => $row->item?->name ?? '',
-                    'address' => $row->item?->address ?? '',
+                    'address' => $address,
                     'qty' => (int) $row->qty,
                     'note' => $row->note,
                 ];

@@ -25,18 +25,16 @@
     <h2>Picking List</h2>
     <div class="meta"><span>Tanggal</span>: {{ $date }}</div>
     <div class="meta"><span>Status</span>: {{ $status }}</div>
-    <div class="meta"><span>Divisi</span>: {{ $divisiName ?: 'Semua' }}</div>
     <div class="meta"><span>Lane</span>: {{ $laneName ?: 'Semua' }}</div>
     <div class="meta"><span>Keyword</span>: {{ $keyword ?: '-' }}</div>
 
     <table>
         <thead>
             <tr>
-                <th>Tanggal</th>
                 <th>SKU</th>
                 <th>Nama</th>
-                <th>Divisi</th>
                 <th>Lane</th>
+                <th>Alamat</th>
                 <th class="text-end">Qty</th>
                 <th class="text-end">Remaining</th>
             </tr>
@@ -44,17 +42,16 @@
         <tbody>
             @forelse($rows as $row)
                 <tr>
-                    <td>{{ $row['date'] }}</td>
                     <td>{{ $row['sku'] }}</td>
                     <td>{{ $row['name'] }}</td>
-                    <td>{{ $row['divisi'] }}</td>
                     <td>{{ $row['lane'] }}</td>
+                    <td>{{ $row['address'] }}</td>
                     <td class="text-end">{{ $row['qty'] }}</td>
                     <td class="text-end">{{ $row['remaining_qty'] }}</td>
                 </tr>
             @empty
                 <tr>
-                    <td colspan="7">Tidak ada data.</td>
+                    <td colspan="6">Tidak ada data.</td>
                 </tr>
             @endforelse
         </tbody>

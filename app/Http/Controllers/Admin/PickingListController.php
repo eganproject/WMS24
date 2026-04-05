@@ -437,13 +437,12 @@ class PickingListController extends Controller
         $rows = $query->get()->map(function ($row) {
             $item = $row->item;
             $lane = $item?->location?->lane;
-            $divisi = $lane?->divisi;
+            $address = $item?->location?->code ?? ($item?->address ?? '-');
             return [
-                'date' => $row->list_date?->format('Y-m-d') ?? '-',
                 'sku' => $row->sku ?? '-',
                 'name' => $item?->name ?? '-',
                 'lane' => $lane?->code ?? '-',
-                'divisi' => $divisi?->name ?? '-',
+                'address' => $address,
                 'qty' => (int) $row->qty,
                 'remaining_qty' => (int) $row->remaining_qty,
             ];

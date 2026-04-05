@@ -164,7 +164,7 @@
         <div class="section-title">Scan SKU</div>
         <div class="scan-row">
             <input type="text" class="input" id="scan_code" placeholder="Scan / ketik SKU" autocomplete="off" />
-            <button type="button" class="primary-btn" id="btn_scan_add">Tambah</button>
+            <button type="button" class="scan-btn" id="btn_open_scanner">Scan</button>
         </div>
         <div class="status-line" id="scan_status">Siap scan</div>
     </div>
@@ -176,6 +176,19 @@
         </div>
         <div class="muted" id="items_empty">Belum ada barang ditambahkan.</div>
         <div class="items-list" id="items_list"></div>
+    </div>
+</div>
+
+<div class="scanner-modal" id="scanner_modal">
+    <div class="scanner-card">
+        <div style="font-weight:700;">Kamera Scanner</div>
+        <video class="scanner-video" id="scanner_video" playsinline></video>
+        <div class="scanner-qr" id="scanner_qr"></div>
+        <div class="scanner-actions">
+            <button type="button" class="ghost-btn" id="btn_close_scanner">Tutup</button>
+            <button type="button" class="primary-btn" id="btn_start_scan">Mulai Scan</button>
+        </div>
+        <div class="muted" id="scanner_hint">Arahkan kamera ke barcode SKU.</div>
     </div>
 </div>
 
@@ -220,7 +233,13 @@
         scanCard: document.getElementById('scan_card'),
         scanCode: document.getElementById('scan_code'),
         scanStatus: document.getElementById('scan_status'),
-        btnScanAdd: document.getElementById('btn_scan_add'),
+        btnOpenScanner: document.getElementById('btn_open_scanner'),
+        scannerModal: document.getElementById('scanner_modal'),
+        scannerVideo: document.getElementById('scanner_video'),
+        scannerQr: document.getElementById('scanner_qr'),
+        btnCloseScanner: document.getElementById('btn_close_scanner'),
+        btnStartScan: document.getElementById('btn_start_scan'),
+        scannerHint: document.getElementById('scanner_hint'),
     };
 
     const setSaveStatus = (text, pending = false) => {
@@ -412,9 +431,9 @@
     };
 
     let scanPending = false;
-    const scanItem = async () => {
+    const scanItem = async (overrideCode = null) => {
         if (scanPending) return;
-        const code = (el.scanCode?.value || '').trim();
+        const code = (overrideCode ?? el.scanCode?.value || '').trim();
         if (!code) return;
         scanPending = true;
         setScanStatus('Memproses scan...', true);
@@ -443,6 +462,172 @@
         } finally {
             scanPending = false;
         }
+    };
+
+    let scannerStream = null;
+    let scannerActive = false;
+    let barcodeDetector = null;
+    let scanLoopId = null;
+    let html5Qr = null;
+    let scanMode = 'native';
+    let html5LoadPromise = null;
+
+    const loadHtml5Qr = () => {
+        if (typeof Html5Qrcode !== 'undefined') {
+            return Promise.resolve(true);
+        }
+        if (html5LoadPromise) return html5LoadPromise;
+        const sources = [
+            '{{ asset('vendor/html5-qrcode.min.js') }}',
+            'https://unpkg.com/html5-qrcode@2.3.10/minified/html5-qrcode.min.js',
+        ];
+        html5LoadPromise = new Promise((resolve) => {
+            const tryLoad = (index) => {
+                if (index >= sources.length) {
+                    resolve(false);
+                    return;
+                }
+                const script = document.createElement('script');
+                script.src = sources[index];
+                script.async = true;
+                script.onload = () => resolve(true);
+                script.onerror = () => tryLoad(index + 1);
+                document.head.appendChild(script);
+            };
+            tryLoad(0);
+        });
+        return html5LoadPromise;
+    };
+
+    const stopScanner = async () => {
+        scannerActive = false;
+        if (scanLoopId) {
+            cancelAnimationFrame(scanLoopId);
+            scanLoopId = null;
+        }
+        if (html5Qr) {
+            try { await html5Qr.stop(); } catch (e) {}
+            try { html5Qr.clear(); } catch (e) {}
+            html5Qr = null;
+        }
+        if (scannerStream) {
+            scannerStream.getTracks().forEach((track) => track.stop());
+            scannerStream = null;
+        }
+        if (el.scannerVideo) {
+            el.scannerVideo.srcObject = null;
+        }
+        if (el.scannerModal) {
+            el.scannerModal.style.display = 'none';
+        }
+        if (el.scannerHint) {
+            el.scannerHint.textContent = 'Arahkan kamera ke barcode SKU.';
+        }
+    };
+
+    const prepareScanner = async () => {
+        const hasNative = 'BarcodeDetector' in window;
+        scanMode = hasNative ? 'native' : 'html5';
+        if (scanMode === 'native') {
+            try {
+                barcodeDetector = new BarcodeDetector({
+                    formats: ['code_128', 'ean_13', 'ean_8', 'code_39', 'itf', 'upc_a', 'upc_e', 'qr_code', 'pdf417']
+                });
+            } catch (err) {
+                scanMode = 'html5';
+            }
+        }
+        if (scanMode === 'html5') {
+            const ok = await loadHtml5Qr();
+            if (!ok) {
+                setScanStatus('Fitur scan kamera belum tersedia.', false);
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire('Error', 'Browser belum mendukung scan kamera. Gunakan input manual.', 'error');
+                }
+                return false;
+            }
+        }
+        if (el.scannerVideo) el.scannerVideo.style.display = scanMode === 'native' ? 'block' : 'none';
+        if (el.scannerQr) el.scannerQr.style.display = scanMode === 'html5' ? 'block' : 'none';
+        return true;
+    };
+
+    const onScanResult = async (code) => {
+        const clean = (code || '').trim();
+        if (!clean) return;
+        await stopScanner();
+        if (el.scanCode) {
+            el.scanCode.value = clean;
+        }
+        await scanItem(clean);
+    };
+
+    const scanLoop = async () => {
+        if (!scannerActive || !barcodeDetector || !el.scannerVideo) return;
+        try {
+            const barcodes = await barcodeDetector.detect(el.scannerVideo);
+            if (Array.isArray(barcodes) && barcodes.length) {
+                const code = barcodes[0].rawValue || '';
+                if (code) {
+                    await onScanResult(code);
+                    return;
+                }
+            }
+        } catch (err) {
+            // ignore
+        }
+        scanLoopId = requestAnimationFrame(scanLoop);
+    };
+
+    const startScanner = async () => {
+        if (scannerActive) return;
+        if (scanMode === 'html5') {
+            try {
+                if (el.scannerHint) el.scannerHint.textContent = 'Mengaktifkan kamera...';
+                html5Qr = new Html5Qrcode('scanner_qr');
+                await html5Qr.start(
+                    { facingMode: 'environment' },
+                    { fps: 12, qrbox: { width: 240, height: 240 } },
+                    (decodedText) => {
+                        if (decodedText) {
+                            onScanResult(decodedText);
+                        }
+                    }
+                );
+                scannerActive = true;
+                if (el.scannerHint) el.scannerHint.textContent = 'Scan berjalan. Arahkan ke barcode.';
+            } catch (err) {
+                await stopScanner();
+                setScanStatus('Gagal membuka kamera', false);
+            }
+            return;
+        }
+
+        try {
+            if (el.scannerHint) el.scannerHint.textContent = 'Mengaktifkan kamera...';
+            scannerStream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: { ideal: 'environment' } },
+                audio: false,
+            });
+            if (el.scannerVideo) {
+                el.scannerVideo.srcObject = scannerStream;
+                await el.scannerVideo.play();
+            }
+            scannerActive = true;
+            if (el.scannerHint) el.scannerHint.textContent = 'Scan berjalan. Arahkan ke barcode.';
+            scanLoop();
+        } catch (err) {
+            await stopScanner();
+            setScanStatus('Gagal membuka kamera', false);
+        }
+    };
+
+    const openScanner = async () => {
+        if (!el.scannerModal) return;
+        const ready = await prepareScanner();
+        if (!ready) return;
+        el.scannerModal.style.display = 'flex';
+        await startScanner();
     };
 
     const updateItem = async (rowId, qty) => {
@@ -534,14 +719,28 @@
         await startSession();
     });
 
-    el.btnScanAdd?.addEventListener('click', async () => {
-        await scanItem();
+    el.btnOpenScanner?.addEventListener('click', async () => {
+        await openScanner();
     });
 
     el.scanCode?.addEventListener('keydown', async (e) => {
         if (e.key === 'Enter') {
             e.preventDefault();
             await scanItem();
+        }
+    });
+
+    el.btnStartScan?.addEventListener('click', async () => {
+        await startScanner();
+    });
+
+    el.btnCloseScanner?.addEventListener('click', async () => {
+        await stopScanner();
+    });
+
+    el.scannerModal?.addEventListener('click', async (event) => {
+        if (event.target === el.scannerModal) {
+            await stopScanner();
         }
     });
 

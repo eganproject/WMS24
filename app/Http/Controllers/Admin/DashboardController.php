@@ -12,37 +12,38 @@ use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $today = now()->toDateString();
+        $currentDate = now()->toDateString();
+        $selectedDate = $this->parseDate($request->input('date')) ?: $currentDate;
 
-        $totalResi = Resi::whereDate('tanggal_upload', $today)->count();
-        $totalScanOut = PackerScanOut::whereDate('scan_date', $today)->count();
-        $totalResiUpdatedAt = Resi::whereDate('tanggal_upload', $today)->max('updated_at');
-        $totalScanUpdatedAt = PackerScanOut::whereDate('scan_date', $today)->max('scanned_at');
+        $totalResi = Resi::whereDate('tanggal_upload', $selectedDate)->count();
+        $totalScanOut = PackerScanOut::whereDate('scan_date', $selectedDate)->count();
+        $totalResiUpdatedAt = Resi::whereDate('tanggal_upload', $selectedDate)->max('updated_at');
+        $totalScanUpdatedAt = PackerScanOut::whereDate('scan_date', $selectedDate)->max('scanned_at');
         $totalResiUpdated = $totalResiUpdatedAt ? Carbon::parse($totalResiUpdatedAt)->format('H:i') : '-';
         $totalScanUpdated = $totalScanUpdatedAt ? Carbon::parse($totalScanUpdatedAt)->format('H:i') : '-';
 
         $resiCounts = Resi::select('kurir_id', DB::raw('count(*) as total'))
-            ->whereDate('tanggal_upload', $today)
+            ->whereDate('tanggal_upload', $selectedDate)
             ->groupBy('kurir_id')
             ->pluck('total', 'kurir_id')
             ->toArray();
 
         $scanCounts = PackerScanOut::select('kurir_id', DB::raw('count(*) as total'))
-            ->whereDate('scan_date', $today)
+            ->whereDate('scan_date', $selectedDate)
             ->groupBy('kurir_id')
             ->pluck('total', 'kurir_id')
             ->toArray();
 
         $resiLatest = Resi::select('kurir_id', DB::raw('max(updated_at) as latest'))
-            ->whereDate('tanggal_upload', $today)
+            ->whereDate('tanggal_upload', $selectedDate)
             ->groupBy('kurir_id')
             ->pluck('latest', 'kurir_id')
             ->toArray();
 
         $scanLatest = PackerScanOut::select('kurir_id', DB::raw('max(scanned_at) as latest'))
-            ->whereDate('scan_date', $today)
+            ->whereDate('scan_date', $selectedDate)
             ->groupBy('kurir_id')
             ->pluck('latest', 'kurir_id')
             ->toArray();
@@ -69,7 +70,8 @@ class DashboardController extends Controller
             });
 
         return view('admin.dashboard', [
-            'today' => $today,
+            'today' => $selectedDate,
+            'currentDate' => $currentDate,
             'totalResi' => $totalResi,
             'totalScanOut' => $totalScanOut,
             'totalResiUpdated' => $totalResiUpdated,
@@ -134,5 +136,17 @@ class DashboardController extends Controller
             ],
             'data' => $data,
         ]);
+    }
+
+    private function parseDate(?string $value): ?string
+    {
+        if (!$value) {
+            return null;
+        }
+        try {
+            return Carbon::parse($value)->toDateString();
+        } catch (\Throwable) {
+            return null;
+        }
     }
 }

@@ -128,14 +128,23 @@
     }
 </style>
 
+@php
+    $isToday = ($today ?? '') === ($currentDate ?? '');
+@endphp
+
 <div class="card mb-8">
     <div class="card-body">
-        <div class="d-flex align-items-center justify-content-between mb-4">
+        <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-3">
             <div>
-                <div class="fw-bold fs-4">Ringkasan Resi Hari Ini</div>
+                <div class="fw-bold fs-4">Ringkasan Resi</div>
                 <div class="text-muted">Tanggal {{ $today ?? '-' }}</div>
             </div>
-            <span class="kurir-badge">Perhari Berjalan</span>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <span class="kurir-badge">{{ $isToday ? 'Hari Ini' : 'Tanggal Terpilih' }}</span>
+                <input type="text" class="form-control form-control-solid w-150px" id="filter_date" placeholder="Tanggal" value="{{ $today ?? '' }}" />
+                <button type="button" class="btn btn-light-primary" id="filter_date_apply">Filter</button>
+                <button type="button" class="btn btn-light" id="filter_date_reset">Reset</button>
+            </div>
         </div>
         <div class="stats-grid">
             <div class="stat-card">
@@ -156,7 +165,7 @@
     <div class="card-body">
         <div class="d-flex align-items-center justify-content-between mb-4">
             <div class="fw-bold fs-4">Per Kurir</div>
-            <div class="text-muted">Jumlah resi & hasil scan hari ini</div>
+            <div class="text-muted">Jumlah resi & hasil scan pada tanggal {{ $today ?? '-' }}</div>
         </div>
 
         @if(isset($kurirs) && $kurirs->count())
@@ -250,8 +259,46 @@
 @push('scripts')
 <script>
     const kurirDetailUrl = '{{ route('admin.dashboard.kurir-detail') }}';
+    const selectedDateStr = '{{ $today ?? '' }}';
+    const currentDateStr = '{{ $currentDate ?? '' }}';
 
     document.addEventListener('DOMContentLoaded', () => {
+        const filterDateEl = document.getElementById('filter_date');
+        const filterApplyBtn = document.getElementById('filter_date_apply');
+        const filterResetBtn = document.getElementById('filter_date_reset');
+        let fpFilterDate = null;
+
+        if (typeof flatpickr !== 'undefined' && filterDateEl) {
+            fpFilterDate = flatpickr(filterDateEl, { dateFormat: 'Y-m-d', allowInput: true });
+            if (selectedDateStr && !filterDateEl.value) {
+                fpFilterDate.setDate(selectedDateStr, true);
+            }
+        }
+
+        const applyDateFilter = (dateValue) => {
+            const url = new URL(window.location.href);
+            if (dateValue) {
+                url.searchParams.set('date', dateValue);
+            } else {
+                url.searchParams.delete('date');
+            }
+            window.location.href = url.toString();
+        };
+
+        filterApplyBtn?.addEventListener('click', () => {
+            applyDateFilter(filterDateEl?.value || '');
+        });
+
+        filterResetBtn?.addEventListener('click', () => {
+            const resetDate = currentDateStr || '';
+            if (fpFilterDate && resetDate) {
+                fpFilterDate.setDate(resetDate, true);
+            } else if (filterDateEl) {
+                filterDateEl.value = resetDate;
+            }
+            applyDateFilter(resetDate);
+        });
+
         const detailModalEl = document.getElementById('modal_kurir_detail');
         const detailModal = detailModalEl ? new bootstrap.Modal(detailModalEl) : null;
         const detailSubtitle = document.getElementById('kurir_detail_subtitle');

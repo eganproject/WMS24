@@ -43,6 +43,26 @@
     .topbar-actions form {
         margin: 0;
     }
+    .pagination-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-top: 12px;
+    }
+    .page-btn {
+        width: auto;
+        padding: 8px 12px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: #fff;
+        font-size: 12px;
+        font-weight: 700;
+    }
+    .page-info {
+        font-size: 12px;
+        color: var(--muted);
+    }
 </style>
 
 <div class="screen">
@@ -64,7 +84,18 @@
         <div style="font-weight: 700; margin-bottom: 8px;">Filter</div>
         <div class="filter-grid">
             <input type="date" class="input" id="filter_date" value="{{ $today ?? '' }}" />
+            <select class="input" id="filter_lane">
+                <option value="">Semua Lane</option>
+                @foreach($lanes as $lane)
+                    <option value="{{ $lane->id }}">{{ $lane->code }} - {{ $lane->name }}</option>
+                @endforeach
+            </select>
             <input type="text" class="input" id="filter_search" placeholder="Cari SKU atau nama" autocomplete="off" />
+            <select class="input" id="filter_per_page">
+                <option value="20" selected>20 per halaman</option>
+                <option value="50">50 per halaman</option>
+                <option value="100">100 per halaman</option>
+            </select>
         </div>
     </div>
 
@@ -75,6 +106,11 @@
         </div>
         <div class="muted" id="list_empty">Belum ada data.</div>
         <div class="items-list" id="list_items"></div>
+        <div class="pagination-bar">
+            <button type="button" class="page-btn" id="btn_prev">Prev</button>
+            <div class="page-info" id="page_info">Page 1 / 1</div>
+            <button type="button" class="page-btn" id="btn_next">Next</button>
+        </div>
     </div>
 </div>
 
@@ -85,10 +121,15 @@
 
     const el = {
         date: document.getElementById('filter_date'),
+        lane: document.getElementById('filter_lane'),
         search: document.getElementById('filter_search'),
+        perPage: document.getElementById('filter_per_page'),
         list: document.getElementById('list_items'),
         empty: document.getElementById('list_empty'),
         total: document.getElementById('total_items'),
+        btnPrev: document.getElementById('btn_prev'),
+        btnNext: document.getElementById('btn_next'),
+        pageInfo: document.getElementById('page_info'),
     };
 
     const fetchJson = async (url) => {
@@ -107,8 +148,9 @@
         return json;
     };
 
-    const renderList = (items) => {
-        el.total.textContent = `${items.length} item`;
+    const renderList = (items, meta) => {
+        const total = meta?.total ?? items.length;
+        el.total.textContent = `${total} item`;
         if (!items.length) {
             el.empty.style.display = 'block';
             el.list.innerHTML = '';
@@ -131,22 +173,59 @@
     };
 
     let searchTimer = null;
+    let currentPage = 1;
+    let totalPages = 1;
     const loadData = async () => {
         const params = new URLSearchParams();
         const dateVal = el.date?.value || todayStr;
         if (dateVal) params.set('date', dateVal);
         const q = (el.search?.value || '').trim();
         if (q) params.set('q', q);
+        const laneId = el.lane?.value || '';
+        if (laneId) params.set('lane_id', laneId);
+        const perPage = Number(el.perPage?.value || 20);
+        params.set('per_page', perPage);
+        params.set('page', currentPage);
 
         const url = `${routes.data}?${params.toString()}`;
         const data = await fetchJson(url);
-        renderList(Array.isArray(data.items) ? data.items : []);
+        const items = Array.isArray(data.items) ? data.items : [];
+        renderList(items, data);
+        totalPages = Math.max(1, Number(data.total_pages || 1));
+        if (el.pageInfo) {
+            el.pageInfo.textContent = `Page ${data.page || 1} / ${totalPages}`;
+        }
+        if (el.btnPrev) el.btnPrev.disabled = (data.page || 1) <= 1;
+        if (el.btnNext) el.btnNext.disabled = (data.page || 1) >= totalPages;
     };
 
-    el.date?.addEventListener('change', loadData);
+    el.date?.addEventListener('change', () => {
+        currentPage = 1;
+        loadData();
+    });
+    el.lane?.addEventListener('change', () => {
+        currentPage = 1;
+        loadData();
+    });
+    el.perPage?.addEventListener('change', () => {
+        currentPage = 1;
+        loadData();
+    });
     el.search?.addEventListener('input', () => {
         if (searchTimer) clearTimeout(searchTimer);
         searchTimer = setTimeout(loadData, 300);
+    });
+    el.btnPrev?.addEventListener('click', () => {
+        if (currentPage > 1) {
+            currentPage -= 1;
+            loadData();
+        }
+    });
+    el.btnNext?.addEventListener('click', () => {
+        if (currentPage < totalPages) {
+            currentPage += 1;
+            loadData();
+        }
     });
 
     if (el.date && !el.date.value && todayStr) {

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Picker;
 
 use App\Http\Controllers\Controller;
+use App\Models\Lane;
 use App\Models\PackerScanException;
 use App\Models\PickingList;
 use Illuminate\Http\Request;
@@ -18,6 +19,7 @@ class PickingListMobileController extends Controller
                 'data' => route('picker.picking-list.data'),
                 'logout' => route('logout'),
             ],
+            'lanes' => Lane::orderBy('code')->get(['id', 'code', 'name']),
             'today' => now()->toDateString(),
         ]);
     }
@@ -47,7 +49,27 @@ class PickingListMobileController extends Controller
             });
         }
 
-        $items = $query->get()->map(function ($row) {
+        $laneId = $request->input('lane_id');
+        if ($laneId) {
+            $query->whereHas('item.location.lane', function ($laneQ) use ($laneId) {
+                $laneQ->where('id', (int) $laneId);
+            });
+        }
+
+        $page = max(1, (int) $request->input('page', 1));
+        $perPage = (int) $request->input('per_page', 20);
+        $perPage = min(100, max(5, $perPage));
+        $total = (clone $query)->count();
+        $totalPages = (int) ceil($total / $perPage);
+        if ($totalPages > 0 && $page > $totalPages) {
+            $page = $totalPages;
+        }
+
+        $items = $query
+            ->skip(($page - 1) * $perPage)
+            ->take($perPage)
+            ->get()
+            ->map(function ($row) {
             return [
                 'sku' => $row->sku ?? '-',
                 'name' => $row->item?->name ?? '-',
@@ -59,6 +81,10 @@ class PickingListMobileController extends Controller
         return response()->json([
             'date' => $date,
             'items' => $items,
+            'page' => $page,
+            'per_page' => $perPage,
+            'total' => $total,
+            'total_pages' => $totalPages,
         ]);
     }
 

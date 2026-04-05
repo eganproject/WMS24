@@ -8,6 +8,7 @@ use App\Models\InboundItem;
 use App\Models\InboundTransaction;
 use App\Models\Item;
 use App\Models\ItemStock;
+use App\Models\Lane;
 use App\Exports\ItemsTemplateExport;
 use App\Imports\ItemsImport;
 use App\Support\LocationService;
@@ -25,12 +26,13 @@ class ItemController extends Controller
     public function index()
     {
         $categories = Category::orderBy('name')->get(['id', 'name']);
-        return view('admin.masterdata.items.index', compact('categories'));
+        $lanes = Lane::orderBy('code')->get(['id', 'code', 'name']);
+        return view('admin.masterdata.items.index', compact('categories', 'lanes'));
     }
 
     public function data(Request $request)
     {
-        $query = Item::with('category')->orderBy('name');
+        $query = Item::with(['category', 'location.lane'])->orderBy('name');
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
@@ -38,7 +40,15 @@ class ItemController extends Controller
                 $q->where('sku', 'like', "%{$search}%")
                     ->orWhere('name', 'like', "%{$search}%")
                     ->orWhere('address', 'like', "%{$search}%")
-                    ->orWhere('description', 'like', "%{$search}%");
+                    ->orWhere('description', 'like', "%{$search}%")
+                    ->orWhereHas('location', function ($locQ) use ($search) {
+                        $locQ->where('code', 'like', "%{$search}%")
+                            ->orWhere('rack_code', 'like', "%{$search}%")
+                            ->orWhereHas('lane', function ($laneQ) use ($search) {
+                                $laneQ->where('code', 'like', "%{$search}%")
+                                    ->orWhere('name', 'like', "%{$search}%");
+                            });
+                    });
             });
         }
 
@@ -61,13 +71,21 @@ class ItemController extends Controller
         }
 
         $data = $query->get()->map(function ($i) {
+            $location = $i->location;
+            $lane = $location?->lane;
+            $address = $location?->code ?? ($i->address ?? '');
             return [
                 'id' => $i->id,
                 'sku' => $i->sku,
                 'name' => $i->name,
                 'category' => $i->category?->name ?? '-',
                 'category_id' => $i->category_id,
-                'address' => $i->address ?? '',
+                'address' => $address,
+                'lane_id' => $lane?->id,
+                'lane_code' => $lane?->code ?? '',
+                'rack_code' => $location?->rack_code ?? '',
+                'column_no' => $location?->column_no ?? '',
+                'row_no' => $location?->row_no ?? '',
                 'description' => $i->description ?? '',
                 'safety_stock' => (int) ($i->safety_stock ?? 0),
             ];
@@ -92,6 +110,10 @@ class ItemController extends Controller
                     $fail('Kategori tidak valid');
                 }
             }],
+            'lane_id' => ['nullable', 'integer', 'exists:lanes,id'],
+            'rack_code' => ['nullable', 'string', 'max:20'],
+            'column_no' => ['nullable', 'integer', 'min:1'],
+            'row_no' => ['nullable', 'integer', 'min:1'],
             'address' => ['nullable', 'string'],
             'description' => ['nullable', 'string'],
             'safety_stock' => ['nullable', 'integer', 'min:0'],
@@ -103,15 +125,7 @@ class ItemController extends Controller
             $validated['safety_stock'] = max(0, (int) $validated['safety_stock']);
         }
 
-        if (array_key_exists('address', $validated)) {
-            $location = LocationService::resolveLocation((string) ($validated['address'] ?? ''));
-            if ($location) {
-                $validated['location_id'] = $location->id;
-                $validated['address'] = $location->code;
-            } else {
-                $validated['location_id'] = null;
-            }
-        }
+        $this->applyLocationPayload($validated);
 
         DB::beginTransaction();
         try {
@@ -148,6 +162,10 @@ class ItemController extends Controller
                     $fail('Kategori tidak valid');
                 }
             }],
+            'lane_id' => ['nullable', 'integer', 'exists:lanes,id'],
+            'rack_code' => ['nullable', 'string', 'max:20'],
+            'column_no' => ['nullable', 'integer', 'min:1'],
+            'row_no' => ['nullable', 'integer', 'min:1'],
             'address' => ['nullable', 'string'],
             'description' => ['nullable', 'string'],
             'safety_stock' => ['nullable', 'integer', 'min:0'],
@@ -159,15 +177,7 @@ class ItemController extends Controller
             $validated['safety_stock'] = max(0, (int) $validated['safety_stock']);
         }
 
-        if (array_key_exists('address', $validated)) {
-            $location = LocationService::resolveLocation((string) ($validated['address'] ?? ''));
-            if ($location) {
-                $validated['location_id'] = $location->id;
-                $validated['address'] = $location->code;
-            } else {
-                $validated['location_id'] = null;
-            }
-        }
+        $this->applyLocationPayload($validated);
 
         DB::beginTransaction();
         try {
@@ -317,5 +327,44 @@ class ItemController extends Controller
         );
         $this->defaultCategoryId = $default->id;
         return $this->defaultCategoryId;
+    }
+
+    private function applyLocationPayload(array &$validated): void
+    {
+        $laneId = $validated['lane_id'] ?? null;
+        $rack = $validated['rack_code'] ?? null;
+        $col = $validated['column_no'] ?? null;
+        $row = $validated['row_no'] ?? null;
+
+        $hasLaneParts = ($laneId !== null && $laneId !== '') ||
+            ($rack !== null && $rack !== '') ||
+            ($col !== null && $col !== '') ||
+            ($row !== null && $row !== '');
+
+        if ($hasLaneParts) {
+            if ($laneId === null || $laneId === '' || $rack === null || $rack === '' || $col === null || $col === '' || $row === null || $row === '') {
+                throw ValidationException::withMessages([
+                    'rack_code' => 'Lengkapi lane, rack, kolom, dan baris.',
+                ]);
+            }
+
+            $location = LocationService::resolveLocationFromParts((int) $laneId, (string) $rack, (int) $col, (int) $row);
+            if ($location) {
+                $validated['location_id'] = $location->id;
+                $validated['address'] = $location->code;
+                return;
+            }
+        }
+
+        if (array_key_exists('address', $validated)) {
+            $address = (string) ($validated['address'] ?? '');
+            $location = LocationService::resolveLocation($address);
+            if ($location) {
+                $validated['location_id'] = $location->id;
+                $validated['address'] = $location->code;
+            } else {
+                $validated['location_id'] = null;
+            }
+        }
     }
 }

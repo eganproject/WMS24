@@ -22,6 +22,8 @@ class MenuSeeder extends Seeder
             ['name' => 'Kurir', 'slug' => 'kurir', 'route' => 'admin.masterdata.kurir.index', 'icon' => 'fa-solid fa-truck', 'parent_slug' => 'master-data', 'sort_order' => 21.45],
             ['name' => 'Categories', 'slug' => 'categories', 'route' => 'admin.masterdata.categories.index', 'icon' => 'fa-solid fa-sitemap', 'parent_slug' => 'master-data', 'sort_order' => 21.5],
             ['name' => 'Items', 'slug' => 'items', 'route' => 'admin.masterdata.items.index', 'icon' => 'fa-solid fa-box', 'parent_slug' => 'master-data', 'sort_order' => 21.6],
+            ['name' => 'Lanes', 'slug' => 'lanes', 'route' => 'admin.masterdata.lanes.index', 'icon' => 'fa-solid fa-road', 'parent_slug' => 'master-data', 'sort_order' => 21.61],
+            ['name' => 'Locations', 'slug' => 'locations', 'route' => 'admin.masterdata.locations.index', 'icon' => 'fa-solid fa-location-dot', 'parent_slug' => 'master-data', 'sort_order' => 21.62],
             ['name' => 'Item Stocks', 'slug' => 'item-stocks', 'route' => 'admin.inventory.item-stocks.index', 'icon' => 'fa-solid fa-boxes-stacked', 'parent_slug' => 'inventory', 'sort_order' => 10],
             ['name' => 'Stock Mutations', 'slug' => 'stock-mutations', 'route' => 'admin.inventory.stock-mutations.index', 'icon' => 'fa-solid fa-right-left', 'parent_slug' => 'inventory', 'sort_order' => 11],
             ['name' => 'Stock Opname', 'slug' => 'stock-opname', 'route' => 'admin.inventory.stock-opname.index', 'icon' => 'fa-solid fa-clipboard-check', 'parent_slug' => 'inventory', 'sort_order' => 12],

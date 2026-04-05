@@ -58,6 +58,16 @@ class LocationService
         ];
     }
 
+    public static function buildAddress(string $laneCode, string $rackCode, int $columnNo, int $rowNo): string
+    {
+        $lane = strtoupper(trim($laneCode));
+        $rack = strtoupper(trim($rackCode));
+        $colLabel = str_pad((string) $columnNo, 2, '0', STR_PAD_LEFT);
+        $rowLabel = str_pad((string) $rowNo, 2, '0', STR_PAD_LEFT);
+
+        return "{$lane}-{$rack}-{$colLabel}-{$rowLabel}";
+    }
+
     public static function resolveLocation(string $address): ?Location
     {
         $parsed = self::parseAddress($address);
@@ -86,6 +96,36 @@ class LocationService
 
         if ($location->code !== $parsed['code']) {
             $location->code = $parsed['code'];
+            $location->save();
+        }
+
+        return $location;
+    }
+
+    public static function resolveLocationFromParts(int $laneId, string $rackCode, int $columnNo, int $rowNo): ?Location
+    {
+        $lane = Lane::find($laneId);
+        if (!$lane) {
+            return null;
+        }
+
+        $rack = strtoupper(trim($rackCode));
+        $columnNo = max(1, (int) $columnNo);
+        $rowNo = max(1, (int) $rowNo);
+        $code = self::buildAddress($lane->code, $rack, $columnNo, $rowNo);
+
+        $location = Location::firstOrCreate(
+            [
+                'lane_id' => $lane->id,
+                'rack_code' => $rack,
+                'column_no' => $columnNo,
+                'row_no' => $rowNo,
+            ],
+            ['code' => $code]
+        );
+
+        if ($location->code !== $code) {
+            $location->code = $code;
             $location->save();
         }
 

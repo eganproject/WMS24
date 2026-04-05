@@ -132,10 +132,39 @@
                         <div class="invalid-feedback" id="error_category_id"></div>
                     </div>
                     <div class="fv-row mb-7">
-                        <label class="fs-6 fw-bold form-label mb-2">Alamat</label>
-                        <textarea class="form-control form-control-solid" name="address" id="item_address" rows="2"></textarea>
-                        <div class="form-text">Format lokasi: <code>KAB-A-03-05</code> (Lane-Rak-Kolom-Baris)</div>
-                        <div class="invalid-feedback" id="error_address"></div>
+                        <label class="fs-6 fw-bold form-label mb-2">Lane</label>
+                        <select name="lane_id" id="item_lane_id" class="form-select form-select-solid" data-control="select2" data-placeholder="Pilih lane">
+                            <option value="">Pilih lane</option>
+                            @foreach($lanes as $lane)
+                                <option value="{{ $lane->id }}" data-code="{{ $lane->code }}">{{ $lane->code }} - {{ $lane->name }}</option>
+                            @endforeach
+                        </select>
+                        <div class="invalid-feedback" id="error_lane_id"></div>
+                    </div>
+                    <div class="row g-3 mb-7">
+                        <div class="col-md-6">
+                            <label class="fs-6 fw-bold form-label mb-2">Rack</label>
+                            <input type="text" class="form-control form-control-solid" name="rack_code" id="item_rack_code" />
+                            <div class="invalid-feedback" id="error_rack_code"></div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="fs-6 fw-bold form-label mb-2">Kolom</label>
+                            <input type="number" min="1" class="form-control form-control-solid" name="column_no" id="item_column_no" />
+                            <div class="invalid-feedback" id="error_column_no"></div>
+                        </div>
+                    </div>
+                    <div class="row g-3 mb-7">
+                        <div class="col-md-6">
+                            <label class="fs-6 fw-bold form-label mb-2">Baris</label>
+                            <input type="number" min="1" class="form-control form-control-solid" name="row_no" id="item_row_no" />
+                            <div class="invalid-feedback" id="error_row_no"></div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="fs-6 fw-bold form-label mb-2">Alamat (auto)</label>
+                            <input type="text" class="form-control form-control-solid" name="address" id="item_address" placeholder="KAB-A-03-05" />
+                            <div class="form-text">Diisi otomatis jika lane/rack/kolom/baris lengkap.</div>
+                            <div class="invalid-feedback" id="error_address"></div>
+                        </div>
                     </div>
                     <div class="fv-row mb-7">
                         <label class="fs-6 fw-bold form-label mb-2">Deskripsi</label>
@@ -256,6 +285,10 @@
         const formSku = document.getElementById('item_sku');
         const formName = document.getElementById('item_name');
         const formCategory = document.getElementById('item_category_id');
+        const formLane = document.getElementById('item_lane_id');
+        const formRack = document.getElementById('item_rack_code');
+        const formColumn = document.getElementById('item_column_no');
+        const formRow = document.getElementById('item_row_no');
         const formId = document.getElementById('item_id');
         const formAddress = document.getElementById('item_address');
         const formDescription = document.getElementById('item_description');
@@ -313,6 +346,15 @@
             }
         };
 
+        const setLaneValue = (val) => {
+            if (!formLane) return;
+            const normalized = (val === null || val === undefined || val === '' || val === 'null') ? '' : String(val);
+            formLane.value = normalized;
+            if (typeof $ !== 'undefined' && $(formLane).data('select2')) {
+                $(formLane).val(normalized).trigger('change');
+            }
+        };
+
         if (!tableEl.length || !$.fn.DataTable) {
             console.error('DataTables unavailable');
             return;
@@ -326,6 +368,11 @@
             }).on('select2:opening select2:closing select2:close', function(e){ e.stopPropagation(); });
             $(formCategory).select2({
                 placeholder: 'Pilih kategori',
+                allowClear: true,
+                width: '100%'
+            });
+            $(formLane).select2({
+                placeholder: 'Pilih lane',
                 allowClear: true,
                 width: '100%'
             });
@@ -360,7 +407,7 @@
                 { data: 'description' },
                 { data: 'safety_stock', className:'text-end', render: (data)=> data ?? 0 },
                 { data: 'id', orderable:false, searchable:false, className:'text-end', render: (data, type, row)=>{
-                    const editItem = canUpdate ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-edit" data-id="${data}" data-sku="${row.sku}" data-name="${row.name}" data-category="${row.category_id}" data-address="${row.address ?? ''}" data-description="${row.description}" data-safety-stock="${row.safety_stock ?? 0}">Edit</a></div>` : '';
+                    const editItem = canUpdate ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-edit" data-id="${data}" data-sku="${row.sku}" data-name="${row.name}" data-category="${row.category_id}" data-address="${row.address ?? ''}" data-lane-id="${row.lane_id ?? ''}" data-rack-code="${row.rack_code ?? ''}" data-column-no="${row.column_no ?? ''}" data-row-no="${row.row_no ?? ''}" data-description="${row.description}" data-safety-stock="${row.safety_stock ?? 0}">Edit</a></div>` : '';
                     const delItem = canDelete ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 text-danger btn-delete" data-id="${data}">Hapus</a></div>` : '';
                     const actions = `${editItem}${delItem}`;
                     if (!actions) return '';
@@ -409,10 +456,31 @@
         });
 
         const clearErrors = () => {
-            ['error_sku','error_name','error_category_id','error_address','error_description','error_safety_stock'].forEach(id => {
+            ['error_sku','error_name','error_category_id','error_lane_id','error_rack_code','error_column_no','error_row_no','error_address','error_description','error_safety_stock'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.textContent = '';
             });
+        };
+
+        const buildAddress = () => {
+            if (!formLane || !formRack || !formColumn || !formRow) return '';
+            const laneOpt = formLane.options[formLane.selectedIndex];
+            const laneCode = laneOpt ? (laneOpt.getAttribute('data-code') || '').trim() : '';
+            const rack = (formRack.value || '').trim().toUpperCase();
+            const col = parseInt(formColumn.value || '', 10);
+            const row = parseInt(formRow.value || '', 10);
+            if (!laneCode || !rack || !col || !row) return '';
+            const colLabel = String(col).padStart(2, '0');
+            const rowLabel = String(row).padStart(2, '0');
+            return `${laneCode}-${rack}-${colLabel}-${rowLabel}`;
+        };
+
+        const syncAddress = () => {
+            if (!formAddress) return;
+            const code = buildAddress();
+            if (code) {
+                formAddress.value = code;
+            }
         };
 
         document.getElementById('btn_open_create_item')?.addEventListener('click', () => {
@@ -422,6 +490,10 @@
             if (formSku) formSku.value = '';
             if (formSafetyStock) formSafetyStock.value = 0;
             setCategoryValue('0');
+            setLaneValue('');
+            if (formRack) formRack.value = '';
+            if (formColumn) formColumn.value = '';
+            if (formRow) formRow.value = '';
             clearErrors();
             if (titleEl) titleEl.textContent = 'Add Item';
         });
@@ -533,6 +605,10 @@
             const name = this.getAttribute('data-name');
             const categoryId = this.getAttribute('data-category');
             const address = this.getAttribute('data-address') || '';
+            const laneId = this.getAttribute('data-lane-id') || '';
+            const rackCode = this.getAttribute('data-rack-code') || '';
+            const columnNo = this.getAttribute('data-column-no') || '';
+            const rowNo = this.getAttribute('data-row-no') || '';
             const description = this.getAttribute('data-description') || '';
             const safetyStock = this.getAttribute('data-safety-stock');
             if (!form) return;
@@ -540,12 +616,21 @@
             if (formSku) formSku.value = sku || '';
             formName.value = name;
             if (formAddress) formAddress.value = address;
+            setLaneValue(laneId);
+            if (formRack) formRack.value = rackCode;
+            if (formColumn) formColumn.value = columnNo;
+            if (formRow) formRow.value = rowNo;
             formDescription.value = description;
             if (formSafetyStock) formSafetyStock.value = safetyStock ?? 0;
             setCategoryValue(categoryId || '0');
             clearErrors();
             if (titleEl) titleEl.textContent = 'Edit Item';
             modal?.show();
+        });
+
+        [formLane, formRack, formColumn, formRow].forEach((field) => {
+            field?.addEventListener('input', syncAddress);
+            field?.addEventListener('change', syncAddress);
         });
 
         tableEl.on('click', '.btn-delete', async function(e) {

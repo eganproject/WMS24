@@ -5,6 +5,7 @@ namespace App\Imports;
 use App\Models\Category;
 use App\Models\Item;
 use App\Models\ItemStock;
+use App\Support\LocationService;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 use Maatwebsite\Excel\Concerns\SkipsEmptyRows;
@@ -46,7 +47,19 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             $parentCategoryName = trim((string) ($row['parent_category'] ?? ''));
             $categoryName = trim((string) ($row['category'] ?? ''));
             $description = trim((string) ($row['description'] ?? ''));
-            $address = isset($row['address']) ? trim((string) ($row['address'] ?? '')) : '';
+            $address = '';
+            $hasAddressHeader = $this->hasAnyKey($row, ['address']);
+            $hasLocationHeaders = $this->hasAnyKey($row, [
+                'lane', 'lane_code', 'ruang', 'ruangan', 'room',
+                'rack', 'rak',
+                'column', 'col', 'kolom',
+                'row', 'baris',
+            ]);
+            if ($hasAddressHeader) {
+                $address = trim((string) ($row['address'] ?? ''));
+            } elseif ($hasLocationHeaders) {
+                $address = $this->composeAddress($row);
+            }
             $stock = $this->parseStock($row);
             $safetyStock = $this->parseSafetyStock($row);
 
@@ -71,8 +84,15 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
                 'category_id' => $catId,
                 'description' => $description,
             ];
-            if (isset($row['address'])) {
-                $payload['address'] = $address;
+            if ($hasAddressHeader || $hasLocationHeaders) {
+                $location = LocationService::resolveLocation($address);
+                if ($location) {
+                    $payload['location_id'] = $location->id;
+                    $payload['address'] = $location->code;
+                } else {
+                    $payload['location_id'] = null;
+                    $payload['address'] = $address;
+                }
             }
             if ($safetyStock !== null) {
                 $payload['safety_stock'] = $safetyStock;
@@ -178,5 +198,56 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
         );
         $this->defaultCategoryId = $default->id;
         return $this->defaultCategoryId;
+    }
+
+    private function composeAddress($row): string
+    {
+        $lane = $this->getValue($row, ['lane', 'lane_code', 'ruang', 'ruangan', 'room']);
+        $rack = $this->getValue($row, ['rack', 'rak']);
+        $col = $this->getValue($row, ['column', 'col', 'kolom']);
+        $rowNo = $this->getValue($row, ['row', 'baris']);
+
+        $lane = trim((string) ($lane ?? ''));
+        $rack = trim((string) ($rack ?? ''));
+        $col = trim((string) ($col ?? ''));
+        $rowNo = trim((string) ($rowNo ?? ''));
+
+        if ($lane === '' || $rack === '' || $col === '' || $rowNo === '') {
+            return '';
+        }
+
+        return "{$lane}-{$rack}-{$col}-{$rowNo}";
+    }
+
+    private function getValue($row, array $keys): mixed
+    {
+        foreach ($keys as $key) {
+            if (is_array($row) && array_key_exists($key, $row)) {
+                return $row[$key];
+            }
+            if ($row instanceof Collection && $row->has($key)) {
+                return $row->get($key);
+            }
+            if (isset($row[$key])) {
+                return $row[$key];
+            }
+        }
+        return null;
+    }
+
+    private function hasAnyKey($row, array $keys): bool
+    {
+        foreach ($keys as $key) {
+            if (is_array($row) && array_key_exists($key, $row)) {
+                return true;
+            }
+            if ($row instanceof Collection && $row->has($key)) {
+                return true;
+            }
+            if (isset($row[$key])) {
+                return true;
+            }
+        }
+        return false;
     }
 }

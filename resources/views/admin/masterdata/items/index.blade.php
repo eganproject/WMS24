@@ -134,6 +134,7 @@
                     <div class="fv-row mb-7">
                         <label class="fs-6 fw-bold form-label mb-2">Alamat</label>
                         <textarea class="form-control form-control-solid" name="address" id="item_address" rows="2"></textarea>
+                        <div class="form-text">Format lokasi: <code>KAB-A-03-05</code> (Lane-Rak-Kolom-Baris)</div>
                         <div class="invalid-feedback" id="error_address"></div>
                     </div>
                     <div class="fv-row mb-7">
@@ -186,12 +187,19 @@
                         <li><strong>category</strong> (opsional, anak kategori; jika kosong akan dimasukkan ke kategori default "Tanpa Kategori")</li>
                         <li><strong>stock</strong> / <strong>stok</strong> / <strong>qty</strong> (opsional, stok awal; akan dicatat sebagai inbound saldo awal)</li>
                         <li><strong>safety_stock</strong> / <strong>stok_pengaman</strong> (opsional, jumlah stok pengaman)</li>
-                        <li><strong>address</strong> (opsional)</li>
+                        <li><strong>address</strong> (opsional, format: <code>KAB-A-03-05</code>)</li>
+                        <li><strong>lane</strong> + <strong>rack</strong> + <strong>column</strong> + <strong>row</strong> (opsional, alternatif jika tidak mengisi address)</li>
                         <li><strong>description</strong> (opsional)</li>
                     </ul>
                     <p class="text-muted small mb-1">Contoh header: <code>sku,name,parent_category,category,stock,safety_stock,address,description</code></p>
+                    <p class="text-muted small mb-1">Alternatif header lokasi: <code>sku,name,parent_category,category,stock,safety_stock,lane,rack,column,row,description</code></p>
                     <p class="text-muted small mb-1">Gunakan format Excel (.xlsx/.xls) dengan header di baris pertama.</p>
                     <p class="text-muted small mb-0">Jika kolom category dikosongkan, item otomatis dimasukkan ke kategori "Tanpa Kategori".</p>
+                    <div class="mt-4">
+                        <a href="{{ route('admin.masterdata.items.template') }}" class="btn btn-light-primary">
+                            Download Template Header
+                        </a>
+                    </div>
                 </div>
                 <div class="mb-10">
                     <label class="required fs-6 fw-bold form-label mb-2">File Excel</label>

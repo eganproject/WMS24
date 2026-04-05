@@ -13,6 +13,7 @@ class Item extends Model
         'sku',
         'name',
         'category_id',
+        'location_id',
         'address',
         'description',
         'safety_stock',
@@ -30,5 +31,10 @@ class Item extends Model
     public function stock()
     {
         return $this->hasOne(ItemStock::class, 'item_id');
+    }
+
+    public function location()
+    {
+        return $this->belongsTo(Location::class, 'location_id');
     }
 }

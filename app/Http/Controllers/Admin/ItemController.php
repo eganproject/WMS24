@@ -8,7 +8,9 @@ use App\Models\InboundItem;
 use App\Models\InboundTransaction;
 use App\Models\Item;
 use App\Models\ItemStock;
+use App\Exports\ItemsTemplateExport;
 use App\Imports\ItemsImport;
+use App\Support\LocationService;
 use App\Support\StockService;
 use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Http\Request;
@@ -101,6 +103,16 @@ class ItemController extends Controller
             $validated['safety_stock'] = max(0, (int) $validated['safety_stock']);
         }
 
+        if (array_key_exists('address', $validated)) {
+            $location = LocationService::resolveLocation((string) ($validated['address'] ?? ''));
+            if ($location) {
+                $validated['location_id'] = $location->id;
+                $validated['address'] = $location->code;
+            } else {
+                $validated['location_id'] = null;
+            }
+        }
+
         DB::beginTransaction();
         try {
             $item = Item::create($validated);
@@ -145,6 +157,16 @@ class ItemController extends Controller
         $validated['category_id'] = ($catId === null || (int)$catId === 0) ? 0 : $catId;
         if (array_key_exists('safety_stock', $validated)) {
             $validated['safety_stock'] = max(0, (int) $validated['safety_stock']);
+        }
+
+        if (array_key_exists('address', $validated)) {
+            $location = LocationService::resolveLocation((string) ($validated['address'] ?? ''));
+            if ($location) {
+                $validated['location_id'] = $location->id;
+                $validated['address'] = $location->code;
+            } else {
+                $validated['location_id'] = null;
+            }
         }
 
         DB::beginTransaction();
@@ -255,6 +277,12 @@ class ItemController extends Controller
             'created' => $created,
             'updated' => $updated,
         ]);
+    }
+
+    public function template()
+    {
+        $filename = 'items-template-'.now()->format('YmdHis').'.xlsx';
+        return Excel::download(new ItemsTemplateExport(), $filename);
     }
 
     protected function findOrCreateCategory(string $name, int $parentId = 0): ?Category

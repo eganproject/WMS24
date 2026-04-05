@@ -123,64 +123,6 @@
         padding: 10px 12px;
         font-size: 12px;
     }
-    .todo-header {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 12px;
-    }
-    .todo-action {
-        width: auto;
-        padding: 8px 12px;
-        font-size: 12px;
-    }
-    .todo-summary {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 10px;
-        margin: 12px 0;
-    }
-    .todo-summary-card {
-        border: 1px solid var(--border);
-        border-radius: 14px;
-        padding: 10px 12px;
-        background: #fff;
-    }
-    .todo-summary-card span {
-        display: block;
-        font-size: 11px;
-        color: var(--muted);
-    }
-    .todo-summary-card strong {
-        font-size: 16px;
-    }
-    .todo-row {
-        display: grid;
-        grid-template-columns: 1fr auto;
-        gap: 12px;
-        align-items: center;
-        border: 1px solid var(--border);
-        border-radius: 16px;
-        padding: 12px;
-        background: #fff;
-    }
-    .todo-row strong {
-        display: block;
-        font-size: 13px;
-    }
-    .todo-row small {
-        color: var(--muted);
-        font-size: 11px;
-    }
-    .todo-badge {
-        background: rgba(15, 118, 110, 0.12);
-        color: var(--brand);
-        font-weight: 700;
-        padding: 6px 10px;
-        border-radius: 999px;
-        font-size: 12px;
-        white-space: nowrap;
-    }
 </style>
 
 <div class="screen">
@@ -210,28 +152,6 @@
         <div style="margin-top: 12px;">
             <button type="button" class="primary-btn" id="btn_start">Mulai Input</button>
         </div>
-    </div>
-
-    <div class="card" id="todo_card">
-        <div class="todo-header">
-            <div>
-                <div class="section-title">To Do Picking List</div>
-                <div class="muted" id="todo_date">Tanggal -</div>
-            </div>
-            <button type="button" class="ghost-btn todo-action" id="btn_todo_refresh">Refresh</button>
-        </div>
-        <div class="todo-summary">
-            <div class="todo-summary-card">
-                <span>Total SKU</span>
-                <strong id="todo_total_items">0</strong>
-            </div>
-            <div class="todo-summary-card">
-                <span>Total Sisa Qty</span>
-                <strong id="todo_total_remaining">0</strong>
-            </div>
-        </div>
-        <div class="muted" id="todo_empty">Belum ada picking list.</div>
-        <div class="items-list" id="todo_list"></div>
     </div>
 
     <div class="card" id="search_card">
@@ -288,12 +208,6 @@
         saveStatus: document.getElementById('save_status'),
         btnSubmit: document.getElementById('btn_submit'),
         searchCard: document.getElementById('search_card'),
-        todoList: document.getElementById('todo_list'),
-        todoEmpty: document.getElementById('todo_empty'),
-        todoTotalItems: document.getElementById('todo_total_items'),
-        todoTotalRemaining: document.getElementById('todo_total_remaining'),
-        todoDate: document.getElementById('todo_date'),
-        btnTodoRefresh: document.getElementById('btn_todo_refresh'),
     };
 
     const setSaveStatus = (text, pending = false) => {
@@ -360,7 +274,6 @@
             el.btnSubmit.classList.add('disabled');
             el.searchCard.classList.add('disabled');
             renderItems([]);
-            queueTodoRefresh();
             return;
         }
 
@@ -374,68 +287,6 @@
         el.btnSubmit.classList.toggle('disabled', !isDraft);
         el.searchCard.classList.toggle('disabled', !isDraft);
         renderItems(session.items || []);
-        queueTodoRefresh();
-    };
-
-    const resolveTodoDate = () => {
-        const startedAt = state.session?.started_at || '';
-        if (startedAt) {
-            return startedAt.split(' ')[0];
-        }
-        return todayStr || '';
-    };
-
-    const renderTodo = (items, date) => {
-        const totalRemaining = items.reduce((sum, row) => sum + (row.remaining_qty || 0), 0);
-        el.todoTotalItems.textContent = items.length;
-        el.todoTotalRemaining.textContent = totalRemaining;
-        el.todoDate.textContent = date ? `Tanggal ${date}` : 'Tanggal -';
-
-        if (!items.length) {
-            el.todoEmpty.style.display = 'block';
-            el.todoEmpty.textContent = 'Belum ada picking list.';
-            el.todoList.innerHTML = '';
-            return;
-        }
-
-        el.todoEmpty.style.display = 'none';
-        el.todoList.innerHTML = items.map((row) => {
-            const qty = row.qty ?? 0;
-            const remaining = row.remaining_qty ?? 0;
-            return `
-                <div class="todo-row">
-                    <div>
-                        <strong>${row.sku || '-'} • ${row.name || '-'}</strong>
-                        <small>Total: ${qty} | Sisa: ${remaining}</small>
-                    </div>
-                    <div class="todo-badge">${remaining}</div>
-                </div>
-            `;
-        }).join('');
-    };
-
-    let todoRefreshTimer = null;
-    const loadTodo = async () => {
-        if (!routes.pickingListData) return;
-        const date = resolveTodoDate();
-        const params = new URLSearchParams();
-        if (date) params.set('date', date);
-        const url = `${routes.pickingListData}?${params.toString()}`;
-        try {
-            const data = await fetchJson(url);
-            const rows = Array.isArray(data.items) ? data.items : [];
-            const pending = rows.filter((row) => (row.remaining_qty ?? 0) > 0);
-            renderTodo(pending, data.date || date);
-        } catch (err) {
-            el.todoEmpty.style.display = 'block';
-            el.todoEmpty.textContent = err.message || 'Gagal memuat picking list.';
-            el.todoList.innerHTML = '';
-        }
-    };
-
-    const queueTodoRefresh = () => {
-        if (todoRefreshTimer) clearTimeout(todoRefreshTimer);
-        todoRefreshTimer = setTimeout(loadTodo, 250);
     };
 
     const renderItems = (items) => {

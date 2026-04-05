@@ -132,7 +132,7 @@
             <div class="subtitle">Picker Mobile Input</div>
         </div>
         <div class="topbar-actions">
-            <a href="{{ $routes['scan'] }}" class="logout">Scan</a>
+            <a href="{{ $routes['pickingList'] }}" class="logout">Picking List</a>
             <a href="{{ $routes['dashboard'] }}" class="logout">Dashboard</a>
             <form method="POST" action="{{ route('logout') }}">
                 @csrf

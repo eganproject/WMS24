@@ -433,7 +433,7 @@
     let scanPending = false;
     const scanItem = async (overrideCode = null) => {
         if (scanPending) return;
-        const code = (overrideCode ?? el.scanCode?.value || '').trim();
+        const code = (overrideCode ?? el.scanCode?.value ?? '').trim();
         if (!code) return;
         scanPending = true;
         setScanStatus('Memproses scan...', true);
@@ -702,10 +702,6 @@
             setSaveStatus(err.message || 'Gagal mengunci sesi');
         }
     };
-
-    el.btnTodoRefresh?.addEventListener('click', () => {
-        loadTodo();
-    });
 
     const debounce = (fn, delay = 300) => {
         let timer;

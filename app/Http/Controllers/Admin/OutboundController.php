@@ -310,7 +310,7 @@ class OutboundController extends Controller
 
     private function index(string $type, string $pageTitle, string $routeBase)
     {
-        $items = Item::orderBy('name')->get(['id', 'sku', 'name']);
+        $items = Item::orderBy('name')->get(['id', 'sku', 'name', 'koli_qty']);
         $baseOptions = $this->typeOptions();
         $typeOptions = ['all' => 'Semua'] + $baseOptions;
         $routeMap = [

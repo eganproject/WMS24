@@ -9,6 +9,7 @@ use App\Models\OutboundTransaction;
 use App\Models\PickerSession;
 use App\Models\StockMutation;
 use App\Models\StockOpname;
+use App\Models\StockTransfer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 
@@ -218,6 +219,27 @@ class StockMutationController extends Controller
                         'note' => $damage->note ?? '-',
                     ];
                     $sourceItems = $damage->items->map(function ($row) {
+                        return [
+                            'label' => trim(($row->item?->sku ?? '').' - '.($row->item?->name ?? '')),
+                            'qty' => (int) $row->qty,
+                            'note' => $row->note ?? '-',
+                        ];
+                    })->values()->all();
+                }
+                break;
+            case 'transfer':
+                $transfer = StockTransfer::with(['items.item', 'fromWarehouse', 'toWarehouse'])->find($mutation->source_id);
+                if ($transfer) {
+                    $from = $transfer->fromWarehouse?->name ?? '-';
+                    $to = $transfer->toWarehouse?->name ?? '-';
+                    $sourceSummary = [
+                        'label' => "Transfer Gudang ({$from} -> {$to})",
+                        'code' => $transfer->code,
+                        'ref' => '-',
+                        'date' => $transfer->transacted_at?->format('Y-m-d H:i'),
+                        'note' => $transfer->note ?? '-',
+                    ];
+                    $sourceItems = $transfer->items->map(function ($row) {
                         return [
                             'label' => trim(($row->item?->sku ?? '').' - '.($row->item?->name ?? '')),
                             'qty' => (int) $row->qty,

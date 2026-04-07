@@ -6,6 +6,7 @@ use App\Models\Category;
 use App\Models\Item;
 use App\Models\ItemStock;
 use App\Support\LocationService;
+use App\Support\WarehouseService;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 use Maatwebsite\Excel\Concerns\SkipsEmptyRows;
@@ -62,6 +63,7 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             }
             $stock = $this->parseStock($row);
             $safetyStock = $this->parseSafetyStock($row);
+            $koliQty = $this->parseKoliQty($row);
 
             if ($sku === '' || $name === '') {
                 continue;
@@ -97,12 +99,19 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             if ($safetyStock !== null) {
                 $payload['safety_stock'] = $safetyStock;
             }
+            if ($koliQty !== null) {
+                $payload['koli_qty'] = $koliQty;
+            }
 
             $item = Item::updateOrCreate(
                 ['sku' => $sku],
                 $payload
             );
-            ItemStock::firstOrCreate(['item_id' => $item->id], ['stock' => 0]);
+            $warehouseId = WarehouseService::defaultWarehouseId();
+            ItemStock::firstOrCreate(
+                ['item_id' => $item->id, 'warehouse_id' => $warehouseId],
+                ['stock' => 0]
+            );
             $item->wasRecentlyCreated ? $this->created++ : $this->updated++;
 
             if ($stock > 0) {
@@ -140,6 +149,37 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
         $raw = null;
         $hasKey = false;
         foreach (['safety_stock', 'stok_pengaman', 'stock_pengaman', 'min_stock', 'minimum_stock'] as $key) {
+            if (is_array($row) && array_key_exists($key, $row)) {
+                $raw = $row[$key];
+                $hasKey = true;
+                break;
+            }
+            if ($row instanceof Collection && $row->has($key)) {
+                $raw = $row->get($key);
+                $hasKey = true;
+                break;
+            }
+            if (isset($row[$key])) {
+                $raw = $row[$key];
+                $hasKey = true;
+                break;
+            }
+        }
+        if (!$hasKey) {
+            return null;
+        }
+        if ($raw === null || $raw === '') {
+            return 0;
+        }
+        $value = is_numeric($raw) ? (int) $raw : (int) preg_replace('/[^0-9\-]/', '', (string) $raw);
+        return $value > 0 ? $value : 0;
+    }
+
+    protected function parseKoliQty($row): ?int
+    {
+        $raw = null;
+        $hasKey = false;
+        foreach (['koli_qty', 'isi_koli', 'qty_koli', 'kolian', 'koli'] as $key) {
             if (is_array($row) && array_key_exists($key, $row)) {
                 $raw = $row[$key];
                 $hasKey = true;

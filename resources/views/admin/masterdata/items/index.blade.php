@@ -82,6 +82,7 @@
                         <th>Kategori</th>
                         <th>Alamat</th>
                         <th>Deskripsi</th>
+                        <th class="text-end">Isi/Koli</th>
                         <th class="text-end">Stok Pengaman</th>
                         <th class="text-end">Aksi</th>
                     </tr>
@@ -172,6 +173,12 @@
                         <div class="invalid-feedback" id="error_description"></div>
                     </div>
                     <div class="fv-row mb-7">
+                        <label class="fs-6 fw-bold form-label mb-2">Isi per Koli (pcs)</label>
+                        <input type="number" min="0" class="form-control form-control-solid" name="koli_qty" id="item_koli_qty" placeholder="Contoh: 24" />
+                        <div class="form-text">Isi 0 atau kosong jika tidak menggunakan koli.</div>
+                        <div class="invalid-feedback" id="error_koli_qty"></div>
+                    </div>
+                    <div class="fv-row mb-7">
                         <label class="fs-6 fw-bold form-label mb-2">Jumlah Stok Pengaman</label>
                         <input type="number" min="0" class="form-control form-control-solid" name="safety_stock" id="item_safety_stock" value="0" />
                         <div class="invalid-feedback" id="error_safety_stock"></div>
@@ -216,12 +223,13 @@
                         <li><strong>category</strong> (opsional, anak kategori; jika kosong akan dimasukkan ke kategori default "Tanpa Kategori")</li>
                         <li><strong>stock</strong> / <strong>stok</strong> / <strong>qty</strong> (opsional, stok awal; akan dicatat sebagai inbound saldo awal)</li>
                         <li><strong>safety_stock</strong> / <strong>stok_pengaman</strong> (opsional, jumlah stok pengaman)</li>
+                        <li><strong>koli_qty</strong> / <strong>isi_koli</strong> (opsional, isi per koli/pcs)</li>
                         <li><strong>address</strong> (opsional, format: <code>KAB-A-03-05</code>)</li>
                         <li><strong>lane</strong> + <strong>rack</strong> + <strong>column</strong> + <strong>row</strong> (opsional, alternatif jika tidak mengisi address)</li>
                         <li><strong>description</strong> (opsional)</li>
                     </ul>
-                    <p class="text-muted small mb-1">Contoh header: <code>sku,name,parent_category,category,stock,safety_stock,address,description</code></p>
-                    <p class="text-muted small mb-1">Alternatif header lokasi: <code>sku,name,parent_category,category,stock,safety_stock,lane,rack,column,row,description</code></p>
+                    <p class="text-muted small mb-1">Contoh header: <code>sku,name,parent_category,category,stock,safety_stock,koli_qty,address,description</code></p>
+                    <p class="text-muted small mb-1">Alternatif header lokasi: <code>sku,name,parent_category,category,stock,safety_stock,koli_qty,lane,rack,column,row,description</code></p>
                     <p class="text-muted small mb-1">Gunakan format Excel (.xlsx/.xls) dengan header di baris pertama.</p>
                     <p class="text-muted small mb-0">Jika kolom category dikosongkan, item otomatis dimasukkan ke kategori "Tanpa Kategori".</p>
                     <div class="mt-4">
@@ -293,6 +301,7 @@
         const formAddress = document.getElementById('item_address');
         const formDescription = document.getElementById('item_description');
         const formSafetyStock = document.getElementById('item_safety_stock');
+        const formKoliQty = document.getElementById('item_koli_qty');
         const titleEl = document.getElementById('modal_item_title');
         const importBtn = document.getElementById('btn_import_items');
         const importModalEl = document.getElementById('modal_import_items');
@@ -420,9 +429,10 @@
                 { data: 'category' },
                 { data: 'address' },
                 { data: 'description' },
+                { data: 'koli_qty', className:'text-end', render: (data)=> (data === null || data === undefined || data === '') ? '-' : data },
                 { data: 'safety_stock', className:'text-end', render: (data)=> data ?? 0 },
                 { data: 'id', orderable:false, searchable:false, className:'text-end', render: (data, type, row)=>{
-                    const editItem = canUpdate ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-edit" data-id="${data}" data-sku="${row.sku}" data-name="${row.name}" data-category="${row.category_id}" data-address="${row.address ?? ''}" data-lane-id="${row.lane_id ?? ''}" data-rack-code="${row.rack_code ?? ''}" data-column-no="${row.column_no ?? ''}" data-row-no="${row.row_no ?? ''}" data-description="${row.description}" data-safety-stock="${row.safety_stock ?? 0}">Edit</a></div>` : '';
+                    const editItem = canUpdate ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-edit" data-id="${data}" data-sku="${row.sku}" data-name="${row.name}" data-category="${row.category_id}" data-address="${row.address ?? ''}" data-lane-id="${row.lane_id ?? ''}" data-rack-code="${row.rack_code ?? ''}" data-column-no="${row.column_no ?? ''}" data-row-no="${row.row_no ?? ''}" data-description="${row.description}" data-koli-qty="${row.koli_qty ?? ''}" data-safety-stock="${row.safety_stock ?? 0}">Edit</a></div>` : '';
                     const delItem = canDelete ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 text-danger btn-delete" data-id="${data}">Hapus</a></div>` : '';
                     const actions = `${editItem}${delItem}`;
                     if (!actions) return '';
@@ -471,7 +481,7 @@
         });
 
         const clearErrors = () => {
-            ['error_sku','error_name','error_category_id','error_lane_id','error_rack_code','error_column_no','error_row_no','error_address','error_description','error_safety_stock'].forEach(id => {
+            ['error_sku','error_name','error_category_id','error_lane_id','error_rack_code','error_column_no','error_row_no','error_address','error_description','error_koli_qty','error_safety_stock'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.textContent = '';
             });
@@ -503,6 +513,7 @@
             form.reset();
             formId.value = '';
             if (formSku) formSku.value = '';
+            if (formKoliQty) formKoliQty.value = '';
             if (formSafetyStock) formSafetyStock.value = 0;
             setCategoryValue('0');
             setLaneValue('');
@@ -627,6 +638,7 @@
             const columnNo = this.getAttribute('data-column-no') || '';
             const rowNo = this.getAttribute('data-row-no') || '';
             const description = this.getAttribute('data-description') || '';
+            const koliQty = this.getAttribute('data-koli-qty');
             const safetyStock = this.getAttribute('data-safety-stock');
             if (!form) return;
             formId.value = id;
@@ -638,6 +650,7 @@
             if (formColumn) formColumn.value = columnNo;
             if (formRow) formRow.value = rowNo;
             formDescription.value = description;
+            if (formKoliQty) formKoliQty.value = koliQty ?? '';
             if (formSafetyStock) formSafetyStock.value = safetyStock ?? 0;
             setCategoryValue(categoryId || '0');
             clearErrors();

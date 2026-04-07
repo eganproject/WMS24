@@ -26,6 +26,7 @@ class MenuSeeder extends Seeder
             ['name' => 'Locations', 'slug' => 'locations', 'route' => 'admin.masterdata.locations.index', 'icon' => 'fa-solid fa-location-dot', 'parent_slug' => 'master-data', 'sort_order' => 21.62],
             ['name' => 'Item Stocks', 'slug' => 'item-stocks', 'route' => 'admin.inventory.item-stocks.index', 'icon' => 'fa-solid fa-boxes-stacked', 'parent_slug' => 'inventory', 'sort_order' => 10],
             ['name' => 'Stock Mutations', 'slug' => 'stock-mutations', 'route' => 'admin.inventory.stock-mutations.index', 'icon' => 'fa-solid fa-right-left', 'parent_slug' => 'inventory', 'sort_order' => 11],
+            ['name' => 'Transfer Gudang', 'slug' => 'stock-transfers', 'route' => 'admin.inventory.stock-transfers.index', 'icon' => 'fa-solid fa-arrow-right-arrow-left', 'parent_slug' => 'inventory', 'sort_order' => 11.5],
             ['name' => 'Stock Opname', 'slug' => 'stock-opname', 'route' => 'admin.inventory.stock-opname.index', 'icon' => 'fa-solid fa-clipboard-check', 'parent_slug' => 'inventory', 'sort_order' => 12],
             ['name' => 'Penyesuaian Stok', 'slug' => 'stock-adjustments', 'route' => 'admin.inventory.stock-adjustments.index', 'icon' => 'fa-solid fa-sliders', 'parent_slug' => 'inventory', 'sort_order' => 12.5],
             ['name' => 'Barang Rusak', 'slug' => 'damaged-goods', 'route' => 'admin.inventory.damaged-goods.index', 'icon' => 'fa-solid fa-triangle-exclamation', 'parent_slug' => 'inventory', 'sort_order' => 13],

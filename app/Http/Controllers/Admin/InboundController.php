@@ -186,6 +186,7 @@ class InboundController extends Controller
                         'inbound_transaction_id' => $tx->id,
                         'item_id' => $row['item_id'],
                         'qty' => $row['qty'],
+                        'koli' => $row['koli'] ?? null,
                         'note' => $row['note'] ?? null,
                     ]);
                     $createdItems++;
@@ -270,6 +271,7 @@ class InboundController extends Controller
                         'inbound_transaction_id' => $tx->id,
                         'item_id' => $row['item_id'],
                         'qty' => $row['qty'],
+                        'koli' => $row['koli'] ?? null,
                         'note' => $row['note'] ?? null,
                     ]);
                     $createdItems++;
@@ -354,6 +356,7 @@ class InboundController extends Controller
                         'inbound_transaction_id' => $tx->id,
                         'item_id' => $row['item_id'],
                         'qty' => $row['qty'],
+                        'koli' => $row['koli'] ?? null,
                         'note' => $row['note'] ?? null,
                     ]);
                     $createdItems++;
@@ -394,7 +397,7 @@ class InboundController extends Controller
 
     private function index(string $type, string $pageTitle, string $routeBase)
     {
-        $items = Item::orderBy('name')->get(['id', 'sku', 'name']);
+        $items = Item::orderBy('name')->get(['id', 'sku', 'name', 'koli_qty']);
         $baseOptions = $this->typeOptions();
         $typeOptions = ['all' => 'Semua'] + $baseOptions;
         $routeMap = [
@@ -436,6 +439,7 @@ class InboundController extends Controller
             'typeOptions' => $typeOptions,
             'typeDefault' => $type,
             'routeMap' => $routeMap,
+            'enableKoli' => true,
             'importUrl' => match ($type) {
                 'receipt' => route('admin.inbound.receipts.import'),
                 'return' => route('admin.inbound.returns.import'),
@@ -559,6 +563,7 @@ class InboundController extends Controller
                 return [
                     'item_id' => $item->item_id,
                     'qty' => $item->qty,
+                    'koli' => $item->koli,
                     'note' => $item->note ?? '',
                 ];
             })->values(),
@@ -572,11 +577,14 @@ class InboundController extends Controller
             ->findOrFail($id);
 
         $totalQty = $tx->items->sum('qty');
+        $totalKoli = $tx->items->sum('koli');
 
         return view('admin.stock-flow.detail', [
             'pageTitle' => $pageTitle,
             'transaction' => $tx,
             'totalQty' => $totalQty,
+            'totalKoli' => $totalKoli,
+            'showKoli' => true,
             'backUrl' => route("admin.inbound.{$routeBase}.index"),
         ]);
     }
@@ -611,6 +619,7 @@ class InboundController extends Controller
                     'inbound_transaction_id' => $tx->id,
                     'item_id' => $row['item_id'],
                     'qty' => $row['qty'],
+                    'koli' => $row['koli'] ?? null,
                     'note' => $row['note'] ?? null,
                 ]);
 
@@ -672,6 +681,7 @@ class InboundController extends Controller
                     'inbound_transaction_id' => $tx->id,
                     'item_id' => $row['item_id'],
                     'qty' => $row['qty'],
+                    'koli' => $row['koli'] ?? null,
                     'note' => $row['note'] ?? null,
                 ]);
 
@@ -760,6 +770,7 @@ class InboundController extends Controller
             'items' => ['required', 'array', 'min:1'],
             'items.*.item_id' => ['required', 'integer', 'exists:items,id'],
             'items.*.qty' => ['required', 'integer', 'min:1'],
+            'items.*.koli' => ['nullable', 'integer', 'min:1'],
             'items.*.note' => ['nullable', 'string'],
             'ref_no' => ['nullable', 'string', 'max:100'],
             'note' => ['nullable', 'string'],
@@ -769,9 +780,11 @@ class InboundController extends Controller
         $items = collect($validated['items'] ?? [])
             ->filter(fn ($row) => (int) ($row['qty'] ?? 0) > 0 && (int) ($row['item_id'] ?? 0) > 0)
             ->map(function ($row) {
+                $koli = isset($row['koli']) && (int) $row['koli'] > 0 ? (int) $row['koli'] : null;
                 return [
                     'item_id' => (int) $row['item_id'],
                     'qty' => (int) $row['qty'],
+                    'koli' => $koli,
                     'note' => $row['note'] ?? null,
                 ];
             })->values();
@@ -791,10 +804,12 @@ class InboundController extends Controller
 
         $normalized = $items->groupBy('item_id')->map(function ($rows, $itemId) {
             $qty = $rows->sum('qty');
+            $koli = $rows->sum('koli');
             $note = $rows->pluck('note')->first(fn ($n) => $n !== null && $n !== '') ?? null;
             return [
                 'item_id' => (int) $itemId,
                 'qty' => $qty,
+                'koli' => $koli > 0 ? $koli : null,
                 'note' => $note,
             ];
         })->values()->all();

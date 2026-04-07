@@ -11,6 +11,7 @@ class StockMutation extends Model
 
     protected $fillable = [
         'item_id',
+        'warehouse_id',
         'direction',
         'qty',
         'source_type',
@@ -29,6 +30,11 @@ class StockMutation extends Model
     public function item()
     {
         return $this->belongsTo(Item::class, 'item_id');
+    }
+
+    public function warehouse()
+    {
+        return $this->belongsTo(Warehouse::class, 'warehouse_id');
     }
 
     public function creator()

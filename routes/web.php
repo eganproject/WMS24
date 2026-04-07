@@ -161,6 +161,14 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/stock-mutations/data', [StockMutationController::class, 'data'])->name('stock-mutations.data');
         Route::get('/stock-mutations/{id}', [StockMutationController::class, 'show'])->name('stock-mutations.show');
 
+        // Stock Transfers
+        Route::get('/stock-transfers', [\App\Http\Controllers\Admin\StockTransferController::class, 'index'])->name('stock-transfers.index');
+        Route::get('/stock-transfers/data', [\App\Http\Controllers\Admin\StockTransferController::class, 'data'])->name('stock-transfers.data');
+        Route::post('/stock-transfers', [\App\Http\Controllers\Admin\StockTransferController::class, 'store'])->name('stock-transfers.store');
+        Route::get('/stock-transfers/{id}', [\App\Http\Controllers\Admin\StockTransferController::class, 'show'])->name('stock-transfers.show');
+        Route::get('/stock-transfers/{id}/detail', [\App\Http\Controllers\Admin\StockTransferController::class, 'detail'])->name('stock-transfers.detail');
+        Route::post('/stock-transfers/{id}/qc', [\App\Http\Controllers\Admin\StockTransferController::class, 'qc'])->name('stock-transfers.qc');
+
         // Stock Opname
         Route::get('/stock-opname', [StockOpnameController::class, 'index'])->name('stock-opname.index');
         Route::get('/stock-opname/data', [StockOpnameController::class, 'data'])->name('stock-opname.data');

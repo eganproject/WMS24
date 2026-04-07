@@ -13,6 +13,7 @@ use App\Exports\ItemsTemplateExport;
 use App\Imports\ItemsImport;
 use App\Support\LocationService;
 use App\Support\StockService;
+use App\Support\WarehouseService;
 use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -88,6 +89,7 @@ class ItemController extends Controller
                 'row_no' => $location?->row_no ?? '',
                 'description' => $i->description ?? '',
                 'safety_stock' => (int) ($i->safety_stock ?? 0),
+                'koli_qty' => $i->koli_qty !== null ? (int) $i->koli_qty : null,
             ];
         });
 
@@ -117,6 +119,7 @@ class ItemController extends Controller
             'address' => ['nullable', 'string'],
             'description' => ['nullable', 'string'],
             'safety_stock' => ['nullable', 'integer', 'min:0'],
+            'koli_qty' => ['nullable', 'integer', 'min:0'],
         ]);
 
         $catId = $request->input('category_id');
@@ -124,13 +127,27 @@ class ItemController extends Controller
         if (array_key_exists('safety_stock', $validated)) {
             $validated['safety_stock'] = max(0, (int) $validated['safety_stock']);
         }
+        if (array_key_exists('koli_qty', $validated)) {
+            $validated['koli_qty'] = $validated['koli_qty'] === null || $validated['koli_qty'] === ''
+                ? null
+                : max(0, (int) $validated['koli_qty']);
+        }
+        if (array_key_exists('koli_qty', $validated)) {
+            $validated['koli_qty'] = $validated['koli_qty'] === null || $validated['koli_qty'] === ''
+                ? null
+                : max(0, (int) $validated['koli_qty']);
+        }
 
         $this->applyLocationPayload($validated);
 
         DB::beginTransaction();
         try {
             $item = Item::create($validated);
-            ItemStock::firstOrCreate(['item_id' => $item->id], ['stock' => 0]);
+            $warehouseId = WarehouseService::defaultWarehouseId();
+            ItemStock::firstOrCreate(
+                ['item_id' => $item->id, 'warehouse_id' => $warehouseId],
+                ['stock' => 0]
+            );
             DB::commit();
 
             return response()->json([
@@ -140,6 +157,7 @@ class ItemController extends Controller
                     'sku' => $item->sku,
                     'name' => $item->name,
                     'category_id' => $item->category_id,
+                    'koli_qty' => $item->koli_qty,
                 ]
             ]);
         } catch (\Throwable $e) {
@@ -169,6 +187,7 @@ class ItemController extends Controller
             'address' => ['nullable', 'string'],
             'description' => ['nullable', 'string'],
             'safety_stock' => ['nullable', 'integer', 'min:0'],
+            'koli_qty' => ['nullable', 'integer', 'min:0'],
         ]);
 
         $catId = $request->input('category_id');
@@ -191,6 +210,7 @@ class ItemController extends Controller
                     'sku' => $item->sku,
                     'name' => $item->name,
                     'category_id' => $item->category_id,
+                    'koli_qty' => $item->koli_qty,
                 ]
             ]);
         } catch (\Throwable $e) {

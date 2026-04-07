@@ -5,6 +5,7 @@ namespace App\Support;
 use App\Models\ItemStock;
 use App\Models\StockMutation;
 use Illuminate\Validation\ValidationException;
+use App\Support\WarehouseService;
 
 class StockService
 {
@@ -13,6 +14,10 @@ class StockService
         $itemId = (int) ($payload['item_id'] ?? 0);
         $direction = $payload['direction'] ?? 'in';
         $qty = (int) ($payload['qty'] ?? 0);
+        $warehouseId = (int) ($payload['warehouse_id'] ?? 0);
+        if ($warehouseId <= 0) {
+            $warehouseId = WarehouseService::defaultWarehouseId();
+        }
 
         if ($itemId <= 0 || $qty <= 0) {
             throw ValidationException::withMessages([
@@ -20,9 +25,16 @@ class StockService
             ]);
         }
 
-        $stock = ItemStock::where('item_id', $itemId)->lockForUpdate()->first();
+        $stock = ItemStock::where('item_id', $itemId)
+            ->where('warehouse_id', $warehouseId)
+            ->lockForUpdate()
+            ->first();
         if (!$stock) {
-            $stock = ItemStock::create(['item_id' => $itemId, 'stock' => 0]);
+            $stock = ItemStock::create([
+                'item_id' => $itemId,
+                'warehouse_id' => $warehouseId,
+                'stock' => 0,
+            ]);
         }
 
         if ($direction === 'out' && $stock->stock < $qty) {
@@ -46,6 +58,7 @@ class StockService
 
         StockMutation::create([
             'item_id' => $itemId,
+            'warehouse_id' => $warehouseId,
             'direction' => $direction,
             'qty' => $qty,
             'source_type' => $sourceType,
@@ -66,9 +79,20 @@ class StockService
             ->get();
 
         foreach ($mutations as $mutation) {
-            $stock = ItemStock::where('item_id', $mutation->item_id)->lockForUpdate()->first();
+            $warehouseId = (int) ($mutation->warehouse_id ?? 0);
+            if ($warehouseId <= 0) {
+                $warehouseId = WarehouseService::defaultWarehouseId();
+            }
+            $stock = ItemStock::where('item_id', $mutation->item_id)
+                ->where('warehouse_id', $warehouseId)
+                ->lockForUpdate()
+                ->first();
             if (!$stock) {
-                $stock = ItemStock::create(['item_id' => $mutation->item_id, 'stock' => 0]);
+                $stock = ItemStock::create([
+                    'item_id' => $mutation->item_id,
+                    'warehouse_id' => $warehouseId,
+                    'stock' => 0,
+                ]);
             }
 
             if ($mutation->direction === 'in') {

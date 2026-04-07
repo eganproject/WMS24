@@ -22,6 +22,7 @@ class ItemsTemplateExport implements FromCollection, WithHeadings
             'category',
             'stock',
             'safety_stock',
+            'koli_qty',
             'address',
             'lane',
             'rack',

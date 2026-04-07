@@ -20,6 +20,7 @@ class DatabaseSeeder extends Seeder
             KurirSeeder::class,
             UserSeeder::class,
             CategoryItemSeeder::class,
+            WarehouseSeeder::class,
             ItemStockSeeder::class,
             StoreSeeder::class,
         ]);

@@ -10,6 +10,7 @@ use App\Models\StockOpname;
 use App\Models\StockOpnameItem;
 use App\Models\StockMutation;
 use App\Support\StockService;
+use App\Support\WarehouseService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -21,7 +22,11 @@ class StockOpnameController extends Controller
 {
     public function index()
     {
-        $items = Item::leftJoin('item_stocks', 'item_stocks.item_id', '=', 'items.id')
+        $warehouseId = WarehouseService::defaultWarehouseId();
+        $items = Item::leftJoin('item_stocks', function ($join) use ($warehouseId) {
+                $join->on('item_stocks.item_id', '=', 'items.id')
+                    ->where('item_stocks.warehouse_id', '=', $warehouseId);
+            })
             ->orderBy('items.name')
             ->get([
                 'items.id',
@@ -204,10 +209,21 @@ class StockOpnameController extends Controller
             ]);
 
             foreach ($validated['items'] as $row) {
-                $stock = ItemStock::where('item_id', $row['item_id'])->lockForUpdate()->first();
+                $warehouseId = WarehouseService::defaultWarehouseId();
+                $stock = ItemStock::where('item_id', $row['item_id'])
+                    ->where('warehouse_id', $warehouseId)
+                    ->lockForUpdate()
+                    ->first();
                 if (!$stock) {
-                    ItemStock::create(['item_id' => $row['item_id'], 'stock' => 0]);
-                    $stock = ItemStock::where('item_id', $row['item_id'])->lockForUpdate()->first();
+                    ItemStock::create([
+                        'item_id' => $row['item_id'],
+                        'warehouse_id' => $warehouseId,
+                        'stock' => 0,
+                    ]);
+                    $stock = ItemStock::where('item_id', $row['item_id'])
+                        ->where('warehouse_id', $warehouseId)
+                        ->lockForUpdate()
+                        ->first();
                 }
                 $systemQty = (int) ($stock?->stock ?? 0);
                 $countedQty = (int) $row['counted_qty'];

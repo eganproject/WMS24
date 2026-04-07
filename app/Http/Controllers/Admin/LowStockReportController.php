@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Category;
+use App\Support\WarehouseService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -21,8 +22,12 @@ class LowStockReportController extends Controller
 
     public function data(Request $request)
     {
+        $warehouseId = WarehouseService::defaultWarehouseId();
         $baseQuery = DB::table('items as i')
-            ->leftJoin('item_stocks as s', 's.item_id', '=', 'i.id')
+            ->leftJoin('item_stocks as s', function ($join) use ($warehouseId) {
+                $join->on('s.item_id', '=', 'i.id')
+                    ->where('s.warehouse_id', '=', $warehouseId);
+            })
             ->leftJoin('categories as c', 'c.id', '=', 'i.category_id')
             ->where('i.safety_stock', '>', 0)
             ->whereRaw('COALESCE(s.stock, 0) < i.safety_stock');

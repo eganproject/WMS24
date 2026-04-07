@@ -172,7 +172,11 @@
                 <div class="modal-body scroll-y mx-5 mx-xl-15 my-7">
                     <div class="mb-6">
                         <div class="text-muted fs-7">
-                            Header minimal: <strong>sku</strong>, <strong>qty</strong>.<br>
+                            @if(!empty($enableKoli ?? false))
+                                Header minimal: <strong>sku</strong>, <strong>qty</strong> atau <strong>koli</strong>.<br>
+                            @else
+                                Header minimal: <strong>sku</strong>, <strong>qty</strong>.<br>
+                            @endif
                             Opsional: <strong>ref_no</strong>, <strong>note</strong>, <strong>item_note</strong>, <strong>transacted_at</strong>.
                         </div>
                     </div>
@@ -205,10 +209,11 @@
     const routeMap = @json($routeMap ?? []);
     const typeLabelMap = @json($typeOptions ?? []);
     const csrfToken = '{{ csrf_token() }}';
-    const itemOptionsHtml = `@foreach($items as $item)<option value="{{ $item->id }}">{{ $item->sku }} - {{ $item->name }}</option>@endforeach`;
+    const itemOptionsHtml = `@foreach($items as $item)<option value="{{ $item->id }}" data-koli-qty="{{ (int) ($item->koli_qty ?? 0) }}">{{ $item->sku }} - {{ $item->name }}</option>@endforeach`;
     const defaultTypeFilter = '{{ $typeDefault ?? '' }}';
     const permMap = @json($permMap ?? []);
     const canCreateDefault = {{ $canCreateDefault ? 'true' : 'false' }};
+    const enableKoli = {{ !empty($enableKoli ?? false) ? 'true' : 'false' }};
 
     document.addEventListener('DOMContentLoaded', () => {
         const tableEl = $('#stock_flow_table');
@@ -295,6 +300,36 @@
             return !hasDuplicate;
         };
 
+        const getSelectedKoliQty = (selectEl) => {
+            if (!selectEl) return 0;
+            const opt = selectEl.selectedOptions?.[0];
+            const raw = opt?.getAttribute('data-koli-qty') || opt?.dataset?.koliQty || '';
+            const val = parseInt(raw, 10);
+            return Number.isFinite(val) ? val : 0;
+        };
+
+        const updateKoliInfo = (row) => {
+            if (!enableKoli || !row) return;
+            const infoEl = row.querySelector('[data-koli-info]');
+            if (!infoEl) return;
+            const selectEl = row.querySelector('.flow-item-select');
+            const koliQty = getSelectedKoliQty(selectEl);
+            infoEl.textContent = koliQty > 0 ? `Isi/Koli: ${koliQty} pcs` : 'Isi/Koli: belum diset';
+        };
+
+        const syncQtyFromKoli = (row) => {
+            if (!enableKoli || !row) return;
+            const koliEl = row.querySelector('input[data-name="koli"]');
+            const qtyEl = row.querySelector('input[data-name="qty"]');
+            const selectEl = row.querySelector('.flow-item-select');
+            if (!koliEl || !qtyEl || !selectEl) return;
+            const koliVal = parseInt(koliEl.value || '', 10);
+            if (!koliVal || koliVal <= 0) return;
+            const koliQty = getSelectedKoliQty(selectEl);
+            if (koliQty <= 0) return;
+            qtyEl.value = String(koliVal * koliQty);
+        };
+
         const initSelect2 = (selectEl) => {
             if (selectEl && typeof $ !== 'undefined' && $.fn.select2) {
                 $(selectEl).select2({
@@ -333,8 +368,17 @@
         const createItemRow = (data = {}) => {
             const row = document.createElement('div');
             row.className = 'row g-3 align-items-end mb-4 flow-item-row';
+            const itemColSize = enableKoli ? 'col-md-5' : 'col-md-6';
+            const noteColSize = enableKoli ? 'col-md-2' : 'col-md-3';
+            const koliCol = enableKoli ? `
+                <div class="col-md-2">
+                    <label class="fs-6 fw-bold form-label mb-2">Koli</label>
+                    <input type="number" min="1" class="form-control form-control-solid" data-name="koli" />
+                    <div class="form-text small text-muted" data-koli-info>Isi/Koli: -</div>
+                </div>
+            ` : '';
             row.innerHTML = `
-                <div class="col-md-6">
+                <div class="${itemColSize}">
                     <label class="required fs-6 fw-bold form-label mb-2">Item</label>
                     <select class="form-select form-select-solid flow-item-select" data-name="item_id" required>
                         <option value=""></option>
@@ -342,12 +386,13 @@
                     </select>
                     <div class="invalid-feedback" data-error-for="item_id"></div>
                 </div>
+                ${koliCol}
                 <div class="col-md-2">
                     <label class="required fs-6 fw-bold form-label mb-2">Qty</label>
                     <input type="number" min="1" class="form-control form-control-solid" data-name="qty" required />
                     <div class="invalid-feedback" data-error-for="qty"></div>
                 </div>
-                <div class="col-md-3">
+                <div class="${noteColSize}">
                     <label class="fs-6 fw-bold form-label mb-2">Catatan Item</label>
                     <input type="text" class="form-control form-control-solid" data-name="note" />
                 </div>
@@ -363,10 +408,14 @@
             }
             const qtyEl = row.querySelector('input[data-name="qty"]');
             if (qtyEl) qtyEl.value = data.qty ?? '';
+            const koliEl = row.querySelector('input[data-name="koli"]');
+            if (koliEl) koliEl.value = data.koli ?? '';
             const noteEl = row.querySelector('input[data-name="note"]');
             if (noteEl) noteEl.value = data.note ?? '';
 
             initSelect2(selectEl);
+            updateKoliInfo(row);
+            syncQtyFromKoli(row);
             renumberRows();
             validateUniqueItems();
         };
@@ -398,6 +447,17 @@
         itemsContainer?.addEventListener('change', (e) => {
             if (e.target.matches('.flow-item-select')) {
                 validateUniqueItems();
+                const row = e.target.closest('.flow-item-row');
+                updateKoliInfo(row);
+                syncQtyFromKoli(row);
+            }
+        });
+
+        itemsContainer?.addEventListener('input', (e) => {
+            if (!enableKoli) return;
+            if (e.target.matches('input[data-name="koli"]')) {
+                const row = e.target.closest('.flow-item-row');
+                syncQtyFromKoli(row);
             }
         });
 

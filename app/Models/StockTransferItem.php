@@ -5,21 +5,23 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class InboundItem extends Model
+class StockTransferItem extends Model
 {
     use HasFactory;
 
     protected $fillable = [
-        'inbound_transaction_id',
+        'stock_transfer_id',
         'item_id',
         'qty',
-        'koli',
+        'qty_ok',
+        'qty_reject',
         'note',
+        'qc_note',
     ];
 
-    public function transaction()
+    public function transfer()
     {
-        return $this->belongsTo(InboundTransaction::class, 'inbound_transaction_id');
+        return $this->belongsTo(StockTransfer::class, 'stock_transfer_id');
     }
 
     public function item()

@@ -11,7 +11,7 @@ use Maatwebsite\Excel\Concerns\WithHeadingRow;
 
 class InboundReceiptsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
 {
-    /** @var array<string,array{ref_no:?string,note:?string,transacted_at:?string,items:array<int,array{item_id:int,qty:int,note:?string}>}> */
+    /** @var array<string,array{ref_no:?string,note:?string,transacted_at:?string,items:array<int,array{item_id:int,qty:int,koli:?int,note:?string}>}> */
     public array $groups = [];
 
     public function collection(Collection $rows)
@@ -26,13 +26,14 @@ class InboundReceiptsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
         $headers = array_keys($first?->toArray() ?? []);
         if (!in_array('sku', $headers, true)) {
             throw ValidationException::withMessages([
-                'file' => 'Header wajib: sku, qty (opsional: ref_no, note, item_note, transacted_at)',
+                'file' => 'Header wajib: sku, qty/koli (opsional: ref_no, note, item_note, transacted_at)',
             ]);
         }
         $qtyKey = $this->detectQtyKey($headers);
-        if ($qtyKey === null) {
+        $koliKey = $this->detectKoliKey($headers);
+        if ($qtyKey === null && $koliKey === null) {
             throw ValidationException::withMessages([
-                'file' => 'Header qty wajib (gunakan: qty/quantity/jumlah/stok/stock)',
+                'file' => 'Header qty/koli wajib (gunakan: qty/quantity/jumlah/stok/stock atau koli/kolian/isi_koli)',
             ]);
         }
 
@@ -41,8 +42,8 @@ class InboundReceiptsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
             ->unique()
             ->values();
 
-        $items = Item::whereIn('sku', $skus)->get(['id', 'sku']);
-        $skuMap = $items->pluck('id', 'sku')->all();
+        $items = Item::whereIn('sku', $skus)->get(['id', 'sku', 'koli_qty']);
+        $skuMap = $items->keyBy('sku');
 
         $missing = [];
         $errors = [];
@@ -57,9 +58,21 @@ class InboundReceiptsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
                 $missing[$sku] = true;
                 continue;
             }
-            $qty = $this->parseQty($row, $qtyKey);
+            $item = $skuMap[$sku];
+            $qty = $qtyKey ? $this->parseQty($row, $qtyKey) : 0;
+            $koli = $koliKey ? $this->parseQty($row, $koliKey) : 0;
+            if ($qty <= 0 && $koliKey) {
+                if ($koli > 0) {
+                    $koliQty = (int) ($item->koli_qty ?? 0);
+                    if ($koliQty <= 0) {
+                        $errors[] = "Baris {$rowIndex}: isi per koli belum diisi untuk SKU {$sku}";
+                        continue;
+                    }
+                    $qty = $koli * $koliQty;
+                }
+            }
             if ($qty <= 0) {
-                $errors[] = "Baris {$rowIndex}: qty tidak valid untuk SKU {$sku}";
+                $errors[] = "Baris {$rowIndex}: qty/koli tidak valid untuk SKU {$sku}";
                 continue;
             }
 
@@ -85,15 +98,20 @@ class InboundReceiptsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
                 }
             }
 
-            $itemId = (int) $skuMap[$sku];
+            $itemId = (int) $item->id;
+            $koliValue = $koli > 0 ? $koli : null;
             if (!isset($this->groups[$groupKey]['items'][$itemId])) {
                 $this->groups[$groupKey]['items'][$itemId] = [
                     'item_id' => $itemId,
                     'qty' => $qty,
+                    'koli' => $koliValue,
                     'note' => $itemNote !== '' ? $itemNote : null,
                 ];
             } else {
                 $this->groups[$groupKey]['items'][$itemId]['qty'] += $qty;
+                if ($koliValue !== null) {
+                    $this->groups[$groupKey]['items'][$itemId]['koli'] = (int) ($this->groups[$groupKey]['items'][$itemId]['koli'] ?? 0) + $koliValue;
+                }
                 if ($itemNote !== '' && empty($this->groups[$groupKey]['items'][$itemId]['note'])) {
                     $this->groups[$groupKey]['items'][$itemId]['note'] = $itemNote;
                 }
@@ -132,6 +150,16 @@ class InboundReceiptsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
     private function detectQtyKey(array $headers): ?string
     {
         foreach (['qty', 'quantity', 'jumlah', 'stok', 'stock'] as $key) {
+            if (in_array($key, $headers, true)) {
+                return $key;
+            }
+        }
+        return null;
+    }
+
+    private function detectKoliKey(array $headers): ?string
+    {
+        foreach (['koli', 'kolian', 'isi_koli', 'koli_qty', 'qty_koli'] as $key) {
             if (in_array($key, $headers, true)) {
                 return $key;
             }

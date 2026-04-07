@@ -30,6 +30,12 @@
                 <div class="fw-bold text-gray-600">Total Qty</div>
                 <div>{{ $totalQty }}</div>
             </div>
+            @if(!empty($showKoli ?? false))
+                <div class="col-md-4">
+                    <div class="fw-bold text-gray-600">Total Koli</div>
+                    <div>{{ ($totalKoli ?? 0) > 0 ? $totalKoli : '-' }}</div>
+                </div>
+            @endif
         </div>
 
         <div class="table-responsive">
@@ -37,6 +43,9 @@
                 <thead>
                     <tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0">
                         <th>Item</th>
+                        @if(!empty($showKoli ?? false))
+                            <th>Koli</th>
+                        @endif
                         <th>Qty</th>
                         <th>Catatan</th>
                     </tr>
@@ -45,6 +54,9 @@
                     @foreach($transaction->items as $row)
                         <tr>
                             <td>{{ $row->item?->sku }} - {{ $row->item?->name }}</td>
+                            @if(!empty($showKoli ?? false))
+                                <td>{{ $row->koli ?? '-' }}</td>
+                            @endif
                             <td>{{ $row->qty }}</td>
                             <td>{{ $row->note ?? '-' }}</td>
                         </tr>

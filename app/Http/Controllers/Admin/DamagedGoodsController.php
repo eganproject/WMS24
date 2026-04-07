@@ -8,6 +8,7 @@ use App\Models\DamagedGoodItem;
 use App\Models\Item;
 use App\Models\StockMutation;
 use App\Support\StockService;
+use App\Support\WarehouseService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -122,6 +123,7 @@ class DamagedGoodsController extends Controller
                 if ($validated['source_type'] === 'display') {
                     StockService::mutate([
                         'item_id' => $row['item_id'],
+                        'warehouse_id' => WarehouseService::displayWarehouseId(),
                         'direction' => 'out',
                         'qty' => $row['qty'],
                         'source_type' => 'damaged',
@@ -211,6 +213,7 @@ class DamagedGoodsController extends Controller
                 if ($validated['source_type'] === 'display') {
                     StockService::mutate([
                         'item_id' => $row['item_id'],
+                        'warehouse_id' => WarehouseService::displayWarehouseId(),
                         'direction' => 'out',
                         'qty' => $row['qty'],
                         'source_type' => 'damaged',

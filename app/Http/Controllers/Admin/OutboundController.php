@@ -468,6 +468,7 @@ class OutboundController extends Controller
                 'transacted_at' => $ts,
                 'submit_by' => $row->creator?->name ?? '-',
                 'warehouse' => $row->warehouse?->name ?? '-',
+                'warehouse_id' => $row->warehouse_id,
                 'item' => $itemLabel ?: '-',
                 'qty' => $totalQty,
                 'note' => $row->note ?? '',

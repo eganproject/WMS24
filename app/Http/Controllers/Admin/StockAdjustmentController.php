@@ -36,6 +36,7 @@ class StockAdjustmentController extends Controller
             'warehouseLabel' => $warehouseLabel,
             'warehouses' => $warehouses,
             'defaultWarehouseId' => $warehouseId,
+            'displayWarehouseId' => WarehouseService::displayWarehouseId(),
         ]);
     }
 
@@ -103,6 +104,7 @@ class StockAdjustmentController extends Controller
                 'transacted_at' => $ts,
                 'submit_by' => $row->creator?->name ?? '-',
                 'warehouse' => $row->warehouse?->name ?? '-',
+                'warehouse_id' => $row->warehouse_id,
                 'item' => $itemLabel ?: '-',
                 'qty_in' => $totalIn,
                 'qty_out' => $totalOut,

@@ -26,6 +26,7 @@ class StockMutationController extends Controller
         return view('admin.inventory.stock-mutations.index', [
             'warehouses' => $warehouses,
             'defaultWarehouseId' => $warehouseId,
+            'displayWarehouseId' => WarehouseService::displayWarehouseId(),
             'warehouseLabel' => $warehouseLabel,
         ]);
     }
@@ -86,6 +87,7 @@ class StockMutationController extends Controller
                 'occurred_at' => $ts,
                 'item' => $itemLabel,
                 'warehouse' => $m->warehouse?->name ?? '-',
+                'warehouse_id' => $m->warehouse_id,
                 'user' => $m->creator?->name ?? '-',
                 'direction' => $direction,
                 'qty' => (int) $m->qty,
@@ -137,6 +139,7 @@ class StockMutationController extends Controller
                 'occurred_at' => $mutation->occurred_at?->format('Y-m-d H:i'),
                 'item' => $itemLabel,
                 'warehouse' => $mutation->warehouse?->name ?? '-',
+                'warehouse_id' => $mutation->warehouse_id,
                 'direction' => $direction,
                 'qty' => (int) $mutation->qty,
                 'source' => trim($source),

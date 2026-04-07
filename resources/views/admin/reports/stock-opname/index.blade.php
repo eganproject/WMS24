@@ -24,9 +24,18 @@
         </div>
         <div class="card-toolbar">
             <div class="d-flex align-items-center gap-2">
-                @if(!empty($warehouseLabel ?? null))
-                    <span class="badge badge-light-primary me-2">Gudang: {{ $warehouseLabel }}</span>
-                @endif
+            @if(!empty($warehouseLabel ?? null))
+                @php
+                    $currentWarehouseId = $defaultWarehouseId ?? null;
+                    $warehouseBadge = 'badge-light-secondary';
+                    if (!empty($displayWarehouseId) && $currentWarehouseId == $displayWarehouseId) {
+                        $warehouseBadge = 'badge-light-success';
+                    } elseif (!empty($defaultWarehouseId) && $currentWarehouseId == $defaultWarehouseId) {
+                        $warehouseBadge = 'badge-light-primary';
+                    }
+                @endphp
+                <span class="badge {{ $warehouseBadge }} me-2">Gudang: {{ $warehouseLabel }}</span>
+            @endif
                 <span class="text-muted small">Akurasi dihitung dari jumlah SKU vs SKU selisih.</span>
                 <button type="button" class="btn btn-light-primary btn-sm" id="btn_export_report">Export Excel</button>
             </div>

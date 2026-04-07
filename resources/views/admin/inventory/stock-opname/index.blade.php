@@ -26,7 +26,16 @@
         </div>
         <div class="card-toolbar">
             @if(!empty($warehouseLabel ?? null))
-                <span class="badge badge-light-primary me-4">Gudang: {{ $warehouseLabel }}</span>
+                @php
+                    $currentWarehouseId = $defaultWarehouseId ?? null;
+                    $warehouseBadge = 'badge-light-secondary';
+                    if (!empty($displayWarehouseId) && $currentWarehouseId == $displayWarehouseId) {
+                        $warehouseBadge = 'badge-light-success';
+                    } elseif (!empty($defaultWarehouseId) && $currentWarehouseId == $defaultWarehouseId) {
+                        $warehouseBadge = 'badge-light-primary';
+                    }
+                @endphp
+                <span class="badge {{ $warehouseBadge }} me-4">Gudang: {{ $warehouseLabel }}</span>
             @endif
             <div class="d-flex align-items-center gap-2 me-4">
                 @if(!empty($warehouses ?? []))
@@ -198,6 +207,7 @@
     const canUpdate = {{ $canUpdate ? 'true' : 'false' }};
     const canDelete = {{ $canDelete ? 'true' : 'false' }};
     const defaultWarehouseId = {{ !empty($defaultWarehouseId) ? (int) $defaultWarehouseId : 'null' }};
+    const displayWarehouseId = {{ !empty($displayWarehouseId) ? (int) $displayWarehouseId : 'null' }};
     const itemOptionsHtml = `@foreach($items as $item)<option value="{{ $item->id }}" data-stock="{{ $item->stock }}">{{ $item->sku }} - {{ $item->name }}</option>@endforeach`;
     let currentItemOptionsHtml = itemOptionsHtml;
 
@@ -349,6 +359,18 @@
             $(warehouseFilter).select2({ placeholder: 'Semua Gudang', allowClear: true, width: '200px' });
         }
 
+        const warehouseBadgeClass = (warehouseId) => {
+            const id = Number(warehouseId || 0);
+            if (displayWarehouseId && id === Number(displayWarehouseId)) return 'badge-light-success';
+            if (defaultWarehouseId && id === Number(defaultWarehouseId)) return 'badge-light-primary';
+            return 'badge-light-secondary';
+        };
+
+        const renderWarehouseBadge = (label, warehouseId) => {
+            const text = label || '-';
+            return `<span class="badge ${warehouseBadgeClass(warehouseId)}">${text}</span>`;
+        };
+
         const renumberRows = () => {
             const rows = itemsContainer.querySelectorAll('.opname-item-row');
             rows.forEach((row, idx) => {
@@ -483,7 +505,7 @@
                 { data: 'status', orderable: false, searchable: false, render: (data) => statusLabel(data) },
                 { data: 'transacted_at' },
                 { data: 'submit_by' },
-                { data: 'warehouse' },
+                { data: 'warehouse', render: (data, type, row) => renderWarehouseBadge(data, row?.warehouse_id) },
                 { data: 'items_count' },
                 { data: 'total_adjustment' },
                 { data: 'note' },

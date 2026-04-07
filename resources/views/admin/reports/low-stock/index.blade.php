@@ -19,7 +19,16 @@
         </div>
         <div class="card-toolbar">
             @if(!empty($warehouseLabel ?? null))
-                <span class="badge badge-light-primary me-4">Gudang: {{ $warehouseLabel }}</span>
+                @php
+                    $currentWarehouseId = $defaultWarehouseId ?? null;
+                    $warehouseBadge = 'badge-light-secondary';
+                    if (!empty($displayWarehouseId) && $currentWarehouseId == $displayWarehouseId) {
+                        $warehouseBadge = 'badge-light-success';
+                    } elseif (!empty($defaultWarehouseId) && $currentWarehouseId == $defaultWarehouseId) {
+                        $warehouseBadge = 'badge-light-primary';
+                    }
+                @endphp
+                <span class="badge {{ $warehouseBadge }} me-4">Gudang: {{ $warehouseLabel }}</span>
             @endif
             <div class="d-flex align-items-end gap-3 flex-wrap">
                 @if(!empty($warehouses ?? []))

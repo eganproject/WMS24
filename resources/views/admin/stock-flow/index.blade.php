@@ -302,6 +302,18 @@
             return '<span class="badge badge-light-warning">Menunggu</span>';
         };
 
+        const warehouseBadgeClass = (warehouseId) => {
+            const id = Number(warehouseId || 0);
+            if (displayWarehouseId && id === Number(displayWarehouseId)) return 'badge-light-success';
+            if (defaultWarehouseId && id === Number(defaultWarehouseId)) return 'badge-light-primary';
+            return 'badge-light-secondary';
+        };
+
+        const renderWarehouseBadge = (label, warehouseId) => {
+            const text = label || '-';
+            return `<span class="badge ${warehouseBadgeClass(warehouseId)}">${text}</span>`;
+        };
+
         const clearErrors = () => {
             ['error_transacted_at','error_ref_no','error_note','error_warehouse_id'].forEach(id => {
                 const el = document.getElementById(id);
@@ -564,7 +576,7 @@
                 { data: 'status', orderable:false, searchable:false, render: (data) => statusLabel(data) },
                 { data: 'transacted_at' },
                 { data: 'submit_by' },
-                { data: 'warehouse' },
+                { data: 'warehouse', render: (data, type, row) => renderWarehouseBadge(data, row?.warehouse_id) },
                 { data: 'item' },
                 { data: 'qty' },
                 { data: 'note' },

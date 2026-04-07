@@ -23,6 +23,7 @@ class StockOpnameReportController extends Controller
             'warehouseLabel' => $warehouseLabel,
             'warehouses' => $warehouses,
             'defaultWarehouseId' => $warehouseId,
+            'displayWarehouseId' => WarehouseService::displayWarehouseId(),
         ]);
     }
 

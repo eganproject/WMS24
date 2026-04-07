@@ -19,7 +19,16 @@
         </div>
         <div class="card-toolbar">
             @if(!empty($warehouseLabel ?? null))
-                <span class="badge badge-light-primary me-4">Gudang: {{ $warehouseLabel }}</span>
+                @php
+                    $currentWarehouseId = $defaultWarehouseId ?? null;
+                    $warehouseBadge = 'badge-light-secondary';
+                    if (!empty($displayWarehouseId) && $currentWarehouseId == $displayWarehouseId) {
+                        $warehouseBadge = 'badge-light-success';
+                    } elseif (!empty($defaultWarehouseId) && $currentWarehouseId == $defaultWarehouseId) {
+                        $warehouseBadge = 'badge-light-primary';
+                    }
+                @endphp
+                <span class="badge {{ $warehouseBadge }} me-4">Gudang: {{ $warehouseLabel }}</span>
             @endif
             <div class="d-flex align-items-center gap-2">
                 @if(!empty($warehouses ?? []))
@@ -176,6 +185,7 @@
     const dataUrl = '{{ route('admin.inventory.stock-mutations.data') }}';
     const detailUrlTpl = '{{ route('admin.inventory.stock-mutations.show', ':id') }}';
     const defaultWarehouseId = {{ !empty($defaultWarehouseId) ? (int) $defaultWarehouseId : 'null' }};
+    const displayWarehouseId = {{ !empty($displayWarehouseId) ? (int) $displayWarehouseId : 'null' }};
 
     document.addEventListener('DOMContentLoaded', () => {
         const tableEl = $('#stock_mutations_table');
@@ -206,6 +216,18 @@
             $(warehouseFilter).select2({ placeholder: 'Semua Gudang', allowClear: true, width: '200px' });
         }
 
+        const warehouseBadgeClass = (warehouseId) => {
+            const id = Number(warehouseId || 0);
+            if (displayWarehouseId && id === Number(displayWarehouseId)) return 'badge-light-success';
+            if (defaultWarehouseId && id === Number(defaultWarehouseId)) return 'badge-light-primary';
+            return 'badge-light-secondary';
+        };
+
+        const renderWarehouseBadge = (label, warehouseId) => {
+            const text = label || '-';
+            return `<span class="badge ${warehouseBadgeClass(warehouseId)}">${text}</span>`;
+        };
+
         const dt = tableEl.DataTable({
             processing: true,
             serverSide: true,
@@ -225,7 +247,7 @@
                 { data: 'id' },
                 { data: 'occurred_at' },
                 { data: 'item' },
-                { data: 'warehouse' },
+                { data: 'warehouse', render: (data, type, row) => renderWarehouseBadge(data, row?.warehouse_id) },
                 { data: 'user' },
                 { data: 'direction' },
                 { data: 'qty' },
@@ -280,6 +302,10 @@
             const el = document.getElementById(id);
             if (el) el.textContent = value ?? '-';
         };
+        const setHtml = (id, value) => {
+            const el = document.getElementById(id);
+            if (el) el.innerHTML = value ?? '-';
+        };
 
         tableEl.on('click', '.btn-detail', async function(e) {
             e.preventDefault();
@@ -296,7 +322,7 @@
                 setText('mutation_id', m.id);
                 setText('mutation_date', m.occurred_at);
                 setText('mutation_item', m.item);
-                setText('mutation_warehouse', m.warehouse);
+                setHtml('mutation_warehouse', renderWarehouseBadge(m.warehouse, m.warehouse_id));
                 setText('mutation_direction', m.direction);
                 setText('mutation_qty', m.qty);
                 setText('mutation_source', m.source);

@@ -29,7 +29,18 @@
             @if(!empty($warehouseLabel ?? null))
                 <div class="col-md-4">
                     <div class="fw-bold text-gray-600">Gudang</div>
-                    <div><span class="badge badge-light-primary">{{ $warehouseLabel }}</span></div>
+                    @php
+                        $defaultWarehouseId = \App\Support\WarehouseService::defaultWarehouseId();
+                        $displayWarehouseId = \App\Support\WarehouseService::displayWarehouseId();
+                        $currentWarehouseId = $transaction->warehouse_id ?? $defaultWarehouseId;
+                        $warehouseBadge = 'badge-light-secondary';
+                        if ($currentWarehouseId == $displayWarehouseId) {
+                            $warehouseBadge = 'badge-light-success';
+                        } elseif ($currentWarehouseId == $defaultWarehouseId) {
+                            $warehouseBadge = 'badge-light-primary';
+                        }
+                    @endphp
+                    <div><span class="badge {{ $warehouseBadge }}">{{ $warehouseLabel }}</span></div>
                 </div>
             @endif
             <div class="col-md-4">

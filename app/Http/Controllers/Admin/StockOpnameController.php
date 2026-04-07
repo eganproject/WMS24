@@ -45,6 +45,7 @@ class StockOpnameController extends Controller
             'warehouseLabel' => $warehouseLabel,
             'warehouses' => $warehouses,
             'defaultWarehouseId' => $warehouseId,
+            'displayWarehouseId' => WarehouseService::displayWarehouseId(),
             'itemsUrl' => route('admin.inventory.stock-opname.items'),
         ]);
     }
@@ -89,10 +90,11 @@ class StockOpnameController extends Controller
                 'stock_opnames.status',
                 DB::raw('creators.name as submit_by'),
                 DB::raw('w.name as warehouse_name'),
+                DB::raw('w.id as warehouse_id'),
                 DB::raw('COUNT(stock_opname_items.id) as items_count'),
                 DB::raw('COALESCE(SUM(stock_opname_items.adjustment), 0) as total_adjustment'),
             ])
-            ->groupBy('stock_opnames.id', 'stock_opnames.code', 'stock_opnames.transacted_at', 'stock_opnames.note', 'stock_opnames.status', 'creators.name', 'w.name')
+            ->groupBy('stock_opnames.id', 'stock_opnames.code', 'stock_opnames.transacted_at', 'stock_opnames.note', 'stock_opnames.status', 'creators.name', 'w.name', 'w.id')
             ->orderBy('stock_opnames.transacted_at', 'desc');
 
         $start = (int) $request->input('start', 0);
@@ -109,6 +111,7 @@ class StockOpnameController extends Controller
                 'transacted_at' => $ts,
                 'submit_by' => $row->submit_by ?? '-',
                 'warehouse' => $row->warehouse_name ?? '-',
+                'warehouse_id' => $row->warehouse_id,
                 'items_count' => (int) $row->items_count,
                 'total_adjustment' => (int) $row->total_adjustment,
                 'note' => $row->note ?? '',

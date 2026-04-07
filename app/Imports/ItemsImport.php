@@ -19,6 +19,8 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
     public int $updated = 0;
     /** @var array<int,int> */
     public array $initialStocks = [];
+    /** @var array<int,array<int,int>> */
+    public array $initialStocksByWarehouse = [];
 
     private ?int $defaultCategoryId = null;
 
@@ -61,7 +63,7 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             } elseif ($hasLocationHeaders) {
                 $address = $this->composeAddress($row);
             }
-            $stock = $this->parseStock($row);
+            $stockByWarehouse = $this->parseStockByWarehouse($row);
             $safetyStock = $this->parseSafetyStock($row);
             $koliQty = $this->parseKoliQty($row);
 
@@ -114,28 +116,87 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             );
             $item->wasRecentlyCreated ? $this->created++ : $this->updated++;
 
-            if ($stock > 0) {
-                $this->initialStocks[$item->id] = ($this->initialStocks[$item->id] ?? 0) + $stock;
+            if (!empty($stockByWarehouse)) {
+                foreach ($stockByWarehouse as $warehouseId => $qty) {
+                    if ($qty > 0) {
+                        $this->initialStocksByWarehouse[$warehouseId][$item->id] = ($this->initialStocksByWarehouse[$warehouseId][$item->id] ?? 0) + $qty;
+                    }
+                }
+                $defaultId = WarehouseService::defaultWarehouseId();
+                $defaultQty = (int) ($stockByWarehouse[$defaultId] ?? 0);
+                if ($defaultQty > 0) {
+                    $this->initialStocks[$item->id] = ($this->initialStocks[$item->id] ?? 0) + $defaultQty;
+                }
             }
         }
     }
 
-    protected function parseStock($row): int
+    protected function parseStockByWarehouse($row): array
+    {
+        $result = [];
+        $defaultId = WarehouseService::defaultWarehouseId();
+        $displayId = WarehouseService::displayWarehouseId();
+
+        $default = $this->parseIntByKeys($row, [
+            'stock_gudang_besar',
+            'stok_gudang_besar',
+            'stock_besar',
+            'stok_besar',
+            'stock_main',
+            'stok_main',
+            'stock_default',
+            'stok_default',
+        ], $hasDefaultKey);
+
+        $display = $this->parseIntByKeys($row, [
+            'stock_gudang_display',
+            'stok_gudang_display',
+            'stock_display',
+            'stok_display',
+            'stock_kecil',
+            'stok_kecil',
+            'stock_showroom',
+            'stok_showroom',
+        ], $hasDisplayKey);
+
+        $legacy = $this->parseIntByKeys($row, ['stock', 'stok', 'qty'], $hasLegacyKey);
+
+        if ($hasDefaultKey) {
+            $result[$defaultId] = $default ?? 0;
+        }
+        if ($hasDisplayKey) {
+            $result[$displayId] = $display ?? 0;
+        }
+        if (!$hasDefaultKey && !$hasDisplayKey && $hasLegacyKey) {
+            $result[$defaultId] = $legacy ?? 0;
+        }
+
+        return $result;
+    }
+
+    protected function parseSafetyStock($row): ?int
     {
         $raw = null;
-        foreach (['stock', 'stok', 'qty'] as $key) {
+        $hasKey = false;
+        foreach (['safety_stock', 'stok_pengaman', 'stock_pengaman', 'min_stock', 'minimum_stock'] as $key) {
             if (is_array($row) && array_key_exists($key, $row)) {
                 $raw = $row[$key];
+                $hasKey = true;
                 break;
             }
             if ($row instanceof Collection && $row->has($key)) {
                 $raw = $row->get($key);
+                $hasKey = true;
                 break;
             }
             if (isset($row[$key])) {
                 $raw = $row[$key];
+                $hasKey = true;
                 break;
             }
+        }
+        if (!$hasKey) {
+            return null;
         }
         if ($raw === null || $raw === '') {
             return 0;
@@ -144,11 +205,11 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
         return $value > 0 ? $value : 0;
     }
 
-    protected function parseSafetyStock($row): ?int
+    private function parseIntByKeys($row, array $keys, ?bool &$hasKey = null): ?int
     {
-        $raw = null;
         $hasKey = false;
-        foreach (['safety_stock', 'stok_pengaman', 'stock_pengaman', 'min_stock', 'minimum_stock'] as $key) {
+        $raw = null;
+        foreach ($keys as $key) {
             if (is_array($row) && array_key_exists($key, $row)) {
                 $raw = $row[$key];
                 $hasKey = true;

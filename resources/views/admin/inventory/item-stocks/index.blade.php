@@ -29,7 +29,9 @@
                         <th>ID</th>
                         <th>SKU</th>
                         <th>Nama</th>
-                        <th>Stok</th>
+                        <th class="text-end">Gudang Besar</th>
+                        <th class="text-end">Gudang Display</th>
+                        <th class="text-end">Total</th>
                     </tr>
                 </thead>
                 <tbody></tbody>
@@ -70,7 +72,9 @@
                 { data: 'id' },
                 { data: 'sku' },
                 { data: 'name' },
-                { data: 'stock' },
+                { data: 'stock_main', className: 'text-end', render: (data) => data ?? 0 },
+                { data: 'stock_display', className: 'text-end', render: (data) => data ?? 0 },
+                { data: 'stock_total', className: 'text-end', render: (data) => data ?? 0 },
             ]
         });
 

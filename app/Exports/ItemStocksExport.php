@@ -3,6 +3,7 @@
 namespace App\Exports;
 
 use App\Models\Item;
+use App\Support\WarehouseService;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
@@ -17,7 +18,11 @@ class ItemStocksExport implements FromCollection, WithHeadings, WithMapping, Sho
 
     public function collection(): Collection
     {
-        $query = Item::with('stock')->orderBy('name');
+        $defaultId = WarehouseService::defaultWarehouseId();
+        $displayId = WarehouseService::displayWarehouseId();
+        $query = Item::with(['stocks' => function ($q) use ($defaultId, $displayId) {
+            $q->whereIn('warehouse_id', [$defaultId, $displayId]);
+        }])->orderBy('name');
         $search = trim($this->search);
         if ($search !== '') {
             $query->where(function ($q) use ($search) {
@@ -32,16 +37,23 @@ class ItemStocksExport implements FromCollection, WithHeadings, WithMapping, Sho
 
     public function headings(): array
     {
-        return ['ID', 'SKU', 'Nama', 'Stok'];
+        return ['ID', 'SKU', 'Nama', 'Stok Gudang Besar', 'Stok Gudang Display', 'Total'];
     }
 
     public function map($row): array
     {
+        $defaultId = WarehouseService::defaultWarehouseId();
+        $displayId = WarehouseService::displayWarehouseId();
+        $stocks = $row->stocks?->keyBy('warehouse_id') ?? collect();
+        $stockMain = (int) ($stocks->get($defaultId)?->stock ?? 0);
+        $stockDisplay = (int) ($stocks->get($displayId)?->stock ?? 0);
         return [
             $row->id,
             $row->sku,
             $row->name,
-            (int) ($row->stock?->stock ?? 0),
+            $stockMain,
+            $stockDisplay,
+            $stockMain + $stockDisplay,
         ];
     }
 }

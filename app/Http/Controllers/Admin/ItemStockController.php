@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Exports\ItemStocksExport;
 use App\Models\Item;
+use App\Support\WarehouseService;
 use Illuminate\Http\Request;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -17,7 +18,11 @@ class ItemStockController extends Controller
 
     public function data(Request $request)
     {
-        $query = Item::with(['stock'])->orderBy('name');
+        $defaultId = WarehouseService::defaultWarehouseId();
+        $displayId = WarehouseService::displayWarehouseId();
+        $query = Item::with(['stocks' => function ($q) use ($defaultId, $displayId) {
+            $q->whereIn('warehouse_id', [$defaultId, $displayId]);
+        }])->orderBy('name');
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
@@ -38,12 +43,17 @@ class ItemStockController extends Controller
             $query->skip($start)->take($length);
         }
 
-        $data = $query->get()->map(function ($i) {
+        $data = $query->get()->map(function ($i) use ($defaultId, $displayId) {
+            $stocks = $i->stocks?->keyBy('warehouse_id') ?? collect();
+            $stockMain = (int) ($stocks->get($defaultId)?->stock ?? 0);
+            $stockDisplay = (int) ($stocks->get($displayId)?->stock ?? 0);
             return [
                 'id' => $i->id,
                 'sku' => $i->sku,
                 'name' => $i->name,
-                'stock' => $i->stock?->stock ?? 0,
+                'stock_main' => $stockMain,
+                'stock_display' => $stockDisplay,
+                'stock_total' => $stockMain + $stockDisplay,
             ];
         });
 

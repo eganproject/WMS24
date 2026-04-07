@@ -253,8 +253,20 @@ class ItemController extends Controller
             $created = $import->created;
             $updated = $import->updated;
 
-            $initialStocks = $import->initialStocks ?? [];
-            if (!empty($initialStocks)) {
+            $initialStocksByWarehouse = $import->initialStocksByWarehouse ?? [];
+            if (empty($initialStocksByWarehouse)) {
+                $initialStocks = $import->initialStocks ?? [];
+                if (!empty($initialStocks)) {
+                    $initialStocksByWarehouse = [
+                        WarehouseService::defaultWarehouseId() => $initialStocks,
+                    ];
+                }
+            }
+
+            foreach ($initialStocksByWarehouse as $warehouseId => $stocks) {
+                if (empty($stocks)) {
+                    continue;
+                }
                 $code = 'INB-OPN-'.now()->format('YmdHis').'-'.Str::upper(Str::random(4));
                 $transactedAt = now();
 
@@ -265,9 +277,12 @@ class ItemController extends Controller
                     'note' => 'Saldo awal dari import items',
                     'transacted_at' => $transactedAt,
                     'created_by' => auth()->id(),
+                    'status' => 'approved',
+                    'approved_at' => $transactedAt,
+                    'approved_by' => auth()->id(),
                 ]);
 
-                foreach ($initialStocks as $itemId => $qty) {
+                foreach ($stocks as $itemId => $qty) {
                     $qty = (int) $qty;
                     if ($qty <= 0) {
                         continue;
@@ -276,11 +291,13 @@ class ItemController extends Controller
                         'inbound_transaction_id' => $tx->id,
                         'item_id' => $itemId,
                         'qty' => $qty,
+                        'koli' => null,
                         'note' => 'Saldo awal import',
                     ]);
 
                     StockService::mutate([
                         'item_id' => $itemId,
+                        'warehouse_id' => (int) $warehouseId,
                         'direction' => 'in',
                         'qty' => $qty,
                         'source_type' => 'inbound',

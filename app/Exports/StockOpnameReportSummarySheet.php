@@ -5,6 +5,7 @@ namespace App\Exports;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use App\Support\WarehouseService;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithHeadings;
@@ -39,6 +40,14 @@ class StockOpnameReportSummarySheet implements FromCollection, WithHeadings, Wit
         $baseQuery = DB::table('stock_opnames as so')
             ->join('stock_opname_items as soi', 'soi.stock_opname_id', '=', 'so.id')
             ->where('so.status', 'completed');
+
+        $warehouseFilter = $this->filters['warehouse_id'] ?? null;
+        if ($warehouseFilter === null || $warehouseFilter === '') {
+            $warehouseFilter = WarehouseService::defaultWarehouseId();
+        }
+        if ($warehouseFilter !== 'all') {
+            $baseQuery->where('so.warehouse_id', (int) $warehouseFilter);
+        }
 
         $search = trim((string) ($this->filters['q'] ?? ''));
         if ($search !== '') {

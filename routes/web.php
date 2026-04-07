@@ -172,6 +172,7 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         // Stock Opname
         Route::get('/stock-opname', [StockOpnameController::class, 'index'])->name('stock-opname.index');
         Route::get('/stock-opname/data', [StockOpnameController::class, 'data'])->name('stock-opname.data');
+        Route::get('/stock-opname/items', [StockOpnameController::class, 'items'])->name('stock-opname.items');
         Route::post('/stock-opname', [StockOpnameController::class, 'store'])->name('stock-opname.store');
         Route::get('/stock-opname/{id}', [StockOpnameController::class, 'show'])->name('stock-opname.show');
         Route::get('/stock-opname/{id}/export', [StockOpnameController::class, 'export'])->name('stock-opname.export');

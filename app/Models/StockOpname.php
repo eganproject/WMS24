@@ -13,6 +13,7 @@ class StockOpname extends Model
         'code',
         'transacted_at',
         'note',
+        'warehouse_id',
         'status',
         'completed_at',
         'created_by',
@@ -27,6 +28,11 @@ class StockOpname extends Model
     public function items()
     {
         return $this->hasMany(StockOpnameItem::class, 'stock_opname_id');
+    }
+
+    public function warehouse()
+    {
+        return $this->belongsTo(Warehouse::class, 'warehouse_id');
     }
 
     public function creator()

@@ -25,7 +25,18 @@
             </div>
         </div>
         <div class="card-toolbar">
+            @if(!empty($warehouseLabel ?? null))
+                <span class="badge badge-light-primary me-4">Gudang: {{ $warehouseLabel }}</span>
+            @endif
             <div class="d-flex align-items-center gap-2 me-4">
+                @if(!empty($warehouses ?? []))
+                    <select class="form-select form-select-solid w-200px" id="filter_warehouse">
+                        <option value="all">Semua Gudang</option>
+                        @foreach($warehouses as $wh)
+                            <option value="{{ $wh->id }}" @if(!empty($defaultWarehouseId) && $defaultWarehouseId === $wh->id) selected @endif>{{ $wh->name }}</option>
+                        @endforeach
+                    </select>
+                @endif
                 <input type="text" class="form-control form-control-solid w-150px" id="filter_date_from" placeholder="Dari" />
                 <input type="text" class="form-control form-control-solid w-150px" id="filter_date_to" placeholder="Sampai" />
                 <button type="button" class="btn btn-light" id="filter_apply">Filter</button>
@@ -46,6 +57,7 @@
                         <th>Status</th>
                         <th>Tanggal</th>
                         <th>Submit By</th>
+                        <th>Gudang</th>
                         <th>Total Item</th>
                         <th>Total Adjust</th>
                         <th>Catatan</th>
@@ -79,6 +91,18 @@
                     <div class="mb-7">
                         <button type="button" class="btn btn-light" id="btn_add_opname_item">Tambah Item</button>
                     </div>
+                    @if(!empty($warehouses ?? []))
+                        <div class="fv-row mb-7">
+                            <label class="required fs-6 fw-bold form-label mb-2">Gudang</label>
+                            <select class="form-select form-select-solid" name="warehouse_id" id="opname_warehouse_id" required>
+                                <option value="">Pilih Gudang</option>
+                                @foreach($warehouses as $wh)
+                                    <option value="{{ $wh->id }}">{{ $wh->name }}</option>
+                                @endforeach
+                            </select>
+                            <div class="invalid-feedback" id="error_warehouse_id"></div>
+                        </div>
+                    @endif
                     <div class="fv-row mb-7">
                         <label class="fs-6 fw-bold form-label mb-2">Tanggal</label>
                         <input type="text" class="form-control form-control-solid" name="transacted_at" id="opname_transacted_at" placeholder="YYYY-MM-DD HH:mm" />
@@ -169,10 +193,13 @@
     const exportUrlTpl = '{{ route('admin.inventory.stock-opname.export', ':id') }}';
     const approveUrlTpl = '{{ route('admin.inventory.stock-opname.approve', ':id') }}';
     const deleteUrlTpl = '{{ route('admin.inventory.stock-opname.destroy', ':id') }}';
+    const itemsUrl = '{{ $itemsUrl ?? '' }}';
     const csrfToken = '{{ csrf_token() }}';
     const canUpdate = {{ $canUpdate ? 'true' : 'false' }};
     const canDelete = {{ $canDelete ? 'true' : 'false' }};
+    const defaultWarehouseId = {{ !empty($defaultWarehouseId) ? (int) $defaultWarehouseId : 'null' }};
     const itemOptionsHtml = `@foreach($items as $item)<option value="{{ $item->id }}" data-stock="{{ $item->stock }}">{{ $item->sku }} - {{ $item->name }}</option>@endforeach`;
+    let currentItemOptionsHtml = itemOptionsHtml;
 
     document.addEventListener('DOMContentLoaded', () => {
         const tableEl = $('#stock_opname_table');
@@ -184,6 +211,8 @@
         const addItemBtn = document.getElementById('btn_add_opname_item');
         const openBtn = document.getElementById('btn_open_opname');
         const transactedAtEl = document.getElementById('opname_transacted_at');
+        const warehouseSelect = document.getElementById('opname_warehouse_id');
+        const warehouseFilter = document.getElementById('filter_warehouse');
         const dateFromEl = document.getElementById('filter_date_from');
         const dateToEl = document.getElementById('filter_date_to');
         const filterApplyBtn = document.getElementById('filter_apply');
@@ -209,7 +238,7 @@
         };
 
         const clearErrors = () => {
-            ['error_transacted_at','error_note'].forEach(id => {
+            ['error_transacted_at','error_note','error_warehouse_id'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.textContent = '';
             });
@@ -260,6 +289,50 @@
             }
         };
 
+        const buildItemOptions = (items) => {
+            if (!Array.isArray(items)) return '';
+            return items.map((item) => {
+                const stock = Number.isFinite(Number(item.stock)) ? Number(item.stock) : 0;
+                return `<option value="${item.id}" data-stock="${stock}">${item.sku} - ${item.name}</option>`;
+            }).join('');
+        };
+
+        const loadItemsForWarehouse = async (warehouseId, reset = true) => {
+            if (!itemsUrl) return;
+            try {
+                const params = new URLSearchParams();
+                if (warehouseId) params.append('warehouse_id', warehouseId);
+                const res = await fetch(`${itemsUrl}?${params.toString()}`, { headers: { 'Accept': 'application/json' }});
+                const json = await res.json();
+                if (!res.ok) {
+                    if (typeof Swal !== 'undefined') Swal.fire('Error', json.message || 'Gagal memuat item', 'error');
+                    return;
+                }
+                currentItemOptionsHtml = buildItemOptions(json.items || []);
+                if (reset) {
+                    itemsContainer.innerHTML = '';
+                    createItemRow();
+                    clearErrors();
+                    validateUniqueItems();
+                } else {
+                    const rows = itemsContainer.querySelectorAll('.opname-item-row');
+                    rows.forEach((row) => {
+                        const selectEl = row.querySelector('.opname-item-select');
+                        const prev = selectEl?.value || '';
+                        if (selectEl) {
+                            const newHtml = `<option value=""></option>${currentItemOptionsHtml}`;
+                            selectEl.innerHTML = newHtml;
+                            if (prev) selectEl.value = prev;
+                        }
+                        initSelect2(selectEl);
+                        updateSystemQty(row);
+                    });
+                }
+            } catch (err) {
+                if (typeof Swal !== 'undefined') Swal.fire('Error', 'Gagal memuat item', 'error');
+            }
+        };
+
         if (typeof flatpickr !== 'undefined') {
             if (dateFromEl) {
                 fpFrom = flatpickr(dateFromEl, { dateFormat: 'Y-m-d', allowInput: true });
@@ -270,6 +343,10 @@
             if (transactedAtEl) {
                 fpTransacted = flatpickr(transactedAtEl, { enableTime: true, dateFormat: 'Y-m-d H:i', allowInput: true });
             }
+        }
+
+        if (warehouseFilter && typeof $ !== 'undefined' && $.fn.select2) {
+            $(warehouseFilter).select2({ placeholder: 'Semua Gudang', allowClear: true, width: '200px' });
         }
 
         const renumberRows = () => {
@@ -299,7 +376,7 @@
                     <label class="required fs-6 fw-bold form-label mb-2">Item</label>
                     <select class="form-select form-select-solid opname-item-select" data-name="item_id" required>
                         <option value=""></option>
-                        ${itemOptionsHtml}
+                        ${currentItemOptionsHtml}
                     </select>
                     <div class="invalid-feedback" data-error-for="item_id"></div>
                 </div>
@@ -345,10 +422,11 @@
             } else if (transactedAtEl) {
                 transactedAtEl.value = nowJkt;
             }
-            itemsContainer.innerHTML = '';
-            createItemRow();
-            clearErrors();
-            validateUniqueItems();
+            if (warehouseSelect && defaultWarehouseId) {
+                warehouseSelect.value = String(defaultWarehouseId);
+            }
+            const whVal = warehouseSelect?.value || defaultWarehouseId || '';
+            loadItemsForWarehouse(whVal, true);
         };
 
         itemsContainer?.addEventListener('change', (e) => {
@@ -374,6 +452,10 @@
 
         addItemBtn?.addEventListener('click', () => createItemRow());
         openBtn?.addEventListener('click', resetForm);
+        warehouseSelect?.addEventListener('change', () => {
+            const whVal = warehouseSelect.value || '';
+            loadItemsForWarehouse(whVal, true);
+        });
 
         if (!tableEl.length || !$.fn.DataTable) {
             console.error('DataTables unavailable');
@@ -390,6 +472,7 @@
                 dataSrc: 'data',
                 data: function(params) {
                     params.q = searchInput?.value || '';
+                    if (warehouseFilter?.value) params.warehouse_id = warehouseFilter.value;
                     if (dateFromEl?.value) params.date_from = dateFromEl.value;
                     if (dateToEl?.value) params.date_to = dateToEl.value;
                 }
@@ -400,6 +483,7 @@
                 { data: 'status', orderable: false, searchable: false, render: (data) => statusLabel(data) },
                 { data: 'transacted_at' },
                 { data: 'submit_by' },
+                { data: 'warehouse' },
                 { data: 'items_count' },
                 { data: 'total_adjustment' },
                 { data: 'note' },
@@ -437,8 +521,15 @@
 
         const reloadTable = () => dt.ajax.reload();
         searchInput?.addEventListener('keyup', reloadTable);
+        warehouseFilter?.addEventListener('change', reloadTable);
         filterApplyBtn?.addEventListener('click', reloadTable);
         filterResetBtn?.addEventListener('click', () => {
+            if (warehouseFilter) {
+                warehouseFilter.value = 'all';
+                if (typeof $ !== 'undefined' && $(warehouseFilter).data('select2')) {
+                    $(warehouseFilter).val('all').trigger('change.select2');
+                }
+            }
             if (fpFrom) fpFrom.clear(); else if (dateFromEl) dateFromEl.value = '';
             if (fpTo) fpTo.clear(); else if (dateToEl) dateToEl.value = '';
             reloadTable();

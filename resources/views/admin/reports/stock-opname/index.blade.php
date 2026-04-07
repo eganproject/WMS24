@@ -8,6 +8,14 @@
     <div class="card-header border-0 pt-6">
         <div class="card-title">
             <div class="d-flex align-items-center gap-2">
+                @if(!empty($warehouses ?? []))
+                    <select id="filter_warehouse" class="form-select form-select-solid w-200px">
+                        <option value="all">Semua Gudang</option>
+                        @foreach($warehouses as $wh)
+                            <option value="{{ $wh->id }}" @if(!empty($defaultWarehouseId) && $defaultWarehouseId === $wh->id) selected @endif>{{ $wh->name }}</option>
+                        @endforeach
+                    </select>
+                @endif
                 <input type="text" class="form-control form-control-solid w-150px" id="filter_date_from" placeholder="Dari" />
                 <input type="text" class="form-control form-control-solid w-150px" id="filter_date_to" placeholder="Sampai" />
                 <button type="button" class="btn btn-light" id="filter_apply">Filter</button>
@@ -16,6 +24,9 @@
         </div>
         <div class="card-toolbar">
             <div class="d-flex align-items-center gap-2">
+                @if(!empty($warehouseLabel ?? null))
+                    <span class="badge badge-light-primary me-2">Gudang: {{ $warehouseLabel }}</span>
+                @endif
                 <span class="text-muted small">Akurasi dihitung dari jumlah SKU vs SKU selisih.</span>
                 <button type="button" class="btn btn-light-primary btn-sm" id="btn_export_report">Export Excel</button>
             </div>
@@ -161,6 +172,7 @@
         const diffPlusEl = $('#diff_plus_table');
         const diffMinusEl = $('#diff_minus_table');
         const searchInput = document.getElementById('report_search');
+        const warehouseFilter = document.getElementById('filter_warehouse');
         const dateFromEl = document.getElementById('filter_date_from');
         const dateToEl = document.getElementById('filter_date_to');
         const applyBtn = document.getElementById('filter_apply');
@@ -184,6 +196,10 @@
             if (dateToEl) {
                 fpTo = flatpickr(dateToEl, { dateFormat: 'Y-m-d', allowInput: true });
             }
+        }
+
+        if (warehouseFilter && typeof $ !== 'undefined' && $.fn.select2) {
+            $(warehouseFilter).select2({ placeholder: 'Semua Gudang', allowClear: true, width: '200px' });
         }
 
         const updateSummary = (summary = {}) => {
@@ -215,6 +231,7 @@
                 },
                 data: function(params) {
                     params.q = searchInput?.value || '';
+                    if (warehouseFilter?.value) params.warehouse_id = warehouseFilter.value;
                     if (dateFromEl?.value) params.date_from = dateFromEl.value;
                     if (dateToEl?.value) params.date_to = dateToEl.value;
                 }
@@ -244,13 +261,14 @@
                 ajax: {
                     url: diffUrl,
                     dataSrc: 'data',
-                    data: function(params) {
-                        params.type = type;
-                        params.q = searchInput?.value || '';
-                        if (dateFromEl?.value) params.date_from = dateFromEl.value;
-                        if (dateToEl?.value) params.date_to = dateToEl.value;
-                    }
-                },
+                data: function(params) {
+                    params.type = type;
+                    params.q = searchInput?.value || '';
+                    if (warehouseFilter?.value) params.warehouse_id = warehouseFilter.value;
+                    if (dateFromEl?.value) params.date_from = dateFromEl.value;
+                    if (dateToEl?.value) params.date_to = dateToEl.value;
+                }
+            },
                 columns: [
                     { data: 'sku' },
                     { data: 'name' },
@@ -269,8 +287,15 @@
         };
 
         searchInput?.addEventListener('keyup', reloadAll);
+        warehouseFilter?.addEventListener('change', reloadAll);
         applyBtn?.addEventListener('click', reloadAll);
         resetBtn?.addEventListener('click', () => {
+            if (warehouseFilter) {
+                warehouseFilter.value = 'all';
+                if (typeof $ !== 'undefined' && $(warehouseFilter).data('select2')) {
+                    $(warehouseFilter).val('all').trigger('change.select2');
+                }
+            }
             if (fpFrom) fpFrom.clear(); else if (dateFromEl) dateFromEl.value = '';
             if (fpTo) fpTo.clear(); else if (dateToEl) dateToEl.value = '';
             reloadAll();
@@ -280,6 +305,7 @@
             const params = new URLSearchParams();
             const q = searchInput?.value?.trim();
             if (q) params.set('q', q);
+            if (warehouseFilter?.value) params.set('warehouse_id', warehouseFilter.value);
             if (dateFromEl?.value) params.set('date_from', dateFromEl.value);
             if (dateToEl?.value) params.set('date_to', dateToEl.value);
             const url = params.toString() ? `${exportUrl}?${params.toString()}` : exportUrl;

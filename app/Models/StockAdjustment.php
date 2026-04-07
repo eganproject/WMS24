@@ -13,6 +13,7 @@ class StockAdjustment extends Model
         'code',
         'transacted_at',
         'note',
+        'warehouse_id',
         'status',
         'approved_at',
         'created_by',
@@ -27,6 +28,11 @@ class StockAdjustment extends Model
     public function items()
     {
         return $this->hasMany(StockAdjustmentItem::class, 'stock_adjustment_id');
+    }
+
+    public function warehouse()
+    {
+        return $this->belongsTo(Warehouse::class, 'warehouse_id');
     }
 
     public function creator()

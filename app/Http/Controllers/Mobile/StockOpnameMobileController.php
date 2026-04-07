@@ -120,7 +120,10 @@ class StockOpnameMobileController extends Controller
                 ]);
             }
 
-            $warehouseId = WarehouseService::defaultWarehouseId();
+            $warehouseId = (int) ($opname->warehouse_id ?? 0);
+            if ($warehouseId <= 0) {
+                $warehouseId = WarehouseService::defaultWarehouseId();
+            }
             $stock = ItemStock::where('item_id', $validated['item_id'])
                 ->where('warehouse_id', $warehouseId)
                 ->lockForUpdate()
@@ -156,6 +159,7 @@ class StockOpnameMobileController extends Controller
                     'item_id' => $validated['item_id'],
                     'direction' => $adjustment > 0 ? 'in' : 'out',
                     'qty' => abs($adjustment),
+                    'warehouse_id' => $warehouseId,
                     'source_type' => 'opname',
                     'source_subtype' => 'mobile',
                     'source_id' => $opname->id,

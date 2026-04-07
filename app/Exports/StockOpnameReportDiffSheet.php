@@ -5,6 +5,7 @@ namespace App\Exports;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use App\Support\WarehouseService;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithHeadings;
@@ -40,6 +41,14 @@ class StockOpnameReportDiffSheet implements FromCollection, WithHeadings, WithTi
             ->join('stock_opnames as so', 'so.id', '=', 'soi.stock_opname_id')
             ->join('items as i', 'i.id', '=', 'soi.item_id')
             ->where('so.status', 'completed');
+
+        $warehouseFilter = $this->filters['warehouse_id'] ?? null;
+        if ($warehouseFilter === null || $warehouseFilter === '') {
+            $warehouseFilter = WarehouseService::defaultWarehouseId();
+        }
+        if ($warehouseFilter !== 'all') {
+            $query->where('so.warehouse_id', (int) $warehouseFilter);
+        }
 
         if ($isMinus) {
             $query->where('soi.adjustment', '<', 0);

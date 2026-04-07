@@ -9,6 +9,7 @@ use App\Models\ItemStock;
 use App\Models\StockOpname;
 use App\Models\StockOpnameItem;
 use App\Models\StockMutation;
+use App\Models\Warehouse;
 use App\Support\StockService;
 use App\Support\WarehouseService;
 use Illuminate\Http\Request;
@@ -23,6 +24,8 @@ class StockOpnameController extends Controller
     public function index()
     {
         $warehouseId = WarehouseService::defaultWarehouseId();
+        $warehouseLabel = Warehouse::where('id', $warehouseId)->value('name') ?? 'Gudang Besar';
+        $warehouses = Warehouse::orderBy('name')->get(['id', 'name', 'code']);
         $items = Item::leftJoin('item_stocks', function ($join) use ($warehouseId) {
                 $join->on('item_stocks.item_id', '=', 'items.id')
                     ->where('item_stocks.warehouse_id', '=', $warehouseId);
@@ -39,6 +42,10 @@ class StockOpnameController extends Controller
             'items' => $items,
             'dataUrl' => route('admin.inventory.stock-opname.data'),
             'storeUrl' => route('admin.inventory.stock-opname.store'),
+            'warehouseLabel' => $warehouseLabel,
+            'warehouses' => $warehouses,
+            'defaultWarehouseId' => $warehouseId,
+            'itemsUrl' => route('admin.inventory.stock-opname.items'),
         ]);
     }
 
@@ -47,7 +54,8 @@ class StockOpnameController extends Controller
         $baseQuery = StockOpname::query()
             ->leftJoin('stock_opname_items', 'stock_opname_items.stock_opname_id', '=', 'stock_opnames.id')
             ->leftJoin('items', 'items.id', '=', 'stock_opname_items.item_id')
-            ->leftJoin('users as creators', 'creators.id', '=', 'stock_opnames.created_by');
+            ->leftJoin('users as creators', 'creators.id', '=', 'stock_opnames.created_by')
+            ->leftJoin('warehouses as w', 'w.id', '=', 'stock_opnames.warehouse_id');
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
@@ -61,6 +69,14 @@ class StockOpnameController extends Controller
 
         $this->applyDateFilter($baseQuery, $request);
 
+        $warehouseFilter = $request->input('warehouse_id');
+        if ($warehouseFilter === null || $warehouseFilter === '') {
+            $warehouseFilter = WarehouseService::defaultWarehouseId();
+        }
+        if ($warehouseFilter !== 'all') {
+            $baseQuery->where('stock_opnames.warehouse_id', (int) $warehouseFilter);
+        }
+
         $recordsTotal = StockOpname::count();
         $recordsFiltered = (clone $baseQuery)->distinct('stock_opnames.id')->count('stock_opnames.id');
 
@@ -72,10 +88,11 @@ class StockOpnameController extends Controller
                 'stock_opnames.note',
                 'stock_opnames.status',
                 DB::raw('creators.name as submit_by'),
+                DB::raw('w.name as warehouse_name'),
                 DB::raw('COUNT(stock_opname_items.id) as items_count'),
                 DB::raw('COALESCE(SUM(stock_opname_items.adjustment), 0) as total_adjustment'),
             ])
-            ->groupBy('stock_opnames.id', 'stock_opnames.code', 'stock_opnames.transacted_at', 'stock_opnames.note', 'stock_opnames.status', 'creators.name')
+            ->groupBy('stock_opnames.id', 'stock_opnames.code', 'stock_opnames.transacted_at', 'stock_opnames.note', 'stock_opnames.status', 'creators.name', 'w.name')
             ->orderBy('stock_opnames.transacted_at', 'desc');
 
         $start = (int) $request->input('start', 0);
@@ -91,6 +108,7 @@ class StockOpnameController extends Controller
                 'code' => $row->code,
                 'transacted_at' => $ts,
                 'submit_by' => $row->submit_by ?? '-',
+                'warehouse' => $row->warehouse_name ?? '-',
                 'items_count' => (int) $row->items_count,
                 'total_adjustment' => (int) $row->total_adjustment,
                 'note' => $row->note ?? '',
@@ -103,6 +121,30 @@ class StockOpnameController extends Controller
             'recordsTotal' => $recordsTotal,
             'recordsFiltered' => $recordsFiltered,
             'data' => $data,
+        ]);
+    }
+
+    public function items(Request $request)
+    {
+        $warehouseId = (int) $request->input('warehouse_id', 0);
+        if ($warehouseId <= 0) {
+            $warehouseId = WarehouseService::defaultWarehouseId();
+        }
+
+        $items = Item::leftJoin('item_stocks', function ($join) use ($warehouseId) {
+                $join->on('item_stocks.item_id', '=', 'items.id')
+                    ->where('item_stocks.warehouse_id', '=', $warehouseId);
+            })
+            ->orderBy('items.name')
+            ->get([
+                'items.id',
+                'items.sku',
+                'items.name',
+                DB::raw('COALESCE(item_stocks.stock, 0) as stock'),
+            ]);
+
+        return response()->json([
+            'items' => $items,
         ]);
     }
 
@@ -122,6 +164,7 @@ class StockOpnameController extends Controller
                 'note' => $opname->note ?? '-',
                 'creator' => $opname->creator?->name ?? '-',
                 'status' => $opname->status ?? 'open',
+                'warehouse_id' => $opname->warehouse_id,
             ],
             'items' => $opname->items->map(function ($row) {
                 return [
@@ -194,6 +237,10 @@ class StockOpnameController extends Controller
     public function store(Request $request)
     {
         $validated = $this->validatePayload($request);
+        $warehouseId = (int) ($validated['warehouse_id'] ?? 0);
+        if ($warehouseId <= 0) {
+            $warehouseId = WarehouseService::defaultWarehouseId();
+        }
 
         $code = $this->generateCode('OPN');
         $transactedAt = $validated['transacted_at'] ?? now();
@@ -203,13 +250,13 @@ class StockOpnameController extends Controller
             $opname = StockOpname::create([
                 'code' => $code,
                 'note' => $validated['note'] ?? null,
+                'warehouse_id' => $warehouseId,
                 'transacted_at' => $transactedAt,
                 'created_by' => auth()->id(),
                 'status' => 'open',
             ]);
 
             foreach ($validated['items'] as $row) {
-                $warehouseId = WarehouseService::defaultWarehouseId();
                 $stock = ItemStock::where('item_id', $row['item_id'])
                     ->where('warehouse_id', $warehouseId)
                     ->lockForUpdate()
@@ -244,6 +291,7 @@ class StockOpnameController extends Controller
                         'item_id' => $row['item_id'],
                         'direction' => $adjustment > 0 ? 'in' : 'out',
                         'qty' => abs($adjustment),
+                        'warehouse_id' => $warehouseId,
                         'source_type' => 'opname',
                         'source_subtype' => null,
                         'source_id' => $opname->id,
@@ -281,6 +329,7 @@ class StockOpnameController extends Controller
             'items.*.note' => ['nullable', 'string'],
             'note' => ['nullable', 'string'],
             'transacted_at' => ['required', 'date'],
+            'warehouse_id' => ['nullable', 'integer', 'exists:warehouses,id'],
         ]);
 
         $items = collect($validated['items'] ?? [])

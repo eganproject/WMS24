@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Exports\StockOpnameReportExport;
+use App\Models\Warehouse;
+use App\Support\WarehouseService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -13,8 +15,14 @@ class StockOpnameReportController extends Controller
 {
     public function index()
     {
+        $warehouseId = WarehouseService::defaultWarehouseId();
+        $warehouseLabel = Warehouse::where('id', $warehouseId)->value('name') ?? 'Gudang Besar';
+        $warehouses = Warehouse::orderBy('name')->get(['id', 'name', 'code']);
         return view('admin.reports.stock-opname.index', [
             'dataUrl' => route('admin.reports.stock-opname.data'),
+            'warehouseLabel' => $warehouseLabel,
+            'warehouses' => $warehouses,
+            'defaultWarehouseId' => $warehouseId,
         ]);
     }
 
@@ -23,6 +31,14 @@ class StockOpnameReportController extends Controller
         $baseQuery = DB::table('stock_opnames as so')
             ->join('stock_opname_items as soi', 'soi.stock_opname_id', '=', 'so.id')
             ->where('so.status', 'completed');
+
+        $warehouseFilter = $request->input('warehouse_id');
+        if ($warehouseFilter === null || $warehouseFilter === '') {
+            $warehouseFilter = WarehouseService::defaultWarehouseId();
+        }
+        if ($warehouseFilter !== 'all') {
+            $baseQuery->where('so.warehouse_id', (int) $warehouseFilter);
+        }
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
@@ -34,6 +50,9 @@ class StockOpnameReportController extends Controller
         $recordsTotal = DB::table('stock_opnames as so')
             ->join('stock_opname_items as soi', 'soi.stock_opname_id', '=', 'so.id')
             ->where('so.status', 'completed')
+            ->when($warehouseFilter !== 'all', function ($q) use ($warehouseFilter) {
+                $q->where('so.warehouse_id', (int) $warehouseFilter);
+            })
             ->selectRaw('COUNT(DISTINCT DATE(so.transacted_at)) as total_days')
             ->value('total_days') ?? 0;
 
@@ -104,6 +123,14 @@ class StockOpnameReportController extends Controller
             ->join('items as i', 'i.id', '=', 'soi.item_id')
             ->where('so.status', 'completed');
 
+        $warehouseFilter = $request->input('warehouse_id');
+        if ($warehouseFilter === null || $warehouseFilter === '') {
+            $warehouseFilter = WarehouseService::defaultWarehouseId();
+        }
+        if ($warehouseFilter !== 'all') {
+            $baseQuery->where('so.warehouse_id', (int) $warehouseFilter);
+        }
+
         if ($isMinus) {
             $baseQuery->where('soi.adjustment', '<', 0);
         } else {
@@ -124,6 +151,9 @@ class StockOpnameReportController extends Controller
             ->join('stock_opnames as so', 'so.id', '=', 'soi.stock_opname_id')
             ->where('so.status', 'completed')
             ->when($isMinus, fn ($q) => $q->where('soi.adjustment', '<', 0), fn ($q) => $q->where('soi.adjustment', '>', 0))
+            ->when($warehouseFilter !== 'all', function ($q) use ($warehouseFilter) {
+                $q->where('so.warehouse_id', (int) $warehouseFilter);
+            })
             ->selectRaw('COUNT(DISTINCT soi.item_id) as total_sku')
             ->value('total_sku') ?? 0;
 
@@ -166,6 +196,7 @@ class StockOpnameReportController extends Controller
             'q' => trim((string) $request->input('q', '')),
             'date_from' => $request->input('date_from'),
             'date_to' => $request->input('date_to'),
+            'warehouse_id' => $request->input('warehouse_id'),
         ];
         $filename = 'laporan-stock-opname-'.now()->format('YmdHis').'.xlsx';
 

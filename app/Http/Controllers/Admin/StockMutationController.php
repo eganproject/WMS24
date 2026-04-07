@@ -10,6 +10,8 @@ use App\Models\PickerSession;
 use App\Models\StockMutation;
 use App\Models\StockOpname;
 use App\Models\StockTransfer;
+use App\Models\Warehouse;
+use App\Support\WarehouseService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 
@@ -17,13 +19,21 @@ class StockMutationController extends Controller
 {
     public function index()
     {
-        return view('admin.inventory.stock-mutations.index');
+        $warehouseId = WarehouseService::defaultWarehouseId();
+        $warehouseLabel = Warehouse::where('id', $warehouseId)->value('name') ?? 'Gudang Besar';
+        $warehouses = Warehouse::orderBy('name')->get(['id', 'name', 'code']);
+
+        return view('admin.inventory.stock-mutations.index', [
+            'warehouses' => $warehouses,
+            'defaultWarehouseId' => $warehouseId,
+            'warehouseLabel' => $warehouseLabel,
+        ]);
     }
 
     public function data(Request $request)
     {
         $query = StockMutation::query()
-            ->with(['item', 'creator'])
+            ->with(['item', 'creator', 'warehouse'])
             ->orderBy('occurred_at', 'desc');
 
         $search = trim((string) $request->input('q', ''));
@@ -39,11 +49,23 @@ class StockMutationController extends Controller
                     ->orWhereHas('item', function ($itemQ) use ($search) {
                         $itemQ->where('sku', 'like', "%{$search}%")
                             ->orWhere('name', 'like', "%{$search}%");
+                    })
+                    ->orWhereHas('warehouse', function ($whQ) use ($search) {
+                        $whQ->where('name', 'like', "%{$search}%")
+                            ->orWhere('code', 'like', "%{$search}%");
                     });
             });
         }
 
         $this->applyDateFilter($query, $request);
+
+        $warehouseFilter = $request->input('warehouse_id');
+        if ($warehouseFilter === null || $warehouseFilter === '') {
+            $warehouseFilter = WarehouseService::defaultWarehouseId();
+        }
+        if ($warehouseFilter !== 'all') {
+            $query->where('warehouse_id', (int) $warehouseFilter);
+        }
 
         $recordsTotal = StockMutation::count();
         $recordsFiltered = (clone $query)->count();
@@ -63,6 +85,7 @@ class StockMutationController extends Controller
                 'id' => $m->id,
                 'occurred_at' => $ts,
                 'item' => $itemLabel,
+                'warehouse' => $m->warehouse?->name ?? '-',
                 'user' => $m->creator?->name ?? '-',
                 'direction' => $direction,
                 'qty' => (int) $m->qty,
@@ -101,7 +124,7 @@ class StockMutationController extends Controller
 
     public function show(int $id)
     {
-        $mutation = StockMutation::with(['item', 'creator'])->findOrFail($id);
+        $mutation = StockMutation::with(['item', 'creator', 'warehouse'])->findOrFail($id);
         [$sourceSummary, $sourceItems] = $this->resolveSource($mutation);
 
         $itemLabel = trim(($mutation->item?->sku ?? '').' - '.($mutation->item?->name ?? ''));
@@ -113,6 +136,7 @@ class StockMutationController extends Controller
                 'id' => $mutation->id,
                 'occurred_at' => $mutation->occurred_at?->format('Y-m-d H:i'),
                 'item' => $itemLabel,
+                'warehouse' => $mutation->warehouse?->name ?? '-',
                 'direction' => $direction,
                 'qty' => (int) $mutation->qty,
                 'source' => trim($source),

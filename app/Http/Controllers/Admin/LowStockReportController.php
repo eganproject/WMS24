@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Category;
+use App\Models\Warehouse;
 use App\Support\WarehouseService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -13,16 +14,28 @@ class LowStockReportController extends Controller
     public function index()
     {
         $categories = Category::orderBy('name')->get(['id', 'name']);
+        $warehouseId = WarehouseService::defaultWarehouseId();
+        $warehouseLabel = Warehouse::where('id', $warehouseId)->value('name') ?? 'Gudang Besar';
+        $warehouses = Warehouse::orderBy('name')->get(['id', 'name', 'code']);
 
         return view('admin.reports.low-stock.index', [
             'dataUrl' => route('admin.reports.low-stock.data'),
             'categories' => $categories,
+            'warehouseLabel' => $warehouseLabel,
+            'warehouses' => $warehouses,
+            'defaultWarehouseId' => $warehouseId,
         ]);
     }
 
     public function data(Request $request)
     {
-        $warehouseId = WarehouseService::defaultWarehouseId();
+        $warehouseFilter = $request->input('warehouse_id');
+        if ($warehouseFilter === null || $warehouseFilter === '') {
+            $warehouseFilter = WarehouseService::defaultWarehouseId();
+        }
+        $warehouseId = $warehouseFilter !== 'all'
+            ? (int) $warehouseFilter
+            : WarehouseService::defaultWarehouseId();
         $baseQuery = DB::table('items as i')
             ->leftJoin('item_stocks as s', function ($join) use ($warehouseId) {
                 $join->on('s.item_id', '=', 'i.id')

@@ -18,7 +18,20 @@
             </div>
         </div>
         <div class="card-toolbar">
+            @if(!empty($warehouseLabel ?? null))
+                <span class="badge badge-light-primary me-4">Gudang: {{ $warehouseLabel }}</span>
+            @endif
             <div class="d-flex align-items-end gap-3 flex-wrap">
+                @if(!empty($warehouses ?? []))
+                    <div class="min-w-200px">
+                        <label class="text-muted fs-7 mb-1">Gudang</label>
+                        <select id="filter_warehouse" class="form-select form-select-solid w-200px">
+                            @foreach($warehouses as $wh)
+                                <option value="{{ $wh->id }}" @if(!empty($defaultWarehouseId) && $defaultWarehouseId === $wh->id) selected @endif>{{ $wh->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                @endif
                 <div class="min-w-200px">
                     <label class="text-muted fs-7 mb-1">Kategori</label>
                     <select id="filter_category" class="form-select form-select-solid w-200px">
@@ -115,10 +128,12 @@
 @push('scripts')
 <script>
     const dataUrl = '{{ $dataUrl }}';
+    const defaultWarehouseId = {{ !empty($defaultWarehouseId) ? (int) $defaultWarehouseId : 'null' }};
 
     document.addEventListener('DOMContentLoaded', () => {
         const tableEl = $('#low_stock_table');
         const searchInput = document.getElementById('report_search');
+        const warehouseFilter = document.getElementById('filter_warehouse');
         const categoryFilter = document.getElementById('filter_category');
         const statusFilter = document.getElementById('filter_status');
         const limitFilter = document.getElementById('filter_limit');
@@ -133,6 +148,9 @@
         }
 
         if (typeof $ !== 'undefined' && $.fn.select2) {
+            if (warehouseFilter) {
+                $(warehouseFilter).select2({ placeholder: 'Gudang', allowClear: false, width: '100%' });
+            }
             $(categoryFilter).select2({ placeholder: 'Semua', allowClear: true, width: '100%' });
             $(statusFilter).select2({ placeholder: 'Semua', allowClear: true, width: '100%' });
         }
@@ -154,6 +172,7 @@
                 },
                 data: function (params) {
                     params.q = searchInput?.value || '';
+                    if (warehouseFilter?.value) params.warehouse_id = warehouseFilter.value;
                     params.category_id = categoryFilter?.value || '';
                     params.status = statusFilter?.value || '';
                 }
@@ -184,6 +203,7 @@
         searchInput?.addEventListener('keyup', (e) => {
             if (e.key === 'Enter') reloadTable();
         });
+        warehouseFilter?.addEventListener('change', reloadTable);
         categoryFilter?.addEventListener('change', reloadTable);
         statusFilter?.addEventListener('change', reloadTable);
         limitFilter?.addEventListener('change', () => {
@@ -202,6 +222,12 @@
                 statusFilter.value = '';
                 if (typeof $ !== 'undefined' && $(statusFilter).data('select2')) {
                     $(statusFilter).val('').trigger('change.select2');
+                }
+            }
+            if (warehouseFilter && defaultWarehouseId) {
+                warehouseFilter.value = String(defaultWarehouseId);
+                if (typeof $ !== 'undefined' && $(warehouseFilter).data('select2')) {
+                    $(warehouseFilter).val(String(defaultWarehouseId)).trigger('change.select2');
                 }
             }
             if (limitFilter) {

@@ -7,10 +7,12 @@ use App\Models\InboundItem;
 use App\Models\InboundTransaction;
 use App\Models\Item;
 use App\Models\StockMutation;
+use App\Models\Warehouse;
 use App\Imports\InboundReceiptsImport;
 use App\Imports\InboundReturnsImport;
 use App\Exports\InboundManualTemplateExport;
 use App\Support\StockService;
+use App\Support\WarehouseService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -590,6 +592,8 @@ class InboundController extends Controller
 
         $totalQty = $tx->items->sum('qty');
         $totalKoli = $tx->items->sum('koli');
+        $warehouseId = WarehouseService::defaultWarehouseId();
+        $warehouseLabel = Warehouse::where('id', $warehouseId)->value('name') ?? 'Gudang Besar';
 
         return view('admin.stock-flow.detail', [
             'pageTitle' => $pageTitle,
@@ -597,6 +601,7 @@ class InboundController extends Controller
             'totalQty' => $totalQty,
             'totalKoli' => $totalKoli,
             'showKoli' => true,
+            'warehouseLabel' => $warehouseLabel,
             'backUrl' => route("admin.inbound.{$routeBase}.index"),
         ]);
     }

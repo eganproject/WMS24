@@ -26,7 +26,18 @@
             </div>
         </div>
         <div class="card-toolbar">
+            @if(!empty($warehouseLabel ?? null))
+                <span class="badge badge-light-primary me-4">Gudang: {{ $warehouseLabel }}</span>
+            @endif
             <div class="d-flex align-items-center gap-2 me-4">
+                @if(!empty($warehouses ?? []))
+                    <select class="form-select form-select-solid w-200px" id="filter_warehouse">
+                        <option value="">Semua Gudang</option>
+                        @foreach($warehouses as $wh)
+                            <option value="{{ $wh->id }}" @if(!empty($defaultWarehouseId) && $defaultWarehouseId === $wh->id) selected @endif>{{ $wh->name }}</option>
+                        @endforeach
+                    </select>
+                @endif
                 <input type="text" class="form-control form-control-solid w-150px" id="filter_date_from" placeholder="Dari" />
                 <input type="text" class="form-control form-control-solid w-150px" id="filter_date_to" placeholder="Sampai" />
                 <button type="button" class="btn btn-light" id="filter_apply">Filter</button>
@@ -52,6 +63,7 @@
                         <th>Status</th>
                         <th>Tanggal</th>
                         <th>Submit By</th>
+                        <th>Gudang</th>
                         <th>Item</th>
                         <th>Qty In</th>
                         <th>Qty Out</th>
@@ -87,6 +99,18 @@
                         <button type="button" class="btn btn-light" id="btn_add_adjustment_item">Tambah Item</button>
                     </div>
 
+                    @if(!empty($warehouses ?? []))
+                        <div class="fv-row mb-7">
+                            <label class="required fs-6 fw-bold form-label mb-2">Gudang</label>
+                            <select class="form-select form-select-solid" name="warehouse_id" id="adjustment_warehouse_id" required>
+                                <option value="">Pilih Gudang</option>
+                                @foreach($warehouses as $wh)
+                                    <option value="{{ $wh->id }}">{{ $wh->name }}</option>
+                                @endforeach
+                            </select>
+                            <div class="invalid-feedback" id="error_warehouse_id"></div>
+                        </div>
+                    @endif
                     <div class="fv-row mb-7">
                         <label class="required fs-6 fw-bold form-label mb-2">Tanggal</label>
                         <input type="text" class="form-control form-control-solid" name="transacted_at" id="adjustment_transacted_at" placeholder="YYYY-MM-DD HH:mm" required />
@@ -130,7 +154,7 @@
                     <div class="mb-6">
                         <div class="text-muted fs-7">
                             Header minimal: <strong>sku</strong>, <strong>qty</strong>, <strong>direction/arah</strong> (in/out atau tambah/kurangi).<br>
-                            Opsional: <strong>note</strong>, <strong>item_note</strong>, <strong>transacted_at</strong>.
+                            Opsional: <strong>note</strong>, <strong>item_note</strong>, <strong>transacted_at</strong>, <strong>warehouse</strong>/<strong>gudang</strong>.
                         </div>
                     </div>
                     <div class="fv-row mb-6">
@@ -161,6 +185,7 @@
     const importUrl = '{{ $importUrl ?? '' }}';
     const canUpdate = {{ $canUpdate ? 'true' : 'false' }};
     const canDelete = {{ $canDelete ? 'true' : 'false' }};
+    const defaultWarehouseId = {{ !empty($defaultWarehouseId) ? (int) $defaultWarehouseId : 'null' }};
     const itemOptionsHtml = `@foreach($items as $item)<option value="{{ $item->id }}">{{ $item->sku }} - {{ $item->name }}</option>@endforeach`;
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -174,6 +199,8 @@
         const openBtn = document.getElementById('btn_open_adjustment');
         const modalTitle = document.getElementById('adjustment_modal_title');
         const transactedAtEl = document.getElementById('adjustment_transacted_at');
+        const warehouseSelect = document.getElementById('adjustment_warehouse_id');
+        const warehouseFilter = document.getElementById('filter_warehouse');
         const dateFromEl = document.getElementById('filter_date_from');
         const dateToEl = document.getElementById('filter_date_to');
         const filterApplyBtn = document.getElementById('filter_apply');
@@ -204,7 +231,7 @@
         };
 
         const clearErrors = () => {
-            ['error_transacted_at','error_note'].forEach(id => {
+            ['error_transacted_at','error_note','error_warehouse_id'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.textContent = '';
             });
@@ -265,6 +292,10 @@
             if (transactedAtEl) {
                 fpTransacted = flatpickr(transactedAtEl, { enableTime: true, dateFormat: 'Y-m-d H:i', allowInput: true });
             }
+        }
+
+        if (warehouseFilter && typeof $ !== 'undefined' && $.fn.select2) {
+            $(warehouseFilter).select2({ placeholder: 'Semua Gudang', allowClear: true, width: '200px' });
         }
 
         const renumberRows = () => {
@@ -338,6 +369,9 @@
             } else if (transactedAtEl) {
                 transactedAtEl.value = nowJkt;
             }
+            if (warehouseSelect && defaultWarehouseId) {
+                warehouseSelect.value = String(defaultWarehouseId);
+            }
             itemsContainer.innerHTML = '';
             createItemRow();
             clearErrors();
@@ -381,6 +415,7 @@
                 dataSrc: 'data',
                 data: function(params) {
                     params.q = searchInput?.value || '';
+                    if (warehouseFilter?.value) params.warehouse_id = warehouseFilter.value;
                     if (dateFromEl?.value) params.date_from = dateFromEl.value;
                     if (dateToEl?.value) params.date_to = dateToEl.value;
                 }
@@ -391,6 +426,7 @@
                 { data: 'status', orderable: false, searchable: false, render: (data) => statusLabel(data) },
                 { data: 'transacted_at' },
                 { data: 'submit_by' },
+                { data: 'warehouse' },
                 { data: 'item' },
                 { data: 'qty_in' },
                 { data: 'qty_out' },
@@ -429,8 +465,15 @@
 
         const reloadTable = () => dt.ajax.reload();
         searchInput?.addEventListener('keyup', reloadTable);
+        warehouseFilter?.addEventListener('change', reloadTable);
         filterApplyBtn?.addEventListener('click', reloadTable);
         filterResetBtn?.addEventListener('click', () => {
+            if (warehouseFilter) {
+                warehouseFilter.value = '';
+                if (typeof $ !== 'undefined' && $(warehouseFilter).data('select2')) {
+                    $(warehouseFilter).val('').trigger('change.select2');
+                }
+            }
             if (fpFrom) fpFrom.clear(); else if (dateFromEl) dateFromEl.value = '';
             if (fpTo) fpTo.clear(); else if (dateToEl) dateToEl.value = '';
             reloadTable();
@@ -504,6 +547,10 @@
                     fpTransacted.setDate(json.transacted_at || null, true, 'Y-m-d H:i');
                 } else {
                     document.getElementById('adjustment_transacted_at').value = json.transacted_at || '';
+                }
+                if (warehouseSelect) {
+                    const whVal = json.warehouse_id || defaultWarehouseId || '';
+                    warehouseSelect.value = whVal ? String(whVal) : '';
                 }
 
                 itemsContainer.innerHTML = '';

@@ -18,7 +18,18 @@
             </div>
         </div>
         <div class="card-toolbar">
+            @if(!empty($warehouseLabel ?? null))
+                <span class="badge badge-light-primary me-4">Gudang: {{ $warehouseLabel }}</span>
+            @endif
             <div class="d-flex align-items-center gap-2">
+                @if(!empty($warehouses ?? []))
+                    <select class="form-select form-select-solid w-200px" id="filter_warehouse">
+                        <option value="all">Semua Gudang</option>
+                        @foreach($warehouses as $wh)
+                            <option value="{{ $wh->id }}" @if(!empty($defaultWarehouseId) && $defaultWarehouseId === $wh->id) selected @endif>{{ $wh->name }}</option>
+                        @endforeach
+                    </select>
+                @endif
                 <input type="text" class="form-control form-control-solid w-150px" id="filter_date_from" placeholder="Dari" />
                 <input type="text" class="form-control form-control-solid w-150px" id="filter_date_to" placeholder="Sampai" />
                 <button type="button" class="btn btn-light" id="filter_apply">Filter</button>
@@ -34,6 +45,7 @@
                         <th>ID</th>
                         <th>Tanggal</th>
                         <th>Item</th>
+                        <th>Gudang</th>
                         <th>Submit By</th>
                         <th>Arah</th>
                         <th>Qty</th>
@@ -65,17 +77,21 @@
             </div>
             <div class="modal-body scroll-y mx-5 mx-xl-15 my-7">
                 <div class="row mb-6">
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <div class="fw-bold text-gray-600">ID</div>
                         <div id="mutation_id">-</div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <div class="fw-bold text-gray-600">Tanggal</div>
                         <div id="mutation_date">-</div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <div class="fw-bold text-gray-600">User</div>
                         <div id="mutation_user">-</div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="fw-bold text-gray-600">Gudang</div>
+                        <div id="mutation_warehouse">-</div>
                     </div>
                 </div>
                 <div class="row mb-6">
@@ -159,10 +175,12 @@
 <script>
     const dataUrl = '{{ route('admin.inventory.stock-mutations.data') }}';
     const detailUrlTpl = '{{ route('admin.inventory.stock-mutations.show', ':id') }}';
+    const defaultWarehouseId = {{ !empty($defaultWarehouseId) ? (int) $defaultWarehouseId : 'null' }};
 
     document.addEventListener('DOMContentLoaded', () => {
         const tableEl = $('#stock_mutations_table');
         const searchInput = document.querySelector('[data-kt-filter="search"]');
+        const warehouseFilter = document.getElementById('filter_warehouse');
         const dateFromEl = document.getElementById('filter_date_from');
         const dateToEl = document.getElementById('filter_date_to');
         const filterApplyBtn = document.getElementById('filter_apply');
@@ -184,6 +202,10 @@
             }
         }
 
+        if (warehouseFilter && typeof $ !== 'undefined' && $.fn.select2) {
+            $(warehouseFilter).select2({ placeholder: 'Semua Gudang', allowClear: true, width: '200px' });
+        }
+
         const dt = tableEl.DataTable({
             processing: true,
             serverSide: true,
@@ -194,6 +216,7 @@
                 dataSrc: 'data',
                 data: function(params) {
                     params.q = searchInput?.value || '';
+                    if (warehouseFilter?.value) params.warehouse_id = warehouseFilter.value;
                     if (dateFromEl?.value) params.date_from = dateFromEl.value;
                     if (dateToEl?.value) params.date_to = dateToEl.value;
                 }
@@ -202,6 +225,7 @@
                 { data: 'id' },
                 { data: 'occurred_at' },
                 { data: 'item' },
+                { data: 'warehouse' },
                 { data: 'user' },
                 { data: 'direction' },
                 { data: 'qty' },
@@ -235,8 +259,16 @@
 
         const reloadTable = () => dt.ajax.reload();
         searchInput?.addEventListener('keyup', reloadTable);
+        warehouseFilter?.addEventListener('change', reloadTable);
         filterApplyBtn?.addEventListener('click', reloadTable);
         filterResetBtn?.addEventListener('click', () => {
+            if (warehouseFilter) {
+                const val = defaultWarehouseId ? String(defaultWarehouseId) : 'all';
+                warehouseFilter.value = val;
+                if (typeof $ !== 'undefined' && $(warehouseFilter).data('select2')) {
+                    $(warehouseFilter).val(val).trigger('change.select2');
+                }
+            }
             if (fpFrom) fpFrom.clear(); else if (dateFromEl) dateFromEl.value = '';
             if (fpTo) fpTo.clear(); else if (dateToEl) dateToEl.value = '';
             reloadTable();
@@ -264,6 +296,7 @@
                 setText('mutation_id', m.id);
                 setText('mutation_date', m.occurred_at);
                 setText('mutation_item', m.item);
+                setText('mutation_warehouse', m.warehouse);
                 setText('mutation_direction', m.direction);
                 setText('mutation_qty', m.qty);
                 setText('mutation_source', m.source);

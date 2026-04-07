@@ -9,6 +9,8 @@ use App\Models\StockAdjustmentItem;
 use App\Models\StockMutation;
 use App\Imports\StockAdjustmentsImport;
 use App\Support\StockService;
+use App\Support\WarehouseService;
+use App\Models\Warehouse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -22,19 +24,25 @@ class StockAdjustmentController extends Controller
     public function index()
     {
         $items = Item::orderBy('name')->get(['id', 'sku', 'name']);
+        $warehouseId = WarehouseService::defaultWarehouseId();
+        $warehouseLabel = Warehouse::where('id', $warehouseId)->value('name') ?? 'Gudang Besar';
+        $warehouses = Warehouse::orderBy('name')->get(['id', 'name', 'code']);
 
         return view('admin.inventory.stock-adjustments.index', [
             'items' => $items,
             'dataUrl' => route('admin.inventory.stock-adjustments.data'),
             'storeUrl' => route('admin.inventory.stock-adjustments.store'),
             'importUrl' => route('admin.inventory.stock-adjustments.import'),
+            'warehouseLabel' => $warehouseLabel,
+            'warehouses' => $warehouses,
+            'defaultWarehouseId' => $warehouseId,
         ]);
     }
 
     public function data(Request $request)
     {
         $query = StockAdjustment::query()
-            ->with(['items.item', 'creator'])
+            ->with(['items.item', 'creator', 'warehouse'])
             ->orderBy('transacted_at', 'desc');
 
         $search = trim((string) $request->input('q', ''));
@@ -45,11 +53,25 @@ class StockAdjustmentController extends Controller
                     ->orWhereHas('items.item', function ($itemQ) use ($search) {
                         $itemQ->where('sku', 'like', "%{$search}%")
                             ->orWhere('name', 'like', "%{$search}%");
+                    })
+                    ->orWhereHas('warehouse', function ($whQ) use ($search) {
+                        $whQ->where('name', 'like', "%{$search}%")
+                            ->orWhere('code', 'like', "%{$search}%");
                     });
             });
         }
 
         $this->applyDateFilter($query, $request);
+
+        $warehouseFilter = $request->input('warehouse_id');
+        if ($warehouseFilter !== null && $warehouseFilter !== '') {
+            if ($warehouseFilter === 'all') {
+                $warehouseFilter = null;
+            }
+        }
+        if ($warehouseFilter !== null && $warehouseFilter !== '') {
+            $query->where('warehouse_id', (int) $warehouseFilter);
+        }
 
         $recordsTotal = StockAdjustment::count();
         $recordsFiltered = (clone $query)->count();
@@ -80,6 +102,7 @@ class StockAdjustmentController extends Controller
                 'code' => $row->code,
                 'transacted_at' => $ts,
                 'submit_by' => $row->creator?->name ?? '-',
+                'warehouse' => $row->warehouse?->name ?? '-',
                 'item' => $itemLabel ?: '-',
                 'qty_in' => $totalIn,
                 'qty_out' => $totalOut,
@@ -99,6 +122,10 @@ class StockAdjustmentController extends Controller
     public function store(Request $request)
     {
         $validated = $this->validatePayload($request);
+        $warehouseId = (int) ($validated['warehouse_id'] ?? 0);
+        if ($warehouseId <= 0) {
+            $warehouseId = WarehouseService::defaultWarehouseId();
+        }
 
         $code = $this->generateCode('ADJ');
         $transactedAt = $validated['transacted_at'] ?? now();
@@ -108,6 +135,7 @@ class StockAdjustmentController extends Controller
             $adjustment = StockAdjustment::create([
                 'code' => $code,
                 'note' => $validated['note'] ?? null,
+                'warehouse_id' => $warehouseId,
                 'transacted_at' => $transactedAt,
                 'created_by' => auth()->id(),
                 'status' => 'pending',
@@ -126,6 +154,7 @@ class StockAdjustmentController extends Controller
                     'item_id' => $row['item_id'],
                     'direction' => $row['direction'],
                     'qty' => $row['qty'],
+                    'warehouse_id' => $warehouseId,
                     'source_type' => 'adjustment',
                     'source_subtype' => 'manual',
                     'source_id' => $adjustment->id,
@@ -170,6 +199,7 @@ class StockAdjustmentController extends Controller
                 ]);
             }
 
+            $warehouseId = $import->warehouse_id ?: WarehouseService::defaultWarehouseId();
             $transactedAt = now();
             if (!empty($import->transacted_at)) {
                 try {
@@ -184,6 +214,7 @@ class StockAdjustmentController extends Controller
             $adjustment = StockAdjustment::create([
                 'code' => $this->generateCode('ADJ'),
                 'note' => $import->note,
+                'warehouse_id' => $warehouseId,
                 'transacted_at' => $transactedAt,
                 'created_by' => auth()->id(),
                 'status' => 'pending',
@@ -204,6 +235,7 @@ class StockAdjustmentController extends Controller
                     'item_id' => $row['item_id'],
                     'direction' => $row['direction'],
                     'qty' => $row['qty'],
+                    'warehouse_id' => $warehouseId,
                     'source_type' => 'adjustment',
                     'source_subtype' => 'import',
                     'source_id' => $adjustment->id,
@@ -243,6 +275,7 @@ class StockAdjustmentController extends Controller
             'note' => $adjustment->note,
             'status' => $adjustment->status ?? 'pending',
             'transacted_at' => $adjustment->transacted_at?->format('Y-m-d H:i'),
+            'warehouse_id' => $adjustment->warehouse_id,
             'items' => $adjustment->items->map(function ($row) {
                 return [
                     'item_id' => $row->item_id,
@@ -257,6 +290,10 @@ class StockAdjustmentController extends Controller
     public function update(Request $request, int $id)
     {
         $validated = $this->validatePayload($request);
+        $warehouseId = (int) ($validated['warehouse_id'] ?? 0);
+        if ($warehouseId <= 0) {
+            $warehouseId = WarehouseService::defaultWarehouseId();
+        }
 
         DB::beginTransaction();
         try {
@@ -274,6 +311,7 @@ class StockAdjustmentController extends Controller
 
             $adjustment->update([
                 'note' => $validated['note'] ?? null,
+                'warehouse_id' => $warehouseId,
                 'transacted_at' => $validated['transacted_at'] ?? now(),
             ]);
 
@@ -290,6 +328,7 @@ class StockAdjustmentController extends Controller
                     'item_id' => $row['item_id'],
                     'direction' => $row['direction'],
                     'qty' => $row['qty'],
+                    'warehouse_id' => $warehouseId,
                     'source_type' => 'adjustment',
                     'source_subtype' => 'manual',
                     'source_id' => $adjustment->id,
@@ -371,6 +410,7 @@ class StockAdjustmentController extends Controller
             'items.*.note' => ['nullable', 'string'],
             'note' => ['nullable', 'string'],
             'transacted_at' => ['required', 'date'],
+            'warehouse_id' => ['nullable', 'integer', 'exists:warehouses,id'],
         ]);
 
         $items = collect($validated['items'] ?? [])

@@ -8,9 +8,11 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
-        Schema::table('item_stocks', function (Blueprint $table) {
-            $table->unsignedBigInteger('warehouse_id')->nullable()->after('item_id');
-        });
+        if (!Schema::hasColumn('item_stocks', 'warehouse_id')) {
+            Schema::table('item_stocks', function (Blueprint $table) {
+                $table->unsignedBigInteger('warehouse_id')->nullable()->after('item_id');
+            });
+        }
 
         $defaultCode = config('inventory.default_warehouse_code', 'GUDANG_BESAR');
         $displayCode = config('inventory.display_warehouse_code', 'GUDANG_DISPLAY');
@@ -36,11 +38,45 @@ return new class extends Migration {
             // ignore for unsupported drivers
         }
 
-        Schema::table('item_stocks', function (Blueprint $table) {
-            $table->dropUnique('item_stocks_item_id_unique');
-            $table->unique(['item_id', 'warehouse_id']);
-            $table->foreign('warehouse_id')->references('id')->on('warehouses')->cascadeOnDelete();
-        });
+        try {
+            Schema::table('item_stocks', function (Blueprint $table) {
+                $table->dropForeign(['item_id']);
+            });
+        } catch (\Throwable) {
+            // ignore if FK doesn't exist
+        }
+
+        try {
+            Schema::table('item_stocks', function (Blueprint $table) {
+                $table->dropUnique('item_stocks_item_id_unique');
+            });
+        } catch (\Throwable) {
+            // ignore if index doesn't exist
+        }
+
+        try {
+            Schema::table('item_stocks', function (Blueprint $table) {
+                $table->unique(['item_id', 'warehouse_id']);
+            });
+        } catch (\Throwable) {
+            // ignore if unique already exists
+        }
+
+        try {
+            Schema::table('item_stocks', function (Blueprint $table) {
+                $table->foreign('item_id')->references('id')->on('items')->cascadeOnDelete();
+            });
+        } catch (\Throwable) {
+            // ignore if FK already exists
+        }
+
+        try {
+            Schema::table('item_stocks', function (Blueprint $table) {
+                $table->foreign('warehouse_id')->references('id')->on('warehouses')->cascadeOnDelete();
+            });
+        } catch (\Throwable) {
+            // ignore if FK already exists
+        }
     }
 
     public function down(): void

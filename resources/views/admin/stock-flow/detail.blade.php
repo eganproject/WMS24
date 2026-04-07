@@ -26,6 +26,12 @@
                 <div class="fw-bold text-gray-600">Catatan</div>
                 <div>{{ $transaction->note ?? '-' }}</div>
             </div>
+            @if(!empty($warehouseLabel ?? null))
+                <div class="col-md-4">
+                    <div class="fw-bold text-gray-600">Gudang</div>
+                    <div>{{ $warehouseLabel }}</div>
+                </div>
+            @endif
             <div class="col-md-4">
                 <div class="fw-bold text-gray-600">Total Qty</div>
                 <div>{{ $totalQty }}</div>

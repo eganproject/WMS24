@@ -9,6 +9,7 @@ use App\Models\Item;
 use App\Models\StockMutation;
 use App\Imports\InboundReceiptsImport;
 use App\Imports\InboundReturnsImport;
+use App\Exports\InboundManualTemplateExport;
 use App\Support\StockService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -137,6 +138,12 @@ class InboundController extends Controller
     public function manualsApprove(int $id)
     {
         return $this->approve('manual', $id);
+    }
+
+    public function manualsTemplate()
+    {
+        $filename = 'inbound-manual-template-'.now()->format('YmdHis').'.xlsx';
+        return Excel::download(new InboundManualTemplateExport(), $filename);
     }
 
     public function manualsImport(Request $request)
@@ -452,6 +459,11 @@ class InboundController extends Controller
                 'manual' => 'Import Manual Inbound',
                 default => null,
             },
+            'templateUrl' => $type === 'manual'
+                ? route('admin.inbound.manuals.template')
+                : null,
+            'templateLabel' => 'Download Template Inbound Manual',
+            'templateNote' => 'Header: sku, qty atau koli. Opsional: ref_no, note, item_note, transacted_at.',
         ]);
     }
 

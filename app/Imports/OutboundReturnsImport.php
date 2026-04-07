@@ -3,6 +3,7 @@
 namespace App\Imports;
 
 use App\Models\Item;
+use App\Models\Warehouse;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 use Maatwebsite\Excel\Concerns\SkipsEmptyRows;
@@ -11,7 +12,7 @@ use Maatwebsite\Excel\Concerns\WithHeadingRow;
 
 class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
 {
-    /** @var array<string,array{ref_no:?string,note:?string,transacted_at:?string,items:array<int,array{item_id:int,qty:int,note:?string}>}> */
+    /** @var array<string,array{ref_no:?string,note:?string,transacted_at:?string,warehouse_id:?int,items:array<int,array{item_id:int,qty:int,note:?string}>}> */
     public array $groups = [];
 
     public function collection(Collection $rows)
@@ -26,7 +27,7 @@ class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
         $headers = array_keys($first?->toArray() ?? []);
         if (!in_array('sku', $headers, true)) {
             throw ValidationException::withMessages([
-                'file' => 'Header wajib: sku, qty (opsional: ref_no, note, item_note, transacted_at)',
+                'file' => 'Header wajib: sku, qty (opsional: ref_no, note, item_note, transacted_at, warehouse/gudang)',
             ]);
         }
         $qtyKey = $this->detectQtyKey($headers);
@@ -35,6 +36,8 @@ class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
                 'file' => 'Header qty wajib (gunakan: qty/quantity/jumlah/stok/stock)',
             ]);
         }
+
+        $warehouseMaps = $this->buildWarehouseMaps();
 
         $skus = $rows->map(fn ($row) => trim((string) ($row['sku'] ?? '')))
             ->filter()
@@ -67,13 +70,15 @@ class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
             $note = trim((string) ($row['note'] ?? ''));
             $itemNote = trim((string) ($row['item_note'] ?? $row['note_item'] ?? ''));
             $transactedAt = trim((string) ($row['transacted_at'] ?? $row['tanggal'] ?? ''));
+            $warehouseId = $this->parseWarehouseId($row, $warehouseMaps, $errors, $rowIndex);
 
-            $groupKey = $ref !== '' ? $ref : '__default__';
+            $groupKey = ($ref !== '' ? $ref : '__default__').'::'.((string) ($warehouseId ?: 'null'));
             if (!isset($this->groups[$groupKey])) {
                 $this->groups[$groupKey] = [
                     'ref_no' => $ref !== '' ? $ref : null,
                     'note' => $note !== '' ? $note : null,
                     'transacted_at' => $transactedAt !== '' ? $transactedAt : null,
+                    'warehouse_id' => $warehouseId,
                     'items' => [],
                 ];
             } else {
@@ -82,6 +87,9 @@ class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
                 }
                 if ($this->groups[$groupKey]['transacted_at'] === null && $transactedAt !== '') {
                     $this->groups[$groupKey]['transacted_at'] = $transactedAt;
+                }
+                if ($this->groups[$groupKey]['warehouse_id'] === null && $warehouseId) {
+                    $this->groups[$groupKey]['warehouse_id'] = $warehouseId;
                 }
             }
 
@@ -154,5 +162,92 @@ class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
         }
         $value = is_numeric($raw) ? (int) $raw : (int) preg_replace('/[^0-9\-]/', '', (string) $raw);
         return $value > 0 ? $value : 0;
+    }
+
+    /**
+     * @param array{codes:array<string,int>,names:array<string,int>,ids:array<int,bool>} $maps
+     * @param array<int,string> $errors
+     */
+    private function parseWarehouseId($row, array $maps, array &$errors, int $rowIndex): ?int
+    {
+        $raw = null;
+        foreach (['warehouse', 'gudang', 'warehouse_code', 'gudang_code', 'warehouse_name', 'gudang_name', 'nama_gudang', 'kode_gudang'] as $key) {
+            if (is_array($row) && array_key_exists($key, $row)) {
+                $raw = $row[$key];
+                break;
+            }
+            if ($row instanceof Collection && $row->has($key)) {
+                $raw = $row->get($key);
+                break;
+            }
+            if (isset($row[$key])) {
+                $raw = $row[$key];
+                break;
+            }
+        }
+
+        if ($raw === null || $raw === '') {
+            return null;
+        }
+
+        $value = trim((string) $raw);
+        if ($value === '') {
+            return null;
+        }
+
+        if (ctype_digit($value)) {
+            $id = (int) $value;
+            if ($id > 0 && isset($maps['ids'][$id])) {
+                return $id;
+            }
+        }
+
+        $codeKey = strtoupper($value);
+        if (isset($maps['codes'][$codeKey])) {
+            return $maps['codes'][$codeKey];
+        }
+
+        $nameKey = $this->normalizeWarehouseName($value);
+        if (isset($maps['names'][$nameKey])) {
+            return $maps['names'][$nameKey];
+        }
+
+        $errors[] = "Baris {$rowIndex}: gudang tidak ditemukan ({$value})";
+        return null;
+    }
+
+    /**
+     * @return array{codes:array<string,int>,names:array<string,int>,ids:array<int,bool>}
+     */
+    private function buildWarehouseMaps(): array
+    {
+        $codes = [];
+        $names = [];
+        $ids = [];
+        $warehouses = Warehouse::query()->get(['id', 'code', 'name']);
+        foreach ($warehouses as $warehouse) {
+            $id = (int) $warehouse->id;
+            $ids[$id] = true;
+            $code = strtoupper((string) $warehouse->code);
+            if ($code !== '') {
+                $codes[$code] = $id;
+            }
+            $name = $this->normalizeWarehouseName((string) $warehouse->name);
+            if ($name !== '') {
+                $names[$name] = $id;
+            }
+        }
+        return [
+            'codes' => $codes,
+            'names' => $names,
+            'ids' => $ids,
+        ];
+    }
+
+    private function normalizeWarehouseName(string $value): string
+    {
+        $value = strtolower(trim($value));
+        $value = preg_replace('/\\s+/', ' ', $value) ?? $value;
+        return $value;
     }
 }

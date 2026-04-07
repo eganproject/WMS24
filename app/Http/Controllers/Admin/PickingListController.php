@@ -12,6 +12,7 @@ use App\Models\PickingListException;
 use App\Models\PackerScanException;
 use App\Models\PickerTransitItem;
 use App\Support\StockService;
+use App\Support\WarehouseService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -212,6 +213,7 @@ class PickingListController extends Controller
                 'item_id' => $item->id,
                 'direction' => 'in',
                 'qty' => $qty,
+                'warehouse_id' => WarehouseService::displayWarehouseId(),
                 'source_type' => 'picking_exception',
                 'source_subtype' => 'return',
                 'source_id' => $exceptionId,

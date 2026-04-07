@@ -125,6 +125,18 @@
                     <div class="mb-7">
                         <button type="button" class="btn btn-light" id="btn_add_flow_item">Tambah Item</button>
                     </div>
+                    @if(!empty($warehouseOptions ?? []))
+                        <div class="fv-row mb-7" id="flow_warehouse_row" style="display:none;">
+                            <label class="fs-6 fw-bold form-label mb-2">Gudang</label>
+                            <select class="form-select form-select-solid" name="warehouse_id" id="flow_warehouse_id">
+                                <option value="">Pilih Gudang</option>
+                                @foreach($warehouseOptions as $wh)
+                                    <option value="{{ $wh['id'] }}">{{ $wh['name'] }}</option>
+                                @endforeach
+                            </select>
+                            <div class="invalid-feedback" id="error_warehouse_id"></div>
+                        </div>
+                    @endif
                     <div class="fv-row mb-7">
                         <label class="fs-6 fw-bold form-label mb-2">Tanggal</label>
                         <input type="text" class="form-control form-control-solid" name="transacted_at" id="flow_transacted_at" placeholder="YYYY-MM-DD HH:mm" />
@@ -177,8 +189,22 @@
                             @else
                                 Header minimal: <strong>sku</strong>, <strong>qty</strong>.<br>
                             @endif
-                            Opsional: <strong>ref_no</strong>, <strong>note</strong>, <strong>item_note</strong>, <strong>transacted_at</strong>.
+                            Opsional: <strong>ref_no</strong>, <strong>note</strong>, <strong>item_note</strong>, <strong>transacted_at</strong>
+                            @if(!empty($enableWarehouseSelect ?? false))
+                                , <strong>warehouse</strong>/<strong>gudang</strong> (isi kode/nama gudang)
+                            @endif
+                            .
                         </div>
+                        @if(!empty($templateUrl ?? null))
+                            <div class="mt-3">
+                                @if(!empty($templateNote ?? null))
+                                    <div class="text-muted fs-7 mb-2">{{ $templateNote }}</div>
+                                @endif
+                                <a href="{{ $templateUrl }}" class="btn btn-light-primary btn-sm">
+                                    {{ $templateLabel ?? 'Download Template' }}
+                                </a>
+                            </div>
+                        @endif
                     </div>
                     <div class="fv-row mb-6">
                         <label class="required fs-6 fw-bold form-label mb-2">File Excel</label>
@@ -214,6 +240,9 @@
     const permMap = @json($permMap ?? []);
     const canCreateDefault = {{ $canCreateDefault ? 'true' : 'false' }};
     const enableKoli = {{ !empty($enableKoli ?? false) ? 'true' : 'false' }};
+    const enableWarehouseSelect = {{ !empty($enableWarehouseSelect ?? false) ? 'true' : 'false' }};
+    const displayWarehouseId = {{ isset($displayWarehouseId) ? (int) $displayWarehouseId : 'null' }};
+    const defaultWarehouseId = {{ isset($defaultWarehouseId) ? (int) $defaultWarehouseId : 'null' }};
 
     document.addEventListener('DOMContentLoaded', () => {
         const tableEl = $('#stock_flow_table');
@@ -236,6 +265,8 @@
         const importInput = document.getElementById('import_flow_file');
         const importError = document.getElementById('error_import_flow_file');
         const importSubmit = document.getElementById('btn_import_flow_submit');
+        const warehouseRow = document.getElementById('flow_warehouse_row');
+        const warehouseSelect = document.getElementById('flow_warehouse_id');
         let fpFrom = null;
         let fpTo = null;
         let fpTransacted = null;
@@ -262,7 +293,7 @@
         };
 
         const clearErrors = () => {
-            ['error_transacted_at','error_ref_no','error_note'].forEach(id => {
+            ['error_transacted_at','error_ref_no','error_note','error_warehouse_id'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.textContent = '';
             });
@@ -340,6 +371,21 @@
                     minimumResultsForSearch: 0,
                 })
                     .on('select2:opening select2:closing select2:close', function(e){ e.stopPropagation(); });
+            }
+        };
+
+        const applyWarehouseVisibility = (flowType) => {
+            if (!warehouseRow || !warehouseSelect) return;
+            const shouldShow = enableWarehouseSelect && flowType === 'manual';
+            warehouseRow.style.display = shouldShow ? '' : 'none';
+            warehouseSelect.required = shouldShow;
+            if (shouldShow) {
+                if (!warehouseSelect.value) {
+                    const fallbackId = displayWarehouseId || defaultWarehouseId || '';
+                    if (fallbackId) warehouseSelect.value = String(fallbackId);
+                }
+            } else {
+                warehouseSelect.value = '';
             }
         };
 
@@ -431,6 +477,7 @@
             } else if (transactedAtEl) {
                 transactedAtEl.value = nowJkt;
             }
+            applyWarehouseVisibility(defaultTypeFilter || '');
             itemsContainer.innerHTML = '';
             createItemRow();
             clearErrors();
@@ -618,6 +665,11 @@
             if (modalTitle) modalTitle.textContent = `Edit ${json.code || ''}`.trim();
                 document.getElementById('flow_ref_no').value = json.ref_no || '';
                 document.getElementById('flow_note').value = json.note || '';
+                applyWarehouseVisibility(rowType);
+                if (warehouseSelect) {
+                    const fallbackId = displayWarehouseId || defaultWarehouseId || '';
+                    warehouseSelect.value = json.warehouse_id ? String(json.warehouse_id) : (fallbackId ? String(fallbackId) : '');
+                }
                 if (fpTransacted) {
                     fpTransacted.setDate(json.transacted_at || null, true, 'Y-m-d\\TH:i');
                 } else {

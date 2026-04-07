@@ -10,6 +10,7 @@ use App\Models\PickerTransitItem;
 use App\Models\PickingList;
 use App\Models\PickingListException;
 use App\Support\StockService;
+use App\Support\WarehouseService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -141,6 +142,7 @@ class PickerSessionController extends Controller
                     'item_id' => $itemRow->item_id,
                     'direction' => $delta > 0 ? 'out' : 'in',
                     'qty' => abs($delta),
+                    'warehouse_id' => WarehouseService::displayWarehouseId(),
                     'source_type' => 'picker',
                     'source_subtype' => 'mobile',
                     'source_id' => $session->id,
@@ -242,6 +244,7 @@ class PickerSessionController extends Controller
                     'item_id' => $itemRow->item_id,
                     'direction' => 'in',
                     'qty' => $qty,
+                    'warehouse_id' => WarehouseService::displayWarehouseId(),
                     'source_type' => 'picker',
                     'source_subtype' => 'mobile',
                     'source_id' => $session->id,
@@ -498,6 +501,7 @@ class PickerSessionController extends Controller
                 'item_id' => $itemId,
                 'direction' => 'out',
                 'qty' => $deltaQty,
+                'warehouse_id' => WarehouseService::displayWarehouseId(),
                 'source_type' => 'picker',
                 'source_subtype' => 'mobile',
                 'source_id' => $session->id,

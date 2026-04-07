@@ -6,9 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Models\OutboundItem;
 use App\Models\OutboundTransaction;
 use App\Models\Item;
+use App\Models\Warehouse;
 use App\Models\StockMutation;
 use App\Imports\OutboundReturnsImport;
 use App\Support\StockService;
+use App\Support\WarehouseService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -158,6 +160,10 @@ class OutboundController extends Controller
             $createdTx = 0;
             $createdItems = 0;
             foreach ($groups as $group) {
+                $warehouseId = (int) ($group['warehouse_id'] ?? 0);
+                if ($warehouseId <= 0) {
+                    $warehouseId = WarehouseService::displayWarehouseId();
+                }
                 $transactedAt = now();
                 if (!empty($group['transacted_at'])) {
                     try {
@@ -174,6 +180,7 @@ class OutboundController extends Controller
                     'type' => 'manual',
                     'ref_no' => $group['ref_no'] ?? null,
                     'note' => $group['note'] ?? null,
+                    'warehouse_id' => $warehouseId,
                     'transacted_at' => $transactedAt,
                     'created_by' => auth()->id(),
                     'status' => 'pending',
@@ -193,6 +200,7 @@ class OutboundController extends Controller
                         'item_id' => $row['item_id'],
                         'direction' => 'out',
                         'qty' => $row['qty'],
+                        'warehouse_id' => $warehouseId,
                         'source_type' => 'outbound',
                         'source_subtype' => 'manual',
                         'source_id' => $tx->id,
@@ -230,6 +238,7 @@ class OutboundController extends Controller
         ]);
 
         $import = new OutboundReturnsImport();
+        $warehouseId = WarehouseService::displayWarehouseId();
         DB::beginTransaction();
         try {
             Excel::import($import, $request->file('file'));
@@ -259,6 +268,7 @@ class OutboundController extends Controller
                     'type' => 'return',
                     'ref_no' => $group['ref_no'] ?? null,
                     'note' => $group['note'] ?? null,
+                    'warehouse_id' => $warehouseId,
                     'transacted_at' => $transactedAt,
                     'created_by' => auth()->id(),
                     'status' => 'pending',
@@ -278,6 +288,7 @@ class OutboundController extends Controller
                         'item_id' => $row['item_id'],
                         'direction' => 'out',
                         'qty' => $row['qty'],
+                        'warehouse_id' => $warehouseId,
                         'source_type' => 'outbound',
                         'source_subtype' => 'return',
                         'source_id' => $tx->id,
@@ -311,6 +322,7 @@ class OutboundController extends Controller
     private function index(string $type, string $pageTitle, string $routeBase)
     {
         $items = Item::orderBy('name')->get(['id', 'sku', 'name', 'koli_qty']);
+        $warehouses = Warehouse::orderBy('name')->get(['id', 'name', 'code']);
         $baseOptions = $this->typeOptions();
         $typeOptions = ['all' => 'Semua'] + $baseOptions;
         $routeMap = [
@@ -349,6 +361,14 @@ class OutboundController extends Controller
             'deleteUrlTpl' => route("admin.outbound.{$routeBase}.destroy", ':id'),
             'detailUrlTpl' => route("admin.outbound.{$routeBase}.detail", ':id'),
             'items' => $items,
+            'warehouseOptions' => $warehouses->map(fn ($w) => [
+                'id' => $w->id,
+                'name' => $w->name,
+                'code' => $w->code,
+            ])->values(),
+            'defaultWarehouseId' => WarehouseService::defaultWarehouseId(),
+            'displayWarehouseId' => WarehouseService::displayWarehouseId(),
+            'enableWarehouseSelect' => $type === 'manual',
             'typeOptions' => $typeOptions,
             'typeDefault' => $type,
             'routeMap' => $routeMap,
@@ -468,6 +488,7 @@ class OutboundController extends Controller
             'ref_no' => $tx->ref_no,
             'note' => $tx->note,
             'status' => $tx->status ?? 'pending',
+            'warehouse_id' => $tx->warehouse_id,
             'transacted_at' => $tx->transacted_at?->format('Y-m-d\TH:i'),
             'items' => $tx->items->map(function ($item) {
                 return [
@@ -481,7 +502,7 @@ class OutboundController extends Controller
 
     private function detail(string $type, string $pageTitle, string $routeBase, int $id)
     {
-        $tx = OutboundTransaction::with(['items.item'])
+        $tx = OutboundTransaction::with(['items.item', 'warehouse'])
             ->where('type', $type)
             ->findOrFail($id);
 
@@ -491,6 +512,7 @@ class OutboundController extends Controller
             'pageTitle' => $pageTitle,
             'transaction' => $tx,
             'totalQty' => $totalQty,
+            'warehouseLabel' => $tx->warehouse?->name,
             'backUrl' => route("admin.outbound.{$routeBase}.index"),
         ]);
     }
@@ -498,6 +520,17 @@ class OutboundController extends Controller
     private function store(Request $request, string $type)
     {
         $validated = $this->validatePayload($request);
+
+        $warehouseId = (int) ($validated['warehouse_id'] ?? 0);
+        if ($type === 'manual') {
+            if ($warehouseId <= 0) {
+                throw ValidationException::withMessages([
+                    'warehouse_id' => 'Gudang wajib dipilih',
+                ]);
+            }
+        } else {
+            $warehouseId = WarehouseService::displayWarehouseId();
+        }
 
         $prefix = match ($type) {
             'picker' => 'OUT-PCK',
@@ -515,6 +548,7 @@ class OutboundController extends Controller
                 'type' => $type,
                 'ref_no' => $validated['ref_no'] ?? null,
                 'note' => $validated['note'] ?? null,
+                'warehouse_id' => $warehouseId,
                 'transacted_at' => $transactedAt,
                 'created_by' => auth()->id(),
                 'status' => 'pending',
@@ -532,6 +566,7 @@ class OutboundController extends Controller
                     'item_id' => $row['item_id'],
                     'direction' => 'out',
                     'qty' => $row['qty'],
+                    'warehouse_id' => $warehouseId,
                     'source_type' => 'outbound',
                     'source_subtype' => $type,
                     'source_id' => $tx->id,
@@ -563,6 +598,17 @@ class OutboundController extends Controller
     {
         $validated = $this->validatePayload($request);
 
+        $warehouseId = (int) ($validated['warehouse_id'] ?? 0);
+        if ($type === 'manual') {
+            if ($warehouseId <= 0) {
+                throw ValidationException::withMessages([
+                    'warehouse_id' => 'Gudang wajib dipilih',
+                ]);
+            }
+        } else {
+            $warehouseId = WarehouseService::displayWarehouseId();
+        }
+
         DB::beginTransaction();
         try {
             $tx = OutboundTransaction::where('type', $type)->findOrFail($id);
@@ -578,6 +624,7 @@ class OutboundController extends Controller
             $tx->update([
                 'ref_no' => $validated['ref_no'] ?? null,
                 'note' => $validated['note'] ?? null,
+                'warehouse_id' => $warehouseId,
                 'transacted_at' => $validated['transacted_at'] ?? $tx->transacted_at,
             ]);
 
@@ -593,6 +640,7 @@ class OutboundController extends Controller
                     'item_id' => $row['item_id'],
                     'direction' => 'out',
                     'qty' => $row['qty'],
+                    'warehouse_id' => $warehouseId,
                     'source_type' => 'outbound',
                     'source_subtype' => $type,
                     'source_id' => $tx->id,
@@ -678,6 +726,7 @@ class OutboundController extends Controller
             'ref_no' => ['nullable', 'string', 'max:100'],
             'note' => ['nullable', 'string'],
             'transacted_at' => ['required', 'date'],
+            'warehouse_id' => ['nullable', 'integer', 'exists:warehouses,id'],
         ]);
 
         $items = collect($validated['items'] ?? [])

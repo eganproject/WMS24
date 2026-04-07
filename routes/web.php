@@ -248,6 +248,7 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/manuals/data', [InboundController::class, 'manualsData'])->name('manuals.data');
         Route::post('/manuals', [InboundController::class, 'manualsStore'])->name('manuals.store');
         Route::post('/manuals/import', [InboundController::class, 'manualsImport'])->name('manuals.import');
+        Route::get('/manuals/template', [InboundController::class, 'manualsTemplate'])->name('manuals.template');
         Route::get('/manuals/{id}', [InboundController::class, 'manualsShow'])->name('manuals.show');
         Route::put('/manuals/{id}', [InboundController::class, 'manualsUpdate'])->name('manuals.update');
         Route::delete('/manuals/{id}', [InboundController::class, 'manualsDestroy'])->name('manuals.destroy');

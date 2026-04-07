@@ -399,7 +399,7 @@ class OutboundController extends Controller
         }
 
         $query = OutboundTransaction::query()
-            ->with(['items.item', 'creator'])
+            ->with(['items.item', 'creator', 'warehouse'])
             ->select([
                 'outbound_transactions.id',
                 'outbound_transactions.code',
@@ -407,6 +407,7 @@ class OutboundController extends Controller
                 'outbound_transactions.type',
                 'outbound_transactions.ref_no',
                 'outbound_transactions.note',
+                'outbound_transactions.warehouse_id',
                 'outbound_transactions.status',
                 'outbound_transactions.created_by',
             ])
@@ -460,6 +461,7 @@ class OutboundController extends Controller
                 'code' => $row->code,
                 'transacted_at' => $ts,
                 'submit_by' => $row->creator?->name ?? '-',
+                'warehouse' => $row->warehouse?->name ?? '-',
                 'item' => $itemLabel ?: '-',
                 'qty' => $totalQty,
                 'note' => $row->note ?? '',

@@ -15,6 +15,7 @@ class InboundTransaction extends Model
         'ref_no',
         'transacted_at',
         'note',
+        'warehouse_id',
         'status',
         'approved_at',
         'created_by',
@@ -29,6 +30,11 @@ class InboundTransaction extends Model
     public function items()
     {
         return $this->hasMany(InboundItem::class, 'inbound_transaction_id');
+    }
+
+    public function warehouse()
+    {
+        return $this->belongsTo(Warehouse::class, 'warehouse_id');
     }
 
     public function creator()

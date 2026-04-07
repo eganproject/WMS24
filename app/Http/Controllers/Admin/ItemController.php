@@ -275,6 +275,7 @@ class ItemController extends Controller
                     'type' => 'opening',
                     'ref_no' => null,
                     'note' => 'Saldo awal dari import items',
+                    'warehouse_id' => (int) $warehouseId,
                     'transacted_at' => $transactedAt,
                     'created_by' => auth()->id(),
                     'status' => 'approved',

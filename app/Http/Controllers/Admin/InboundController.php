@@ -184,6 +184,7 @@ class InboundController extends Controller
                     'type' => 'manual',
                     'ref_no' => $group['ref_no'] ?? null,
                     'note' => $group['note'] ?? null,
+                    'warehouse_id' => WarehouseService::defaultWarehouseId(),
                     'transacted_at' => $transactedAt,
                     'created_by' => auth()->id(),
                     'status' => 'pending',
@@ -269,6 +270,7 @@ class InboundController extends Controller
                     'type' => 'return',
                     'ref_no' => $group['ref_no'] ?? null,
                     'note' => $group['note'] ?? null,
+                    'warehouse_id' => WarehouseService::defaultWarehouseId(),
                     'transacted_at' => $transactedAt,
                     'created_by' => auth()->id(),
                     'status' => 'pending',
@@ -354,6 +356,7 @@ class InboundController extends Controller
                     'type' => 'receipt',
                     'ref_no' => $group['ref_no'] ?? null,
                     'note' => $group['note'] ?? null,
+                    'warehouse_id' => WarehouseService::defaultWarehouseId(),
                     'transacted_at' => $transactedAt,
                     'created_by' => auth()->id(),
                     'status' => 'pending',
@@ -483,7 +486,7 @@ class InboundController extends Controller
         }
 
         $query = InboundTransaction::query()
-            ->with(['items.item', 'creator'])
+            ->with(['items.item', 'creator', 'warehouse'])
             ->select([
                 'inbound_transactions.id',
                 'inbound_transactions.code',
@@ -491,6 +494,7 @@ class InboundController extends Controller
                 'inbound_transactions.type',
                 'inbound_transactions.ref_no',
                 'inbound_transactions.note',
+                'inbound_transactions.warehouse_id',
                 'inbound_transactions.status',
                 'inbound_transactions.created_by',
             ])
@@ -519,6 +523,7 @@ class InboundController extends Controller
         }
         $recordsTotal = $recordsTotalQuery->count();
         $recordsFiltered = (clone $query)->count();
+        $defaultWarehouseLabel = Warehouse::where('id', WarehouseService::defaultWarehouseId())->value('name') ?? 'Gudang Besar';
 
         $start = (int) $request->input('start', 0);
         $length = (int) $request->input('length', 10);
@@ -526,7 +531,7 @@ class InboundController extends Controller
             $query->skip($start)->take($length);
         }
 
-        $data = $query->get()->map(function ($row) {
+        $data = $query->get()->map(function ($row) use ($defaultWarehouseLabel) {
             $ts = $row->transacted_at ? Carbon::parse($row->transacted_at)->format('Y-m-d H:i') : '';
             $items = $row->items ?? collect();
             $labels = $items->map(function ($it) {
@@ -544,6 +549,7 @@ class InboundController extends Controller
                 'code' => $row->code,
                 'transacted_at' => $ts,
                 'submit_by' => $row->creator?->name ?? '-',
+                'warehouse' => $row->warehouse?->name ?? $defaultWarehouseLabel,
                 'item' => $itemLabel ?: '-',
                 'qty' => $totalQty,
                 'note' => $row->note ?? '',
@@ -586,14 +592,17 @@ class InboundController extends Controller
 
     private function detail(string $type, string $pageTitle, string $routeBase, int $id)
     {
-        $tx = InboundTransaction::with(['items.item'])
+        $tx = InboundTransaction::with(['items.item', 'warehouse'])
             ->where('type', $type)
             ->findOrFail($id);
 
         $totalQty = $tx->items->sum('qty');
         $totalKoli = $tx->items->sum('koli');
-        $warehouseId = WarehouseService::defaultWarehouseId();
-        $warehouseLabel = Warehouse::where('id', $warehouseId)->value('name') ?? 'Gudang Besar';
+        $warehouseLabel = $tx->warehouse?->name;
+        if (!$warehouseLabel) {
+            $warehouseId = WarehouseService::defaultWarehouseId();
+            $warehouseLabel = Warehouse::where('id', $warehouseId)->value('name') ?? 'Gudang Besar';
+        }
 
         return view('admin.stock-flow.detail', [
             'pageTitle' => $pageTitle,
@@ -626,6 +635,7 @@ class InboundController extends Controller
                 'type' => $type,
                 'ref_no' => $validated['ref_no'] ?? null,
                 'note' => $validated['note'] ?? null,
+                'warehouse_id' => WarehouseService::defaultWarehouseId(),
                 'transacted_at' => $transactedAt,
                 'created_by' => auth()->id(),
                 'status' => 'pending',

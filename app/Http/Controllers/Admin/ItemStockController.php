@@ -5,15 +5,28 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Exports\ItemStocksExport;
 use App\Models\Item;
+use App\Models\ItemStock;
+use App\Models\Warehouse;
 use App\Support\WarehouseService;
 use Illuminate\Http\Request;
 use Maatwebsite\Excel\Facades\Excel;
+use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\DB;
 
 class ItemStockController extends Controller
 {
     public function index()
     {
-        return view('admin.inventory.item-stocks.index');
+        $defaultId = WarehouseService::defaultWarehouseId();
+        $displayId = WarehouseService::displayWarehouseId();
+        $defaultLabel = Warehouse::where('id', $defaultId)->value('name') ?? 'Gudang Besar';
+        $displayLabel = Warehouse::where('id', $displayId)->value('name') ?? 'Gudang Display';
+
+        return view('admin.inventory.item-stocks.index', [
+            'defaultWarehouseLabel' => $defaultLabel,
+            'displayWarehouseLabel' => $displayLabel,
+            'updateSafetyUrl' => route('admin.inventory.item-stocks.update-safety'),
+        ]);
     }
 
     public function data(Request $request)
@@ -45,8 +58,13 @@ class ItemStockController extends Controller
 
         $data = $query->get()->map(function ($i) use ($defaultId, $displayId) {
             $stocks = $i->stocks?->keyBy('warehouse_id') ?? collect();
+            $baseSafety = (int) ($i->safety_stock ?? 0);
             $stockMain = (int) ($stocks->get($defaultId)?->stock ?? 0);
             $stockDisplay = (int) ($stocks->get($displayId)?->stock ?? 0);
+            $safetyMainRaw = $stocks->get($defaultId)?->safety_stock;
+            $safetyDisplayRaw = $stocks->get($displayId)?->safety_stock;
+            $safetyMain = $safetyMainRaw !== null ? (int) $safetyMainRaw : $baseSafety;
+            $safetyDisplay = $safetyDisplayRaw !== null ? (int) $safetyDisplayRaw : $baseSafety;
             return [
                 'id' => $i->id,
                 'sku' => $i->sku,
@@ -54,6 +72,11 @@ class ItemStockController extends Controller
                 'stock_main' => $stockMain,
                 'stock_display' => $stockDisplay,
                 'stock_total' => $stockMain + $stockDisplay,
+                'safety_main' => $safetyMain,
+                'safety_display' => $safetyDisplay,
+                'safety_base' => $baseSafety,
+                'safety_main_raw' => $safetyMainRaw,
+                'safety_display_raw' => $safetyDisplayRaw,
             ];
         });
 
@@ -71,5 +94,56 @@ class ItemStockController extends Controller
         $filename = 'item-stocks-'.now()->format('YmdHis').'.xlsx';
 
         return Excel::download(new ItemStocksExport($search), $filename);
+    }
+
+    public function updateSafety(Request $request)
+    {
+        $validated = $request->validate([
+            'item_id' => ['required', 'integer', 'exists:items,id'],
+            'safety_main' => ['nullable', 'integer', 'min:0'],
+            'safety_display' => ['nullable', 'integer', 'min:0'],
+        ]);
+
+        $itemId = (int) $validated['item_id'];
+        $defaultId = WarehouseService::defaultWarehouseId();
+        $displayId = WarehouseService::displayWarehouseId();
+
+        $mainVal = $validated['safety_main'];
+        $displayVal = $validated['safety_display'];
+
+        $mainVal = ($mainVal === '' || $mainVal === null) ? null : (int) $mainVal;
+        $displayVal = ($displayVal === '' || $displayVal === null) ? null : (int) $displayVal;
+
+        DB::beginTransaction();
+        try {
+            $mainStock = ItemStock::firstOrCreate(
+                ['item_id' => $itemId, 'warehouse_id' => $defaultId],
+                ['stock' => 0]
+            );
+            $mainStock->safety_stock = $mainVal;
+            $mainStock->save();
+
+            $displayStock = ItemStock::firstOrCreate(
+                ['item_id' => $itemId, 'warehouse_id' => $displayId],
+                ['stock' => 0]
+            );
+            $displayStock->safety_stock = $displayVal;
+            $displayStock->save();
+
+            DB::commit();
+        } catch (ValidationException $e) {
+            DB::rollBack();
+            throw $e;
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return response()->json([
+                'message' => 'Gagal menyimpan safety stock',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+
+        return response()->json([
+            'message' => 'Safety stock berhasil disimpan',
+        ]);
     }
 }

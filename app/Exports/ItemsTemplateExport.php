@@ -23,6 +23,8 @@ class ItemsTemplateExport implements FromCollection, WithHeadings
             'stock_gudang_besar',
             'stock_gudang_display',
             'stock',
+            'safety_stock_gudang_besar',
+            'safety_stock_gudang_display',
             'safety_stock',
             'koli_qty',
             'address',

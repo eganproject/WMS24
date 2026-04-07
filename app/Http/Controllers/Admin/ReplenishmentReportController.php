@@ -9,43 +9,50 @@ use App\Support\WarehouseService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
-class LowStockReportController extends Controller
+class ReplenishmentReportController extends Controller
 {
     public function index()
     {
         $categories = Category::orderBy('name')->get(['id', 'name']);
-        $warehouseId = WarehouseService::defaultWarehouseId();
-        $warehouseLabel = Warehouse::where('id', $warehouseId)->value('name') ?? 'Gudang Besar';
-        $warehouses = Warehouse::orderBy('name')->get(['id', 'name', 'code']);
+        $defaultId = WarehouseService::defaultWarehouseId();
+        $displayId = WarehouseService::displayWarehouseId();
+        $defaultLabel = Warehouse::where('id', $defaultId)->value('name') ?? 'Gudang Besar';
+        $displayLabel = Warehouse::where('id', $displayId)->value('name') ?? 'Gudang Display';
 
-        return view('admin.reports.low-stock.index', [
-            'dataUrl' => route('admin.reports.low-stock.data'),
+        return view('admin.reports.replenishment.index', [
+            'dataUrl' => route('admin.reports.replenishment.data'),
             'categories' => $categories,
-            'warehouseLabel' => $warehouseLabel,
-            'warehouses' => $warehouses,
-            'defaultWarehouseId' => $warehouseId,
+            'defaultWarehouseLabel' => $defaultLabel,
+            'displayWarehouseLabel' => $displayLabel,
+            'defaultWarehouseId' => $defaultId,
+            'displayWarehouseId' => $displayId,
+            'transferUrl' => route('admin.inventory.stock-transfers.index'),
         ]);
     }
 
     public function data(Request $request)
     {
-        $warehouseFilter = $request->input('warehouse_id');
-        if ($warehouseFilter === null || $warehouseFilter === '') {
-            $warehouseFilter = WarehouseService::defaultWarehouseId();
-        }
-        $warehouseId = $warehouseFilter !== 'all'
-            ? (int) $warehouseFilter
-            : WarehouseService::defaultWarehouseId();
-        $safetyExpr = 'COALESCE(s.safety_stock, i.safety_stock, 0)';
-        $stockExpr = 'COALESCE(s.stock, 0)';
+        $defaultId = WarehouseService::defaultWarehouseId();
+        $displayId = WarehouseService::displayWarehouseId();
+
+        $safetyExpr = 'COALESCE(sd.safety_stock, i.safety_stock, 0)';
+        $displayStockExpr = 'COALESCE(sd.stock, 0)';
+        $mainStockExpr = 'COALESCE(sm.stock, 0)';
+        $needExpr = "GREATEST(0, {$safetyExpr} - {$displayStockExpr})";
+        $suggestExpr = "LEAST({$needExpr}, {$mainStockExpr})";
+
         $baseQuery = DB::table('items as i')
-            ->leftJoin('item_stocks as s', function ($join) use ($warehouseId) {
-                $join->on('s.item_id', '=', 'i.id')
-                    ->where('s.warehouse_id', '=', $warehouseId);
+            ->leftJoin('item_stocks as sd', function ($join) use ($displayId) {
+                $join->on('sd.item_id', '=', 'i.id')
+                    ->where('sd.warehouse_id', '=', $displayId);
+            })
+            ->leftJoin('item_stocks as sm', function ($join) use ($defaultId) {
+                $join->on('sm.item_id', '=', 'i.id')
+                    ->where('sm.warehouse_id', '=', $defaultId);
             })
             ->leftJoin('categories as c', 'c.id', '=', 'i.category_id')
             ->whereRaw("{$safetyExpr} > 0")
-            ->whereRaw("{$stockExpr} < {$safetyExpr}");
+            ->whereRaw("{$displayStockExpr} < {$safetyExpr}");
 
         $catFilter = $request->input('category_id');
         if ($catFilter !== null && $catFilter !== '') {
@@ -54,13 +61,6 @@ class LowStockReportController extends Controller
             } else {
                 $baseQuery->where('i.category_id', (int) $catFilter);
             }
-        }
-
-        $statusFilter = $request->input('status');
-        if ($statusFilter === 'out') {
-            $baseQuery->whereRaw("{$stockExpr} <= 0");
-        } elseif ($statusFilter === 'low') {
-            $baseQuery->whereRaw("{$stockExpr} > 0");
         }
 
         $recordsTotalQuery = clone $baseQuery;
@@ -78,14 +78,8 @@ class LowStockReportController extends Controller
         $recordsTotal = (clone $recordsTotalQuery)->count();
         $recordsFiltered = (clone $baseQuery)->count();
 
-        $summaryQuery = clone $baseQuery;
-        $summaryTotal = $recordsFiltered;
-        $summaryOutOfStock = (clone $summaryQuery)
-            ->whereRaw("{$stockExpr} <= 0")
-            ->count();
-        $summaryGap = (int) ((clone $summaryQuery)
-            ->selectRaw("COALESCE(SUM({$safetyExpr} - {$stockExpr}), 0) as gap")
-            ->value('gap') ?? 0);
+        $summaryNeed = (int) ((clone $baseQuery)->selectRaw("COALESCE(SUM({$needExpr}), 0) as total_need")->value('total_need') ?? 0);
+        $summarySuggest = (int) ((clone $baseQuery)->selectRaw("COALESCE(SUM({$suggestExpr}), 0) as total_suggest")->value('total_suggest') ?? 0);
 
         $start = (int) $request->input('start', 0);
         $length = (int) $request->input('length', 10);
@@ -97,10 +91,13 @@ class LowStockReportController extends Controller
             'i.name',
             'i.address',
             DB::raw("{$safetyExpr} as safety_stock"),
-            DB::raw("{$stockExpr} as stock"),
+            DB::raw("{$displayStockExpr} as display_stock"),
+            DB::raw("{$mainStockExpr} as main_stock"),
+            DB::raw("{$needExpr} as need_qty"),
+            DB::raw("{$suggestExpr} as suggest_qty"),
             DB::raw("CASE WHEN i.category_id = 0 THEN 'Tanpa Kategori' ELSE COALESCE(c.name, '-') END as category"),
         ])
-        ->orderByRaw("({$safetyExpr} - {$stockExpr}) desc")
+        ->orderByRaw("{$needExpr} desc")
         ->orderBy('i.sku');
 
         if ($length > 0) {
@@ -108,20 +105,17 @@ class LowStockReportController extends Controller
         }
 
         $data = $dataQuery->get()->map(function ($row) {
-            $stock = (int) ($row->stock ?? 0);
-            $safety = (int) ($row->safety_stock ?? 0);
-            $gap = max(0, $safety - $stock);
-
             return [
                 'id' => $row->id,
                 'sku' => $row->sku ?? '-',
                 'name' => $row->name ?? '-',
                 'category' => $row->category ?? '-',
                 'address' => $row->address ?? '-',
-                'stock' => $stock,
-                'safety_stock' => $safety,
-                'gap' => $gap,
-                'status' => $stock <= 0 ? 'Out of Stock' : 'Low Stock',
+                'display_stock' => (int) ($row->display_stock ?? 0),
+                'safety_stock' => (int) ($row->safety_stock ?? 0),
+                'need_qty' => (int) ($row->need_qty ?? 0),
+                'main_stock' => (int) ($row->main_stock ?? 0),
+                'suggest_qty' => (int) ($row->suggest_qty ?? 0),
             ];
         });
 
@@ -130,9 +124,9 @@ class LowStockReportController extends Controller
             'recordsTotal' => $recordsTotal,
             'recordsFiltered' => $recordsFiltered,
             'summary' => [
-                'total_low' => $summaryTotal,
-                'out_of_stock' => $summaryOutOfStock,
-                'total_gap' => $summaryGap,
+                'total_items' => $recordsFiltered,
+                'total_need' => $summaryNeed,
+                'total_suggest' => $summarySuggest,
             ],
             'data' => $data,
         ]);

@@ -23,6 +23,7 @@ use App\Http\Controllers\Admin\PickerReportController;
 use App\Http\Controllers\Admin\LowStockReportController;
 use App\Http\Controllers\Admin\ActivityLogController;
 use App\Http\Controllers\Admin\StockOpnameReportController;
+use App\Http\Controllers\Admin\ReplenishmentReportController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\MenuController;
 use App\Http\Controllers\Admin\PermissionController;
@@ -155,6 +156,7 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/item-stocks', [ItemStockController::class, 'index'])->name('item-stocks.index');
         Route::get('/item-stocks/data', [ItemStockController::class, 'data'])->name('item-stocks.data');
         Route::get('/item-stocks/export', [ItemStockController::class, 'export'])->name('item-stocks.export');
+        Route::post('/item-stocks/update-safety', [ItemStockController::class, 'updateSafety'])->name('item-stocks.update-safety');
 
         // Stock Mutations
         Route::get('/stock-mutations', [StockMutationController::class, 'index'])->name('stock-mutations.index');
@@ -320,6 +322,8 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/packer-packing-reports/search-resi', [PackerPackingReportController::class, 'searchResi'])->name('packer-packing-reports.search-resi');
         Route::get('/low-stock', [LowStockReportController::class, 'index'])->name('low-stock.index');
         Route::get('/low-stock/data', [LowStockReportController::class, 'data'])->name('low-stock.data');
+        Route::get('/replenishment', [ReplenishmentReportController::class, 'index'])->name('replenishment.index');
+        Route::get('/replenishment/data', [ReplenishmentReportController::class, 'data'])->name('replenishment.data');
         Route::get('/stock-opname', [StockOpnameReportController::class, 'index'])->name('stock-opname.index');
         Route::get('/stock-opname/data', [StockOpnameReportController::class, 'data'])->name('stock-opname.data');
         Route::get('/stock-opname/sku-diff', [StockOpnameReportController::class, 'diffSku'])->name('stock-opname.diff-sku');

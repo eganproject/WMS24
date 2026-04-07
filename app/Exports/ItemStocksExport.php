@@ -37,7 +37,7 @@ class ItemStocksExport implements FromCollection, WithHeadings, WithMapping, Sho
 
     public function headings(): array
     {
-        return ['ID', 'SKU', 'Nama', 'Stok Gudang Besar', 'Stok Gudang Display', 'Total'];
+        return ['ID', 'SKU', 'Nama', 'Stok Gudang Besar', 'Safety Gudang Besar', 'Stok Gudang Display', 'Safety Gudang Display', 'Total'];
     }
 
     public function map($row): array
@@ -47,12 +47,19 @@ class ItemStocksExport implements FromCollection, WithHeadings, WithMapping, Sho
         $stocks = $row->stocks?->keyBy('warehouse_id') ?? collect();
         $stockMain = (int) ($stocks->get($defaultId)?->stock ?? 0);
         $stockDisplay = (int) ($stocks->get($displayId)?->stock ?? 0);
+        $baseSafety = (int) ($row->safety_stock ?? 0);
+        $safetyMainRaw = $stocks->get($defaultId)?->safety_stock;
+        $safetyDisplayRaw = $stocks->get($displayId)?->safety_stock;
+        $safetyMain = $safetyMainRaw !== null ? (int) $safetyMainRaw : $baseSafety;
+        $safetyDisplay = $safetyDisplayRaw !== null ? (int) $safetyDisplayRaw : $baseSafety;
         return [
             $row->id,
             $row->sku,
             $row->name,
             $stockMain,
+            $safetyMain,
             $stockDisplay,
+            $safetyDisplay,
             $stockMain + $stockDisplay,
         ];
     }

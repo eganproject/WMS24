@@ -13,6 +13,12 @@ class ItemStock extends Model
         'item_id',
         'warehouse_id',
         'stock',
+        'safety_stock',
+    ];
+
+    protected $casts = [
+        'stock' => 'integer',
+        'safety_stock' => 'integer',
     ];
 
     public function item()

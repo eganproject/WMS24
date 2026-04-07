@@ -64,6 +64,7 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
                 $address = $this->composeAddress($row);
             }
             $stockByWarehouse = $this->parseStockByWarehouse($row);
+            $safetyByWarehouse = $this->parseSafetyStockByWarehouse($row);
             $safetyStock = $this->parseSafetyStock($row);
             $koliQty = $this->parseKoliQty($row);
 
@@ -114,6 +115,17 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
                 ['item_id' => $item->id, 'warehouse_id' => $warehouseId],
                 ['stock' => 0]
             );
+
+            if (!empty($safetyByWarehouse)) {
+                foreach ($safetyByWarehouse as $whId => $qty) {
+                    $stockRow = ItemStock::firstOrCreate(
+                        ['item_id' => $item->id, 'warehouse_id' => (int) $whId],
+                        ['stock' => 0]
+                    );
+                    $stockRow->safety_stock = (int) $qty;
+                    $stockRow->save();
+                }
+            }
             $item->wasRecentlyCreated ? $this->created++ : $this->updated++;
 
             if (!empty($stockByWarehouse)) {
@@ -203,6 +215,52 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
         }
         $value = is_numeric($raw) ? (int) $raw : (int) preg_replace('/[^0-9\-]/', '', (string) $raw);
         return $value > 0 ? $value : 0;
+    }
+
+    protected function parseSafetyStockByWarehouse($row): array
+    {
+        $result = [];
+        $defaultId = WarehouseService::defaultWarehouseId();
+        $displayId = WarehouseService::displayWarehouseId();
+
+        $default = $this->parseIntByKeys($row, [
+            'safety_stock_gudang_besar',
+            'safety_gudang_besar',
+            'stok_pengaman_gudang_besar',
+            'safety_stock_besar',
+            'safety_besar',
+            'stok_pengaman_besar',
+            'safety_stock_main',
+            'safety_main',
+            'stok_pengaman_main',
+            'safety_stock_default',
+            'safety_default',
+            'stok_pengaman_default',
+        ], $hasDefaultKey);
+
+        $display = $this->parseIntByKeys($row, [
+            'safety_stock_gudang_display',
+            'safety_gudang_display',
+            'stok_pengaman_gudang_display',
+            'safety_stock_display',
+            'safety_display',
+            'stok_pengaman_display',
+            'safety_stock_kecil',
+            'safety_kecil',
+            'stok_pengaman_kecil',
+            'safety_stock_showroom',
+            'safety_showroom',
+            'stok_pengaman_showroom',
+        ], $hasDisplayKey);
+
+        if ($hasDefaultKey) {
+            $result[$defaultId] = $default ?? 0;
+        }
+        if ($hasDisplayKey) {
+            $result[$displayId] = $display ?? 0;
+        }
+
+        return $result;
     }
 
     private function parseIntByKeys($row, array $keys, ?bool &$hasKey = null): ?int

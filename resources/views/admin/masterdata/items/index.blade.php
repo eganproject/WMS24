@@ -224,14 +224,16 @@
                         <li><strong>stock_gudang_besar</strong> / <strong>stok_gudang_besar</strong> (opsional, stok awal gudang besar)</li>
                         <li><strong>stock_gudang_display</strong> / <strong>stok_gudang_display</strong> (opsional, stok awal gudang display)</li>
                         <li><strong>stock</strong> / <strong>stok</strong> / <strong>qty</strong> (opsional, stok awal default gudang besar)</li>
+                        <li><strong>safety_stock_gudang_besar</strong> / <strong>stok_pengaman_gudang_besar</strong> (opsional, safety stock gudang besar)</li>
+                        <li><strong>safety_stock_gudang_display</strong> / <strong>stok_pengaman_gudang_display</strong> (opsional, safety stock gudang display)</li>
                         <li><strong>safety_stock</strong> / <strong>stok_pengaman</strong> (opsional, jumlah stok pengaman)</li>
                         <li><strong>koli_qty</strong> / <strong>isi_koli</strong> (opsional, isi per koli/pcs)</li>
                         <li><strong>address</strong> (opsional, format: <code>KAB-A-03-05</code>)</li>
                         <li><strong>lane</strong> + <strong>rack</strong> + <strong>column</strong> + <strong>row</strong> (opsional, alternatif jika tidak mengisi address)</li>
                         <li><strong>description</strong> (opsional)</li>
                     </ul>
-                    <p class="text-muted small mb-1">Contoh header: <code>sku,name,parent_category,category,stock_gudang_besar,stock_gudang_display,stock,safety_stock,koli_qty,address,description</code></p>
-                    <p class="text-muted small mb-1">Alternatif header lokasi: <code>sku,name,parent_category,category,stock_gudang_besar,stock_gudang_display,stock,safety_stock,koli_qty,lane,rack,column,row,description</code></p>
+                    <p class="text-muted small mb-1">Contoh header: <code>sku,name,parent_category,category,stock_gudang_besar,stock_gudang_display,stock,safety_stock_gudang_besar,safety_stock_gudang_display,safety_stock,koli_qty,address,description</code></p>
+                    <p class="text-muted small mb-1">Alternatif header lokasi: <code>sku,name,parent_category,category,stock_gudang_besar,stock_gudang_display,stock,safety_stock_gudang_besar,safety_stock_gudang_display,safety_stock,koli_qty,lane,rack,column,row,description</code></p>
                     <p class="text-muted small mb-1">Gunakan format Excel (.xlsx/.xls) dengan header di baris pertama.</p>
                     <p class="text-muted small mb-0">Jika kolom category dikosongkan, item otomatis dimasukkan ke kategori "Tanpa Kategori".</p>
                     <div class="mt-4">

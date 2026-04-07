@@ -181,6 +181,9 @@
         const openBtn = document.getElementById('btn_open_transfer');
         const modalTitle = document.getElementById('transfer_modal_title');
         const transactedAtEl = document.getElementById('transfer_transacted_at');
+        const fromWarehouseEl = document.getElementById('transfer_from');
+        const toWarehouseEl = document.getElementById('transfer_to');
+        const noteEl = document.getElementById('transfer_note');
         const dateFromEl = document.getElementById('filter_date_from');
         const dateToEl = document.getElementById('filter_date_to');
         const filterApplyBtn = document.getElementById('filter_apply');
@@ -327,15 +330,19 @@
             itemsContainer.appendChild(row);
 
             const selectEl = row.querySelector('.transfer-item-select');
-            if (data.item_id) {
-                selectEl.value = String(data.item_id);
-            }
             const qtyEl = row.querySelector('input[data-name="qty"]');
             if (qtyEl) qtyEl.value = data.qty ?? '';
             const noteEl = row.querySelector('input[data-name="note"]');
             if (noteEl) noteEl.value = data.note ?? '';
 
             initSelect2(selectEl);
+            if (data.item_id) {
+                if (typeof $ !== 'undefined' && $.fn.select2) {
+                    $(selectEl).val(String(data.item_id)).trigger('change');
+                } else {
+                    selectEl.value = String(data.item_id);
+                }
+            }
             renumberRows();
             validateUniqueItems();
         };
@@ -355,8 +362,49 @@
             validateUniqueItems();
         };
 
+        const openPrefill = (prefill) => {
+            form?.reset();
+            if (modalTitle) modalTitle.textContent = 'Tambah Transfer';
+            const nowJkt = getJakartaNow();
+            if (fpTransacted) {
+                fpTransacted.setDate(nowJkt, true, 'Y-m-d H:i');
+            } else if (transactedAtEl) {
+                transactedAtEl.value = nowJkt;
+            }
+            if (fromWarehouseEl && prefill?.from_warehouse_id) {
+                fromWarehouseEl.value = String(prefill.from_warehouse_id);
+            }
+            if (toWarehouseEl && prefill?.to_warehouse_id) {
+                toWarehouseEl.value = String(prefill.to_warehouse_id);
+            }
+            if (noteEl && prefill?.note) {
+                noteEl.value = prefill.note;
+            }
+            itemsContainer.innerHTML = '';
+            createItemRow({
+                item_id: prefill?.item_id || '',
+                qty: prefill?.qty ?? '',
+            });
+            clearErrors();
+            validateUniqueItems();
+            modal?.show();
+        };
+
         addItemBtn?.addEventListener('click', () => createItemRow());
         openBtn?.addEventListener('click', resetForm);
+
+        const params = new URLSearchParams(window.location.search);
+        const prefillItemId = params.get('item_id');
+        if (prefillItemId) {
+            const qty = parseInt(params.get('qty') || '0', 10);
+            openPrefill({
+                item_id: parseInt(prefillItemId, 10),
+                qty: Number.isFinite(qty) && qty > 0 ? qty : '',
+                from_warehouse_id: params.get('from') || '',
+                to_warehouse_id: params.get('to') || '',
+                note: params.get('note') || '',
+            });
+        }
 
         itemsContainer?.addEventListener('change', (e) => {
             if (e.target.matches('.transfer-item-select')) {

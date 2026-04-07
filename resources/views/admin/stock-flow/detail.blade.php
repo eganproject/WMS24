@@ -29,7 +29,7 @@
             @if(!empty($warehouseLabel ?? null))
                 <div class="col-md-4">
                     <div class="fw-bold text-gray-600">Gudang</div>
-                    <div>{{ $warehouseLabel }}</div>
+                    <div><span class="badge badge-light-primary">{{ $warehouseLabel }}</span></div>
                 </div>
             @endif
             <div class="col-md-4">

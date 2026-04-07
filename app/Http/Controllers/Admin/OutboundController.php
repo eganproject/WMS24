@@ -361,6 +361,7 @@ class OutboundController extends Controller
             'deleteUrlTpl' => route("admin.outbound.{$routeBase}.destroy", ':id'),
             'detailUrlTpl' => route("admin.outbound.{$routeBase}.detail", ':id'),
             'items' => $items,
+            'warehouses' => $warehouses,
             'warehouseOptions' => $warehouses->map(fn ($w) => [
                 'id' => $w->id,
                 'name' => $w->name,
@@ -429,6 +430,11 @@ class OutboundController extends Controller
         }
 
         $this->applyDateFilter($query, $request);
+
+        $warehouseFilter = $request->input('warehouse_id');
+        if ($warehouseFilter !== null && $warehouseFilter !== '' && $warehouseFilter !== 'all') {
+            $query->where('outbound_transactions.warehouse_id', (int) $warehouseFilter);
+        }
 
         $recordsTotalQuery = OutboundTransaction::query();
         if ($baseType) {

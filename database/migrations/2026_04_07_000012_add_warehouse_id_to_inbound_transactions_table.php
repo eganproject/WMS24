@@ -38,6 +38,12 @@ return new class extends Migration {
                 'warehouse_id' => $defaultId,
             ]);
         }
+
+        try {
+            DB::statement('ALTER TABLE inbound_transactions MODIFY warehouse_id BIGINT UNSIGNED NOT NULL');
+        } catch (\Throwable) {
+            // ignore for unsupported drivers
+        }
     }
 
     public function down(): void

@@ -64,6 +64,14 @@
         </div>
         <div class="card-toolbar">
             <div class="d-flex align-items-center gap-2 me-4">
+                @if(!empty($warehouses ?? []))
+                    <select class="form-select form-select-solid w-200px" id="filter_warehouse">
+                        <option value="all">Semua Gudang</option>
+                        @foreach($warehouses as $wh)
+                            <option value="{{ $wh->id }}">{{ $wh->name }}</option>
+                        @endforeach
+                    </select>
+                @endif
                 <input type="text" class="form-control form-control-solid w-150px" id="filter_date_from" placeholder="Dari" />
                 <input type="text" class="form-control form-control-solid w-150px" id="filter_date_to" placeholder="Sampai" />
                 <button type="button" class="btn btn-light" id="filter_apply">Filter</button>
@@ -258,6 +266,7 @@
         const dateFromEl = document.getElementById('filter_date_from');
         const dateToEl = document.getElementById('filter_date_to');
         const transactedAtEl = document.getElementById('flow_transacted_at');
+        const warehouseFilter = document.getElementById('filter_warehouse');
         const filterApplyBtn = document.getElementById('filter_apply');
         const filterResetBtn = document.getElementById('filter_reset');
         const importBtn = document.getElementById('btn_import_flow');
@@ -402,6 +411,10 @@
             }
         }
 
+        if (warehouseFilter && typeof $ !== 'undefined' && $.fn.select2) {
+            $(warehouseFilter).select2({ placeholder: 'Semua Gudang', allowClear: true, width: '200px' });
+        }
+
         const renumberRows = () => {
             const rows = itemsContainer.querySelectorAll('.flow-item-row');
             rows.forEach((row, idx) => {
@@ -539,6 +552,7 @@
                 dataSrc: 'data',
                 data: function(params) {
                     params.q = searchInput?.value || '';
+                    if (warehouseFilter?.value) params.warehouse_id = warehouseFilter.value;
                     if (dateFromEl?.value) params.date_from = dateFromEl.value;
                     if (dateToEl?.value) params.date_to = dateToEl.value;
                 }
@@ -593,8 +607,15 @@
 
         const reloadTable = () => dt.ajax.reload();
         searchInput?.addEventListener('keyup', reloadTable);
+        warehouseFilter?.addEventListener('change', reloadTable);
         filterApplyBtn?.addEventListener('click', reloadTable);
         filterResetBtn?.addEventListener('click', () => {
+            if (warehouseFilter) {
+                warehouseFilter.value = 'all';
+                if (typeof $ !== 'undefined' && $(warehouseFilter).data('select2')) {
+                    $(warehouseFilter).val('all').trigger('change.select2');
+                }
+            }
             if (fpFrom) fpFrom.clear(); else if (dateFromEl) dateFromEl.value = '';
             if (fpTo) fpTo.clear(); else if (dateToEl) dateToEl.value = '';
             reloadTable();

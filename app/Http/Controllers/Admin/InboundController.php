@@ -410,6 +410,7 @@ class InboundController extends Controller
     private function index(string $type, string $pageTitle, string $routeBase)
     {
         $items = Item::orderBy('name')->get(['id', 'sku', 'name', 'koli_qty']);
+        $warehouses = Warehouse::orderBy('name')->get(['id', 'name', 'code']);
         $baseOptions = $this->typeOptions();
         $typeOptions = ['all' => 'Semua'] + $baseOptions;
         $routeMap = [
@@ -448,6 +449,8 @@ class InboundController extends Controller
             'deleteUrlTpl' => route("admin.inbound.{$routeBase}.destroy", ':id'),
             'detailUrlTpl' => route("admin.inbound.{$routeBase}.detail", ':id'),
             'items' => $items,
+            'warehouses' => $warehouses,
+            'defaultWarehouseId' => WarehouseService::defaultWarehouseId(),
             'typeOptions' => $typeOptions,
             'typeDefault' => $type,
             'routeMap' => $routeMap,
@@ -516,6 +519,11 @@ class InboundController extends Controller
         }
 
         $this->applyDateFilter($query, $request);
+
+        $warehouseFilter = $request->input('warehouse_id');
+        if ($warehouseFilter !== null && $warehouseFilter !== '' && $warehouseFilter !== 'all') {
+            $query->where('inbound_transactions.warehouse_id', (int) $warehouseFilter);
+        }
 
         $recordsTotalQuery = InboundTransaction::query();
         if ($baseType) {

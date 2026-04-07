@@ -39,11 +39,44 @@ return new class extends Migration {
         }
 
         try {
+            $dbName = DB::getDatabaseName();
+            $fkRow = DB::table('information_schema.KEY_COLUMN_USAGE')
+                ->select('CONSTRAINT_NAME')
+                ->where('TABLE_SCHEMA', $dbName)
+                ->where('TABLE_NAME', 'item_stocks')
+                ->where('COLUMN_NAME', 'item_id')
+                ->whereNotNull('REFERENCED_TABLE_NAME')
+                ->first();
+            if (!empty($fkRow?->CONSTRAINT_NAME)) {
+                DB::statement('ALTER TABLE item_stocks DROP FOREIGN KEY `'.$fkRow->CONSTRAINT_NAME.'`');
+            }
+        } catch (\Throwable) {
+            // ignore if FK doesn't exist
+        }
+
+        try {
             Schema::table('item_stocks', function (Blueprint $table) {
                 $table->dropForeign(['item_id']);
             });
         } catch (\Throwable) {
             // ignore if FK doesn't exist
+        }
+
+        try {
+            $dbName = DB::getDatabaseName();
+            $idxRow = DB::table('information_schema.STATISTICS')
+                ->select('INDEX_NAME')
+                ->where('TABLE_SCHEMA', $dbName)
+                ->where('TABLE_NAME', 'item_stocks')
+                ->where('COLUMN_NAME', 'item_id')
+                ->where('NON_UNIQUE', 0)
+                ->where('INDEX_NAME', '!=', 'PRIMARY')
+                ->first();
+            if (!empty($idxRow?->INDEX_NAME)) {
+                DB::statement('ALTER TABLE item_stocks DROP INDEX `'.$idxRow->INDEX_NAME.'`');
+            }
+        } catch (\Throwable) {
+            // ignore if index doesn't exist
         }
 
         try {

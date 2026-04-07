@@ -249,6 +249,21 @@
             return !hasDuplicate;
         };
 
+        const syncQcReject = (row) => {
+            if (!row) return;
+            const qtyTransfer = parseInt(row.getAttribute('data-qty-transfer') || '0', 10);
+            const okEl = row.querySelector('[data-qc="ok"]');
+            const rejectEl = row.querySelector('[data-qc="reject"]');
+            if (!okEl || !rejectEl) return;
+            let okVal = parseInt(okEl.value || '0', 10);
+            if (!Number.isFinite(okVal)) okVal = 0;
+            if (okVal < 0) okVal = 0;
+            if (okVal > qtyTransfer) okVal = qtyTransfer;
+            okEl.value = okVal;
+            const rejectVal = Math.max(0, qtyTransfer - okVal);
+            rejectEl.value = rejectVal;
+        };
+
         const initSelect2 = (selectEl) => {
             if (selectEl && typeof $ !== 'undefined' && $.fn.select2) {
                 $(selectEl).select2({
@@ -505,6 +520,7 @@
                 (json.items || []).forEach((item, idx) => {
                     const row = document.createElement('div');
                     row.className = 'row g-3 align-items-end mb-4';
+                    row.setAttribute('data-qty-transfer', String(item.qty ?? 0));
                     row.innerHTML = `
                         <div class="col-md-4">
                             <label class="fs-6 fw-bold form-label mb-2">Item</label>
@@ -517,11 +533,11 @@
                         </div>
                         <div class="col-md-2">
                             <label class="required fs-6 fw-bold form-label mb-2">Qty OK</label>
-                            <input type="number" min="0" class="form-control form-control-solid" name="items[${idx}][qty_ok]" value="${(item.qty_ok && item.qty_ok > 0) ? item.qty_ok : item.qty}" />
+                            <input type="number" min="0" class="form-control form-control-solid" data-qc="ok" name="items[${idx}][qty_ok]" value="${(item.qty_ok && item.qty_ok > 0) ? item.qty_ok : item.qty}" />
                         </div>
                         <div class="col-md-2">
                             <label class="required fs-6 fw-bold form-label mb-2">Qty Reject</label>
-                            <input type="number" min="0" class="form-control form-control-solid" name="items[${idx}][qty_reject]" value="${item.qty_reject ?? 0}" />
+                            <input type="number" min="0" class="form-control form-control-solid" data-qc="reject" name="items[${idx}][qty_reject]" value="${item.qty_reject ?? 0}" readonly />
                         </div>
                         <div class="col-md-2">
                             <label class="fs-6 fw-bold form-label mb-2">Catatan</label>
@@ -529,6 +545,7 @@
                         </div>
                     `;
                     qcItemsContainer.appendChild(row);
+                    syncQcReject(row);
                 });
                 if (typeof Swal !== 'undefined') Swal.close();
                 qcModal?.show();
@@ -566,6 +583,15 @@
                 reloadTable();
             } catch (err) {
                 if (typeof Swal !== 'undefined') Swal.fire('Error', 'Gagal QC', 'error');
+            }
+        });
+
+        qcItemsContainer?.addEventListener('input', (e) => {
+            const target = e.target;
+            if (!(target instanceof HTMLElement)) return;
+            if (target.matches('[data-qc="ok"]')) {
+                const row = target.closest('[data-qty-transfer]');
+                syncQcReject(row);
             }
         });
     });

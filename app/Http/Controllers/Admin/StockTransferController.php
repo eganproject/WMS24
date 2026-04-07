@@ -231,9 +231,11 @@ class StockTransferController extends Controller
             }
             $ok = (int) $row['qty_ok'];
             $reject = (int) $row['qty_reject'];
-            if ($ok + $reject > (int) $transferItem->qty) {
+            $total = $ok + $reject;
+            $transferQty = (int) $transferItem->qty;
+            if ($total !== $transferQty) {
                 throw ValidationException::withMessages([
-                    'items' => 'Qty OK + reject melebihi qty transfer',
+                    'items' => 'Qty OK + reject harus sama dengan qty transfer',
                 ]);
             }
         }

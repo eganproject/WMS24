@@ -28,7 +28,7 @@
                         $warehouseBadge = 'badge-light-primary';
                     }
                 @endphp
-                <span class="badge {{ $warehouseBadge }} me-4">Gudang: {{ $warehouseLabel }}</span>
+                <span class="badge {{ $warehouseBadge }} me-4" id="warehouse_badge">Gudang: {{ $warehouseLabel }}</span>
             @endif
             <div class="d-flex align-items-end gap-3 flex-wrap">
                 @if(!empty($warehouses ?? []))
@@ -138,6 +138,7 @@
 <script>
     const dataUrl = '{{ $dataUrl }}';
     const defaultWarehouseId = {{ !empty($defaultWarehouseId) ? (int) $defaultWarehouseId : 'null' }};
+    const displayWarehouseId = {{ !empty($displayWarehouseId) ? (int) $displayWarehouseId : 'null' }};
 
     document.addEventListener('DOMContentLoaded', () => {
         const tableEl = $('#low_stock_table');
@@ -208,11 +209,32 @@
         });
 
         const reloadTable = () => dt.ajax.reload();
+        const warehouseBadgeEl = document.getElementById('warehouse_badge');
+        const warehouseBadgeClass = (warehouseId) => {
+            const id = Number(warehouseId || 0);
+            if (displayWarehouseId && id === Number(displayWarehouseId)) return 'badge-light-success';
+            if (defaultWarehouseId && id === Number(defaultWarehouseId)) return 'badge-light-primary';
+            return 'badge-light-secondary';
+        };
+        const updateWarehouseBadge = () => {
+            if (!warehouseBadgeEl) return;
+            const selectedVal = warehouseFilter?.value || '';
+            if (!selectedVal || selectedVal === 'all') {
+                warehouseBadgeEl.className = 'badge badge-light-secondary me-4';
+                warehouseBadgeEl.textContent = 'Gudang: Semua Gudang';
+                return;
+            }
+            const label = warehouseFilter?.selectedOptions?.[0]?.textContent?.trim() || 'Gudang';
+            const badgeClass = warehouseBadgeClass(selectedVal);
+            warehouseBadgeEl.className = `badge ${badgeClass} me-4`;
+            warehouseBadgeEl.textContent = `Gudang: ${label}`;
+        };
 
         searchInput?.addEventListener('keyup', (e) => {
             if (e.key === 'Enter') reloadTable();
         });
         warehouseFilter?.addEventListener('change', reloadTable);
+        warehouseFilter?.addEventListener('change', updateWarehouseBadge);
         categoryFilter?.addEventListener('change', reloadTable);
         statusFilter?.addEventListener('change', reloadTable);
         limitFilter?.addEventListener('change', () => {
@@ -244,7 +266,9 @@
                 dt.page.len(10).draw();
             }
             reloadTable();
+            updateWarehouseBadge();
         });
+        updateWarehouseBadge();
     });
 </script>
 @endpush

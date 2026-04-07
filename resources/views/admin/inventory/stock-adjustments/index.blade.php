@@ -36,7 +36,7 @@
                         $warehouseBadge = 'badge-light-primary';
                     }
                 @endphp
-                <span class="badge {{ $warehouseBadge }} me-4">Gudang: {{ $warehouseLabel }}</span>
+                <span class="badge {{ $warehouseBadge }} me-4" id="warehouse_badge">Gudang: {{ $warehouseLabel }}</span>
             @endif
             <div class="d-flex align-items-center gap-2 me-4">
                 @if(!empty($warehouses ?? []))
@@ -320,6 +320,22 @@
             return `<span class="badge ${warehouseBadgeClass(warehouseId)}">${text}</span>`;
         };
 
+        const warehouseBadgeEl = document.getElementById('warehouse_badge');
+        const updateWarehouseBadge = () => {
+            if (!warehouseBadgeEl) return;
+            const selectedVal = warehouseFilter?.value || '';
+            if (!selectedVal) {
+                warehouseBadgeEl.className = 'badge badge-light-secondary me-4';
+                warehouseBadgeEl.textContent = 'Gudang: Semua Gudang';
+                return;
+            }
+            const opt = warehouseFilter?.selectedOptions?.[0];
+            const label = opt?.textContent?.trim() || 'Gudang';
+            const badgeClass = warehouseBadgeClass(selectedVal);
+            warehouseBadgeEl.className = `badge ${badgeClass} me-4`;
+            warehouseBadgeEl.textContent = `Gudang: ${label}`;
+        };
+
         const renumberRows = () => {
             const rows = itemsContainer.querySelectorAll('.adjustment-item-row');
             rows.forEach((row, idx) => {
@@ -488,6 +504,7 @@
         const reloadTable = () => dt.ajax.reload();
         searchInput?.addEventListener('keyup', reloadTable);
         warehouseFilter?.addEventListener('change', reloadTable);
+        warehouseFilter?.addEventListener('change', updateWarehouseBadge);
         filterApplyBtn?.addEventListener('click', reloadTable);
         filterResetBtn?.addEventListener('click', () => {
             if (warehouseFilter) {
@@ -496,10 +513,13 @@
                     $(warehouseFilter).val('').trigger('change.select2');
                 }
             }
+            updateWarehouseBadge();
             if (fpFrom) fpFrom.clear(); else if (dateFromEl) dateFromEl.value = '';
             if (fpTo) fpTo.clear(); else if (dateToEl) dateToEl.value = '';
             reloadTable();
         });
+
+        updateWarehouseBadge();
 
         importBtn?.addEventListener('click', () => {
             if (importInput) importInput.value = '';

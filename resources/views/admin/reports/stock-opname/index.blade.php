@@ -34,7 +34,7 @@
                         $warehouseBadge = 'badge-light-primary';
                     }
                 @endphp
-                <span class="badge {{ $warehouseBadge }} me-2">Gudang: {{ $warehouseLabel }}</span>
+                <span class="badge {{ $warehouseBadge }} me-2" id="warehouse_badge">Gudang: {{ $warehouseLabel }}</span>
             @endif
                 <span class="text-muted small">Akurasi dihitung dari jumlah SKU vs SKU selisih.</span>
                 <button type="button" class="btn btn-light-primary btn-sm" id="btn_export_report">Export Excel</button>
@@ -175,6 +175,8 @@
     const dataUrl = '{{ $dataUrl }}';
     const diffUrl = '{{ route('admin.reports.stock-opname.diff-sku') }}';
     const exportUrl = '{{ route('admin.reports.stock-opname.export') }}';
+    const defaultWarehouseId = {{ !empty($defaultWarehouseId) ? (int) $defaultWarehouseId : 'null' }};
+    const displayWarehouseId = {{ !empty($displayWarehouseId) ? (int) $displayWarehouseId : 'null' }};
 
     document.addEventListener('DOMContentLoaded', () => {
         const tableEl = $('#stock_opname_report_table');
@@ -210,6 +212,27 @@
         if (warehouseFilter && typeof $ !== 'undefined' && $.fn.select2) {
             $(warehouseFilter).select2({ placeholder: 'Semua Gudang', allowClear: true, width: '200px' });
         }
+
+        const warehouseBadgeEl = document.getElementById('warehouse_badge');
+        const warehouseBadgeClass = (warehouseId) => {
+            const id = Number(warehouseId || 0);
+            if (displayWarehouseId && id === Number(displayWarehouseId)) return 'badge-light-success';
+            if (defaultWarehouseId && id === Number(defaultWarehouseId)) return 'badge-light-primary';
+            return 'badge-light-secondary';
+        };
+        const updateWarehouseBadge = () => {
+            if (!warehouseBadgeEl) return;
+            const selectedVal = warehouseFilter?.value || '';
+            if (!selectedVal || selectedVal === 'all') {
+                warehouseBadgeEl.className = 'badge badge-light-secondary me-2';
+                warehouseBadgeEl.textContent = 'Gudang: Semua Gudang';
+                return;
+            }
+            const label = warehouseFilter?.selectedOptions?.[0]?.textContent?.trim() || 'Gudang';
+            const badgeClass = warehouseBadgeClass(selectedVal);
+            warehouseBadgeEl.className = `badge ${badgeClass} me-2`;
+            warehouseBadgeEl.textContent = `Gudang: ${label}`;
+        };
 
         const updateSummary = (summary = {}) => {
             if (elSummary.totalDays) elSummary.totalDays.textContent = summary.total_days ?? 0;
@@ -297,6 +320,7 @@
 
         searchInput?.addEventListener('keyup', reloadAll);
         warehouseFilter?.addEventListener('change', reloadAll);
+        warehouseFilter?.addEventListener('change', updateWarehouseBadge);
         applyBtn?.addEventListener('click', reloadAll);
         resetBtn?.addEventListener('click', () => {
             if (warehouseFilter) {
@@ -305,6 +329,7 @@
                     $(warehouseFilter).val('all').trigger('change.select2');
                 }
             }
+            updateWarehouseBadge();
             if (fpFrom) fpFrom.clear(); else if (dateFromEl) dateFromEl.value = '';
             if (fpTo) fpTo.clear(); else if (dateToEl) dateToEl.value = '';
             reloadAll();
@@ -320,6 +345,7 @@
             const url = params.toString() ? `${exportUrl}?${params.toString()}` : exportUrl;
             window.location.href = url;
         });
+        updateWarehouseBadge();
     });
 </script>
 @endpush

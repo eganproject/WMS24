@@ -87,6 +87,12 @@
         margin-top: 6px;
         font-weight: 600;
     }
+    .kurir-canceled {
+        font-size: 12px;
+        color: #b91c1c;
+        margin-top: 6px;
+        font-weight: 600;
+    }
     .kurir-badge {
         display: inline-flex;
         align-items: center;
@@ -148,9 +154,14 @@
         </div>
         <div class="stats-grid">
             <div class="stat-card">
-                <div class="stat-label">Total Resi</div>
+                <div class="stat-label">Total Resi (Aktif)</div>
                 <div class="stat-value">{{ number_format($totalResi ?? 0) }}</div>
                 <div class="stat-meta">Update: {{ $totalResiUpdated ?? '-' }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Total Canceled</div>
+                <div class="stat-value text-danger">{{ number_format($totalCanceled ?? 0) }}</div>
+                <div class="stat-meta">Update: {{ $totalCanceledUpdated ?? '-' }}</div>
             </div>
             <div class="stat-card">
                 <div class="stat-label">Total Scan Out</div>
@@ -165,7 +176,7 @@
     <div class="card-body">
         <div class="d-flex align-items-center justify-content-between mb-4">
             <div class="fw-bold fs-4">Per Kurir</div>
-            <div class="text-muted">Jumlah resi & hasil scan pada tanggal {{ $today ?? '-' }}</div>
+            <div class="text-muted">Jumlah resi aktif & hasil scan pada tanggal {{ $today ?? '-' }}</div>
         </div>
 
         @if(isset($kurirs) && $kurirs->count())
@@ -182,7 +193,10 @@
                             <span class="ratio-scan">{{ number_format($kurir['scan_total']) }}</span>
                         </div>
                         <div class="kurir-remaining">
-                            Sisa resi: {{ number_format($kurir['remaining']) }}
+                            Sisa resi (aktif): {{ number_format($kurir['remaining']) }}
+                        </div>
+                        <div class="kurir-canceled">
+                            Canceled: {{ number_format($kurir['canceled_total'] ?? 0) }}
                         </div>
                         <div class="kurir-actions">
                             <button

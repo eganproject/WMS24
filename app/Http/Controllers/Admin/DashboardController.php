@@ -17,11 +17,23 @@ class DashboardController extends Controller
         $currentDate = now()->toDateString();
         $selectedDate = $this->parseDate($request->input('date')) ?: $currentDate;
 
-        $totalResi = Resi::whereDate('tanggal_upload', $selectedDate)->count();
+        $activeResiQuery = Resi::whereDate('tanggal_upload', $selectedDate)
+            ->where(function ($q) {
+                $q->whereNull('status')
+                    ->orWhere('status', '!=', 'canceled');
+            });
+        $totalResi = (clone $activeResiQuery)->count();
+        $totalCanceled = Resi::whereDate('tanggal_upload', $selectedDate)
+            ->where('status', 'canceled')
+            ->count();
         $totalScanOut = PackerScanOut::whereDate('scan_date', $selectedDate)->count();
-        $totalResiUpdatedAt = Resi::whereDate('tanggal_upload', $selectedDate)->max('updated_at');
+        $totalResiUpdatedAt = (clone $activeResiQuery)->max('updated_at');
+        $totalCanceledUpdatedAt = Resi::whereDate('tanggal_upload', $selectedDate)
+            ->where('status', 'canceled')
+            ->max('canceled_at');
         $totalScanUpdatedAt = PackerScanOut::whereDate('scan_date', $selectedDate)->max('scanned_at');
         $totalResiUpdated = $totalResiUpdatedAt ? Carbon::parse($totalResiUpdatedAt)->format('H:i') : '-';
+        $totalCanceledUpdated = $totalCanceledUpdatedAt ? Carbon::parse($totalCanceledUpdatedAt)->format('H:i') : '-';
         $totalScanUpdated = $totalScanUpdatedAt ? Carbon::parse($totalScanUpdatedAt)->format('H:i') : '-';
 
         $resiCounts = Resi::select('kurir_id', DB::raw('count(*) as total'))
@@ -42,6 +54,13 @@ class DashboardController extends Controller
             ->pluck('latest', 'kurir_id')
             ->toArray();
 
+        $resiCanceledCounts = Resi::select('kurir_id', DB::raw('count(*) as total'))
+            ->whereDate('tanggal_upload', $selectedDate)
+            ->where('status', 'canceled')
+            ->groupBy('kurir_id')
+            ->pluck('total', 'kurir_id')
+            ->toArray();
+
         $scanLatest = PackerScanOut::select('kurir_id', DB::raw('max(scanned_at) as latest'))
             ->whereDate('scan_date', $selectedDate)
             ->groupBy('kurir_id')
@@ -50,9 +69,11 @@ class DashboardController extends Controller
 
         $kurirs = Kurir::orderBy('name')
             ->get(['id', 'name'])
-            ->map(function ($kurir) use ($resiCounts, $scanCounts, $resiLatest, $scanLatest) {
+            ->map(function ($kurir) use ($resiCounts, $scanCounts, $resiLatest, $scanLatest, $resiCanceledCounts) {
                 $resiTotal = (int) ($resiCounts[$kurir->id] ?? 0);
                 $scanTotal = (int) ($scanCounts[$kurir->id] ?? 0);
+                $canceledTotal = (int) ($resiCanceledCounts[$kurir->id] ?? 0);
+                $activeTotal = max(0, $resiTotal - $canceledTotal);
                 $latestResi = $resiLatest[$kurir->id] ?? null;
                 $latestScan = $scanLatest[$kurir->id] ?? null;
                 $latestRaw = $latestResi && $latestScan
@@ -62,9 +83,10 @@ class DashboardController extends Controller
                 return [
                     'id' => $kurir->id,
                     'name' => $kurir->name,
-                    'resi_total' => $resiTotal,
+                    'resi_total' => $activeTotal,
                     'scan_total' => $scanTotal,
-                    'remaining' => max(0, $resiTotal - $scanTotal),
+                    'canceled_total' => $canceledTotal,
+                    'remaining' => max(0, $activeTotal - $scanTotal),
                     'last_update' => $latestTime,
                 ];
             });
@@ -73,8 +95,10 @@ class DashboardController extends Controller
             'today' => $selectedDate,
             'currentDate' => $currentDate,
             'totalResi' => $totalResi,
+            'totalCanceled' => $totalCanceled,
             'totalScanOut' => $totalScanOut,
             'totalResiUpdated' => $totalResiUpdated,
+            'totalCanceledUpdated' => $totalCanceledUpdated,
             'totalScanUpdated' => $totalScanUpdated,
             'kurirs' => $kurirs,
         ]);

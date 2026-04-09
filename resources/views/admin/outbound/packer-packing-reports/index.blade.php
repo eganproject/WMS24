@@ -81,22 +81,28 @@
                 </div>
             </div>
             <div class="row g-4 mb-4">
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <div class="bg-light-primary rounded-3 px-4 py-3 h-100">
-                        <div class="text-muted">Total Import</div>
+                        <div class="text-muted">Total Import (Aktif)</div>
                         <div class="fs-2 fw-bold" id="comparison_import_total">0</div>
                     </div>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <div class="bg-light-success rounded-3 px-4 py-3 h-100">
                         <div class="text-muted">Sudah Packing</div>
                         <div class="fs-2 fw-bold" id="comparison_scanned_total">0</div>
                     </div>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <div class="bg-light-warning rounded-3 px-4 py-3 h-100">
                         <div class="text-muted">Sisa Belum Packing</div>
                         <div class="fs-2 fw-bold" id="comparison_missing_total">0</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="bg-light-danger rounded-3 px-4 py-3 h-100">
+                        <div class="text-muted">Canceled</div>
+                        <div class="fs-2 fw-bold" id="comparison_canceled_total">0</div>
                     </div>
                 </div>
             </div>
@@ -209,6 +215,7 @@
         const comparisonImportEl = document.getElementById('comparison_import_total');
         const comparisonScannedEl = document.getElementById('comparison_scanned_total');
         const comparisonMissingEl = document.getElementById('comparison_missing_total');
+        const comparisonCanceledEl = document.getElementById('comparison_canceled_total');
         const missingBody = document.getElementById('missing_transit_body');
         const missingPagination = document.getElementById('missing_pagination');
         const missingPrevBtn = document.getElementById('missing_prev');
@@ -303,6 +310,7 @@
             if (comparisonImportEl) comparisonImportEl.textContent = (comparison.import_total || 0).toLocaleString('id-ID');
             if (comparisonScannedEl) comparisonScannedEl.textContent = (comparison.scanned_total || 0).toLocaleString('id-ID');
             if (comparisonMissingEl) comparisonMissingEl.textContent = (comparison.missing_total || 0).toLocaleString('id-ID');
+            if (comparisonCanceledEl) comparisonCanceledEl.textContent = (comparison.canceled_total || 0).toLocaleString('id-ID');
             comparisonState.samples = Array.isArray(comparison.missing_samples) ? comparison.missing_samples : [];
             comparisonState.page = 1;
             renderMissingRows();

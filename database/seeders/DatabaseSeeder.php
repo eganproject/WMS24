@@ -19,6 +19,7 @@ class DatabaseSeeder extends Seeder
             DivisiSeeder::class,
             KurirSeeder::class,
             UserSeeder::class,
+            OperationalUserSeeder::class,
             CategoryItemSeeder::class,
             WarehouseSeeder::class,
             ItemStockSeeder::class,

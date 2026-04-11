@@ -142,7 +142,7 @@ class DashboardController extends Controller
             return [
                 'id_pesanan' => $resi->id_pesanan ?? '-',
                 'no_resi' => $resi->no_resi ?? '-',
-                'status' => 'Belum Scan Out',
+                'status' => 'Siap Scan Out',
                 'tanggal_upload' => $resi->tanggal_upload
                     ? Carbon::parse($resi->tanggal_upload)->format('Y-m-d')
                     : '-',

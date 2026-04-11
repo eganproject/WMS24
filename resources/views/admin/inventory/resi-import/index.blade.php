@@ -80,6 +80,12 @@
                     <option value="active" {{ ($filterStatus ?? '') === 'active' ? 'selected' : '' }}>Aktif</option>
                     <option value="canceled" {{ ($filterStatus ?? '') === 'canceled' ? 'selected' : '' }}>Cancel</option>
                 </select>
+                <select class="form-select form-select-solid w-200px" id="filter_flow_status">
+                    <option value="">Semua Status Operasional</option>
+                    @foreach(($flowStatusOptions ?? []) as $option)
+                        <option value="{{ $option['value'] }}" {{ ($filterFlowStatus ?? '') === $option['value'] ? 'selected' : '' }}>{{ $option['label'] }}</option>
+                    @endforeach
+                </select>
                 <input type="text" class="form-control form-control-solid w-150px" id="filter_date" placeholder="Tanggal" value="{{ $filterDate ?? '' }}" />
                 <button type="button" class="btn btn-light" id="filter_apply">Filter</button>
                 <button type="button" class="btn btn-light" id="filter_reset">Reset</button>
@@ -276,6 +282,7 @@
         const filterDateEl = document.getElementById('filter_date');
         const filterSearchEl = document.getElementById('filter_search');
         const filterStatusEl = document.getElementById('filter_status');
+        const filterFlowStatusEl = document.getElementById('filter_flow_status');
         const filterApplyBtn = document.getElementById('filter_apply');
         const filterResetBtn = document.getElementById('filter_reset');
         const rekapBtn = document.getElementById('btn_rekap_sku');
@@ -321,6 +328,7 @@
                         params.q = filterSearchEl?.value || '';
                         params.date = filterDateEl?.value || '';
                         params.status = filterStatusEl?.value || '';
+                        params.flow_status = filterFlowStatusEl?.value || '';
                     }
                 },
                 columns: [
@@ -332,22 +340,26 @@
                     { data: 'id_pesanan' },
                     { data: 'sku' },
                     { data: 'tanggal_pesanan' },
-                    { data: 'status', render: (data) => {
-                        if (data === 'canceled') {
-                            return '<span class="badge badge-light-danger">Cancel</span>';
-                        }
-                        return '<span class="badge badge-light-success">Aktif</span>';
+                    { data: 'status', render: (data, type, row) => {
+                        const businessBadge = data === 'canceled'
+                            ? '<span class="badge badge-light-danger">Cancel</span>'
+                            : '<span class="badge badge-light-success">Aktif</span>';
+                        const opLabel = row.operational_status_label || '-';
+                        const opClass = row.operational_status_badge || 'badge-light';
+                        const opBadge = `<span class="badge ${opClass}">${opLabel}</span>`;
+                        return `<div class="d-flex flex-column gap-1">${businessBadge}${opBadge}</div>`;
                     }},
                     { data: null, orderable: false, searchable: false, className: 'text-end', render: (data, type, row) => {
                         const idPesanan = row.id_pesanan || '';
                         const noResi = row.no_resi || '';
                         const status = row.status || 'active';
+                        const hasQcScan = !!row.has_qc_scan;
                         const hasPackerScan = !!row.has_packer_scan;
                         const hasScanOut = !!row.has_scan_out;
                         if (status === 'canceled') {
                             return `<button type="button" class="btn btn-sm btn-light-warning btn-uncancel" data-id="${idPesanan}" data-resi="${noResi}">Batal Cancel</button>`;
                         }
-                        if (hasPackerScan || hasScanOut) {
+                        if (hasQcScan || hasPackerScan || hasScanOut) {
                             return '<span class="text-muted">-</span>';
                         }
                         return `<button type="button" class="btn btn-sm btn-light-danger btn-cancel" data-id="${idPesanan}" data-resi="${noResi}">Cancel</button>`;
@@ -378,6 +390,7 @@
             if (e.key === 'Enter') reloadTable();
         });
         filterStatusEl?.addEventListener('change', reloadTable);
+        filterFlowStatusEl?.addEventListener('change', reloadTable);
         filterResetBtn?.addEventListener('click', () => {
             if (fpDate && todayStr) {
                 fpDate.setDate(todayStr, true);
@@ -386,6 +399,7 @@
             }
             if (filterSearchEl) filterSearchEl.value = '';
             if (filterStatusEl) filterStatusEl.value = '';
+            if (filterFlowStatusEl) filterFlowStatusEl.value = '';
             reloadTable();
         });
 
@@ -411,6 +425,7 @@
                 const params = new URLSearchParams();
                 if (dateValue) params.set('date', dateValue);
                 if (statusValue) params.set('status', statusValue);
+                if (filterFlowStatusEl?.value) params.set('flow_status', filterFlowStatusEl.value);
                 const res = await fetch(`${summaryUrl}?${params.toString()}`);
                 const json = await res.json();
                 if (!res.ok) {

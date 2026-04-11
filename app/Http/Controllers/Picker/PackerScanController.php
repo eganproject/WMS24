@@ -8,8 +8,9 @@ use App\Models\PackerResiScan;
 use App\Models\PackerScanException;
 use App\Models\PackerTransitHistory;
 use App\Models\PickerTransitItem;
+use App\Models\QcResiScan;
+use App\Models\QcResiScanItem;
 use App\Models\Resi;
-use App\Models\ResiDetail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -61,42 +62,10 @@ class PackerScanController extends Controller
             ], 422);
         }
 
-        $details = ResiDetail::where('resi_id', $resi->id)
-            ->get(['sku', 'qty']);
-
-        if ($details->isEmpty()) {
+        $qc = QcResiScan::where('resi_id', $resi->id)->first();
+        if (!$qc || ($qc->status ?? '') !== 'passed') {
             return response()->json([
-                'message' => 'Detail resi belum tersedia.',
-            ], 422);
-        }
-
-        $exceptionSkus = PackerScanException::query()
-            ->pluck('sku')
-            ->map(fn ($sku) => strtolower(trim((string) $sku)))
-            ->filter()
-            ->values()
-            ->all();
-        $exceptionLookup = array_flip($exceptionSkus);
-
-        $skuTotals = [];
-        $excludedTotals = [];
-        foreach ($details as $detail) {
-            $sku = trim((string) $detail->sku);
-            $qty = (int) $detail->qty;
-            if ($sku === '' || $qty <= 0) {
-                continue;
-            }
-            $skuKey = strtolower($sku);
-            if (isset($exceptionLookup[$skuKey])) {
-                $excludedTotals[$sku] = ($excludedTotals[$sku] ?? 0) + $qty;
-                continue;
-            }
-            $skuTotals[$sku] = ($skuTotals[$sku] ?? 0) + $qty;
-        }
-
-        if (empty($skuTotals) && empty($excludedTotals)) {
-            return response()->json([
-                'message' => 'Detail resi tidak valid.',
+                'message' => 'Resi belum QC selesai.',
             ], 422);
         }
 
@@ -104,6 +73,18 @@ class PackerScanController extends Controller
 
         DB::beginTransaction();
         try {
+            $qc = QcResiScan::where('id', $qc->id)
+                ->where('status', 'passed')
+                ->lockForUpdate()
+                ->first();
+
+            if (!$qc) {
+                DB::rollBack();
+                return response()->json([
+                    'message' => 'QC resi belum selesai.',
+                ], 422);
+            }
+
             $existingScan = PackerResiScan::where('resi_id', $resi->id)
                 ->lockForUpdate()
                 ->first();
@@ -112,6 +93,48 @@ class PackerScanController extends Controller
                 DB::rollBack();
                 return response()->json([
                     'message' => 'Resi sudah pernah discan.',
+                ], 422);
+            }
+
+            $details = QcResiScanItem::where('qc_resi_scan_id', $qc->id)
+                ->lockForUpdate()
+                ->get(['sku', 'expected_qty']);
+
+            if ($details->isEmpty()) {
+                DB::rollBack();
+                return response()->json([
+                    'message' => 'Snapshot QC tidak ditemukan.',
+                ], 422);
+            }
+
+            $exceptionSkus = PackerScanException::query()
+                ->pluck('sku')
+                ->map(fn ($sku) => strtolower(trim((string) $sku)))
+                ->filter()
+                ->values()
+                ->all();
+            $exceptionLookup = array_flip($exceptionSkus);
+
+            $skuTotals = [];
+            $excludedTotals = [];
+            foreach ($details as $detail) {
+                $sku = trim((string) $detail->sku);
+                $qty = (int) $detail->expected_qty;
+                if ($sku === '' || $qty <= 0) {
+                    continue;
+                }
+                $skuKey = strtolower($sku);
+                if (isset($exceptionLookup[$skuKey])) {
+                    $excludedTotals[$sku] = ($excludedTotals[$sku] ?? 0) + $qty;
+                    continue;
+                }
+                $skuTotals[$sku] = ($skuTotals[$sku] ?? 0) + $qty;
+            }
+
+            if (empty($skuTotals) && empty($excludedTotals)) {
+                DB::rollBack();
+                return response()->json([
+                    'message' => 'Snapshot QC tidak valid.',
                 ], 422);
             }
 

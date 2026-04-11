@@ -154,7 +154,7 @@ class PackerPackingReportController extends Controller
 
         if (!$scan) {
             return response()->json([
-                'message' => 'Resi belum terpacking atau tidak ditemukan.',
+                'message' => 'Resi belum siap scan out atau tidak ditemukan.',
             ], 404);
         }
 

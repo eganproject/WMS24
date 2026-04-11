@@ -37,7 +37,7 @@
             <div class="col-md-4">
                 <div class="card card-flush h-100">
                     <div class="card-body">
-                        <div class="text-muted">Total Scan Out</div>
+                        <div class="text-muted">Total Scan Out Selesai</div>
                         <div class="fs-2 fw-bold" id="summary_total_scan">0</div>
                     </div>
                 </div>
@@ -78,13 +78,13 @@
                 </div>
                 <div class="col-md-3">
                     <div class="bg-light-success rounded-3 px-4 py-3 h-100">
-                        <div class="text-muted">Sudah Scan Out</div>
+                        <div class="text-muted">Scan Out Selesai</div>
                         <div class="fs-2 fw-bold" id="comparison_scanned_total">0</div>
                     </div>
                 </div>
                 <div class="col-md-3">
                     <div class="bg-light-warning rounded-3 px-4 py-3 h-100">
-                        <div class="text-muted">Sisa Belum Scan Out</div>
+                        <div class="text-muted">Sisa Siap Scan Out</div>
                         <div class="fs-2 fw-bold" id="comparison_missing_total">0</div>
                     </div>
                 </div>
@@ -128,7 +128,7 @@
                         <th width="5%">No</th>
                         <th>Tanggal</th>
                         <th>Petugas</th>
-                        <th class="text-end">Total Scan Out</th>
+                        <th class="text-end">Total Scan Out Selesai</th>
                         <th class="text-end">Unik Resi</th>
                         <th class="text-end">Avg / Jam</th>
                         <th>Scan Pertama</th>

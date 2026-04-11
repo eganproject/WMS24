@@ -1,6 +1,6 @@
 @extends('layouts.mobile')
 
-@section('title', 'Packer Scan Resi')
+@section('title', 'QC Resi')
 
 @section('content')
 <style>
@@ -65,6 +65,10 @@
         font-weight: 700;
         font-size: 11px;
     }
+    .result-badge.pending {
+        background: rgba(249, 115, 22, 0.15);
+        color: #c2410c;
+    }
     .result-items {
         display: grid;
         gap: 10px;
@@ -78,11 +82,25 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
+        gap: 10px;
         font-size: 13px;
     }
     .result-meta {
         font-size: 12px;
         color: var(--muted);
+    }
+    .count-pill {
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: rgba(15, 118, 110, 0.12);
+        color: #0f766e;
+        font-weight: 700;
+        font-size: 12px;
+        white-space: nowrap;
+    }
+    .count-pill.done {
+        background: rgba(34, 197, 94, 0.16);
+        color: #15803d;
     }
     .topbar-actions {
         display: flex;
@@ -133,13 +151,27 @@
         padding: 10px 12px;
         font-size: 12px;
     }
+    .qc-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 10px;
+    }
+    .qc-actions .ghost-btn,
+    .qc-actions .primary-btn {
+        width: auto;
+        padding: 10px 12px;
+        font-size: 12px;
+    }
+    .qty-input {
+        width: 120px;
+    }
 </style>
 
 <div class="screen">
     <div class="topbar">
         <div>
             <div class="brand">{{ config('app.name', 'Gudang 24') }}</div>
-            <div class="subtitle">Packer Scan Resi</div>
+            <div class="subtitle">QC Resi</div>
         </div>
         <div class="topbar-actions">
             <a href="{{ $routes['dashboard'] }}" class="logout">Dashboard</a>
@@ -151,49 +183,71 @@
     </div>
 
     <div class="card">
-        <div class="section-title">Scan Resi</div>
-        <div class="muted">Pastikan QC selesai, lalu scan resi untuk mengurangi sisa transit.</div>
+        <div class="section-title">Scan Resi QC</div>
+        <div class="muted">Scan resi terlebih dahulu untuk mengambil daftar SKU.</div>
         <div class="scan-actions">
-            <select class="input" id="scan_type">
+            <select class="input" id="resi_type">
                 <option value="no_resi">No Resi</option>
                 <option value="id_pesanan">ID Pesanan</option>
             </select>
             <div class="scan-row">
-                <input type="text" class="input" id="scan_code" placeholder="Scan No. Resi" autocomplete="off" />
-                <button type="button" class="scan-btn" id="btn_open_scanner">Scan</button>
+                <input type="text" class="input" id="resi_code" placeholder="Scan No. Resi" autocomplete="off" />
+                <button type="button" class="scan-btn" id="btn_open_resi_scanner">Scan</button>
             </div>
             <div class="photo-scan" id="photo_scan_wrap">
                 <button type="button" class="photo-btn" id="btn_scan_photo">Scan via Foto</button>
                 <span class="muted">Alternatif untuk iPhone.</span>
             </div>
             <input type="file" id="scan_photo" accept="image/*" capture="environment" style="display:none;" />
-            <button type="button" class="primary-btn" id="btn_scan">Proses Resi</button>
+            <button type="button" class="primary-btn" id="btn_scan_resi">Proses Resi</button>
         </div>
-        <div class="status-line" id="scan_status">Siap memproses resi.</div>
+        <div class="status-line" id="resi_status">Siap memproses resi.</div>
+    </div>
+
+    <div class="card">
+        <div class="section-title">Scan SKU</div>
+        <div class="muted">Scan setiap SKU sesuai detail resi.</div>
+        <div class="scan-actions">
+            <div class="scan-row">
+                <input type="text" class="input" id="sku_code" placeholder="Scan SKU" autocomplete="off" />
+                <button type="button" class="scan-btn" id="btn_open_sku_scanner">Scan</button>
+            </div>
+            <div class="scan-row">
+                <input type="number" class="input qty-input" id="sku_qty" min="1" value="1" />
+                <button type="button" class="primary-btn" id="btn_scan_sku">Tambah SKU</button>
+            </div>
+        </div>
+        <div class="status-line" id="sku_status">Menunggu resi.</div>
     </div>
 
     <div class="card result-card" id="result_card">
         <div class="result-header">
             <div>
-                <div style="font-weight:700;" id="result_title">Resi Diproses</div>
+                <div style="font-weight:700;" id="result_title">QC Berjalan</div>
                 <div class="result-meta" id="result_meta">-</div>
             </div>
-            <div class="result-badge">Sukses</div>
+            <div class="result-badge pending" id="result_badge">Proses</div>
         </div>
+        <div class="result-meta" id="result_summary">-</div>
         <div class="result-items" id="result_items"></div>
+        <div class="qc-actions">
+            <button type="button" class="ghost-btn" id="btn_reset_qc">Reset QC</button>
+            <button type="button" class="primary-btn" id="btn_complete_qc">Selesaikan QC</button>
+        </div>
+        <div class="status-line" id="qc_status">-</div>
     </div>
 </div>
 
 <div class="scanner-modal" id="scanner_modal">
     <div class="scanner-card">
-        <div style="font-weight:700;">Kamera Scanner</div>
+        <div style="font-weight:700;" id="scanner_title">Kamera Scanner</div>
         <video class="scanner-video" id="scanner_video" playsinline></video>
         <div class="scanner-qr" id="scanner_qr"></div>
         <div class="scanner-actions">
             <button type="button" class="ghost-btn" id="btn_close_scanner">Tutup</button>
             <button type="button" class="primary-btn" id="btn_start_scan">Mulai Scan</button>
         </div>
-        <div class="muted" id="scanner_hint">Arahkan kamera ke barcode resi.</div>
+        <div class="muted" id="scanner_hint">Arahkan kamera ke barcode.</div>
     </div>
 </div>
 
@@ -234,23 +288,44 @@
     const playSuccessSound = () => playBeep(1200, 140, 0.45);
 
     const el = {
-        scanType: document.getElementById('scan_type'),
-        scanCode: document.getElementById('scan_code'),
-        btnScan: document.getElementById('btn_scan'),
-        btnOpenScanner: document.getElementById('btn_open_scanner'),
-        btnScanPhoto: document.getElementById('btn_scan_photo'),
-        scanPhotoInput: document.getElementById('scan_photo'),
-        photoScanWrap: document.getElementById('photo_scan_wrap'),
-        scanStatus: document.getElementById('scan_status'),
+        resiType: document.getElementById('resi_type'),
+        resiCode: document.getElementById('resi_code'),
+        btnScanResi: document.getElementById('btn_scan_resi'),
+        resiStatus: document.getElementById('resi_status'),
+        btnOpenResiScanner: document.getElementById('btn_open_resi_scanner'),
+        btnOpenSkuScanner: document.getElementById('btn_open_sku_scanner'),
+        skuCode: document.getElementById('sku_code'),
+        skuQty: document.getElementById('sku_qty'),
+        btnScanSku: document.getElementById('btn_scan_sku'),
+        skuStatus: document.getElementById('sku_status'),
         resultCard: document.getElementById('result_card'),
         resultMeta: document.getElementById('result_meta'),
         resultItems: document.getElementById('result_items'),
+        resultBadge: document.getElementById('result_badge'),
+        resultTitle: document.getElementById('result_title'),
+        resultSummary: document.getElementById('result_summary'),
+        qcStatus: document.getElementById('qc_status'),
+        btnResetQc: document.getElementById('btn_reset_qc'),
+        btnCompleteQc: document.getElementById('btn_complete_qc'),
         scannerModal: document.getElementById('scanner_modal'),
         scannerVideo: document.getElementById('scanner_video'),
         scannerQr: document.getElementById('scanner_qr'),
         btnCloseScanner: document.getElementById('btn_close_scanner'),
         btnStartScan: document.getElementById('btn_start_scan'),
         scannerHint: document.getElementById('scanner_hint'),
+        scannerTitle: document.getElementById('scanner_title'),
+        photoScanWrap: document.getElementById('photo_scan_wrap'),
+        scanPhotoInput: document.getElementById('scan_photo'),
+        btnScanPhoto: document.getElementById('btn_scan_photo'),
+    };
+
+    let qcState = {
+        id: null,
+        status: null,
+        items: [],
+        summary: null,
+        resi: null,
+        audit: null,
     };
 
     let scannerStream = null;
@@ -260,6 +335,7 @@
     let html5Qr = null;
     let scanMode = 'native';
     let html5LoadPromise = null;
+    let scanTarget = 'resi';
     const isIOS = (() => {
         const ua = navigator.userAgent || '';
         const platform = navigator.platform || '';
@@ -302,16 +378,16 @@
         return html5LoadPromise;
     };
 
-    const setStatus = (text, type = 'muted') => {
-        el.scanStatus.textContent = text;
+    const setStatus = (elNode, text, type = 'muted') => {
+        elNode.textContent = text;
         if (type === 'error') {
-            el.scanStatus.style.color = '#b91c1c';
+            elNode.style.color = '#b91c1c';
         } else if (type === 'success') {
-            el.scanStatus.style.color = '#047857';
+            elNode.style.color = '#047857';
         } else if (type === 'pending') {
-            el.scanStatus.style.color = '#f97316';
+            elNode.style.color = '#f97316';
         } else {
-            el.scanStatus.style.color = '#6b7280';
+            elNode.style.color = '#6b7280';
         }
     };
 
@@ -368,12 +444,8 @@
                 const list = details.map((row) => {
                     const sku = row.sku || '-';
                     const required = row.required ?? '-';
-                    const available = row.available ?? '-';
-                    const reason = row.reason ? `<div style="color:#64748b; font-size:12px;">${row.reason}</div>` : '';
-                    const stock = row.available !== undefined
-                        ? `<div style="color:#64748b; font-size:12px;">Butuh ${required}, tersedia ${available}</div>`
-                        : `<div style="color:#64748b; font-size:12px;">Butuh ${required}</div>`;
-                    return `<li style="margin-bottom:8px;"><strong>${sku}</strong>${reason}${stock}</li>`;
+                    const scanned = row.scanned ?? '-';
+                    return `<li style="margin-bottom:8px;"><strong>${sku}</strong><div style="color:#64748b; font-size:12px;">Butuh ${required}, sudah ${scanned}</div></li>`;
                 }).join('');
                 html += `<ul style="text-align:left; padding-left:18px; margin-top:8px;">${list}</ul>`;
             }
@@ -385,12 +457,17 @@
             return;
         }
 
-        setStatus(message, 'error');
+        setStatus(el.qcStatus, message, 'error');
     };
 
-    const renderResult = (data) => {
-        const resi = data?.resi || {};
-        const items = Array.isArray(data?.items) ? data.items : [];
+    const renderQc = () => {
+        const qc = qcState;
+        if (!qc.id) {
+            el.resultCard.style.display = 'none';
+            return;
+        }
+
+        const resi = qc.resi || {};
         const resiLine = [
             resi.id_pesanan ? `ID Pesanan: ${resi.id_pesanan}` : null,
             resi.no_resi ? `No Resi: ${resi.no_resi}` : null,
@@ -398,46 +475,245 @@
         ].filter(Boolean).join(' • ');
 
         el.resultMeta.textContent = resiLine || '-';
-        el.resultItems.innerHTML = items.map((row) => {
-            const qty = row.qty ?? 0;
-            return `<div class="result-item"><strong>${row.sku || '-'}</strong><span>${qty} qty</span></div>`;
+
+        const summary = qc.summary || { total_expected: 0, total_scanned: 0, remaining: 0 };
+        const audit = qc.audit || {};
+        const auditBits = [];
+        if (audit.started_by && audit.started_by !== '-') {
+            auditBits.push(`Mulai: ${audit.started_by}`);
+        }
+        if (audit.last_scanned_by && audit.last_scanned_by !== '-' && audit.last_scanned_at) {
+            auditBits.push(`Scan terakhir: ${audit.last_scanned_by} @ ${audit.last_scanned_at}`);
+        }
+        if ((audit.reset_count || 0) > 0) {
+            auditBits.push(`Reset: ${audit.reset_count}x`);
+        }
+
+        const summaryBits = [
+            `Total: ${summary.total_scanned}/${summary.total_expected}`,
+            `Sisa: ${summary.remaining}`,
+            ...auditBits,
+        ];
+        el.resultSummary.textContent = summaryBits.join(' • ');
+
+        const statusPassed = qc.status === 'passed';
+        el.resultTitle.textContent = statusPassed ? 'QC Selesai' : 'QC Berjalan';
+        el.resultBadge.textContent = statusPassed ? 'Selesai' : 'Proses';
+        el.resultBadge.classList.toggle('pending', !statusPassed);
+
+        el.resultItems.innerHTML = (qc.items || []).map((row) => {
+            const expected = row.expected_qty ?? 0;
+            const scanned = row.scanned_qty ?? 0;
+            const done = expected > 0 && scanned >= expected;
+            return `<div class="result-item">
+                <div>
+                    <strong>${row.sku || '-'}</strong>
+                    <div class="result-meta">Target ${expected} qty</div>
+                </div>
+                <div class="count-pill ${done ? 'done' : ''}">${scanned}/${expected}</div>
+            </div>`;
         }).join('');
 
         el.resultCard.style.display = 'block';
+        el.btnCompleteQc.disabled = statusPassed || summary.remaining > 0;
+        el.btnResetQc.disabled = statusPassed;
+
+        if (statusPassed) {
+            setStatus(el.qcStatus, 'QC selesai. Resi siap dipacking.', 'success');
+        } else {
+            setStatus(el.qcStatus, 'QC belum selesai.', summary.remaining === 0 ? 'success' : 'pending');
+        }
     };
 
-    const submitScan = async () => {
+    const submitResi = async () => {
         getAudioCtx();
-        const type = el.scanType.value;
-        const code = el.scanCode.value.trim();
+        const type = el.resiType.value;
+        const code = el.resiCode.value.trim();
         if (!code) {
-            setStatus('Masukkan nomor resi atau ID pesanan.', 'error');
-            el.scanCode.focus();
+            setStatus(el.resiStatus, 'Masukkan nomor resi atau ID pesanan.', 'error');
+            el.resiCode.focus();
             return;
         }
 
-        el.btnScan.disabled = true;
-        setStatus('Memproses resi...', 'pending');
+        el.btnScanResi.disabled = true;
+        setStatus(el.resiStatus, 'Memproses resi...', 'pending');
 
         try {
-            const data = await fetchJson(routes.scan, {
+            const data = await fetchJson(routes.scanResi, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ code, type, _token: csrfToken }),
             });
 
-            setStatus(data?.message || 'Resi berhasil diproses.', 'success');
+            qcState = {
+                id: data?.qc?.id || null,
+                status: data?.qc?.status || null,
+                items: data?.qc?.items || [],
+                summary: data?.qc?.summary || null,
+                resi: data?.resi || null,
+                audit: data?.qc?.audit || null,
+            };
+
+            setStatus(el.resiStatus, data?.message || 'Resi siap QC.', 'success');
+            setStatus(el.skuStatus, 'Siap scan SKU.', 'success');
             playSuccessSound();
-            renderResult(data);
-            el.scanCode.value = '';
-            el.scanCode.focus();
+            renderQc();
+            el.resiCode.value = '';
+            el.resiCode.focus();
         } catch (error) {
             showError(error.message || 'Gagal memproses resi.', error.details || []);
-            setStatus(error.message || 'Gagal memproses resi.', 'error');
+            setStatus(el.resiStatus, error.message || 'Gagal memproses resi.', 'error');
         } finally {
-            el.btnScan.disabled = false;
+            el.btnScanResi.disabled = false;
+        }
+    };
+
+    const submitSku = async () => {
+        getAudioCtx();
+        if (!qcState.id) {
+            setStatus(el.skuStatus, 'Scan resi terlebih dahulu.', 'error');
+            return;
+        }
+
+        const code = el.skuCode.value.trim();
+        const qty = parseInt(el.skuQty.value || '1', 10);
+        if (!code) {
+            setStatus(el.skuStatus, 'Masukkan SKU.', 'error');
+            el.skuCode.focus();
+            return;
+        }
+        if (!qty || qty <= 0) {
+            setStatus(el.skuStatus, 'Qty minimal 1.', 'error');
+            el.skuQty.focus();
+            return;
+        }
+
+        el.btnScanSku.disabled = true;
+        setStatus(el.skuStatus, 'Memproses SKU...', 'pending');
+
+        try {
+            const data = await fetchJson(routes.scanSku, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ qc_id: qcState.id, code, qty, _token: csrfToken }),
+            });
+
+            qcState = {
+                ...qcState,
+                status: data?.qc?.status || qcState.status,
+                items: data?.qc?.items || qcState.items,
+                summary: data?.qc?.summary || qcState.summary,
+                audit: data?.qc?.audit || qcState.audit,
+            };
+
+            setStatus(el.skuStatus, data?.message || 'SKU berhasil discan.', 'success');
+            playScanSound();
+            renderQc();
+            el.skuCode.value = '';
+            el.skuQty.value = '1';
+            el.skuCode.focus();
+        } catch (error) {
+            showError(error.message || 'Gagal memproses SKU.', error.details || []);
+            setStatus(el.skuStatus, error.message || 'Gagal memproses SKU.', 'error');
+        } finally {
+            el.btnScanSku.disabled = false;
+        }
+    };
+
+    const completeQc = async () => {
+        if (!qcState.id) return;
+
+        el.btnCompleteQc.disabled = true;
+        setStatus(el.qcStatus, 'Menyelesaikan QC...', 'pending');
+
+        try {
+            const data = await fetchJson(routes.complete, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ qc_id: qcState.id, _token: csrfToken }),
+            });
+
+            qcState = {
+                ...qcState,
+                status: data?.qc?.status || qcState.status,
+                items: data?.qc?.items || qcState.items,
+                summary: data?.qc?.summary || qcState.summary,
+                audit: data?.qc?.audit || qcState.audit,
+            };
+
+            setStatus(el.qcStatus, data?.message || 'QC selesai.', 'success');
+            playSuccessSound();
+            renderQc();
+        } catch (error) {
+            showError(error.message || 'Gagal menyelesaikan QC.', error.details || []);
+            setStatus(el.qcStatus, error.message || 'Gagal menyelesaikan QC.', 'error');
+        } finally {
+            el.btnCompleteQc.disabled = false;
+        }
+    };
+
+    const resetQc = async () => {
+        if (!qcState.id) return;
+
+        let reason = '';
+        if (typeof Swal !== 'undefined') {
+            const result = await Swal.fire({
+                title: 'Reset QC',
+                text: 'Masukkan alasan reset untuk audit.',
+                input: 'text',
+                inputPlaceholder: 'Contoh: scan ganda / resi salah',
+                inputAttributes: {
+                    maxlength: '500',
+                },
+                showCancelButton: true,
+                confirmButtonText: 'Reset',
+                cancelButtonText: 'Batal',
+                inputValidator: (value) => {
+                    if (!value || !value.trim()) {
+                        return 'Alasan reset wajib diisi.';
+                    }
+                    return null;
+                },
+            });
+
+            if (!result.isConfirmed) {
+                return;
+            }
+
+            reason = (result.value || '').trim();
+        } else {
+            reason = (window.prompt('Alasan reset QC:') || '').trim();
+            if (!reason) {
+                setStatus(el.qcStatus, 'Reset dibatalkan. Alasan wajib diisi.', 'error');
+                return;
+            }
+        }
+
+        el.btnResetQc.disabled = true;
+        setStatus(el.qcStatus, 'Mereset QC...', 'pending');
+
+        try {
+            const data = await fetchJson(routes.reset, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ qc_id: qcState.id, reason, _token: csrfToken }),
+            });
+
+            qcState = {
+                ...qcState,
+                status: data?.qc?.status || qcState.status,
+                items: data?.qc?.items || qcState.items,
+                summary: data?.qc?.summary || qcState.summary,
+                audit: data?.qc?.audit || qcState.audit,
+            };
+
+            setStatus(el.qcStatus, data?.message || 'QC direset.', 'success');
+            renderQc();
+        } catch (error) {
+            showError(error.message || 'Gagal reset QC.', error.details || []);
+            setStatus(el.qcStatus, error.message || 'Gagal reset QC.', 'error');
+        } finally {
+            el.btnResetQc.disabled = false;
         }
     };
 
@@ -466,11 +742,14 @@
         stopScanner();
         el.scannerModal.style.display = 'none';
         el.btnStartScan.disabled = false;
-        el.scannerHint.textContent = 'Arahkan kamera ke barcode resi.';
+        el.scannerHint.textContent = 'Arahkan kamera ke barcode.';
     };
 
-    const openScanner = async () => {
+    const openScanner = async (target) => {
         getAudioCtx();
+        scanTarget = target;
+        el.scannerTitle.textContent = target === 'sku' ? 'Scan SKU' : 'Scan Resi';
+
         if (!window.isSecureContext) {
             showError('Akses kamera membutuhkan HTTPS. Gunakan domain HTTPS atau localhost.');
             return;
@@ -542,8 +821,13 @@
                     (decodedText) => {
                         if (decodedText) {
                             playScanSound();
-                            el.scanCode.value = decodedText;
-                            el.scanCode.focus();
+                            if (scanTarget === 'sku') {
+                                el.skuCode.value = decodedText;
+                                el.skuCode.focus();
+                            } else {
+                                el.resiCode.value = decodedText;
+                                el.resiCode.focus();
+                            }
                             closeScanner();
                         }
                     },
@@ -589,8 +873,13 @@
                 const code = barcodes[0].rawValue || '';
                 if (code) {
                     playScanSound();
-                    el.scanCode.value = code;
-                    el.scanCode.focus();
+                    if (scanTarget === 'sku') {
+                        el.skuCode.value = code;
+                        el.skuCode.focus();
+                    } else {
+                        el.resiCode.value = code;
+                        el.resiCode.focus();
+                    }
                     closeScanner();
                     return;
                 }
@@ -604,11 +893,11 @@
     const scanFromPhoto = async (file) => {
         if (!file) return;
 
-        setStatus('Memproses foto...', 'pending');
+        setStatus(el.resiStatus, 'Memproses foto...', 'pending');
         const ready = await loadHtml5Qr();
         if (!ready || typeof Html5Qrcode === 'undefined') {
             showError('Library scan belum tersedia. Gunakan input manual.');
-            setStatus('Scan foto gagal.', 'error');
+            setStatus(el.resiStatus, 'Scan foto gagal.', 'error');
             return;
         }
 
@@ -618,12 +907,12 @@
             const decodedText = await photoScanner.scanFile(file, true);
             await photoScanner.clear();
             playScanSound();
-            el.scanCode.value = decodedText || '';
-            el.scanCode.focus();
-            setStatus('Hasil scan foto siap. Tekan Proses Resi.', 'success');
+            el.resiCode.value = decodedText || '';
+            el.resiCode.focus();
+            setStatus(el.resiStatus, 'Hasil scan foto siap. Tekan Proses Resi.', 'success');
         } catch (error) {
             showError('Gagal membaca barcode dari foto. Pastikan barcode jelas dan tidak blur.');
-            setStatus('Scan foto gagal.', 'error');
+            setStatus(el.resiStatus, 'Scan foto gagal.', 'error');
         } finally {
             el.scanPhotoInput.value = '';
         }
@@ -637,17 +926,23 @@
         const supported = canUseCamera && (hasNative || hasHtml5);
 
         if (!supported) {
-            if (el.btnOpenScanner) el.btnOpenScanner.style.display = 'none';
+            if (el.btnOpenResiScanner) el.btnOpenResiScanner.style.display = 'none';
+            if (el.btnOpenSkuScanner) el.btnOpenSkuScanner.style.display = 'none';
             if (el.photoScanWrap) el.photoScanWrap.style.display = 'none';
-            setStatus('Scan kamera tidak tersedia. Gunakan input manual.', 'error');
+            setStatus(el.resiStatus, 'Scan kamera tidak tersedia. Gunakan input manual.', 'error');
             return;
         }
     };
 
-    el.btnScan.addEventListener('click', submitScan);
-    el.btnOpenScanner.addEventListener('click', openScanner);
+    el.btnScanResi.addEventListener('click', submitResi);
+    el.btnScanSku.addEventListener('click', submitSku);
+    el.btnResetQc.addEventListener('click', resetQc);
+    el.btnCompleteQc.addEventListener('click', completeQc);
+    el.btnOpenResiScanner.addEventListener('click', () => openScanner('resi'));
+    el.btnOpenSkuScanner.addEventListener('click', () => openScanner('sku'));
     el.btnCloseScanner.addEventListener('click', closeScanner);
     el.btnStartScan.addEventListener('click', startScanner);
+
     if (el.photoScanWrap) {
         el.photoScanWrap.style.display = isIOS ? 'flex' : 'none';
     }
@@ -663,15 +958,21 @@
             closeScanner();
         }
     });
-    el.scanType.addEventListener('change', () => {
-        const type = el.scanType.value;
-        el.scanCode.placeholder = type === 'id_pesanan' ? 'Scan ID Pesanan' : 'Scan No. Resi';
-        el.scanCode.focus();
+    el.resiType.addEventListener('change', () => {
+        const type = el.resiType.value;
+        el.resiCode.placeholder = type === 'id_pesanan' ? 'Scan ID Pesanan' : 'Scan No. Resi';
+        el.resiCode.focus();
     });
-    el.scanCode.addEventListener('keydown', (event) => {
+    el.resiCode.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
             event.preventDefault();
-            submitScan();
+            submitResi();
+        }
+    });
+    el.skuCode.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            submitSku();
         }
     });
 

@@ -1,7 +1,7 @@
 @extends('layouts.admin')
 
-@section('title', 'Laporan Packer (Packing)')
-@section('page_title', 'Laporan Packer (Packing)')
+@section('title', 'Laporan Packing')
+@section('page_title', 'Laporan Packing')
 
 @section('content')
 <div class="card">
@@ -74,10 +74,10 @@
             <div class="d-flex align-items-center justify-content-between flex-wrap gap-4 mb-4">
                 <div>
                     <div class="fs-4 fw-bold">Komparasi Import Resi vs Packing</div>
-                    <div class="text-muted">Memastikan seluruh ID Pesanan / No Resi hasil import telah terpacking.</div>
+                    <div class="text-muted">Memastikan seluruh ID Pesanan / No Resi hasil import sudah siap scan out.</div>
                 </div>
                 <div class="text-muted">
-                    Menampilkan maksimal 50 data resi yang belum terpacking.
+                    Menampilkan maksimal 50 data resi yang belum siap scan out.
                 </div>
             </div>
             <div class="row g-4 mb-4">
@@ -89,13 +89,13 @@
                 </div>
                 <div class="col-md-3">
                     <div class="bg-light-success rounded-3 px-4 py-3 h-100">
-                        <div class="text-muted">Sudah Packing</div>
+                        <div class="text-muted">Siap Scan Out</div>
                         <div class="fs-2 fw-bold" id="comparison_scanned_total">0</div>
                     </div>
                 </div>
                 <div class="col-md-3">
                     <div class="bg-light-warning rounded-3 px-4 py-3 h-100">
-                        <div class="text-muted">Sisa Belum Packing</div>
+                        <div class="text-muted">Belum Siap Scan Out</div>
                         <div class="fs-2 fw-bold" id="comparison_missing_total">0</div>
                     </div>
                 </div>
@@ -157,7 +157,7 @@
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Detail Packing</h5>
+                <h5 class="modal-title">Detail Riwayat Packing</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">

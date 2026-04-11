@@ -20,18 +20,7 @@ class PackerHistoryController extends Controller
     public function data(Request $request)
     {
         $baseQuery = PackerResiScan::query()
-            ->with(['resi.details', 'scanner'])
-            ->select('packer_resi_scans.*')
-            ->selectSub(function ($q) {
-                $q->from('resi_details')
-                    ->selectRaw('COALESCE(SUM(qty), 0)')
-                    ->whereColumn('resi_id', 'packer_resi_scans.resi_id');
-            }, 'total_qty')
-            ->selectSub(function ($q) {
-                $q->from('resi_details')
-                    ->selectRaw('COUNT(*)')
-                    ->whereColumn('resi_id', 'packer_resi_scans.resi_id');
-            }, 'total_sku')
+            ->with(['resi.qcScan.items', 'resi.details', 'scanner'])
             ->orderByDesc('scanned_at');
 
         $this->applyDateFilter($baseQuery, $request);
@@ -47,12 +36,18 @@ class PackerHistoryController extends Controller
                         $resiQ->where('id_pesanan', 'like', "%{$search}%")
                             ->orWhere('no_resi', 'like', "%{$search}%");
                     })
-                    ->orWhereHas('resi.details', function ($detailQ) use ($search) {
-                        $detailQ->where('sku', 'like', "%{$search}%");
-                    })
                     ->orWhereHas('scanner', function ($userQ) use ($search) {
                         $userQ->where('name', 'like', "%{$search}%")
                             ->orWhere('email', 'like', "%{$search}%");
+                    })
+                    ->orWhereHas('resi.qcScan.items', function ($itemQ) use ($search) {
+                        $itemQ->where('sku', 'like', "%{$search}%");
+                    })
+                    ->orWhere(function ($fallbackQ) use ($search) {
+                        $fallbackQ->whereDoesntHave('resi.qcScan')
+                            ->whereHas('resi.details', function ($detailQ) use ($search) {
+                                $detailQ->where('sku', 'like', "%{$search}%");
+                            });
                     });
             });
         }
@@ -69,11 +64,11 @@ class PackerHistoryController extends Controller
         $data = $query->get()->map(function ($row) {
             $scanDate = $row->scan_date ? Carbon::parse($row->scan_date)->format('Y-m-d') : '';
             $scannedAt = $row->scanned_at ? Carbon::parse($row->scanned_at)->format('Y-m-d H:i') : '';
-            $details = $row->resi?->details ?? collect();
+            $details = $this->resolvePackingItems($row);
             $skuTotals = [];
             foreach ($details as $detail) {
                 $sku = trim((string) $detail->sku);
-                $qty = (int) ($detail->qty ?? 0);
+                $qty = (int) ($detail->qty ?? $detail->expected_qty ?? 0);
                 if ($sku === '' || $qty <= 0) {
                     continue;
                 }
@@ -93,8 +88,8 @@ class PackerHistoryController extends Controller
                 'id_pesanan' => $row->resi?->id_pesanan ?? '-',
                 'no_resi' => $row->resi?->no_resi ?? '-',
                 'sku_list' => $skuList !== '' ? $skuList : '-',
-                'total_sku' => (int) ($row->total_sku ?? 0),
-                'total_qty' => (int) ($row->total_qty ?? 0),
+                'total_sku' => count($skuTotals),
+                'total_qty' => array_sum($skuTotals),
             ];
         });
 
@@ -123,5 +118,14 @@ class PackerHistoryController extends Controller
         if ($dateTo) {
             $query->whereDate('scan_date', '<=', $dateTo);
         }
+    }
+
+    private function resolvePackingItems(PackerResiScan $scan)
+    {
+        if ($scan->resi?->qcScan) {
+            return $scan->resi->qcScan->items ?? collect();
+        }
+
+        return $scan->resi?->details ?? collect();
     }
 }

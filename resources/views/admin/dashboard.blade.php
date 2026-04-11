@@ -164,7 +164,7 @@
                 <div class="stat-meta">Update: {{ $totalCanceledUpdated ?? '-' }}</div>
             </div>
             <div class="stat-card">
-                <div class="stat-label">Total Scan Out</div>
+                <div class="stat-label">Total Scan Out Selesai</div>
                 <div class="stat-value">{{ number_format($totalScanOut ?? 0) }}</div>
                 <div class="stat-meta">Update: {{ $totalScanUpdated ?? '-' }}</div>
             </div>
@@ -176,7 +176,7 @@
     <div class="card-body">
         <div class="d-flex align-items-center justify-content-between mb-4">
             <div class="fw-bold fs-4">Per Kurir</div>
-            <div class="text-muted">Jumlah resi aktif & hasil scan pada tanggal {{ $today ?? '-' }}</div>
+            <div class="text-muted">Jumlah resi aktif & scan out selesai pada tanggal {{ $today ?? '-' }}</div>
         </div>
 
         @if(isset($kurirs) && $kurirs->count())
@@ -235,11 +235,11 @@
                         <div class="kurir-summary-value" id="kurir_detail_total">0</div>
                     </div>
                     <div class="kurir-summary-item">
-                        <div class="kurir-summary-label">Sudah Scan Out</div>
+                        <div class="kurir-summary-label">Scan Out Selesai</div>
                         <div class="kurir-summary-value text-success" id="kurir_detail_scanned">0</div>
                     </div>
                     <div class="kurir-summary-item">
-                        <div class="kurir-summary-label">Belum Scan Out</div>
+                        <div class="kurir-summary-label">Siap Scan Out</div>
                         <div class="kurir-summary-value text-warning" id="kurir_detail_remaining">0</div>
                     </div>
                     <div class="kurir-summary-item">

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\ResiOperationalStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -54,5 +55,35 @@ class Resi extends Model
     public function kurir()
     {
         return $this->belongsTo(Kurir::class, 'kurir_id');
+    }
+
+    public function qcScan()
+    {
+        return $this->hasOne(QcResiScan::class, 'resi_id');
+    }
+
+    public function packerScan()
+    {
+        return $this->hasOne(PackerResiScan::class, 'resi_id');
+    }
+
+    public function scanOut()
+    {
+        return $this->hasOne(PackerScanOut::class, 'resi_id');
+    }
+
+    public function getOperationalStatusAttribute(): string
+    {
+        $qcScan = $this->relationLoaded('qcScan') ? $this->getRelation('qcScan') : $this->qcScan()->first();
+        $packerScan = $this->relationLoaded('packerScan') ? $this->getRelation('packerScan') : $this->packerScan()->first();
+        $scanOut = $this->relationLoaded('scanOut') ? $this->getRelation('scanOut') : $this->scanOut()->first();
+
+        return ResiOperationalStatus::resolve(
+            $this->status,
+            $qcScan !== null,
+            ($qcScan?->status ?? '') === 'passed',
+            $packerScan !== null,
+            $scanOut !== null
+        );
     }
 }

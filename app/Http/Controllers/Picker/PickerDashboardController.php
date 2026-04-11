@@ -13,24 +13,26 @@ class PickerDashboardController extends Controller
         $hasPicker = $roles->contains('picker');
         $hasPacker = $roles->contains('packer');
         $hasAdminScan = $roles->contains('admin-scan');
-        $hasOtherRoles = $roles->diff(['picker', 'packer', 'admin-scan'])->isNotEmpty();
-        $isAdminScanOnly = $hasAdminScan && !$hasPicker && !$hasPacker && !$hasOtherRoles;
+        $hasQc = $roles->contains('qc');
+        $hasOtherRoles = $roles->diff(['picker', 'packer', 'admin-scan', 'qc'])->isNotEmpty();
 
         return view('picker.dashboard', [
             'routes' => [
                 'opname' => route('opname.index'),
                 'picker' => route('picker.index'),
+                'qc' => route('picker.qc.index'),
                 'packer' => route('picker.packer.index'),
                 'scanOut' => route('picker.scan-out.index'),
                 'scanOutV2' => route('picker.scan-out-v2.index'),
                 'pickingList' => route('picker.picking-list.index'),
                 'logout' => route('logout'),
             ],
-            'showPicking' => ($hasPicker || $hasPacker || $hasOtherRoles) && !$isAdminScanOnly,
-            'showPacking' => ($hasPicker || $hasPacker || $hasOtherRoles) && !$isAdminScanOnly,
-            'showScanOut' => ($hasAdminScan || $hasOtherRoles) && !$hasPicker && !$hasPacker,
-            'showScanOutV2' => ($hasAdminScan || $hasOtherRoles) && !$hasPicker && !$hasPacker,
-            'showPickingList' => ($hasPicker || $hasPacker || $hasOtherRoles) && !$isAdminScanOnly,
+            'showPicking' => $hasPicker || $hasOtherRoles,
+            'showQc' => $hasQc || $hasOtherRoles,
+            'showPacking' => $hasPacker || $hasOtherRoles,
+            'showScanOut' => $hasAdminScan || $hasOtherRoles,
+            'showScanOutV2' => $hasAdminScan || $hasOtherRoles,
+            'showPickingList' => $hasPicker || $hasOtherRoles,
         ]);
     }
 }

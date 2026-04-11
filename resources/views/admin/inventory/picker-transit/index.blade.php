@@ -12,7 +12,7 @@
     </div>
     <div class="card-body py-6">
         <div class="row g-4 mb-6">
-            <div class="col-md-3">
+            <div class="col-md-6 col-xl-2">
                 <div class="card card-flush h-100">
                     <div class="card-body">
                         <div class="d-flex align-items-start justify-content-between gap-2">
@@ -27,7 +27,7 @@
                     </div>
                 </div>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-6 col-xl-2">
                 <div class="card card-flush h-100">
                     <div class="card-body">
                         <div class="d-flex align-items-start justify-content-between gap-2">
@@ -42,30 +42,60 @@
                     </div>
                 </div>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-6 col-xl-2">
                 <div class="card card-flush h-100">
                     <div class="card-body">
                         <div class="d-flex align-items-start justify-content-between gap-2">
                             <div>
-                                <div class="text-muted">Packer Transit - Menunggu Scan Out</div>
-                                <div class="fs-2 fw-bold" id="packer_summary_pending">0</div>
+                                <div class="text-muted">QC Transit - Berjalan</div>
+                                <div class="fs-2 fw-bold" id="qc_summary_draft">0</div>
                             </div>
-                            <button type="button" class="btn btn-sm btn-light btn-packer-status" data-status="pending" data-title="Packer Transit - Menunggu Scan Out">
+                            <button type="button" class="btn btn-sm btn-light btn-qc-status" data-status="draft">
                                 Detail
                             </button>
                         </div>
                     </div>
                 </div>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-6 col-xl-2">
                 <div class="card card-flush h-100">
                     <div class="card-body">
                         <div class="d-flex align-items-start justify-content-between gap-2">
                             <div>
-                                <div class="text-muted">Packer Transit - Selesai</div>
+                                <div class="text-muted">QC Transit - Siap Packing</div>
+                                <div class="fs-2 fw-bold" id="qc_summary_ready_packing">0</div>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-light btn-qc-status" data-status="ready_packing">
+                                Detail
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-xl-2">
+                <div class="card card-flush h-100">
+                    <div class="card-body">
+                        <div class="d-flex align-items-start justify-content-between gap-2">
+                            <div>
+                                <div class="text-muted">Packer Transit - Siap Scan Out</div>
+                                <div class="fs-2 fw-bold" id="packer_summary_pending">0</div>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-light btn-packer-status" data-status="pending" data-title="Packer Transit - Siap Scan Out">
+                                Detail
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-xl-2">
+                <div class="card card-flush h-100">
+                    <div class="card-body">
+                        <div class="d-flex align-items-start justify-content-between gap-2">
+                            <div>
+                                <div class="text-muted">Packer Transit - Scan Out Selesai</div>
                                 <div class="fs-2 fw-bold" id="packer_summary_done">0</div>
                             </div>
-                            <button type="button" class="btn btn-sm btn-light btn-packer-status" data-status="done" data-title="Packer Transit - Selesai">
+                            <button type="button" class="btn btn-sm btn-light btn-packer-status" data-status="done" data-title="Packer Transit - Scan Out Selesai">
                                 Detail
                             </button>
                         </div>
@@ -76,6 +106,9 @@
         <ul class="nav nav-tabs nav-line-tabs mb-6" role="tablist">
             <li class="nav-item" role="presentation">
                 <a class="nav-link active" data-bs-toggle="tab" href="#tab_picker_transit" role="tab">Picker Transit</a>
+            </li>
+            <li class="nav-item" role="presentation">
+                <a class="nav-link" data-bs-toggle="tab" href="#tab_qc_transit" role="tab">QC Transit</a>
             </li>
             <li class="nav-item" role="presentation">
                 <a class="nav-link" data-bs-toggle="tab" href="#tab_packer_transit" role="tab">Packer Transit</a>
@@ -119,6 +152,48 @@
                     </table>
                 </div>
             </div>
+            <div class="tab-pane fade" id="tab_qc_transit" role="tabpanel">
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-4">
+                    <div class="d-flex align-items-center position-relative my-1">
+                        <span class="svg-icon svg-icon-1 position-absolute ms-6">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+                                <rect opacity="0.5" x="17.0365" y="15.1223" width="8.15546" height="2" rx="1" transform="rotate(45 17.0365 15.1223)" fill="black" />
+                                <path d="M11 19C6.55556 19 3 15.4444 3 11C3 6.55556 6.55556 3 11 3C15.4444 3 19 6.55556 19 11C19 15.4444 15.4444 19 11 19ZM11 5C7.53333 5 5 7.53333 5 11C5 14.4667 7.53333 17 11 17C14.4667 17 17 14.4667 17 11C17 7.53333 14.4667 5 11 5Z" fill="black" />
+                            </svg>
+                        </span>
+                        <input type="text" class="form-control form-control-solid w-250px ps-14" id="qc_filter_search" placeholder="Search ID Pesanan / Resi / User" />
+                    </div>
+                    <input type="text" class="form-control form-control-solid w-150px" id="qc_filter_date" placeholder="Tanggal" value="{{ $today ?? '' }}" />
+                    <select class="form-select form-select-solid w-175px" id="qc_filter_status">
+                        <option value="">Semua Status</option>
+                        <option value="draft">QC Berjalan</option>
+                        <option value="ready_packing">Siap Packing</option>
+                        <option value="forwarded">Sudah ke Packer</option>
+                    </select>
+                    <button type="button" class="btn btn-light" id="qc_filter_apply">Filter</button>
+                    <button type="button" class="btn btn-light-primary" id="qc_export">Export Excel</button>
+                    <button type="button" class="btn btn-light" id="qc_filter_reset">Reset</button>
+                </div>
+                <div class="table-responsive">
+                    <table class="table align-middle table-row-dashed fs-6 gy-5" id="qc_transit_table">
+                        <thead>
+                            <tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0">
+                                <th>No</th>
+                                <th>Waktu Mulai</th>
+                                <th>Waktu Selesai</th>
+                                <th>ID Pesanan</th>
+                                <th>No Resi</th>
+                                <th>Status QC</th>
+                                <th>Status Lanjutan</th>
+                                <th>QC Oleh</th>
+                                <th>Selesai Oleh</th>
+                                <th>Kode Scan</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
             <div class="tab-pane fade" id="tab_packer_transit" role="tabpanel">
                 <div class="d-flex flex-wrap align-items-center gap-2 mb-4">
                     <div class="d-flex align-items-center position-relative my-1">
@@ -133,8 +208,8 @@
                     <input type="text" class="form-control form-control-solid w-150px" id="packer_filter_date" placeholder="Tanggal" value="{{ $today ?? '' }}" />
                     <select class="form-select form-select-solid w-175px" id="packer_filter_status">
                         <option value="">Semua Status</option>
-                        <option value="pending">Menunggu Scan Out</option>
-                        <option value="done">Selesai</option>
+                        <option value="pending">Siap Scan Out</option>
+                        <option value="done">Scan Out Selesai</option>
                     </select>
                     <button type="button" class="btn btn-light" id="packer_filter_apply">Filter</button>
                     <button type="button" class="btn btn-light" id="packer_filter_reset">Reset</button>
@@ -243,13 +318,16 @@
 @push('scripts')
 <script>
     const dataUrl = '{{ $dataUrl }}';
+    const dataUrlQc = '{{ $dataUrlQc }}';
     const dataUrlPacker = '{{ $dataUrlPacker }}';
     const exportPickerUrl = '{{ route('admin.inventory.picker-transit.export-picker') }}';
+    const exportQcUrl = '{{ route('admin.inventory.picker-transit.export-qc') }}';
     const exportPackerUrl = '{{ route('admin.inventory.picker-transit.export-packer') }}';
     const todayStr = '{{ $today ?? '' }}';
 
     document.addEventListener('DOMContentLoaded', () => {
         const tableEl = $('#picker_transit_table');
+        const qcTableEl = $('#qc_transit_table');
         const packerTableEl = $('#packer_transit_table');
         const pickerStatusTableEl = $('#picker_status_table');
         const packerStatusTableEl = $('#packer_status_table');
@@ -258,6 +336,12 @@
         const pickerApplyBtn = document.getElementById('picker_filter_apply');
         const pickerResetBtn = document.getElementById('picker_filter_reset');
         const pickerStatusEl = document.getElementById('picker_filter_status');
+        const qcSearchInput = document.getElementById('qc_filter_search');
+        const qcDateEl = document.getElementById('qc_filter_date');
+        const qcApplyBtn = document.getElementById('qc_filter_apply');
+        const qcExportBtn = document.getElementById('qc_export');
+        const qcResetBtn = document.getElementById('qc_filter_reset');
+        const qcStatusEl = document.getElementById('qc_filter_status');
         const packerSearchInput = document.getElementById('packer_filter_search');
         const packerDateEl = document.getElementById('packer_filter_date');
         const packerApplyBtn = document.getElementById('packer_filter_apply');
@@ -274,8 +358,10 @@
         const pickerStatusExportBtn = document.getElementById('picker_status_export');
         const packerStatusExportBtn = document.getElementById('packer_status_export');
         let fpPickerDate = null;
+        let fpQcDate = null;
         let fpPackerDate = null;
         let dtPicker = null;
+        let dtQc = null;
         let dtPacker = null;
         let dtPickerStatus = null;
         let dtPackerStatus = null;
@@ -290,6 +376,9 @@
         if (typeof flatpickr !== 'undefined') {
             if (pickerDateEl) {
                 fpPickerDate = flatpickr(pickerDateEl, { dateFormat: 'Y-m-d', allowInput: true });
+            }
+            if (qcDateEl) {
+                fpQcDate = flatpickr(qcDateEl, { dateFormat: 'Y-m-d', allowInput: true });
             }
             if (packerDateEl) {
                 fpPackerDate = flatpickr(packerDateEl, { dateFormat: 'Y-m-d', allowInput: true });
@@ -334,6 +423,49 @@
             ]
         });
 
+        dtQc = qcTableEl.DataTable({
+            processing: true,
+            serverSide: true,
+            dom: 'rtip',
+            order: [[1, 'desc']],
+            ajax: {
+                url: dataUrlQc,
+                dataSrc: function(json) {
+                    const summary = json?.summary || {};
+                    const elDraft = document.getElementById('qc_summary_draft');
+                    const elReady = document.getElementById('qc_summary_ready_packing');
+                    if (elDraft) elDraft.textContent = summary.draft ?? 0;
+                    if (elReady) elReady.textContent = summary.ready_packing ?? 0;
+                    return json.data || [];
+                },
+                data: function(params) {
+                    params.q = qcSearchInput?.value || '';
+                    if (qcDateEl?.value) params.date = qcDateEl.value;
+                    if (qcStatusEl?.value) params.status = qcStatusEl.value;
+                }
+            },
+            columns: [
+                { data: null, orderable: false, searchable: false, render: (data, type, row, meta) => meta.row + meta.settings._iDisplayStart + 1 },
+                { data: 'started_at' },
+                { data: 'completed_at' },
+                { data: 'id_pesanan' },
+                { data: 'no_resi' },
+                { data: 'status', render: (data, type, row) => {
+                    const label = row.status_label || '-';
+                    const badge = row.status_badge || 'badge-light';
+                    return `<span class="badge ${badge}">${label}</span>`;
+                }},
+                { data: 'next_stage', render: (data, type, row) => {
+                    const label = row.next_stage_label || '-';
+                    const badge = row.next_stage_badge || 'badge-light';
+                    return `<span class="badge ${badge}">${label}</span>`;
+                }},
+                { data: 'scanner' },
+                { data: 'completed_by' },
+                { data: 'scan_code' },
+            ]
+        });
+
         dtPacker = packerTableEl.DataTable({
             processing: true,
             serverSide: true,
@@ -371,17 +503,22 @@
                     } else if (normalized === 'selesai') {
                         badgeClass = 'badge-light-success';
                     }
-                    return `<span class="badge ${badgeClass}">${text}</span>`;
+                    const label = normalized === 'menunggu scan out'
+                        ? 'Siap Scan Out'
+                        : (normalized === 'selesai' ? 'Scan Out Selesai' : text);
+                    return `<span class="badge ${badgeClass}">${label}</span>`;
                 }},
             ]
         });
 
         const reloadPicker = () => dtPicker?.ajax?.reload();
+        const reloadQc = () => dtQc?.ajax?.reload();
         const reloadPacker = () => dtPacker?.ajax?.reload();
 
         document.querySelectorAll('a[data-bs-toggle="tab"]').forEach((el) => {
             el.addEventListener('shown.bs.tab', () => {
                 dtPicker?.columns?.adjust();
+                dtQc?.columns?.adjust();
                 dtPacker?.columns?.adjust();
             });
         });
@@ -401,6 +538,31 @@
             reloadPicker();
         });
         pickerStatusEl?.addEventListener('change', reloadPicker);
+
+        qcSearchInput?.addEventListener('keyup', (e) => {
+            if (e.key === 'Enter') reloadQc();
+        });
+        qcApplyBtn?.addEventListener('click', reloadQc);
+        qcExportBtn?.addEventListener('click', () => {
+            const params = new URLSearchParams();
+            const q = (qcSearchInput?.value || '').trim();
+            if (q) params.set('q', q);
+            if (qcDateEl?.value) params.set('date', qcDateEl.value);
+            if (qcStatusEl?.value) params.set('status', qcStatusEl.value);
+            const url = params.toString() ? `${exportQcUrl}?${params.toString()}` : exportQcUrl;
+            window.location.href = url;
+        });
+        qcResetBtn?.addEventListener('click', () => {
+            if (fpQcDate && todayStr) {
+                fpQcDate.setDate(todayStr, true);
+            } else if (qcDateEl) {
+                qcDateEl.value = todayStr || '';
+            }
+            if (qcSearchInput) qcSearchInput.value = '';
+            if (qcStatusEl) qcStatusEl.value = '';
+            reloadQc();
+        });
+        qcStatusEl?.addEventListener('change', reloadQc);
 
         packerSearchInput?.addEventListener('keyup', (e) => {
             if (e.key === 'Enter') reloadPacker();
@@ -470,7 +632,12 @@
                     { data: 'created_at' },
                     { data: 'id_pesanan' },
                     { data: 'no_resi' },
-                    { data: 'status' },
+                    { data: 'status', render: (data) => {
+                        const normalized = String(data || '').toLowerCase();
+                        if (normalized === 'menunggu scan out') return 'Siap Scan Out';
+                        if (normalized === 'selesai') return 'Scan Out Selesai';
+                        return data || '-';
+                    }},
                 ]
             });
         };
@@ -501,6 +668,17 @@
         document.querySelectorAll('.btn-packer-status').forEach((btn) => {
             btn.addEventListener('click', () => {
                 openPackerStatus(btn.getAttribute('data-status'), btn.getAttribute('data-title'));
+            });
+        });
+        document.querySelectorAll('.btn-qc-status').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                if (qcStatusEl) qcStatusEl.value = btn.getAttribute('data-status') || '';
+                if (qcSearchInput) qcSearchInput.value = '';
+                const qcTab = document.querySelector('a[href="#tab_qc_transit"]');
+                if (qcTab && typeof bootstrap !== 'undefined' && bootstrap.Tab) {
+                    bootstrap.Tab.getOrCreateInstance(qcTab).show();
+                }
+                reloadQc();
             });
         });
 

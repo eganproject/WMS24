@@ -61,11 +61,19 @@ class PackerTransitStatusExport implements FromCollection, WithHeadings, WithMap
 
     public function map($row): array
     {
+        $status = $row->status ?? '-';
+        $normalized = strtolower((string) $status);
+        if ($normalized === 'menunggu scan out') {
+            $status = 'Siap Scan Out';
+        } elseif ($normalized === 'selesai') {
+            $status = 'Scan Out Selesai';
+        }
+
         return [
             $row->created_at?->format('Y-m-d H:i') ?? '-',
             (string) ($row->id_pesanan ?? '-'),
             (string) ($row->no_resi ?? '-'),
-            $row->status ?? '-',
+            $status,
         ];
     }
 

@@ -11,8 +11,10 @@ use App\Models\PackerScanOut;
 use App\Models\PickingList;
 use App\Models\PickingListException;
 use App\Models\PickerTransitItem;
+use App\Models\QcResiScan;
 use App\Models\Resi;
 use App\Models\ResiDetail;
+use App\Support\ResiOperationalStatus;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -31,10 +33,12 @@ class ResiImportController extends Controller
         }
         $search = trim((string) $request->input('q', ''));
         $status = $this->normalizeStatusFilter($request->input('status'));
+        $flowStatus = $this->normalizeFlowStatusFilter($request->input('flow_status'));
 
         $baseQuery = Resi::query()->whereDate('tanggal_upload', $filterDate);
         $this->applySearch($baseQuery, $search);
         $this->applyStatusFilter($baseQuery, $status);
+        $this->applyFlowStatusFilter($baseQuery, $flowStatus);
 
         $summaryOrders = (clone $baseQuery)->count();
         $summarySkus = ResiDetail::whereIn('resi_id', (clone $baseQuery)->select('id'))->count();
@@ -45,6 +49,8 @@ class ResiImportController extends Controller
             'filterDate' => $filterDate,
             'filterSearch' => $search,
             'filterStatus' => $status,
+            'filterFlowStatus' => $flowStatus,
+            'flowStatusOptions' => ResiOperationalStatus::options(),
             'today' => $today,
             'summaryOrders' => $summaryOrders,
             'summarySkus' => $summarySkus,
@@ -60,10 +66,12 @@ class ResiImportController extends Controller
         }
         $search = trim((string) $request->input('q', ''));
         $status = $this->normalizeStatusFilter($request->input('status'));
+        $flowStatus = $this->normalizeFlowStatusFilter($request->input('flow_status'));
 
         $filterQuery = Resi::query()->whereDate('tanggal_upload', $filterDate);
         $this->applySearch($filterQuery, $search);
         $this->applyStatusFilter($filterQuery, $status);
+        $this->applyFlowStatusFilter($filterQuery, $flowStatus);
 
         $recordsTotal = Resi::whereDate('tanggal_upload', $filterDate)->count();
         $summaryOrders = (clone $filterQuery)->count();
@@ -81,6 +89,17 @@ class ResiImportController extends Controller
                     ->selectRaw('count(1)')
                     ->whereColumn('packer_scan_outs.resi_id', 'resis.id');
             }, 'scan_out_count')
+            ->selectSub(function ($sub) {
+                $sub->from('qc_resi_scans')
+                    ->selectRaw('count(1)')
+                    ->whereColumn('qc_resi_scans.resi_id', 'resis.id');
+            }, 'qc_scan_count')
+            ->selectSub(function ($sub) {
+                $sub->from('qc_resi_scans')
+                    ->selectRaw('count(1)')
+                    ->whereColumn('qc_resi_scans.resi_id', 'resis.id')
+                    ->where('qc_resi_scans.status', 'passed');
+            }, 'qc_passed_count')
             ->with(['details' => function ($q) {
                 $q->select(['id', 'resi_id', 'sku', 'qty']);
             }, 'kurir'])
@@ -89,6 +108,7 @@ class ResiImportController extends Controller
 
         $this->applySearch($query, $search);
         $this->applyStatusFilter($query, $status);
+        $this->applyFlowStatusFilter($query, $flowStatus);
 
         $start = (int) $request->input('start', 0);
         $length = (int) $request->input('length', 10);
@@ -105,8 +125,17 @@ class ResiImportController extends Controller
                 : '-';
             $skuList = $skuItems !== '' ? $skuItems : '-';
             $tanggalOrder = $row->tanggal_pesanan?->format('Y-m-d') ?? $row->tanggal_pesanan ?? '-';
+            $hasQcScan = (int) ($row->qc_scan_count ?? 0) > 0;
+            $hasQcPassed = (int) ($row->qc_passed_count ?? 0) > 0;
             $hasPackerScan = (int) ($row->packer_scan_count ?? 0) > 0;
             $hasScanOut = (int) ($row->scan_out_count ?? 0) > 0;
+            $operationalStatus = ResiOperationalStatus::resolve(
+                $row->status,
+                $hasQcScan,
+                $hasQcPassed,
+                $hasPackerScan,
+                $hasScanOut
+            );
             return [
                 'id' => $row->id,
                 'no_resi' => $row->no_resi ?? '-',
@@ -115,8 +144,12 @@ class ResiImportController extends Controller
                 'sku' => $skuList,
                 'tanggal_pesanan' => $tanggalOrder,
                 'status' => $row->status ?? 'active',
+                'has_qc_scan' => $hasQcScan,
                 'has_packer_scan' => $hasPackerScan,
                 'has_scan_out' => $hasScanOut,
+                'operational_status' => $operationalStatus,
+                'operational_status_label' => ResiOperationalStatus::label($operationalStatus),
+                'operational_status_badge' => ResiOperationalStatus::badgeClass($operationalStatus),
             ];
         });
 
@@ -140,6 +173,7 @@ class ResiImportController extends Controller
             $filterDate = $today;
         }
         $status = $this->normalizeStatusFilter($request->input('status'));
+        $flowStatus = $this->normalizeFlowStatusFilter($request->input('flow_status'));
 
         $baseQuery = DB::table('resi_details as rd')
             ->join('resis as r', 'r.id', '=', 'rd.resi_id')
@@ -147,6 +181,9 @@ class ResiImportController extends Controller
 
         if ($status !== '') {
             $baseQuery->where('r.status', $status);
+        }
+        if ($flowStatus !== '') {
+            $this->applyFlowStatusFilter($baseQuery, $flowStatus, 'r');
         }
 
         $rows = (clone $baseQuery)
@@ -200,6 +237,18 @@ class ResiImportController extends Controller
 
             foreach ($groups as $group) {
                 $existing = Resi::where('id_pesanan', $group['id_pesanan'])->first();
+                if ($existing) {
+                    $hasQc = QcResiScan::where('resi_id', $existing->id)->exists();
+                    $hasPackerScan = PackerResiScan::where('resi_id', $existing->id)->exists();
+                    $hasScanOut = PackerScanOut::where('resi_id', $existing->id)->exists();
+
+                    if ($hasQc || $hasPackerScan || $hasScanOut) {
+                        throw ValidationException::withMessages([
+                            'file' => 'Resi dengan ID Pesanan '.$group['id_pesanan'].' sudah masuk proses operasional, import ulang diblokir.',
+                        ]);
+                    }
+                }
+
                 $oldTanggalUpload = $existing?->tanggal_upload?->format('Y-m-d');
                 $oldDetails = $existing
                     ? ResiDetail::where('resi_id', $existing->id)->get(['sku', 'qty'])
@@ -285,9 +334,15 @@ class ResiImportController extends Controller
 
         $hasPackerScan = PackerResiScan::where('resi_id', $resi->id)->exists();
         $hasScanOut = PackerScanOut::where('resi_id', $resi->id)->exists();
+        $hasQc = QcResiScan::where('resi_id', $resi->id)->exists();
         if ($hasScanOut) {
             return response()->json([
                 'message' => 'Resi sudah scan out, tidak bisa dibatalkan.',
+            ], 422);
+        }
+        if ($hasQc) {
+            return response()->json([
+                'message' => 'Resi sudah QC, tidak bisa dibatalkan.',
             ], 422);
         }
         if ($hasPackerScan) {
@@ -565,6 +620,16 @@ class ResiImportController extends Controller
         $status = trim((string) $status);
 
         return in_array($status, ['active', 'canceled'], true) ? $status : '';
+    }
+
+    private function applyFlowStatusFilter($query, string $flowStatus, string $tableAlias = 'resis'): void
+    {
+        ResiOperationalStatus::applyFilter($query, $flowStatus, $tableAlias);
+    }
+
+    private function normalizeFlowStatusFilter($status): string
+    {
+        return ResiOperationalStatus::normalize($status);
     }
 
     private function resolveDefaultKurirId(): ?int

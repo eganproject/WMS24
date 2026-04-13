@@ -140,6 +140,7 @@ class InboundScanController extends Controller
         $validated = $request->validate([
             'session_id' => ['required', 'integer', 'exists:inbound_scan_sessions,id'],
             'code' => ['required', 'string'],
+            'allow_over_scan' => ['sometimes', 'boolean'],
         ]);
 
         $code = trim((string) $validated['code']);
@@ -181,19 +182,26 @@ class InboundScanController extends Controller
                 ], 422);
             }
 
-            if ((int) $target->scanned_koli >= (int) $target->expected_koli) {
+            $nextScannedKoli = (int) $target->scanned_koli + 1;
+            $willOverScan = $nextScannedKoli > (int) $target->expected_koli;
+            if ($willOverScan && empty($validated['allow_over_scan'])) {
                 DB::rollBack();
                 return response()->json([
-                    'message' => 'Jumlah scan koli untuk SKU ini sudah penuh.',
+                    'message' => 'SKU sudah mencapai target surat jalan. Scan lagi akan dianggap terima lebih. Lanjutkan?',
+                    'action' => 'confirm_over_scan',
                     'details' => [[
                         'sku' => $target->sku,
                         'expected_koli' => (int) $target->expected_koli,
                         'scanned_koli' => (int) $target->scanned_koli,
+                        'expected_qty' => (int) $target->expected_qty,
+                        'scanned_qty' => (int) $target->scanned_qty,
+                        'next_scanned_koli' => $nextScannedKoli,
+                        'next_scanned_qty' => (int) $target->scanned_qty + (int) $target->qty_per_koli,
                     ]],
-                ], 422);
+                ], 409);
             }
 
-            $target->scanned_koli = (int) $target->scanned_koli + 1;
+            $target->scanned_koli = $nextScannedKoli;
             $target->scanned_qty = (int) $target->scanned_qty + (int) $target->qty_per_koli;
             $target->save();
 
@@ -237,6 +245,7 @@ class InboundScanController extends Controller
     {
         $validated = $request->validate([
             'session_id' => ['required', 'integer', 'exists:inbound_scan_sessions,id'],
+            'confirm_variance' => ['sometimes', 'boolean'],
         ]);
 
         DB::beginTransaction();
@@ -260,25 +269,36 @@ class InboundScanController extends Controller
                 ->lockForUpdate()
                 ->get();
 
-            $missing = [];
+            $totalScannedKoli = (int) $items->sum('scanned_koli');
+            if ($totalScannedKoli <= 0) {
+                DB::rollBack();
+                return response()->json([
+                    'message' => 'Belum ada scan koli. Scan minimal 1 koli sebelum complete.',
+                ], 422);
+            }
+
+            $variance = [];
             foreach ($items as $item) {
                 if ((int) $item->scanned_koli !== (int) $item->expected_koli || (int) $item->scanned_qty !== (int) $item->expected_qty) {
-                    $missing[] = [
+                    $variance[] = [
                         'sku' => $item->sku,
                         'expected_koli' => (int) $item->expected_koli,
                         'scanned_koli' => (int) $item->scanned_koli,
                         'expected_qty' => (int) $item->expected_qty,
                         'scanned_qty' => (int) $item->scanned_qty,
+                        'diff_koli' => (int) $item->scanned_koli - (int) $item->expected_koli,
+                        'diff_qty' => (int) $item->scanned_qty - (int) $item->expected_qty,
                     ];
                 }
             }
 
-            if (!empty($missing)) {
+            if (!empty($variance) && empty($validated['confirm_variance'])) {
                 DB::rollBack();
                 return response()->json([
-                    'message' => 'Masih ada SKU yang belum lengkap discan.',
-                    'details' => $missing,
-                ], 422);
+                    'message' => 'Ada selisih antara surat jalan dan hasil scan. Jika dilanjutkan, stok akan masuk sesuai hasil scan.',
+                    'action' => 'confirm_variance',
+                    'details' => $variance,
+                ], 409);
             }
 
             $completedAt = now();
@@ -289,19 +309,22 @@ class InboundScanController extends Controller
                     ]);
                 }
 
-                StockService::mutate([
-                    'item_id' => $item->item_id,
-                    'warehouse_id' => $transaction->warehouse_id,
-                    'direction' => 'in',
-                    'qty' => (int) $item->scanned_qty,
-                    'source_type' => 'inbound',
-                    'source_subtype' => $transaction->type,
-                    'source_id' => $transaction->id,
-                    'source_code' => $transaction->code,
-                    'note' => $item->note,
-                    'occurred_at' => $completedAt,
-                    'created_by' => auth()->id(),
-                ]);
+                $qty = (int) $item->scanned_qty;
+                if ($qty > 0) {
+                    StockService::mutate([
+                        'item_id' => $item->item_id,
+                        'warehouse_id' => $transaction->warehouse_id,
+                        'direction' => 'in',
+                        'qty' => $qty,
+                        'source_type' => 'inbound',
+                        'source_subtype' => $transaction->type,
+                        'source_id' => $transaction->id,
+                        'source_code' => $transaction->code,
+                        'note' => $item->note,
+                        'occurred_at' => $completedAt,
+                        'created_by' => auth()->id(),
+                    ]);
+                }
             }
 
             $transaction->status = InboundScanStatus::COMPLETED;

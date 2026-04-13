@@ -33,6 +33,11 @@ class OperationalUserSeeder extends Seeder
                 'email' => 'scanout@wms24.test',
                 'role_slug' => 'admin-scan',
             ],
+            [
+                'name' => 'Inbound Scan Operasional',
+                'email' => 'inbound@wms24.test',
+                'role_slug' => 'inbound-scan',
+            ],
         ];
 
         foreach ($users as $user) {

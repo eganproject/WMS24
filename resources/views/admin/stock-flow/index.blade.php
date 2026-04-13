@@ -103,6 +103,9 @@
                         <th>Gudang</th>
                         <th>Item</th>
                         <th>Qty</th>
+                        @if(!empty($showScanProgressColumn ?? false))
+                            <th>Progress Scan</th>
+                        @endif
                         <th>Catatan</th>
                         <th class="text-end">Aksi</th>
                     </tr>
@@ -272,6 +275,7 @@
     const lockedStatuses = @json($lockedStatuses ?? ['approved']);
     const showApproveAction = {{ isset($showApproveAction) ? ($showApproveAction ? 'true' : 'false') : 'true' }};
     const deleteWarningText = @json($deleteWarningText ?? 'Data akan dihapus dan stok akan dikembalikan');
+    const showScanProgressColumn = {{ !empty($showScanProgressColumn ?? false) ? 'true' : 'false' }};
 
     document.addEventListener('DOMContentLoaded', () => {
         const tableEl = $('#stock_flow_table');
@@ -341,6 +345,25 @@
         const renderWarehouseBadge = (label, warehouseId) => {
             const text = label || '-';
             return `<span class="badge ${warehouseBadgeClass(warehouseId)}">${text}</span>`;
+        };
+
+        const renderScanProgress = (progress) => {
+            const expectedKoli = Number(progress?.expected_koli || 0);
+            if (!expectedKoli) return '-';
+
+            const scannedKoli = Number(progress?.scanned_koli || 0);
+            const expectedQty = Number(progress?.expected_qty || 0);
+            const scannedQty = Number(progress?.scanned_qty || 0);
+            const isDone = scannedKoli >= expectedKoli;
+            const klass = isDone
+                ? 'badge-light-success'
+                : (scannedKoli > 0 ? 'badge-light-primary' : 'badge-light-warning');
+
+            const qtyLine = expectedQty
+                ? `<div class="text-muted fs-7">Qty ${scannedQty}/${expectedQty}</div>`
+                : '';
+
+            return `<div><span class="badge ${klass}">Koli ${scannedKoli}/${expectedKoli}</span>${qtyLine}</div>`;
         };
 
         const clearErrors = () => {
@@ -616,6 +639,9 @@
                 { data: 'warehouse', render: (data, type, row) => renderWarehouseBadge(data, row?.warehouse_id) },
                 { data: 'item' },
                 { data: 'qty' },
+                @if(!empty($showScanProgressColumn ?? false))
+                    { data: 'scan_progress', orderable:false, searchable:false, render: (data) => renderScanProgress(data) },
+                @endif
                 { data: 'note' },
                 { data: 'id', orderable:false, searchable:false, className:'text-end', render: (data, type, row)=>{
                     const rowType = row?.type || defaultTypeFilter;

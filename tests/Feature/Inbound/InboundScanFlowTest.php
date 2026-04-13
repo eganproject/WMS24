@@ -95,8 +95,8 @@ class InboundScanFlowTest extends TestCase
                 'session_id' => $session->id,
                 'code' => 'SKU-IN-001',
             ])
-            ->assertStatus(422)
-            ->assertJsonPath('message', 'Jumlah scan koli untuk SKU ini sudah penuh.');
+            ->assertStatus(409)
+            ->assertJsonPath('action', 'confirm_over_scan');
 
         $this->actingAs($scanner)
             ->postJson(route('picker.inbound-scan.complete'), [
@@ -179,6 +179,92 @@ class InboundScanFlowTest extends TestCase
             ])
             ->assertStatus(422)
             ->assertJsonPath('message', 'Inbound yang sudah mulai discan tidak bisa diubah.');
+    }
+
+    public function test_inbound_receipt_can_complete_with_variance_and_posts_scanned_qty(): void
+    {
+        $this->withoutMiddleware(AuthorizeMenuPermission::class);
+
+        $admin = User::factory()->create();
+        $scanner = $this->createUserWithRole('inbound-scan');
+        $warehouse = Warehouse::create([
+            'code' => 'GUDANG_BESAR',
+            'name' => 'Gudang Besar',
+        ]);
+        $item = Item::create([
+            'sku' => 'SKU-IN-003',
+            'name' => 'Inbound Item 3',
+            'category_id' => 0,
+            'koli_qty' => 10,
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson(route('admin.inbound.receipts.store'), [
+                'ref_no' => 'REF-IN-003',
+                'transacted_at' => now()->format('Y-m-d H:i:s'),
+                'items' => [
+                    [
+                        'item_id' => $item->id,
+                        'qty' => 20,
+                    ],
+                ],
+            ])
+            ->assertOk();
+
+        $transaction = InboundTransaction::firstOrFail();
+
+        $this->actingAs($scanner)
+            ->postJson(route('picker.inbound-scan.open'), [
+                'transaction_id' => $transaction->id,
+            ])
+            ->assertOk()
+            ->assertJsonPath('transaction.status', 'scanning');
+
+        $session = InboundScanSession::firstOrFail();
+
+        $this->actingAs($scanner)
+            ->postJson(route('picker.inbound-scan.scan-sku'), [
+                'session_id' => $session->id,
+                'code' => 'SKU-IN-003',
+            ])
+            ->assertOk()
+            ->assertJsonPath('transaction.summary.scanned_koli', 1)
+            ->assertJsonPath('transaction.summary.scanned_qty', 10);
+
+        $this->actingAs($scanner)
+            ->postJson(route('picker.inbound-scan.complete'), [
+                'session_id' => $session->id,
+            ])
+            ->assertStatus(409)
+            ->assertJsonPath('action', 'confirm_variance');
+
+        $this->actingAs($scanner)
+            ->postJson(route('picker.inbound-scan.complete'), [
+                'session_id' => $session->id,
+                'confirm_variance' => true,
+            ])
+            ->assertOk()
+            ->assertJsonPath('transaction.status', 'completed');
+
+        $transaction->refresh();
+        $session->refresh();
+
+        $this->assertSame('completed', $transaction->status);
+        $this->assertSame($scanner->id, $transaction->approved_by);
+        $this->assertSame($scanner->id, $session->completed_by);
+        $this->assertDatabaseHas('stock_mutations', [
+            'source_type' => 'inbound',
+            'source_id' => $transaction->id,
+            'source_subtype' => 'receipt',
+            'item_id' => $item->id,
+            'qty' => 10,
+            'warehouse_id' => $warehouse->id,
+        ]);
+        $this->assertDatabaseHas('item_stocks', [
+            'item_id' => $item->id,
+            'warehouse_id' => $warehouse->id,
+            'stock' => 10,
+        ]);
     }
 
     private function createUserWithRole(string $slug): User

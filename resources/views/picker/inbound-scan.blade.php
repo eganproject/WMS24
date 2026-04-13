@@ -103,6 +103,10 @@
         background: rgba(34, 197, 94, 0.16);
         color: #15803d;
     }
+    .count-pill.over {
+        background: rgba(249, 115, 22, 0.15);
+        color: #c2410c;
+    }
     .result-row {
         display: flex;
         justify-content: space-between;
@@ -357,38 +361,67 @@
 
         if (!res.ok) {
             const err = new Error(buildErrorMessage(res, json));
+            err.status = res.status;
             err.details = json?.details || [];
+            err.payload = json;
             throw err;
         }
 
         return json;
     };
 
+    const buildDetailsHtml = (message, details = []) => {
+        let html = `<div style="text-align:left; font-size:13px;">${escapeHtml(message || '')}</div>`;
+        if (Array.isArray(details) && details.length) {
+            const items = details.map((row) => {
+                const sku = escapeHtml(row.sku || '-');
+                const expectedKoli = row.expected_koli ?? row.required ?? '-';
+                const scannedKoli = row.scanned_koli ?? row.scanned ?? '-';
+                const expectedQty = row.expected_qty ?? '-';
+                const scannedQty = row.scanned_qty ?? '-';
+                const diffKoliRaw = row.diff_koli;
+                const diffQtyRaw = row.diff_qty;
+                const diffKoli = Number.isFinite(Number(diffKoliRaw)) ? Number(diffKoliRaw) : null;
+                const diffQty = Number.isFinite(Number(diffQtyRaw)) ? Number(diffQtyRaw) : null;
+                const diffLine = diffKoli !== null && diffKoli !== 0
+                    ? `<div style="color:#c2410c; font-size:12px;">Selisih Koli ${diffKoli > 0 ? '+' : ''}${diffKoli}${diffQty !== null && diffQty !== 0 ? ` • Qty ${diffQty > 0 ? '+' : ''}${diffQty}` : ''}</div>`
+                    : '';
+                return `
+                    <li style="margin-bottom:8px;">
+                        <strong>${sku}</strong>
+                        <div style="color:#64748b; font-size:12px;">Koli ${scannedKoli}/${expectedKoli}</div>
+                        ${expectedQty !== '-' ? `<div style="color:#64748b; font-size:12px;">Qty ${scannedQty}/${expectedQty}</div>` : ''}
+                        ${diffLine}
+                    </li>
+                `;
+            }).join('');
+            html += `<ul style="text-align:left; padding-left:18px; margin-top:8px;">${items}</ul>`;
+        }
+        return html;
+    };
+
+    const confirmWithDetails = async ({ title = 'Konfirmasi', message = '', details = [], confirmText = 'Lanjutkan', cancelText = 'Batal' }) => {
+        if (typeof Swal !== 'undefined') {
+            const result = await Swal.fire({
+                icon: 'warning',
+                title,
+                html: buildDetailsHtml(message, details),
+                showCancelButton: true,
+                confirmButtonText: confirmText,
+                cancelButtonText: cancelText,
+            });
+            return !!result.isConfirmed;
+        }
+
+        return window.confirm(message || 'Lanjutkan?');
+    };
+
     const showError = (message, details = []) => {
         if (typeof Swal !== 'undefined') {
-            let html = `<div style="text-align:left; font-size:13px;">${escapeHtml(message)}</div>`;
-            if (Array.isArray(details) && details.length) {
-                const items = details.map((row) => {
-                    const sku = escapeHtml(row.sku || '-');
-                    const expectedKoli = row.expected_koli ?? row.required ?? '-';
-                    const scannedKoli = row.scanned_koli ?? row.scanned ?? '-';
-                    const expectedQty = row.expected_qty ?? '-';
-                    const scannedQty = row.scanned_qty ?? '-';
-                    return `
-                        <li style="margin-bottom:8px;">
-                            <strong>${sku}</strong>
-                            <div style="color:#64748b; font-size:12px;">Koli ${scannedKoli}/${expectedKoli}</div>
-                            ${expectedQty !== '-' ? `<div style="color:#64748b; font-size:12px;">Qty ${scannedQty}/${expectedQty}</div>` : ''}
-                        </li>
-                    `;
-                }).join('');
-                html += `<ul style="text-align:left; padding-left:18px; margin-top:8px;">${items}</ul>`;
-            }
-
             Swal.fire({
                 icon: 'error',
                 title: 'Gagal',
-                html,
+                html: buildDetailsHtml(message, details),
             });
             return;
         }
@@ -462,13 +495,32 @@
             transaction.transacted_at ? `Inbound: ${transaction.transacted_at}` : null,
         ].filter(Boolean).join(' • ');
 
+        const expectedKoli = Number(summary.expected_koli || 0);
+        const scannedKoli = Number(summary.scanned_koli || 0);
+        const expectedQty = Number(summary.expected_qty || 0);
+        const scannedQty = Number(summary.scanned_qty || 0);
+        const hasVariance = (expectedKoli && scannedKoli !== expectedKoli) || (expectedQty && scannedQty !== expectedQty);
+
         el.resultTitle.textContent = transaction.code || 'Inbound Aktif';
         el.resultMeta.textContent = meta || '-';
-        el.resultBadge.textContent = statusLabel(transaction.status);
-        el.resultBadge.className = `result-badge${transaction.status === 'completed' ? ' done' : ''}`;
-        el.resultSummary.textContent = `Koli ${summary.scanned_koli || 0}/${summary.expected_koli || 0} • Qty ${summary.scanned_qty || 0}/${summary.expected_qty || 0}`;
+        el.resultBadge.textContent = transaction.status === 'completed' && hasVariance
+            ? 'Selesai (Selisih)'
+            : statusLabel(transaction.status);
+        el.resultBadge.className = `result-badge${transaction.status === 'completed' && !hasVariance ? ' done' : ''}`;
+        el.resultSummary.textContent = `Koli ${scannedKoli}/${expectedKoli} • Qty ${scannedQty}/${expectedQty}`;
         el.resultItems.innerHTML = items.map((row) => {
-            const done = (row.scanned_koli || 0) >= (row.expected_koli || 0);
+            const rowExpected = Number(row.expected_koli || 0);
+            const rowScanned = Number(row.scanned_koli || 0);
+            const isMatch = rowExpected > 0 && rowScanned === rowExpected;
+            const isOver = rowExpected > 0 && rowScanned > rowExpected;
+            const isCompleted = transaction.status === 'completed';
+            const mismatch = rowExpected > 0 && rowScanned !== rowExpected;
+            const pillText = (isCompleted && mismatch)
+                ? (isOver ? 'Lebih' : 'Kurang')
+                : (isMatch ? 'Done' : 'Progress');
+            const pillClass = isMatch
+                ? ' done'
+                : ((isOver || (isCompleted && mismatch)) ? ' over' : '');
             return `
                 <div class="result-item">
                     <div class="result-row">
@@ -477,7 +529,7 @@
                             <div class="result-meta">${escapeHtml(row.item_name || '-')} • ${row.qty_per_koli || 0} pcs/koli</div>
                             <div class="result-meta">Qty ${row.scanned_qty || 0}/${row.expected_qty || 0} • Koli ${row.scanned_koli || 0}/${row.expected_koli || 0}</div>
                         </div>
-                        <div class="count-pill${done ? ' done' : ''}">${done ? 'Done' : 'Progress'}</div>
+                        <div class="count-pill${pillClass}">${pillText}</div>
                     </div>
                 </div>
             `;
@@ -557,25 +609,49 @@
         setStatus(el.scanStatus, 'Memproses scan SKU...', 'pending');
 
         try {
-            const data = await fetchJson(routes.scanSku, {
+            const postScan = (extra = {}) => fetchJson(routes.scanSku, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     session_id: state.transaction.session.id,
                     code,
+                    ...extra,
                     _token: csrfToken,
                 }),
             });
-            renderTransaction(data.transaction || null);
+
+            let data = null;
+            try {
+                data = await postScan();
+            } catch (innerError) {
+                if (innerError?.payload?.action === 'confirm_over_scan') {
+                    const ok = await confirmWithDetails({
+                        title: 'Terima Lebih?',
+                        message: innerError.message || 'SKU sudah melewati target surat jalan.',
+                        details: innerError.details || [],
+                        confirmText: 'Ya, tambah 1 koli',
+                        cancelText: 'Batal',
+                    });
+                    if (!ok) {
+                        setStatus(el.scanStatus, 'Scan dibatalkan.', 'muted');
+                        return;
+                    }
+                    data = await postScan({ allow_over_scan: true });
+                } else {
+                    throw innerError;
+                }
+            }
+
+            renderTransaction(data?.transaction || null);
             el.skuCode.value = '';
             el.skuCode.focus();
-            setStatus(el.scanStatus, data.message || 'SKU berhasil discan.', 'success');
+            setStatus(el.scanStatus, data?.message || 'SKU berhasil discan.', 'success');
         } catch (error) {
             showError(error.message || 'Gagal scan SKU.', error.details || []);
             setStatus(el.scanStatus, error.message || 'Gagal scan SKU.', 'error');
         } finally {
             state.scanning = false;
-            el.btnScanSku.disabled = false;
+            el.btnScanSku.disabled = state.transaction?.status === 'completed';
         }
     };
 
@@ -591,23 +667,47 @@
         setStatus(el.resultStatus, 'Menyelesaikan scan inbound...', 'pending');
 
         try {
-            const data = await fetchJson(routes.complete, {
+            const postComplete = (extra = {}) => fetchJson(routes.complete, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     session_id: state.transaction.session.id,
+                    ...extra,
                     _token: csrfToken,
                 }),
             });
-            renderTransaction(data.transaction || null);
-            setStatus(el.resultStatus, data.message || 'Inbound selesai.', 'success');
+
+            let data = null;
+            try {
+                data = await postComplete();
+            } catch (innerError) {
+                if (innerError?.payload?.action === 'confirm_variance') {
+                    const ok = await confirmWithDetails({
+                        title: 'Complete Dengan Selisih?',
+                        message: innerError.message || 'Ada selisih antara surat jalan dan hasil scan.',
+                        details: innerError.details || [],
+                        confirmText: 'Ya, complete & posting stok',
+                        cancelText: 'Batal',
+                    });
+                    if (!ok) {
+                        setStatus(el.resultStatus, 'Complete dibatalkan.', 'muted');
+                        return;
+                    }
+                    data = await postComplete({ confirm_variance: true });
+                } else {
+                    throw innerError;
+                }
+            }
+
+            renderTransaction(data?.transaction || null);
+            setStatus(el.resultStatus, data?.message || 'Inbound selesai.', 'success');
             searchTransactions();
         } catch (error) {
             showError(error.message || 'Gagal menyelesaikan inbound.', error.details || []);
             setStatus(el.resultStatus, error.message || 'Gagal menyelesaikan inbound.', 'error');
         } finally {
             state.completing = false;
-            el.btnCompleteInbound.disabled = false;
+            el.btnCompleteInbound.disabled = state.transaction?.status === 'completed';
         }
     };
 
@@ -647,7 +747,7 @@
             setStatus(el.resultStatus, error.message || 'Gagal reset scan inbound.', 'error');
         } finally {
             state.resetting = false;
-            el.btnResetInbound.disabled = false;
+            el.btnResetInbound.disabled = state.transaction?.status === 'completed';
         }
     };
 

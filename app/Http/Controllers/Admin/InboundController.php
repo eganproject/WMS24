@@ -241,6 +241,7 @@ class InboundController extends Controller
             'routeMap' => $routeMap,
             'enableKoli' => true,
             'showApproveAction' => false,
+            'showScanProgressColumn' => true,
             'statusLabels' => $statusLabels,
             'lockedStatuses' => [InboundScanStatus::SCANNING, InboundScanStatus::COMPLETED, 'approved'],
             'showDeliveryNoteFields' => true,
@@ -278,7 +279,7 @@ class InboundController extends Controller
         }
 
         $query = InboundTransaction::query()
-            ->with(['items.item', 'creator', 'warehouse'])
+            ->with(['items.item', 'creator', 'warehouse', 'scanSession.items'])
             ->select([
                 'inbound_transactions.id',
                 'inbound_transactions.code',
@@ -335,6 +336,7 @@ class InboundController extends Controller
         $data = $query->get()->map(function (InboundTransaction $row) use ($defaultWarehouseLabel) {
             $ts = $row->transacted_at?->format('Y-m-d H:i') ?? '';
             $items = $row->items ?? collect();
+            $scanItems = $row->scanSession?->items ?? collect();
             $labels = $items->map(function (InboundItem $item) {
                 $sku = trim($item->item?->sku ?? '');
                 if ($sku === '') {
@@ -344,6 +346,11 @@ class InboundController extends Controller
                 return sprintf('%s (%d)', $sku, (int) ($item->qty ?? 0));
             })->filter()->values();
 
+            $expectedQty = (int) $items->sum('qty');
+            $expectedKoli = (int) $items->sum(fn ($item) => (int) ($item->koli ?? 0));
+            $scannedQty = (int) $scanItems->sum('scanned_qty');
+            $scannedKoli = (int) $scanItems->sum('scanned_koli');
+
             return [
                 'id' => $row->id,
                 'code' => $row->code,
@@ -352,7 +359,13 @@ class InboundController extends Controller
                 'warehouse' => $row->warehouse?->name ?? $defaultWarehouseLabel,
                 'warehouse_id' => $row->warehouse_id,
                 'item' => $labels->implode(', ') ?: '-',
-                'qty' => (int) $items->sum('qty'),
+                'qty' => $expectedQty,
+                'scan_progress' => [
+                    'expected_koli' => $expectedKoli,
+                    'scanned_koli' => $scannedKoli,
+                    'expected_qty' => $expectedQty,
+                    'scanned_qty' => $scannedQty,
+                ],
                 'note' => $row->note ?? '',
                 'type' => $row->type,
                 'status' => $row->status ?? InboundScanStatus::PENDING_SCAN,

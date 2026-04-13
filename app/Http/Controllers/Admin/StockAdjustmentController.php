@@ -151,20 +151,6 @@ class StockAdjustmentController extends Controller
                     'qty' => $row['qty'],
                     'note' => $row['note'] ?? null,
                 ]);
-
-                StockService::mutate([
-                    'item_id' => $row['item_id'],
-                    'direction' => $row['direction'],
-                    'qty' => $row['qty'],
-                    'warehouse_id' => $warehouseId,
-                    'source_type' => 'adjustment',
-                    'source_subtype' => 'manual',
-                    'source_id' => $adjustment->id,
-                    'source_code' => $adjustment->code,
-                    'note' => $row['note'] ?? null,
-                    'occurred_at' => $transactedAt,
-                    'created_by' => auth()->id(),
-                ]);
             }
 
             DB::commit();
@@ -180,7 +166,7 @@ class StockAdjustmentController extends Controller
         }
 
         return response()->json([
-            'message' => 'Penyesuaian stok berhasil disimpan',
+            'message' => 'Penyesuaian stok berhasil disimpan dan menunggu approval.',
         ]);
     }
 
@@ -232,20 +218,6 @@ class StockAdjustmentController extends Controller
                     'note' => $row['note'] ?? null,
                 ]);
                 $createdItems++;
-
-                StockService::mutate([
-                    'item_id' => $row['item_id'],
-                    'direction' => $row['direction'],
-                    'qty' => $row['qty'],
-                    'warehouse_id' => $warehouseId,
-                    'source_type' => 'adjustment',
-                    'source_subtype' => 'import',
-                    'source_id' => $adjustment->id,
-                    'source_code' => $adjustment->code,
-                    'note' => $row['note'] ?? null,
-                    'occurred_at' => $transactedAt,
-                    'created_by' => auth()->id(),
-                ]);
             }
 
             DB::commit();
@@ -325,20 +297,6 @@ class StockAdjustmentController extends Controller
                     'qty' => $row['qty'],
                     'note' => $row['note'] ?? null,
                 ]);
-
-                StockService::mutate([
-                    'item_id' => $row['item_id'],
-                    'direction' => $row['direction'],
-                    'qty' => $row['qty'],
-                    'warehouse_id' => $warehouseId,
-                    'source_type' => 'adjustment',
-                    'source_subtype' => 'manual',
-                    'source_id' => $adjustment->id,
-                    'source_code' => $adjustment->code,
-                    'note' => $row['note'] ?? null,
-                    'occurred_at' => $validated['transacted_at'] ?? now(),
-                    'created_by' => auth()->id(),
-                ]);
             }
 
             DB::commit();
@@ -390,14 +348,57 @@ class StockAdjustmentController extends Controller
 
     public function approve(int $id)
     {
-        $adjustment = StockAdjustment::findOrFail($id);
-        if (($adjustment->status ?? 'pending') === 'approved') {
-            return response()->json(['message' => 'Data sudah disetujui']);
+        DB::beginTransaction();
+        try {
+            $adjustment = StockAdjustment::with('items')
+                ->lockForUpdate()
+                ->findOrFail($id);
+
+            if (($adjustment->status ?? 'pending') === 'approved') {
+                DB::rollBack();
+                return response()->json(['message' => 'Data sudah disetujui']);
+            }
+
+            $hasMutations = StockMutation::where('source_type', 'adjustment')
+                ->where('source_id', $adjustment->id)
+                ->exists();
+
+            $approvedAt = now();
+            if (!$hasMutations) {
+                foreach ($adjustment->items as $row) {
+                    StockService::mutate([
+                        'item_id' => $row->item_id,
+                        'direction' => $row->direction,
+                        'qty' => (int) $row->qty,
+                        'warehouse_id' => $adjustment->warehouse_id,
+                        'source_type' => 'adjustment',
+                        'source_subtype' => 'approve',
+                        'source_id' => $adjustment->id,
+                        'source_code' => $adjustment->code,
+                        'note' => $row->note,
+                        'occurred_at' => $approvedAt,
+                        'created_by' => auth()->id(),
+                    ]);
+                }
+            }
+
+            $adjustment->status = 'approved';
+            $adjustment->approved_at = $approvedAt;
+            $adjustment->approved_by = auth()->id();
+            $adjustment->save();
+
+            DB::commit();
+        } catch (ValidationException $e) {
+            DB::rollBack();
+            throw $e;
+        } catch (\Throwable $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'message' => 'Gagal menyetujui penyesuaian stok',
+                'error' => $e->getMessage(),
+            ], 500);
         }
-        $adjustment->status = 'approved';
-        $adjustment->approved_at = now();
-        $adjustment->approved_by = auth()->id();
-        $adjustment->save();
 
         return response()->json(['message' => 'Penyesuaian stok berhasil disetujui']);
     }

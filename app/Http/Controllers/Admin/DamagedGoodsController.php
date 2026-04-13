@@ -119,22 +119,6 @@ class DamagedGoodsController extends Controller
                     'qty' => $row['qty'],
                     'note' => $row['note'] ?? null,
                 ]);
-
-                if ($validated['source_type'] === 'display') {
-                    StockService::mutate([
-                        'item_id' => $row['item_id'],
-                        'warehouse_id' => WarehouseService::displayWarehouseId(),
-                        'direction' => 'out',
-                        'qty' => $row['qty'],
-                        'source_type' => 'damaged',
-                        'source_subtype' => $validated['source_type'],
-                        'source_id' => $damage->id,
-                        'source_code' => $damage->code,
-                        'note' => $row['note'] ?? null,
-                        'occurred_at' => $transactedAt,
-                        'created_by' => auth()->id(),
-                    ]);
-                }
             }
 
             DB::commit();
@@ -150,7 +134,7 @@ class DamagedGoodsController extends Controller
         }
 
         return response()->json([
-            'message' => 'Barang rusak berhasil disimpan',
+            'message' => 'Barang rusak berhasil disimpan dan menunggu approval.',
         ]);
     }
 
@@ -209,22 +193,6 @@ class DamagedGoodsController extends Controller
                     'qty' => $row['qty'],
                     'note' => $row['note'] ?? null,
                 ]);
-
-                if ($validated['source_type'] === 'display') {
-                    StockService::mutate([
-                        'item_id' => $row['item_id'],
-                        'warehouse_id' => WarehouseService::displayWarehouseId(),
-                        'direction' => 'out',
-                        'qty' => $row['qty'],
-                        'source_type' => 'damaged',
-                        'source_subtype' => $validated['source_type'],
-                        'source_id' => $damage->id,
-                        'source_code' => $damage->code,
-                        'note' => $row['note'] ?? null,
-                        'occurred_at' => $validated['transacted_at'] ?? now(),
-                        'created_by' => auth()->id(),
-                    ]);
-                }
             }
 
             DB::commit();
@@ -276,14 +244,59 @@ class DamagedGoodsController extends Controller
 
     public function approve(int $id)
     {
-        $damage = DamagedGood::findOrFail($id);
-        if (($damage->status ?? 'pending') === 'approved') {
-            return response()->json(['message' => 'Data sudah disetujui']);
+        DB::beginTransaction();
+        try {
+            $damage = DamagedGood::with('items')
+                ->lockForUpdate()
+                ->findOrFail($id);
+
+            if (($damage->status ?? 'pending') === 'approved') {
+                DB::rollBack();
+                return response()->json(['message' => 'Data sudah disetujui']);
+            }
+
+            $approvedAt = now();
+            if (($damage->source_type ?? '') === 'display') {
+                $hasMutations = StockMutation::where('source_type', 'damaged')
+                    ->where('source_id', $damage->id)
+                    ->exists();
+
+                if (!$hasMutations) {
+                    foreach ($damage->items as $row) {
+                        StockService::mutate([
+                            'item_id' => $row->item_id,
+                            'warehouse_id' => WarehouseService::displayWarehouseId(),
+                            'direction' => 'out',
+                            'qty' => (int) $row->qty,
+                            'source_type' => 'damaged',
+                            'source_subtype' => $damage->source_type,
+                            'source_id' => $damage->id,
+                            'source_code' => $damage->code,
+                            'note' => $row->note,
+                            'occurred_at' => $approvedAt,
+                            'created_by' => auth()->id(),
+                        ]);
+                    }
+                }
+            }
+
+            $damage->status = 'approved';
+            $damage->approved_at = $approvedAt;
+            $damage->approved_by = auth()->id();
+            $damage->save();
+
+            DB::commit();
+        } catch (ValidationException $e) {
+            DB::rollBack();
+            throw $e;
+        } catch (\Throwable $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'message' => 'Gagal menyetujui barang rusak',
+                'error' => $e->getMessage(),
+            ], 500);
         }
-        $damage->status = 'approved';
-        $damage->approved_at = now();
-        $damage->approved_by = auth()->id();
-        $damage->save();
 
         return response()->json(['message' => 'Barang rusak berhasil disetujui']);
     }

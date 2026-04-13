@@ -185,14 +185,72 @@ class StockOpnameController extends Controller
 
     public function approve(int $id)
     {
-        $opname = StockOpname::findOrFail($id);
-        if (($opname->status ?? 'open') === 'completed') {
-            return response()->json(['message' => 'Stock opname sudah disetujui']);
+        DB::beginTransaction();
+        try {
+            $opname = StockOpname::with('items')
+                ->lockForUpdate()
+                ->findOrFail($id);
+
+            if (($opname->status ?? 'open') === 'completed') {
+                DB::rollBack();
+                return response()->json(['message' => 'Stock opname sudah disetujui']);
+            }
+
+            $hasMutations = StockMutation::where('source_type', 'opname')
+                ->where('source_id', $opname->id)
+                ->exists();
+
+            $approvedAt = now();
+            if (!$hasMutations) {
+                $warehouseId = (int) ($opname->warehouse_id ?? 0);
+                if ($warehouseId <= 0) {
+                    $warehouseId = WarehouseService::defaultWarehouseId();
+                }
+
+                foreach ($opname->items as $row) {
+                    $adjustment = (int) $row->adjustment;
+                    if ($adjustment === 0) {
+                        continue;
+                    }
+                    if (!(int) $row->item_id) {
+                        throw ValidationException::withMessages([
+                            'items' => 'Item opname tidak valid.',
+                        ]);
+                    }
+
+                    StockService::mutate([
+                        'item_id' => $row->item_id,
+                        'direction' => $adjustment > 0 ? 'in' : 'out',
+                        'qty' => abs($adjustment),
+                        'warehouse_id' => $warehouseId,
+                        'source_type' => 'opname',
+                        'source_subtype' => 'approve',
+                        'source_id' => $opname->id,
+                        'source_code' => $opname->code,
+                        'note' => $row->note,
+                        'occurred_at' => $approvedAt,
+                        'created_by' => auth()->id(),
+                    ]);
+                }
+            }
+
+            $opname->status = 'completed';
+            $opname->completed_at = $approvedAt;
+            $opname->completed_by = auth()->id();
+            $opname->save();
+
+            DB::commit();
+        } catch (ValidationException $e) {
+            DB::rollBack();
+            throw $e;
+        } catch (\Throwable $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'message' => 'Gagal menyetujui stock opname',
+                'error' => $e->getMessage(),
+            ], 500);
         }
-        $opname->status = 'completed';
-        $opname->completed_at = now();
-        $opname->completed_by = auth()->id();
-        $opname->save();
 
         return response()->json(['message' => 'Stock opname berhasil disetujui']);
     }
@@ -288,22 +346,6 @@ class StockOpnameController extends Controller
                     'note' => $row['note'] ?? null,
                     'created_by' => auth()->id(),
                 ]);
-
-                if ($adjustment !== 0) {
-                    StockService::mutate([
-                        'item_id' => $row['item_id'],
-                        'direction' => $adjustment > 0 ? 'in' : 'out',
-                        'qty' => abs($adjustment),
-                        'warehouse_id' => $warehouseId,
-                        'source_type' => 'opname',
-                        'source_subtype' => null,
-                        'source_id' => $opname->id,
-                        'source_code' => $opname->code,
-                        'note' => $row['note'] ?? null,
-                        'occurred_at' => $transactedAt,
-                        'created_by' => auth()->id(),
-                    ]);
-                }
             }
 
             DB::commit();
@@ -319,7 +361,7 @@ class StockOpnameController extends Controller
         }
 
         return response()->json([
-            'message' => 'Stock opname berhasil disimpan',
+            'message' => 'Stock opname berhasil disimpan dan menunggu approval.',
         ]);
     }
 

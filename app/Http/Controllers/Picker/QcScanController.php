@@ -9,6 +9,8 @@ use App\Models\QcResiScan;
 use App\Models\QcResiScanItem;
 use App\Models\Resi;
 use App\Models\ResiDetail;
+use App\Support\PickerTransitAllocator;
+use App\Support\QcTransitStatus;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -22,6 +24,7 @@ class QcScanController extends Controller
                 'dashboard' => route('picker.dashboard'),
                 'scanResi' => route('picker.qc.scan'),
                 'scanSku' => route('picker.qc.scan-sku'),
+                'hold' => route('picker.qc.hold'),
                 'complete' => route('picker.qc.complete'),
                 'reset' => route('picker.qc.reset'),
                 'logout' => route('logout'),
@@ -104,7 +107,7 @@ class QcScanController extends Controller
                 ->lockForUpdate()
                 ->first();
 
-            if ($qc && ($qc->status ?? '') === 'passed') {
+            if ($qc && ($qc->status ?? '') === QcTransitStatus::PASSED) {
                 DB::rollBack();
                 return response()->json([
                     'message' => 'Resi sudah QC selesai.',
@@ -116,7 +119,7 @@ class QcScanController extends Controller
                     'resi_id' => $resi->id,
                     'scan_type' => $type,
                     'scan_code' => $code,
-                    'status' => 'draft',
+                    'status' => QcTransitStatus::DRAFT,
                     'started_at' => now(),
                     'scanned_by' => auth()->id(),
                     'last_scanned_by' => auth()->id(),
@@ -193,7 +196,7 @@ class QcScanController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            if (($qc->status ?? '') === 'passed') {
+            if (($qc->status ?? '') === QcTransitStatus::PASSED) {
                 DB::rollBack();
                 return response()->json([
                     'message' => 'QC sudah selesai, tidak bisa scan ulang.',
@@ -230,9 +233,32 @@ class QcScanController extends Controller
                 ], 422);
             }
 
+            if (!PickerTransitAllocator::isExceptionSku((string) $target->sku)) {
+                $availability = PickerTransitAllocator::availableQtyForAdditionalScan(
+                    (string) $target->sku,
+                    now()->toDateString()
+                );
+
+                if (($availability['available'] ?? 0) < $qty) {
+                    DB::rollBack();
+                    return response()->json([
+                        'message' => 'Sisa transit picker tidak mencukupi untuk scan SKU ini.',
+                        'details' => [[
+                            'sku' => $target->sku,
+                            'required' => $qty,
+                            'available' => (int) ($availability['available'] ?? 0),
+                            'reason' => $availability['reason'] ?? 'Sisa transit tidak mencukupi',
+                        ]],
+                    ], 422);
+                }
+            }
+
             $target->scanned_qty = $scanned + $qty;
             $target->save();
 
+            if (($qc->status ?? '') === QcTransitStatus::HOLD) {
+                $qc->status = QcTransitStatus::DRAFT;
+            }
             $qc->last_scanned_by = auth()->id();
             $qc->last_scanned_at = now();
             $qc->save();
@@ -260,6 +286,61 @@ class QcScanController extends Controller
         ]);
     }
 
+    public function hold(Request $request)
+    {
+        $validated = $request->validate([
+            'qc_id' => ['required', 'integer', 'exists:qc_resi_scans,id'],
+            'reason' => ['required', 'string', 'max:500'],
+        ]);
+
+        $reason = trim((string) $validated['reason']);
+        if ($reason === '') {
+            return response()->json([
+                'message' => 'Alasan simpan & lewatkan wajib diisi.',
+            ], 422);
+        }
+
+        DB::beginTransaction();
+        try {
+            $qc = QcResiScan::where('id', (int) $validated['qc_id'])
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if (($qc->status ?? '') === QcTransitStatus::PASSED) {
+                DB::rollBack();
+                return response()->json([
+                    'message' => 'QC sudah selesai, tidak bisa dilewatkan.',
+                ], 422);
+            }
+
+            $qc->status = QcTransitStatus::HOLD;
+            $qc->hold_by = auth()->id();
+            $qc->hold_at = now();
+            $qc->hold_reason = $reason;
+            $qc->last_scanned_by = auth()->id();
+            $qc->last_scanned_at = now();
+            $qc->save();
+
+            $this->loadQcRelations($qc);
+
+            DB::commit();
+        } catch (ValidationException $e) {
+            DB::rollBack();
+            throw $e;
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return response()->json([
+                'message' => 'Gagal menyimpan QC untuk dilewatkan.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+
+        return response()->json([
+            'message' => 'QC disimpan untuk dilewatkan.',
+            'qc' => $this->serializeQc($qc),
+        ]);
+    }
+
     public function complete(Request $request)
     {
         $validated = $request->validate([
@@ -272,7 +353,7 @@ class QcScanController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            if (($qc->status ?? '') === 'passed') {
+            if (($qc->status ?? '') === QcTransitStatus::PASSED) {
                 DB::rollBack();
                 return response()->json([
                     'message' => 'QC sudah selesai sebelumnya.',
@@ -302,8 +383,22 @@ class QcScanController extends Controller
                 ], 422);
             }
 
-            $qc->status = 'passed';
-            $qc->completed_at = now();
+            $completedAt = now();
+            [$skuTotals] = PickerTransitAllocator::splitSkuTotals($items, 'expected_qty');
+            $allocation = PickerTransitAllocator::prepareAllocations($skuTotals, $completedAt->toDateString());
+
+            if (!empty($allocation['issues'])) {
+                DB::rollBack();
+                return response()->json([
+                    'message' => 'Masih ada SKU dengan sisa transit picker tidak mencukupi.',
+                    'details' => $allocation['issues'],
+                ], 422);
+            }
+
+            PickerTransitAllocator::applyAllocations($allocation['updates']);
+
+            $qc->status = QcTransitStatus::PASSED;
+            $qc->completed_at = $completedAt;
             $qc->completed_by = auth()->id();
             $qc->save();
 
@@ -345,7 +440,7 @@ class QcScanController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            if (($qc->status ?? '') === 'passed') {
+            if (($qc->status ?? '') === QcTransitStatus::PASSED) {
                 DB::rollBack();
                 return response()->json([
                     'message' => 'QC sudah selesai, tidak bisa direset.',
@@ -355,6 +450,7 @@ class QcScanController extends Controller
             QcResiScanItem::where('qc_resi_scan_id', $qc->id)
                 ->update(['scanned_qty' => 0]);
 
+            $qc->status = QcTransitStatus::DRAFT;
             $qc->reset_count = (int) ($qc->reset_count ?? 0) + 1;
             $qc->reset_by = auth()->id();
             $qc->reset_at = now();
@@ -389,6 +485,7 @@ class QcScanController extends Controller
             'completer:id,name',
             'lastScanner:id,name',
             'resetter:id,name',
+            'holder:id,name',
         ]);
     }
 
@@ -429,6 +526,9 @@ class QcScanController extends Controller
                 'reset_by' => $qc->resetter?->name ?? '-',
                 'reset_at' => $qc->reset_at?->format('Y-m-d H:i'),
                 'reset_reason' => $qc->reset_reason,
+                'hold_by' => $qc->holder?->name ?? '-',
+                'hold_at' => $qc->hold_at?->format('Y-m-d H:i'),
+                'hold_reason' => $qc->hold_reason,
             ],
         ];
     }

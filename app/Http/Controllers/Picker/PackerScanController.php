@@ -3,14 +3,13 @@
 namespace App\Http\Controllers\Picker;
 
 use App\Http\Controllers\Controller;
-use App\Models\Item;
 use App\Models\PackerResiScan;
-use App\Models\PackerScanException;
 use App\Models\PackerTransitHistory;
-use App\Models\PickerTransitItem;
 use App\Models\QcResiScan;
 use App\Models\QcResiScanItem;
 use App\Models\Resi;
+use App\Support\PickerTransitAllocator;
+use App\Support\QcTransitStatus;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -63,7 +62,7 @@ class PackerScanController extends Controller
         }
 
         $qc = QcResiScan::where('resi_id', $resi->id)->first();
-        if (!$qc || ($qc->status ?? '') !== 'passed') {
+        if (!$qc || ($qc->status ?? '') !== QcTransitStatus::PASSED) {
             return response()->json([
                 'message' => 'Resi belum QC selesai.',
             ], 422);
@@ -74,7 +73,7 @@ class PackerScanController extends Controller
         DB::beginTransaction();
         try {
             $qc = QcResiScan::where('id', $qc->id)
-                ->where('status', 'passed')
+                ->where('status', QcTransitStatus::PASSED)
                 ->lockForUpdate()
                 ->first();
 
@@ -107,103 +106,13 @@ class PackerScanController extends Controller
                 ], 422);
             }
 
-            $exceptionSkus = PackerScanException::query()
-                ->pluck('sku')
-                ->map(fn ($sku) => strtolower(trim((string) $sku)))
-                ->filter()
-                ->values()
-                ->all();
-            $exceptionLookup = array_flip($exceptionSkus);
-
-            $skuTotals = [];
-            $excludedTotals = [];
-            foreach ($details as $detail) {
-                $sku = trim((string) $detail->sku);
-                $qty = (int) $detail->expected_qty;
-                if ($sku === '' || $qty <= 0) {
-                    continue;
-                }
-                $skuKey = strtolower($sku);
-                if (isset($exceptionLookup[$skuKey])) {
-                    $excludedTotals[$sku] = ($excludedTotals[$sku] ?? 0) + $qty;
-                    continue;
-                }
-                $skuTotals[$sku] = ($skuTotals[$sku] ?? 0) + $qty;
-            }
+            [$skuTotals, $excludedTotals] = PickerTransitAllocator::splitSkuTotals($details, 'expected_qty');
 
             if (empty($skuTotals) && empty($excludedTotals)) {
                 DB::rollBack();
                 return response()->json([
                     'message' => 'Snapshot QC tidak valid.',
                 ], 422);
-            }
-
-            $items = collect();
-            if (!empty($skuTotals)) {
-                $items = Item::whereIn('sku', array_keys($skuTotals))
-                    ->get(['id', 'sku', 'name'])
-                    ->keyBy('sku');
-            }
-
-            $issues = [];
-            $updates = [];
-
-            foreach ($skuTotals as $sku => $qty) {
-                $item = $items->get($sku);
-                if (!$item) {
-                    $issues[] = [
-                        'sku' => $sku,
-                        'required' => $qty,
-                        'reason' => 'SKU tidak ditemukan',
-                    ];
-                    continue;
-                }
-
-                $transitRow = PickerTransitItem::where('item_id', $item->id)
-                    ->where('picked_date', '<=', $scanDate)
-                    ->where('remaining_qty', '>', 0)
-                    ->orderByDesc('picked_date')
-                    ->lockForUpdate()
-                    ->first();
-
-                if (!$transitRow) {
-                    $issues[] = [
-                        'sku' => $sku,
-                        'required' => $qty,
-                        'reason' => 'Transit hari ini belum tersedia',
-                    ];
-                    continue;
-                }
-
-                $remaining = (int) $transitRow->remaining_qty;
-                if ($remaining < $qty) {
-                    $issues[] = [
-                        'sku' => $sku,
-                        'required' => $qty,
-                        'available' => $remaining,
-                        'reason' => 'Sisa transit tidak mencukupi',
-                    ];
-                    continue;
-                }
-
-                $updates[] = [
-                    'row' => $transitRow,
-                    'qty' => $qty,
-                ];
-            }
-
-            if (!empty($issues)) {
-                DB::rollBack();
-                return response()->json([
-                    'message' => 'Masih ada SKU dengan sisa transit tidak mencukupi.',
-                    'details' => $issues,
-                ], 422);
-            }
-
-            foreach ($updates as $update) {
-                $row = $update['row'];
-                $row->remaining_qty = max(0, (int) $row->remaining_qty - (int) $update['qty']);
-                $row->save();
             }
 
             PackerResiScan::create([

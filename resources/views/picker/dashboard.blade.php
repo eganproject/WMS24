@@ -135,7 +135,7 @@
                 <div class="menu-icon packer">PA</div>
                 <div>
                     <div class="menu-title">Packer Scan Resi</div>
-                    <div class="menu-desc">Scan resi untuk mengurangi sisa transit.</div>
+                    <div class="menu-desc">Scan resi untuk meneruskan ke transit packer.</div>
                 </div>
             </a>
         @endif

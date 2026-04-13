@@ -152,7 +152,7 @@
 
     <div class="card">
         <div class="section-title">Scan Resi</div>
-        <div class="muted">Pastikan QC selesai, lalu scan resi untuk mengurangi sisa transit.</div>
+        <div class="muted">Pastikan QC selesai, lalu scan resi untuk meneruskan ke transit packer.</div>
         <div class="scan-actions">
             <select class="input" id="scan_type">
                 <option value="no_resi">No Resi</option>
@@ -191,9 +191,9 @@
         <div class="scanner-qr" id="scanner_qr"></div>
         <div class="scanner-actions">
             <button type="button" class="ghost-btn" id="btn_close_scanner">Tutup</button>
-            <button type="button" class="primary-btn" id="btn_start_scan">Mulai Scan</button>
+            <button type="button" class="primary-btn" id="btn_start_scan">Coba Lagi</button>
         </div>
-        <div class="muted" id="scanner_hint">Arahkan kamera ke barcode resi.</div>
+        <div class="muted" id="scanner_hint">Kamera aktif otomatis. Arahkan ke barcode resi.</div>
     </div>
 </div>
 
@@ -260,6 +260,7 @@
     let html5Qr = null;
     let scanMode = 'native';
     let html5LoadPromise = null;
+    let isSubmitting = false;
     const isIOS = (() => {
         const ua = navigator.userAgent || '';
         const platform = navigator.platform || '';
@@ -407,6 +408,10 @@
     };
 
     const submitScan = async () => {
+        if (isSubmitting) {
+            return;
+        }
+
         getAudioCtx();
         const type = el.scanType.value;
         const code = el.scanCode.value.trim();
@@ -416,6 +421,7 @@
             return;
         }
 
+        isSubmitting = true;
         el.btnScan.disabled = true;
         setStatus('Memproses resi...', 'pending');
 
@@ -437,6 +443,7 @@
             showError(error.message || 'Gagal memproses resi.', error.details || []);
             setStatus(error.message || 'Gagal memproses resi.', 'error');
         } finally {
+            isSubmitting = false;
             el.btnScan.disabled = false;
         }
     };
@@ -466,7 +473,7 @@
         stopScanner();
         el.scannerModal.style.display = 'none';
         el.btnStartScan.disabled = false;
-        el.scannerHint.textContent = 'Arahkan kamera ke barcode resi.';
+        el.scannerHint.textContent = 'Kamera aktif otomatis. Arahkan ke barcode resi.';
     };
 
     const openScanner = async () => {
@@ -512,6 +519,7 @@
         }
 
         el.scannerModal.style.display = 'flex';
+        await startScanner();
     };
 
     const startScanner = async () => {
@@ -553,9 +561,10 @@
                 el.scannerHint.textContent = 'Scan berjalan. Arahkan ke barcode.';
                 return;
             } catch (error) {
+                stopScanner();
                 el.btnStartScan.disabled = false;
+                el.scannerHint.textContent = 'Gagal mengaktifkan kamera. Tekan Coba Lagi.';
                 showError('Tidak bisa membuka kamera. Pastikan izin kamera aktif.');
-                closeScanner();
                 return;
             }
         }
@@ -575,9 +584,10 @@
             el.scannerHint.textContent = 'Scan berjalan. Arahkan ke barcode.';
             scanLoop();
         } catch (error) {
+            stopScanner();
             el.btnStartScan.disabled = false;
+            el.scannerHint.textContent = 'Gagal mengaktifkan kamera. Tekan Coba Lagi.';
             showError('Tidak bisa membuka kamera. Pastikan izin kamera aktif.');
-            closeScanner();
         }
     };
 

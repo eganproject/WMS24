@@ -24,6 +24,9 @@ class QcResiScan extends Model
         'reset_by',
         'reset_at',
         'reset_reason',
+        'hold_by',
+        'hold_at',
+        'hold_reason',
     ];
 
     protected $casts = [
@@ -31,6 +34,7 @@ class QcResiScan extends Model
         'completed_at' => 'datetime',
         'last_scanned_at' => 'datetime',
         'reset_at' => 'datetime',
+        'hold_at' => 'datetime',
     ];
 
     public function resi()
@@ -56,6 +60,11 @@ class QcResiScan extends Model
     public function resetter()
     {
         return $this->belongsTo(User::class, 'reset_by');
+    }
+
+    public function holder()
+    {
+        return $this->belongsTo(User::class, 'hold_by');
     }
 
     public function items()

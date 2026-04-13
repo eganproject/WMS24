@@ -191,9 +191,9 @@
         <div class="scanner-qr" id="scanner_qr"></div>
         <div class="scanner-actions">
             <button type="button" class="ghost-btn" id="btn_close_scanner">Tutup</button>
-            <button type="button" class="primary-btn" id="btn_start_scan">Mulai Scan</button>
+            <button type="button" class="primary-btn" id="btn_start_scan">Coba Lagi</button>
         </div>
-        <div class="muted" id="scanner_hint">Arahkan kamera ke barcode resi.</div>
+        <div class="muted" id="scanner_hint">Kamera aktif otomatis. Arahkan ke barcode resi.</div>
     </div>
 </div>
 
@@ -470,7 +470,7 @@
         stopScanner();
         el.scannerModal.style.display = 'none';
         el.btnStartScan.disabled = false;
-        el.scannerHint.textContent = 'Arahkan kamera ke barcode resi.';
+        el.scannerHint.textContent = 'Kamera aktif otomatis. Arahkan ke barcode resi.';
     };
 
     const openScanner = async () => {
@@ -516,6 +516,7 @@
         }
 
         el.scannerModal.style.display = 'flex';
+        await startScanner();
     };
 
     const startScanner = async () => {
@@ -558,9 +559,10 @@
                 el.scannerHint.textContent = 'Scan berjalan. Arahkan ke barcode.';
                 return;
             } catch (error) {
+                stopScanner();
                 el.btnStartScan.disabled = false;
+                el.scannerHint.textContent = 'Gagal mengaktifkan kamera. Tekan Coba Lagi.';
                 showError('Tidak bisa membuka kamera. Pastikan izin kamera aktif.');
-                closeScanner();
                 return;
             }
         }
@@ -580,9 +582,10 @@
             el.scannerHint.textContent = 'Scan berjalan. Arahkan ke barcode.';
             scanLoop();
         } catch (error) {
+            stopScanner();
             el.btnStartScan.disabled = false;
+            el.scannerHint.textContent = 'Gagal mengaktifkan kamera. Tekan Coba Lagi.';
             showError('Tidak bisa membuka kamera. Pastikan izin kamera aktif.');
-            closeScanner();
         }
     };
 

@@ -66,6 +66,8 @@ class QcTransitStatusExport implements FromCollection, WithHeadings, WithMapping
         $status = (string) ($this->filters['status'] ?? '');
         if ($status === QcTransitStatus::DRAFT) {
             $query->where('status', QcTransitStatus::DRAFT);
+        } elseif ($status === QcTransitStatus::HOLD) {
+            $query->where('status', QcTransitStatus::HOLD);
         } elseif ($status === QcTransitStatus::NEXT_READY_PACKING) {
             $query->where('status', QcTransitStatus::PASSED)
                 ->whereNotExists(function ($sub) {

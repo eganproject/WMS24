@@ -171,7 +171,8 @@ class PickerTransitController extends Controller
         $recordsTotal = QcResiScan::count();
         $summaryQuery = clone $baseQuery;
         $summary = [
-            'draft' => (clone $summaryQuery)->where('status', 'draft')->count(),
+            'draft' => (clone $summaryQuery)->where('status', QcTransitStatus::DRAFT)->count(),
+            'hold' => (clone $summaryQuery)->where('status', QcTransitStatus::HOLD)->count(),
             'ready_packing' => $this->applyQcReadyPackingFilter(clone $summaryQuery)->count(),
         ];
 
@@ -325,17 +326,22 @@ class PickerTransitController extends Controller
     private function applyQcStatusFilter($query, Request $request): void
     {
         $status = (string) $request->input('status', '');
-        if ($status === 'draft') {
-            $query->where('status', 'draft');
+        if ($status === QcTransitStatus::DRAFT) {
+            $query->where('status', QcTransitStatus::DRAFT);
             return;
         }
 
-        if ($status === 'ready_packing') {
+        if ($status === QcTransitStatus::HOLD) {
+            $query->where('status', QcTransitStatus::HOLD);
+            return;
+        }
+
+        if ($status === QcTransitStatus::NEXT_READY_PACKING) {
             $this->applyQcReadyPackingFilter($query);
             return;
         }
 
-        if ($status === 'forwarded') {
+        if ($status === QcTransitStatus::NEXT_FORWARDED) {
             $query->whereExists(function ($sub) {
                 $sub->selectRaw('1')
                     ->from('packer_resi_scans')
@@ -346,7 +352,7 @@ class PickerTransitController extends Controller
 
     private function applyQcReadyPackingFilter($query)
     {
-        return $query->where('status', 'passed')
+        return $query->where('status', QcTransitStatus::PASSED)
             ->whereNotExists(function ($sub) {
                 $sub->selectRaw('1')
                     ->from('packer_resi_scans')

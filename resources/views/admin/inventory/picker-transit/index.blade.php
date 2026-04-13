@@ -62,6 +62,21 @@
                     <div class="card-body">
                         <div class="d-flex align-items-start justify-content-between gap-2">
                             <div>
+                                <div class="text-muted">QC Transit - Ditunda</div>
+                                <div class="fs-2 fw-bold" id="qc_summary_hold">0</div>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-light btn-qc-status" data-status="hold">
+                                Detail
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-xl-2">
+                <div class="card card-flush h-100">
+                    <div class="card-body">
+                        <div class="d-flex align-items-start justify-content-between gap-2">
+                            <div>
                                 <div class="text-muted">QC Transit - Siap Packing</div>
                                 <div class="fs-2 fw-bold" id="qc_summary_ready_packing">0</div>
                             </div>
@@ -167,6 +182,7 @@
                     <select class="form-select form-select-solid w-175px" id="qc_filter_status">
                         <option value="">Semua Status</option>
                         <option value="draft">QC Berjalan</option>
+                        <option value="hold">QC Ditunda</option>
                         <option value="ready_packing">Siap Packing</option>
                         <option value="forwarded">Sudah ke Packer</option>
                     </select>
@@ -433,8 +449,10 @@
                 dataSrc: function(json) {
                     const summary = json?.summary || {};
                     const elDraft = document.getElementById('qc_summary_draft');
+                    const elHold = document.getElementById('qc_summary_hold');
                     const elReady = document.getElementById('qc_summary_ready_packing');
                     if (elDraft) elDraft.textContent = summary.draft ?? 0;
+                    if (elHold) elHold.textContent = summary.hold ?? 0;
                     if (elReady) elReady.textContent = summary.ready_packing ?? 0;
                     return json.data || [];
                 },

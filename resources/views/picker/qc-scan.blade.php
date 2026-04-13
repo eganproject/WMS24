@@ -69,6 +69,10 @@
         background: rgba(249, 115, 22, 0.15);
         color: #c2410c;
     }
+    .result-badge.hold {
+        background: rgba(239, 68, 68, 0.16);
+        color: #b91c1c;
+    }
     .result-items {
         display: grid;
         gap: 10px;
@@ -153,6 +157,7 @@
     }
     .qc-actions {
         display: flex;
+        flex-wrap: wrap;
         gap: 8px;
         margin-top: 10px;
     }
@@ -231,6 +236,7 @@
         <div class="result-meta" id="result_summary">-</div>
         <div class="result-items" id="result_items"></div>
         <div class="qc-actions">
+            <button type="button" class="ghost-btn" id="btn_hold_qc">Simpan & Lewatkan</button>
             <button type="button" class="ghost-btn" id="btn_reset_qc">Reset QC</button>
             <button type="button" class="primary-btn" id="btn_complete_qc">Selesaikan QC</button>
         </div>
@@ -245,9 +251,9 @@
         <div class="scanner-qr" id="scanner_qr"></div>
         <div class="scanner-actions">
             <button type="button" class="ghost-btn" id="btn_close_scanner">Tutup</button>
-            <button type="button" class="primary-btn" id="btn_start_scan">Mulai Scan</button>
+            <button type="button" class="primary-btn" id="btn_start_scan">Coba Lagi</button>
         </div>
-        <div class="muted" id="scanner_hint">Arahkan kamera ke barcode.</div>
+        <div class="muted" id="scanner_hint">Kamera aktif otomatis. Arahkan ke barcode.</div>
     </div>
 </div>
 
@@ -305,6 +311,7 @@
         resultTitle: document.getElementById('result_title'),
         resultSummary: document.getElementById('result_summary'),
         qcStatus: document.getElementById('qc_status'),
+        btnHoldQc: document.getElementById('btn_hold_qc'),
         btnResetQc: document.getElementById('btn_reset_qc'),
         btnCompleteQc: document.getElementById('btn_complete_qc'),
         scannerModal: document.getElementById('scanner_modal'),
@@ -336,6 +343,7 @@
     let scanMode = 'native';
     let html5LoadPromise = null;
     let scanTarget = 'resi';
+    let qcActionBusy = false;
     const isIOS = (() => {
         const ua = navigator.userAgent || '';
         const platform = navigator.platform || '';
@@ -443,9 +451,31 @@
             if (Array.isArray(details) && details.length) {
                 const list = details.map((row) => {
                     const sku = row.sku || '-';
-                    const required = row.required ?? '-';
-                    const scanned = row.scanned ?? '-';
-                    return `<li style="margin-bottom:8px;"><strong>${sku}</strong><div style="color:#64748b; font-size:12px;">Butuh ${required}, sudah ${scanned}</div></li>`;
+                    const detailBits = [];
+
+                    if (row.required !== undefined && row.scanned !== undefined) {
+                        detailBits.push(`Butuh ${row.required}, sudah ${row.scanned}`);
+                    } else if (row.required !== undefined) {
+                        detailBits.push(`Butuh ${row.required}`);
+                    }
+
+                    if (row.attempt !== undefined) {
+                        detailBits.push(`Scan sekarang ${row.attempt}`);
+                    }
+
+                    if (row.available !== undefined) {
+                        detailBits.push(`Tersedia ${row.available}`);
+                    }
+
+                    if (row.reason) {
+                        detailBits.push(row.reason);
+                    }
+
+                    const detailLine = detailBits.length
+                        ? `<div style="color:#64748b; font-size:12px;">${detailBits.join(' • ')}</div>`
+                        : '';
+
+                    return `<li style="margin-bottom:8px;"><strong>${sku}</strong>${detailLine}</li>`;
                 }).join('');
                 html += `<ul style="text-align:left; padding-left:18px; margin-top:8px;">${list}</ul>`;
             }
@@ -488,6 +518,12 @@
         if ((audit.reset_count || 0) > 0) {
             auditBits.push(`Reset: ${audit.reset_count}x`);
         }
+        if (audit.hold_by && audit.hold_by !== '-' && audit.hold_at) {
+            auditBits.push(`Ditunda: ${audit.hold_by} @ ${audit.hold_at}`);
+        }
+        if (audit.hold_reason) {
+            auditBits.push(`Alasan hold: ${audit.hold_reason}`);
+        }
 
         const summaryBits = [
             `Total: ${summary.total_scanned}/${summary.total_expected}`,
@@ -497,9 +533,14 @@
         el.resultSummary.textContent = summaryBits.join(' • ');
 
         const statusPassed = qc.status === 'passed';
-        el.resultTitle.textContent = statusPassed ? 'QC Selesai' : 'QC Berjalan';
-        el.resultBadge.textContent = statusPassed ? 'Selesai' : 'Proses';
-        el.resultBadge.classList.toggle('pending', !statusPassed);
+        const statusHold = qc.status === 'hold';
+        el.resultTitle.textContent = statusPassed
+            ? 'QC Selesai'
+            : (statusHold ? 'QC Ditunda' : 'QC Berjalan');
+        el.resultBadge.textContent = statusPassed
+            ? 'Selesai'
+            : (statusHold ? 'Ditunda' : 'Proses');
+        el.resultBadge.className = `result-badge${statusHold ? ' hold' : (!statusPassed ? ' pending' : '')}`;
 
         el.resultItems.innerHTML = (qc.items || []).map((row) => {
             const expected = row.expected_qty ?? 0;
@@ -515,11 +556,14 @@
         }).join('');
 
         el.resultCard.style.display = 'block';
-        el.btnCompleteQc.disabled = statusPassed || summary.remaining > 0;
-        el.btnResetQc.disabled = statusPassed;
+        el.btnHoldQc.disabled = statusPassed || qcActionBusy;
+        el.btnCompleteQc.disabled = statusPassed || summary.remaining > 0 || qcActionBusy;
+        el.btnResetQc.disabled = statusPassed || qcActionBusy;
 
         if (statusPassed) {
             setStatus(el.qcStatus, 'QC selesai. Resi siap dipacking.', 'success');
+        } else if (statusHold) {
+            setStatus(el.qcStatus, audit.hold_reason ? `QC ditunda: ${audit.hold_reason}` : 'QC ditunda. Bisa dilanjutkan nanti.', 'pending');
         } else {
             setStatus(el.qcStatus, 'QC belum selesai.', summary.remaining === 0 ? 'success' : 'pending');
         }
@@ -620,10 +664,78 @@
         }
     };
 
-    const completeQc = async () => {
-        if (!qcState.id) return;
+    const holdQc = async () => {
+        if (!qcState.id || qcActionBusy) return;
 
-        el.btnCompleteQc.disabled = true;
+        let reason = '';
+        if (typeof Swal !== 'undefined') {
+            const result = await Swal.fire({
+                title: 'Simpan & Lewatkan',
+                text: 'Masukkan alasan penundaan untuk audit.',
+                input: 'text',
+                inputPlaceholder: 'Contoh: transit SKU belum cukup',
+                inputAttributes: {
+                    maxlength: '500',
+                },
+                showCancelButton: true,
+                confirmButtonText: 'Simpan',
+                cancelButtonText: 'Batal',
+                inputValidator: (value) => {
+                    if (!value || !value.trim()) {
+                        return 'Alasan simpan & lewatkan wajib diisi.';
+                    }
+                    return null;
+                },
+            });
+
+            if (!result.isConfirmed) {
+                return;
+            }
+
+            reason = (result.value || '').trim();
+        } else {
+            reason = (window.prompt('Alasan simpan & lewatkan:') || '').trim();
+            if (!reason) {
+                setStatus(el.qcStatus, 'Simpan & lewatkan dibatalkan. Alasan wajib diisi.', 'error');
+                return;
+            }
+        }
+
+        qcActionBusy = true;
+        renderQc();
+        setStatus(el.qcStatus, 'Menyimpan QC untuk dilewatkan...', 'pending');
+
+        try {
+            const data = await fetchJson(routes.hold, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ qc_id: qcState.id, reason, _token: csrfToken }),
+            });
+
+            qcState = {
+                ...qcState,
+                status: data?.qc?.status || qcState.status,
+                items: data?.qc?.items || qcState.items,
+                summary: data?.qc?.summary || qcState.summary,
+                audit: data?.qc?.audit || qcState.audit,
+            };
+
+            setStatus(el.qcStatus, data?.message || 'QC disimpan untuk dilewatkan.', 'success');
+            renderQc();
+        } catch (error) {
+            showError(error.message || 'Gagal menyimpan QC untuk dilewatkan.', error.details || []);
+            setStatus(el.qcStatus, error.message || 'Gagal menyimpan QC untuk dilewatkan.', 'error');
+        } finally {
+            qcActionBusy = false;
+            renderQc();
+        }
+    };
+
+    const completeQc = async () => {
+        if (!qcState.id || qcActionBusy) return;
+
+        qcActionBusy = true;
+        renderQc();
         setStatus(el.qcStatus, 'Menyelesaikan QC...', 'pending');
 
         try {
@@ -648,12 +760,13 @@
             showError(error.message || 'Gagal menyelesaikan QC.', error.details || []);
             setStatus(el.qcStatus, error.message || 'Gagal menyelesaikan QC.', 'error');
         } finally {
-            el.btnCompleteQc.disabled = false;
+            qcActionBusy = false;
+            renderQc();
         }
     };
 
     const resetQc = async () => {
-        if (!qcState.id) return;
+        if (!qcState.id || qcActionBusy) return;
 
         let reason = '';
         if (typeof Swal !== 'undefined') {
@@ -689,7 +802,8 @@
             }
         }
 
-        el.btnResetQc.disabled = true;
+        qcActionBusy = true;
+        renderQc();
         setStatus(el.qcStatus, 'Mereset QC...', 'pending');
 
         try {
@@ -713,7 +827,8 @@
             showError(error.message || 'Gagal reset QC.', error.details || []);
             setStatus(el.qcStatus, error.message || 'Gagal reset QC.', 'error');
         } finally {
-            el.btnResetQc.disabled = false;
+            qcActionBusy = false;
+            renderQc();
         }
     };
 
@@ -742,7 +857,7 @@
         stopScanner();
         el.scannerModal.style.display = 'none';
         el.btnStartScan.disabled = false;
-        el.scannerHint.textContent = 'Arahkan kamera ke barcode.';
+        el.scannerHint.textContent = 'Kamera aktif otomatis. Arahkan ke barcode.';
     };
 
     const openScanner = async (target) => {
@@ -791,6 +906,7 @@
         }
 
         el.scannerModal.style.display = 'flex';
+        await startScanner();
     };
 
     const startScanner = async () => {
@@ -837,9 +953,10 @@
                 el.scannerHint.textContent = 'Scan berjalan. Arahkan ke barcode.';
                 return;
             } catch (error) {
+                stopScanner();
                 el.btnStartScan.disabled = false;
+                el.scannerHint.textContent = 'Gagal mengaktifkan kamera. Tekan Coba Lagi.';
                 showError('Tidak bisa membuka kamera. Pastikan izin kamera aktif.');
-                closeScanner();
                 return;
             }
         }
@@ -859,9 +976,10 @@
             el.scannerHint.textContent = 'Scan berjalan. Arahkan ke barcode.';
             scanLoop();
         } catch (error) {
+            stopScanner();
             el.btnStartScan.disabled = false;
+            el.scannerHint.textContent = 'Gagal mengaktifkan kamera. Tekan Coba Lagi.';
             showError('Tidak bisa membuka kamera. Pastikan izin kamera aktif.');
-            closeScanner();
         }
     };
 
@@ -936,6 +1054,7 @@
 
     el.btnScanResi.addEventListener('click', submitResi);
     el.btnScanSku.addEventListener('click', submitSku);
+    el.btnHoldQc.addEventListener('click', holdQc);
     el.btnResetQc.addEventListener('click', resetQc);
     el.btnCompleteQc.addEventListener('click', completeQc);
     el.btnOpenResiScanner.addEventListener('click', () => openScanner('resi'));

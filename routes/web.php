@@ -65,6 +65,7 @@ Route::middleware('auth')->prefix('picker')->as('picker.')->group(function () {
     Route::get('/qc', [QcScanController::class, 'index'])->name('qc.index');
     Route::post('/qc/scan', [QcScanController::class, 'scanResi'])->name('qc.scan');
     Route::post('/qc/scan-sku', [QcScanController::class, 'scanSku'])->name('qc.scan-sku');
+    Route::post('/qc/hold', [QcScanController::class, 'hold'])->name('qc.hold');
     Route::post('/qc/complete', [QcScanController::class, 'complete'])->name('qc.complete');
     Route::post('/qc/reset', [QcScanController::class, 'reset'])->name('qc.reset');
     Route::get('/packer', [PackerScanController::class, 'index'])->name('packer.index');

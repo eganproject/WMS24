@@ -186,9 +186,9 @@
         <div class="scanner-qr" id="scanner_qr"></div>
         <div class="scanner-actions">
             <button type="button" class="ghost-btn" id="btn_close_scanner">Tutup</button>
-            <button type="button" class="primary-btn" id="btn_start_scan">Mulai Scan</button>
+            <button type="button" class="primary-btn" id="btn_start_scan">Coba Lagi</button>
         </div>
-        <div class="muted" id="scanner_hint">Arahkan kamera ke barcode SKU.</div>
+        <div class="muted" id="scanner_hint">Kamera aktif otomatis. Arahkan ke barcode SKU.</div>
     </div>
 </div>
 
@@ -521,7 +521,7 @@
             el.scannerModal.style.display = 'none';
         }
         if (el.scannerHint) {
-            el.scannerHint.textContent = 'Arahkan kamera ke barcode SKU.';
+            el.scannerHint.textContent = 'Kamera aktif otomatis. Arahkan ke barcode SKU.';
         }
     };
 

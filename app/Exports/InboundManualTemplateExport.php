@@ -20,6 +20,8 @@ class InboundManualTemplateExport implements FromCollection, WithHeadings
             'qty',
             'koli',
             'ref_no',
+            'surat_jalan_no',
+            'surat_jalan_at',
             'note',
             'item_note',
             'transacted_at',

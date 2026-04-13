@@ -13,6 +13,8 @@ class InboundTransaction extends Model
         'code',
         'type',
         'ref_no',
+        'surat_jalan_no',
+        'surat_jalan_at',
         'transacted_at',
         'note',
         'warehouse_id',
@@ -23,6 +25,7 @@ class InboundTransaction extends Model
     ];
 
     protected $casts = [
+        'surat_jalan_at' => 'datetime',
         'transacted_at' => 'datetime',
         'approved_at' => 'datetime',
     ];
@@ -45,5 +48,10 @@ class InboundTransaction extends Model
     public function approver()
     {
         return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function scanSession()
+    {
+        return $this->hasOne(InboundScanSession::class, 'inbound_transaction_id');
     }
 }

@@ -2,16 +2,16 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Exports\InboundManualTemplateExport;
 use App\Http\Controllers\Controller;
+use App\Imports\InboundReceiptsImport;
+use App\Imports\InboundReturnsImport;
 use App\Models\InboundItem;
 use App\Models\InboundTransaction;
 use App\Models\Item;
-use App\Models\StockMutation;
 use App\Models\Warehouse;
-use App\Imports\InboundReceiptsImport;
-use App\Imports\InboundReturnsImport;
-use App\Exports\InboundManualTemplateExport;
-use App\Support\StockService;
+use App\Support\InboundScanExpectation;
+use App\Support\InboundScanStatus;
 use App\Support\WarehouseService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -145,266 +145,44 @@ class InboundController extends Controller
     public function manualsTemplate()
     {
         $filename = 'inbound-manual-template-'.now()->format('YmdHis').'.xlsx';
+
         return Excel::download(new InboundManualTemplateExport(), $filename);
     }
 
     public function manualsImport(Request $request)
     {
-        $request->validate([
-            'file' => ['required', 'file', 'mimes:xlsx,xls', 'max:5120'],
-        ]);
-
-        $import = new InboundReceiptsImport();
-        DB::beginTransaction();
-        try {
-            Excel::import($import, $request->file('file'));
-            $groups = $import->groups ?? [];
-            if (empty($groups)) {
-                throw ValidationException::withMessages([
-                    'file' => 'Tidak ada data valid untuk diimport',
-                ]);
-            }
-
-            $createdTx = 0;
-            $createdItems = 0;
-            foreach ($groups as $group) {
-                $transactedAt = now();
-                if (!empty($group['transacted_at'])) {
-                    try {
-                        $transactedAt = Carbon::parse($group['transacted_at']);
-                    } catch (\Throwable $e) {
-                        throw ValidationException::withMessages([
-                            'file' => 'Format transacted_at tidak valid: '.$group['transacted_at'],
-                        ]);
-                    }
-                }
-
-                $tx = InboundTransaction::create([
-                    'code' => $this->generateCode('INB-MNL'),
-                    'type' => 'manual',
-                    'ref_no' => $group['ref_no'] ?? null,
-                    'note' => $group['note'] ?? null,
-                    'warehouse_id' => WarehouseService::defaultWarehouseId(),
-                    'transacted_at' => $transactedAt,
-                    'created_by' => auth()->id(),
-                    'status' => 'pending',
-                ]);
-                $createdTx++;
-
-                foreach ($group['items'] as $row) {
-                    InboundItem::create([
-                        'inbound_transaction_id' => $tx->id,
-                        'item_id' => $row['item_id'],
-                        'qty' => $row['qty'],
-                        'koli' => $row['koli'] ?? null,
-                        'note' => $row['note'] ?? null,
-                    ]);
-                    $createdItems++;
-
-                    StockService::mutate([
-                        'item_id' => $row['item_id'],
-                        'direction' => 'in',
-                        'qty' => $row['qty'],
-                        'source_type' => 'inbound',
-                        'source_subtype' => 'manual',
-                        'source_id' => $tx->id,
-                        'source_code' => $tx->code,
-                        'note' => $row['note'] ?? null,
-                        'occurred_at' => $transactedAt,
-                        'created_by' => auth()->id(),
-                    ]);
-                }
-            }
-
-            DB::commit();
-
-            return response()->json([
-                'message' => 'Import inbound manual berhasil',
-                'transactions' => $createdTx,
-                'items' => $createdItems,
-            ]);
-        } catch (ValidationException $e) {
-            DB::rollBack();
-            throw $e;
-        } catch (\Throwable $e) {
-            DB::rollBack();
-            return response()->json([
-                'message' => 'Gagal import inbound manual',
-                'error' => $e->getMessage(),
-            ], 500);
-        }
+        return $this->importGroups(
+            $request,
+            new InboundReceiptsImport(),
+            'manual',
+            'INB-MNL',
+            'Import inbound manual berhasil',
+            'Gagal import inbound manual'
+        );
     }
 
     public function returnsImport(Request $request)
     {
-        $request->validate([
-            'file' => ['required', 'file', 'mimes:xlsx,xls', 'max:5120'],
-        ]);
-
-        $import = new InboundReturnsImport();
-        DB::beginTransaction();
-        try {
-            Excel::import($import, $request->file('file'));
-            $groups = $import->groups ?? [];
-            if (empty($groups)) {
-                throw ValidationException::withMessages([
-                    'file' => 'Tidak ada data valid untuk diimport',
-                ]);
-            }
-
-            $createdTx = 0;
-            $createdItems = 0;
-            foreach ($groups as $group) {
-                $transactedAt = now();
-                if (!empty($group['transacted_at'])) {
-                    try {
-                        $transactedAt = Carbon::parse($group['transacted_at']);
-                    } catch (\Throwable $e) {
-                        throw ValidationException::withMessages([
-                            'file' => 'Format transacted_at tidak valid: '.$group['transacted_at'],
-                        ]);
-                    }
-                }
-                $tx = InboundTransaction::create([
-                    'code' => $this->generateCode('INB-RET'),
-                    'type' => 'return',
-                    'ref_no' => $group['ref_no'] ?? null,
-                    'note' => $group['note'] ?? null,
-                    'warehouse_id' => WarehouseService::defaultWarehouseId(),
-                    'transacted_at' => $transactedAt,
-                    'created_by' => auth()->id(),
-                    'status' => 'pending',
-                ]);
-                $createdTx++;
-
-                foreach ($group['items'] as $row) {
-                    InboundItem::create([
-                        'inbound_transaction_id' => $tx->id,
-                        'item_id' => $row['item_id'],
-                        'qty' => $row['qty'],
-                        'koli' => $row['koli'] ?? null,
-                        'note' => $row['note'] ?? null,
-                    ]);
-                    $createdItems++;
-
-                    StockService::mutate([
-                        'item_id' => $row['item_id'],
-                        'direction' => 'in',
-                        'qty' => $row['qty'],
-                        'source_type' => 'inbound',
-                        'source_subtype' => 'return',
-                        'source_id' => $tx->id,
-                        'source_code' => $tx->code,
-                        'note' => $row['note'] ?? null,
-                        'occurred_at' => $transactedAt,
-                        'created_by' => auth()->id(),
-                    ]);
-                }
-            }
-
-            DB::commit();
-
-            return response()->json([
-                'message' => 'Import retur inbound berhasil',
-                'transactions' => $createdTx,
-                'items' => $createdItems,
-            ]);
-        } catch (ValidationException $e) {
-            DB::rollBack();
-            throw $e;
-        } catch (\Throwable $e) {
-            DB::rollBack();
-            return response()->json([
-                'message' => 'Gagal import retur inbound',
-                'error' => $e->getMessage(),
-            ], 500);
-        }
+        return $this->importGroups(
+            $request,
+            new InboundReturnsImport(),
+            'return',
+            'INB-RET',
+            'Import retur inbound berhasil',
+            'Gagal import retur inbound'
+        );
     }
 
     public function receiptsImport(Request $request)
     {
-        $request->validate([
-            'file' => ['required', 'file', 'mimes:xlsx,xls', 'max:5120'],
-        ]);
-
-        $import = new InboundReceiptsImport();
-        DB::beginTransaction();
-        try {
-            Excel::import($import, $request->file('file'));
-            $groups = $import->groups ?? [];
-            if (empty($groups)) {
-                throw ValidationException::withMessages([
-                    'file' => 'Tidak ada data valid untuk diimport',
-                ]);
-            }
-
-            $createdTx = 0;
-            $createdItems = 0;
-            foreach ($groups as $group) {
-                $transactedAt = now();
-                if (!empty($group['transacted_at'])) {
-                    try {
-                        $transactedAt = Carbon::parse($group['transacted_at']);
-                    } catch (\Throwable $e) {
-                        throw ValidationException::withMessages([
-                            'file' => 'Format transacted_at tidak valid: '.$group['transacted_at'],
-                        ]);
-                    }
-                }
-                $tx = InboundTransaction::create([
-                    'code' => $this->generateCode('INB-RCV'),
-                    'type' => 'receipt',
-                    'ref_no' => $group['ref_no'] ?? null,
-                    'note' => $group['note'] ?? null,
-                    'warehouse_id' => WarehouseService::defaultWarehouseId(),
-                    'transacted_at' => $transactedAt,
-                    'created_by' => auth()->id(),
-                    'status' => 'pending',
-                ]);
-                $createdTx++;
-
-                foreach ($group['items'] as $row) {
-                    InboundItem::create([
-                        'inbound_transaction_id' => $tx->id,
-                        'item_id' => $row['item_id'],
-                        'qty' => $row['qty'],
-                        'koli' => $row['koli'] ?? null,
-                        'note' => $row['note'] ?? null,
-                    ]);
-                    $createdItems++;
-
-                    StockService::mutate([
-                        'item_id' => $row['item_id'],
-                        'direction' => 'in',
-                        'qty' => $row['qty'],
-                        'source_type' => 'inbound',
-                        'source_subtype' => 'receipt',
-                        'source_id' => $tx->id,
-                        'source_code' => $tx->code,
-                        'note' => $row['note'] ?? null,
-                        'occurred_at' => $transactedAt,
-                        'created_by' => auth()->id(),
-                    ]);
-                }
-            }
-
-            DB::commit();
-
-            return response()->json([
-                'message' => 'Import penerimaan barang berhasil',
-                'transactions' => $createdTx,
-                'items' => $createdItems,
-            ]);
-        } catch (ValidationException $e) {
-            DB::rollBack();
-            throw $e;
-        } catch (\Throwable $e) {
-            DB::rollBack();
-            return response()->json([
-                'message' => 'Gagal import penerimaan barang',
-                'error' => $e->getMessage(),
-            ], 500);
-        }
+        return $this->importGroups(
+            $request,
+            new InboundReceiptsImport(),
+            'receipt',
+            'INB-RCV',
+            'Import penerimaan barang berhasil',
+            'Gagal import penerimaan barang'
+        );
     }
 
     private function index(string $type, string $pageTitle, string $routeBase)
@@ -413,6 +191,12 @@ class InboundController extends Controller
         $warehouses = Warehouse::orderBy('name')->get(['id', 'name', 'code']);
         $baseOptions = $this->typeOptions();
         $typeOptions = ['all' => 'Semua'] + $baseOptions;
+        $statusLabels = [
+            InboundScanStatus::PENDING_SCAN => 'Menunggu Scan',
+            InboundScanStatus::SCANNING => 'Sedang Scan',
+            InboundScanStatus::COMPLETED => 'Selesai',
+            'approved' => 'Selesai',
+        ];
         $routeMap = [
             'receipt' => [
                 'store' => route('admin.inbound.receipts.store'),
@@ -456,6 +240,11 @@ class InboundController extends Controller
             'typeDefault' => $type,
             'routeMap' => $routeMap,
             'enableKoli' => true,
+            'showApproveAction' => false,
+            'statusLabels' => $statusLabels,
+            'lockedStatuses' => [InboundScanStatus::SCANNING, InboundScanStatus::COMPLETED, 'approved'],
+            'showDeliveryNoteFields' => true,
+            'deleteWarningText' => 'Data akan dihapus sebelum proses scan inbound.',
             'importUrl' => match ($type) {
                 'receipt' => route('admin.inbound.receipts.import'),
                 'return' => route('admin.inbound.returns.import'),
@@ -472,7 +261,7 @@ class InboundController extends Controller
                 ? route('admin.inbound.manuals.template')
                 : null,
             'templateLabel' => 'Download Template Inbound Manual',
-            'templateNote' => 'Header: sku, qty atau koli. Opsional: ref_no, note, item_note, transacted_at.',
+            'templateNote' => 'Header: sku, qty atau koli. Opsional: ref_no, surat_jalan_no, surat_jalan_at, note, item_note, transacted_at.',
         ]);
     }
 
@@ -480,7 +269,6 @@ class InboundController extends Controller
     {
         $allowed = array_keys($this->typeOptions());
         $filterType = $request->input('type');
-        $baseType = null;
         if ($filterType === 'all') {
             $baseType = null;
         } elseif (in_array($filterType, $allowed, true)) {
@@ -497,12 +285,14 @@ class InboundController extends Controller
                 'inbound_transactions.transacted_at',
                 'inbound_transactions.type',
                 'inbound_transactions.ref_no',
+                'inbound_transactions.surat_jalan_no',
                 'inbound_transactions.note',
                 'inbound_transactions.warehouse_id',
                 'inbound_transactions.status',
                 'inbound_transactions.created_by',
             ])
             ->orderBy('inbound_transactions.transacted_at', 'desc');
+
         if ($baseType) {
             $query->where('inbound_transactions.type', $baseType);
         }
@@ -512,6 +302,7 @@ class InboundController extends Controller
             $query->where(function ($q) use ($search) {
                 $q->where('inbound_transactions.code', 'like', "%{$search}%")
                     ->orWhere('inbound_transactions.ref_no', 'like', "%{$search}%")
+                    ->orWhere('inbound_transactions.surat_jalan_no', 'like', "%{$search}%")
                     ->orWhereHas('items.item', function ($itemQ) use ($search) {
                         $itemQ->where('sku', 'like', "%{$search}%")
                             ->orWhere('name', 'like', "%{$search}%");
@@ -530,6 +321,7 @@ class InboundController extends Controller
         if ($baseType) {
             $recordsTotalQuery->where('type', $baseType);
         }
+
         $recordsTotal = $recordsTotalQuery->count();
         $recordsFiltered = (clone $query)->count();
         $defaultWarehouseLabel = Warehouse::where('id', WarehouseService::defaultWarehouseId())->value('name') ?? 'Gudang Besar';
@@ -540,19 +332,18 @@ class InboundController extends Controller
             $query->skip($start)->take($length);
         }
 
-        $data = $query->get()->map(function ($row) use ($defaultWarehouseLabel) {
-            $ts = $row->transacted_at ? Carbon::parse($row->transacted_at)->format('Y-m-d H:i') : '';
+        $data = $query->get()->map(function (InboundTransaction $row) use ($defaultWarehouseLabel) {
+            $ts = $row->transacted_at?->format('Y-m-d H:i') ?? '';
             $items = $row->items ?? collect();
-            $labels = $items->map(function ($it) {
-                $sku = trim($it->item?->sku ?? '');
+            $labels = $items->map(function (InboundItem $item) {
+                $sku = trim($item->item?->sku ?? '');
                 if ($sku === '') {
                     return '';
                 }
-                $qty = (int) ($it->qty ?? 0);
-                return sprintf('%s (%d)', $sku, $qty);
+
+                return sprintf('%s (%d)', $sku, (int) ($item->qty ?? 0));
             })->filter()->values();
-            $itemLabel = $labels->implode(', ');
-            $totalQty = (int) $items->sum('qty');
+
             return [
                 'id' => $row->id,
                 'code' => $row->code,
@@ -560,11 +351,11 @@ class InboundController extends Controller
                 'submit_by' => $row->creator?->name ?? '-',
                 'warehouse' => $row->warehouse?->name ?? $defaultWarehouseLabel,
                 'warehouse_id' => $row->warehouse_id,
-                'item' => $itemLabel ?: '-',
-                'qty' => $totalQty,
+                'item' => $labels->implode(', ') ?: '-',
+                'qty' => (int) $items->sum('qty'),
                 'note' => $row->note ?? '',
                 'type' => $row->type,
-                'status' => $row->status ?? 'pending',
+                'status' => $row->status ?? InboundScanStatus::PENDING_SCAN,
             ];
         });
 
@@ -578,18 +369,21 @@ class InboundController extends Controller
 
     private function show(string $type, int $id)
     {
-        $tx = InboundTransaction::with('items')
+        $transaction = InboundTransaction::with('items')
             ->where('type', $type)
             ->findOrFail($id);
 
         return response()->json([
-            'id' => $tx->id,
-            'code' => $tx->code,
-            'ref_no' => $tx->ref_no,
-            'note' => $tx->note,
-            'status' => $tx->status ?? 'pending',
-            'transacted_at' => $tx->transacted_at?->format('Y-m-d\TH:i'),
-            'items' => $tx->items->map(function ($item) {
+            'id' => $transaction->id,
+            'code' => $transaction->code,
+            'ref_no' => $transaction->ref_no,
+            'surat_jalan_no' => $transaction->surat_jalan_no,
+            'surat_jalan_at' => $transaction->surat_jalan_at?->format('Y-m-d'),
+            'note' => $transaction->note,
+            'status' => $transaction->status ?? InboundScanStatus::PENDING_SCAN,
+            'warehouse_id' => $transaction->warehouse_id,
+            'transacted_at' => $transaction->transacted_at?->format('Y-m-d\TH:i'),
+            'items' => $transaction->items->map(function (InboundItem $item) {
                 return [
                     'item_id' => $item->item_id,
                     'qty' => $item->qty,
@@ -602,75 +396,76 @@ class InboundController extends Controller
 
     private function detail(string $type, string $pageTitle, string $routeBase, int $id)
     {
-        $tx = InboundTransaction::with(['items.item', 'warehouse'])
-            ->where('type', $type)
-            ->findOrFail($id);
+        $transaction = InboundTransaction::with([
+            'items.item',
+            'warehouse',
+            'scanSession.items',
+            'scanSession.starter:id,name',
+            'scanSession.lastScanner:id,name',
+            'scanSession.completer:id,name',
+            'scanSession.resetter:id,name',
+        ])->where('type', $type)->findOrFail($id);
 
-        $totalQty = $tx->items->sum('qty');
-        $totalKoli = $tx->items->sum('koli');
-        $warehouseLabel = $tx->warehouse?->name;
+        $totalQty = (int) $transaction->items->sum('qty');
+        $totalKoli = (int) $transaction->items->sum(fn ($row) => (int) ($row->koli ?? 0));
+        $warehouseLabel = $transaction->warehouse?->name;
         if (!$warehouseLabel) {
-            $warehouseId = WarehouseService::defaultWarehouseId();
-            $warehouseLabel = Warehouse::where('id', $warehouseId)->value('name') ?? 'Gudang Besar';
+            $warehouseLabel = Warehouse::where('id', WarehouseService::defaultWarehouseId())->value('name') ?? 'Gudang Besar';
         }
+
+        $scanItems = $transaction->scanSession?->items ?? collect();
+        $scanSummary = [
+            'expected_qty' => (int) $scanItems->sum('expected_qty'),
+            'expected_koli' => (int) $scanItems->sum('expected_koli'),
+            'scanned_qty' => (int) $scanItems->sum('scanned_qty'),
+            'scanned_koli' => (int) $scanItems->sum('scanned_koli'),
+        ];
 
         return view('admin.stock-flow.detail', [
             'pageTitle' => $pageTitle,
-            'transaction' => $tx,
+            'transaction' => $transaction,
             'totalQty' => $totalQty,
             'totalKoli' => $totalKoli,
             'showKoli' => true,
             'warehouseLabel' => $warehouseLabel,
             'backUrl' => route("admin.inbound.{$routeBase}.index"),
+            'scanSession' => $transaction->scanSession,
+            'scanSummary' => $scanSummary,
+            'statusLabel' => InboundScanStatus::label($transaction->status),
         ]);
     }
 
     private function store(Request $request, string $type)
     {
         $validated = $this->validatePayload($request);
-
         $prefix = match ($type) {
             'receipt' => 'INB-RCV',
             'return' => 'INB-RET',
             default => 'INB-MNL',
         };
 
-        $code = $this->generateCode($prefix);
-        $transactedAt = $validated['transacted_at'] ?? now();
-
         DB::beginTransaction();
         try {
-            $tx = InboundTransaction::create([
-                'code' => $code,
+            $transaction = InboundTransaction::create([
+                'code' => $this->generateCode($prefix),
                 'type' => $type,
                 'ref_no' => $validated['ref_no'] ?? null,
+                'surat_jalan_no' => $validated['surat_jalan_no'] ?? null,
+                'surat_jalan_at' => $validated['surat_jalan_at'] ?? null,
                 'note' => $validated['note'] ?? null,
                 'warehouse_id' => WarehouseService::defaultWarehouseId(),
-                'transacted_at' => $transactedAt,
+                'transacted_at' => $validated['transacted_at'] ?? now(),
                 'created_by' => auth()->id(),
-                'status' => 'pending',
+                'status' => InboundScanStatus::PENDING_SCAN,
             ]);
 
             foreach ($validated['items'] as $row) {
                 InboundItem::create([
-                    'inbound_transaction_id' => $tx->id,
+                    'inbound_transaction_id' => $transaction->id,
                     'item_id' => $row['item_id'],
                     'qty' => $row['qty'],
-                    'koli' => $row['koli'] ?? null,
+                    'koli' => $row['koli'],
                     'note' => $row['note'] ?? null,
-                ]);
-
-                StockService::mutate([
-                    'item_id' => $row['item_id'],
-                    'direction' => 'in',
-                    'qty' => $row['qty'],
-                    'source_type' => 'inbound',
-                    'source_subtype' => $type,
-                    'source_id' => $tx->id,
-                    'source_code' => $tx->code,
-                    'note' => $row['note'] ?? null,
-                    'occurred_at' => $transactedAt,
-                    'created_by' => auth()->id(),
                 ]);
             }
 
@@ -680,6 +475,7 @@ class InboundController extends Controller
             throw $e;
         } catch (\Throwable $e) {
             DB::rollBack();
+
             return response()->json([
                 'message' => 'Gagal menyimpan inbound',
                 'error' => $e->getMessage(),
@@ -687,7 +483,7 @@ class InboundController extends Controller
         }
 
         return response()->json([
-            'message' => 'Inbound berhasil disimpan',
+            'message' => 'Inbound berhasil disimpan dan menunggu scan inbound.',
         ]);
     }
 
@@ -697,42 +493,35 @@ class InboundController extends Controller
 
         DB::beginTransaction();
         try {
-            $tx = InboundTransaction::where('type', $type)->findOrFail($id);
-            if (($tx->status ?? 'pending') === 'approved') {
+            $transaction = InboundTransaction::with('scanSession')
+                ->where('type', $type)
+                ->findOrFail($id);
+
+            if (($transaction->status ?? InboundScanStatus::PENDING_SCAN) !== InboundScanStatus::PENDING_SCAN || $transaction->scanSession) {
                 DB::rollBack();
-                return response()->json(['message' => 'Data sudah disetujui dan tidak bisa diubah'], 422);
+
+                return response()->json([
+                    'message' => 'Inbound yang sudah mulai discan tidak bisa diubah.',
+                ], 422);
             }
 
-            StockService::rollbackBySource('inbound', $tx->id);
-            StockMutation::where('source_type', 'inbound')->where('source_id', $tx->id)->delete();
-            InboundItem::where('inbound_transaction_id', $tx->id)->delete();
+            InboundItem::where('inbound_transaction_id', $transaction->id)->delete();
 
-            $tx->update([
+            $transaction->update([
                 'ref_no' => $validated['ref_no'] ?? null,
+                'surat_jalan_no' => $validated['surat_jalan_no'] ?? null,
+                'surat_jalan_at' => $validated['surat_jalan_at'] ?? null,
                 'note' => $validated['note'] ?? null,
-                'transacted_at' => $validated['transacted_at'] ?? $tx->transacted_at,
+                'transacted_at' => $validated['transacted_at'] ?? $transaction->transacted_at,
             ]);
 
             foreach ($validated['items'] as $row) {
                 InboundItem::create([
-                    'inbound_transaction_id' => $tx->id,
+                    'inbound_transaction_id' => $transaction->id,
                     'item_id' => $row['item_id'],
                     'qty' => $row['qty'],
-                    'koli' => $row['koli'] ?? null,
+                    'koli' => $row['koli'],
                     'note' => $row['note'] ?? null,
-                ]);
-
-                StockService::mutate([
-                    'item_id' => $row['item_id'],
-                    'direction' => 'in',
-                    'qty' => $row['qty'],
-                    'source_type' => 'inbound',
-                    'source_subtype' => $type,
-                    'source_id' => $tx->id,
-                    'source_code' => $tx->code,
-                    'note' => $row['note'] ?? null,
-                    'occurred_at' => $validated['transacted_at'] ?? $tx->transacted_at,
-                    'created_by' => auth()->id(),
                 ]);
             }
 
@@ -742,6 +531,7 @@ class InboundController extends Controller
             throw $e;
         } catch (\Throwable $e) {
             DB::rollBack();
+
             return response()->json([
                 'message' => 'Gagal memperbarui inbound',
                 'error' => $e->getMessage(),
@@ -749,7 +539,7 @@ class InboundController extends Controller
         }
 
         return response()->json([
-            'message' => 'Inbound berhasil diperbarui',
+            'message' => 'Inbound berhasil diperbarui.',
         ]);
     }
 
@@ -757,25 +547,31 @@ class InboundController extends Controller
     {
         DB::beginTransaction();
         try {
-            $tx = InboundTransaction::where('type', $type)->findOrFail($id);
-            if (($tx->status ?? 'pending') === 'approved') {
+            $transaction = InboundTransaction::with('scanSession')
+                ->where('type', $type)
+                ->findOrFail($id);
+
+            if (($transaction->status ?? InboundScanStatus::PENDING_SCAN) !== InboundScanStatus::PENDING_SCAN || $transaction->scanSession) {
                 DB::rollBack();
-                return response()->json(['message' => 'Data sudah disetujui dan tidak bisa dihapus'], 422);
+
+                return response()->json([
+                    'message' => 'Inbound yang sudah mulai discan tidak bisa dihapus.',
+                ], 422);
             }
 
-            StockService::rollbackBySource('inbound', $tx->id);
-            StockMutation::where('source_type', 'inbound')->where('source_id', $tx->id)->delete();
-            $tx->delete();
+            $transaction->delete();
 
             DB::commit();
         } catch (ValidationException $e) {
             DB::rollBack();
-            $msg = collect($e->errors())->flatten()->first() ?? $e->getMessage();
+            $message = collect($e->errors())->flatten()->first() ?? $e->getMessage();
+
             return response()->json([
-                'message' => $msg,
+                'message' => $message,
             ], 422);
         } catch (\Throwable $e) {
             DB::rollBack();
+
             return response()->json([
                 'message' => 'Gagal menghapus inbound',
                 'error' => $e->getMessage(),
@@ -783,22 +579,17 @@ class InboundController extends Controller
         }
 
         return response()->json([
-            'message' => 'Inbound berhasil dihapus',
+            'message' => 'Inbound berhasil dihapus.',
         ]);
     }
 
     private function approve(string $type, int $id)
     {
-        $tx = InboundTransaction::where('type', $type)->findOrFail($id);
-        if (($tx->status ?? 'pending') === 'approved') {
-            return response()->json(['message' => 'Data sudah disetujui']);
-        }
-        $tx->status = 'approved';
-        $tx->approved_at = now();
-        $tx->approved_by = auth()->id();
-        $tx->save();
+        InboundTransaction::where('type', $type)->findOrFail($id);
 
-        return response()->json(['message' => 'Inbound berhasil disetujui']);
+        return response()->json([
+            'message' => 'Inbound sekarang diselesaikan melalui Scan Inbound, bukan approve manual.',
+        ], 422);
     }
 
     private function validatePayload(Request $request): array
@@ -810,6 +601,8 @@ class InboundController extends Controller
             'items.*.koli' => ['nullable', 'integer', 'min:1'],
             'items.*.note' => ['nullable', 'string'],
             'ref_no' => ['nullable', 'string', 'max:100'],
+            'surat_jalan_no' => ['nullable', 'string', 'max:100'],
+            'surat_jalan_at' => ['nullable', 'date'],
             'note' => ['nullable', 'string'],
             'transacted_at' => ['required', 'date'],
         ]);
@@ -817,11 +610,10 @@ class InboundController extends Controller
         $items = collect($validated['items'] ?? [])
             ->filter(fn ($row) => (int) ($row['qty'] ?? 0) > 0 && (int) ($row['item_id'] ?? 0) > 0)
             ->map(function ($row) {
-                $koli = isset($row['koli']) && (int) $row['koli'] > 0 ? (int) $row['koli'] : null;
                 return [
                     'item_id' => (int) $row['item_id'],
                     'qty' => (int) $row['qty'],
-                    'koli' => $koli,
+                    'koli' => isset($row['koli']) && (int) $row['koli'] > 0 ? (int) $row['koli'] : null,
                     'note' => $row['note'] ?? null,
                 ];
             })->values();
@@ -839,26 +631,111 @@ class InboundController extends Controller
             ]);
         }
 
-        $normalized = $items->groupBy('item_id')->map(function ($rows, $itemId) {
-            $qty = $rows->sum('qty');
-            $koli = $rows->sum('koli');
-            $note = $rows->pluck('note')->first(fn ($n) => $n !== null && $n !== '') ?? null;
+        $itemMap = Item::whereIn('id', $items->pluck('item_id')->all())
+            ->get(['id', 'sku', 'name', 'koli_qty'])
+            ->keyBy('id');
+
+        $normalized = $items->map(function ($row) use ($itemMap) {
+            $item = $itemMap->get($row['item_id']);
+            if (!$item) {
+                throw ValidationException::withMessages([
+                    'items' => 'Item inbound tidak ditemukan.',
+                ]);
+            }
+
+            $resolved = InboundScanExpectation::resolve($item, (int) $row['qty'], $row['koli']);
+
             return [
-                'item_id' => (int) $itemId,
-                'qty' => $qty,
-                'koli' => $koli > 0 ? $koli : null,
-                'note' => $note,
+                'item_id' => (int) $row['item_id'],
+                'qty' => $resolved['qty'],
+                'koli' => $resolved['koli'],
+                'note' => $row['note'],
             ];
         })->values()->all();
 
         $validated['items'] = $normalized;
-        if (!empty($validated['transacted_at'])) {
-            $validated['transacted_at'] = Carbon::parse($validated['transacted_at']);
-        } else {
-            $validated['transacted_at'] = null;
-        }
+        $validated['transacted_at'] = !empty($validated['transacted_at'])
+            ? Carbon::parse($validated['transacted_at'])
+            : null;
+        $validated['surat_jalan_at'] = !empty($validated['surat_jalan_at'])
+            ? Carbon::parse($validated['surat_jalan_at'])
+            : null;
 
         return $validated;
+    }
+
+    private function importGroups(
+        Request $request,
+        object $import,
+        string $type,
+        string $prefix,
+        string $successMessage,
+        string $failureMessage
+    ) {
+        $request->validate([
+            'file' => ['required', 'file', 'mimes:xlsx,xls', 'max:5120'],
+        ]);
+
+        DB::beginTransaction();
+        try {
+            Excel::import($import, $request->file('file'));
+            $groups = $import->groups ?? [];
+            if (empty($groups)) {
+                throw ValidationException::withMessages([
+                    'file' => 'Tidak ada data valid untuk diimport',
+                ]);
+            }
+
+            $createdTransactions = 0;
+            $createdItems = 0;
+            foreach ($groups as $group) {
+                $transactedAt = $this->parseImportedDate($group['transacted_at'] ?? null, 'transacted_at');
+                $suratJalanAt = $this->parseImportedDate($group['surat_jalan_at'] ?? null, 'surat_jalan_at', false);
+
+                $transaction = InboundTransaction::create([
+                    'code' => $this->generateCode($prefix),
+                    'type' => $type,
+                    'ref_no' => $group['ref_no'] ?? null,
+                    'surat_jalan_no' => $group['surat_jalan_no'] ?? null,
+                    'surat_jalan_at' => $suratJalanAt,
+                    'note' => $group['note'] ?? null,
+                    'warehouse_id' => WarehouseService::defaultWarehouseId(),
+                    'transacted_at' => $transactedAt,
+                    'created_by' => auth()->id(),
+                    'status' => InboundScanStatus::PENDING_SCAN,
+                ]);
+                $createdTransactions++;
+
+                foreach (($group['items'] ?? []) as $row) {
+                    InboundItem::create([
+                        'inbound_transaction_id' => $transaction->id,
+                        'item_id' => $row['item_id'],
+                        'qty' => $row['qty'],
+                        'koli' => $row['koli'],
+                        'note' => $row['note'] ?? null,
+                    ]);
+                    $createdItems++;
+                }
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'message' => $successMessage,
+                'transactions' => $createdTransactions,
+                'items' => $createdItems,
+            ]);
+        } catch (ValidationException $e) {
+            DB::rollBack();
+            throw $e;
+        } catch (\Throwable $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'message' => $failureMessage,
+                'error' => $e->getMessage(),
+            ], 500);
+        }
     }
 
     private function typeOptions(): array
@@ -878,15 +755,30 @@ class InboundController extends Controller
 
         try {
             if ($dateFrom) {
-                $from = Carbon::parse($dateFrom)->startOfDay();
-                $query->where('inbound_transactions.transacted_at', '>=', $from);
+                $query->where('inbound_transactions.transacted_at', '>=', Carbon::parse($dateFrom)->startOfDay());
             }
+
             if ($dateTo) {
-                $to = Carbon::parse($dateTo)->endOfDay();
-                $query->where('inbound_transactions.transacted_at', '<=', $to);
+                $query->where('inbound_transactions.transacted_at', '<=', Carbon::parse($dateTo)->endOfDay());
             }
         } catch (\Throwable) {
-            // ignore invalid date filters
+            // Ignore invalid date filters.
+        }
+    }
+
+    private function parseImportedDate(?string $value, string $field, bool $required = true): ?Carbon
+    {
+        $value = trim((string) $value);
+        if ($value === '') {
+            return $required ? now() : null;
+        }
+
+        try {
+            return Carbon::parse($value);
+        } catch (\Throwable) {
+            throw ValidationException::withMessages([
+                'file' => "Format {$field} tidak valid: {$value}",
+            ]);
         }
     }
 

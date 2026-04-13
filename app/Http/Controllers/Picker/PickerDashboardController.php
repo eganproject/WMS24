@@ -14,11 +14,13 @@ class PickerDashboardController extends Controller
         $hasPacker = $roles->contains('packer');
         $hasAdminScan = $roles->contains('admin-scan');
         $hasQc = $roles->contains('qc');
-        $hasOtherRoles = $roles->diff(['picker', 'packer', 'admin-scan', 'qc'])->isNotEmpty();
+        $hasInboundScan = $roles->contains('inbound-scan');
+        $hasOtherRoles = $roles->diff(['picker', 'packer', 'admin-scan', 'qc', 'inbound-scan'])->isNotEmpty();
 
         return view('picker.dashboard', [
             'routes' => [
                 'opname' => route('opname.index'),
+                'inboundScan' => route('picker.inbound-scan.index'),
                 'picker' => route('picker.index'),
                 'qc' => route('picker.qc.index'),
                 'packer' => route('picker.packer.index'),
@@ -28,6 +30,7 @@ class PickerDashboardController extends Controller
                 'logout' => route('logout'),
             ],
             'showPicking' => $hasPicker || $hasOtherRoles,
+            'showInboundScan' => $hasInboundScan || $hasOtherRoles,
             'showQc' => $hasQc || $hasOtherRoles,
             'showPacking' => $hasPacker || $hasOtherRoles,
             'showScanOut' => $hasAdminScan || $hasOtherRoles,

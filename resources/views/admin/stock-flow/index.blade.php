@@ -156,6 +156,18 @@
                         <input type="text" class="form-control form-control-solid" name="ref_no" id="flow_ref_no" />
                         <div class="invalid-feedback" id="error_ref_no"></div>
                     </div>
+                    @if(!empty($showDeliveryNoteFields ?? false))
+                        <div class="fv-row mb-7">
+                            <label class="fs-6 fw-bold form-label mb-2">No Surat Jalan</label>
+                            <input type="text" class="form-control form-control-solid" name="surat_jalan_no" id="flow_surat_jalan_no" />
+                            <div class="invalid-feedback" id="error_surat_jalan_no"></div>
+                        </div>
+                        <div class="fv-row mb-7">
+                            <label class="fs-6 fw-bold form-label mb-2">Tanggal Surat Jalan</label>
+                            <input type="text" class="form-control form-control-solid" name="surat_jalan_at" id="flow_surat_jalan_at" placeholder="YYYY-MM-DD" />
+                            <div class="invalid-feedback" id="error_surat_jalan_at"></div>
+                        </div>
+                    @endif
                     <div class="fv-row mb-7">
                         <label class="fs-6 fw-bold form-label mb-2">Catatan</label>
                         <textarea class="form-control form-control-solid" name="note" id="flow_note" rows="3"></textarea>
@@ -198,7 +210,11 @@
                             @else
                                 Header minimal: <strong>sku</strong>, <strong>qty</strong>.<br>
                             @endif
-                            Opsional: <strong>ref_no</strong>, <strong>note</strong>, <strong>item_note</strong>, <strong>transacted_at</strong>
+                            Opsional: <strong>ref_no</strong>
+                            @if(!empty($showDeliveryNoteFields ?? false))
+                                , <strong>surat_jalan_no</strong>, <strong>surat_jalan_at</strong>
+                            @endif
+                            , <strong>note</strong>, <strong>item_note</strong>, <strong>transacted_at</strong>
                             @if(!empty($enableWarehouseSelect ?? false))
                                 , <strong>warehouse</strong>/<strong>gudang</strong> (isi kode/nama gudang)
                             @endif
@@ -252,6 +268,10 @@
     const enableWarehouseSelect = {{ !empty($enableWarehouseSelect ?? false) ? 'true' : 'false' }};
     const displayWarehouseId = {{ isset($displayWarehouseId) ? (int) $displayWarehouseId : 'null' }};
     const defaultWarehouseId = {{ isset($defaultWarehouseId) ? (int) $defaultWarehouseId : 'null' }};
+    const statusLabels = @json($statusLabels ?? []);
+    const lockedStatuses = @json($lockedStatuses ?? ['approved']);
+    const showApproveAction = {{ isset($showApproveAction) ? ($showApproveAction ? 'true' : 'false') : 'true' }};
+    const deleteWarningText = @json($deleteWarningText ?? 'Data akan dihapus dan stok akan dikembalikan');
 
     document.addEventListener('DOMContentLoaded', () => {
         const tableEl = $('#stock_flow_table');
@@ -277,9 +297,12 @@
         const importSubmit = document.getElementById('btn_import_flow_submit');
         const warehouseRow = document.getElementById('flow_warehouse_row');
         const warehouseSelect = document.getElementById('flow_warehouse_id');
+        const suratJalanNoEl = document.getElementById('flow_surat_jalan_no');
+        const suratJalanAtEl = document.getElementById('flow_surat_jalan_at');
         let fpFrom = null;
         let fpTo = null;
         let fpTransacted = null;
+        let fpSuratJalan = null;
 
         const formatDateTime = (date) => {
             const pad = (n) => String(n).padStart(2, '0');
@@ -298,6 +321,12 @@
         };
 
         const statusLabel = (status) => {
+            if (status && statusLabels?.[status]) {
+                const klass = status === 'completed' || status === 'approved'
+                    ? 'badge-light-success'
+                    : (status === 'scanning' ? 'badge-light-primary' : 'badge-light-warning');
+                return `<span class="badge ${klass}">${statusLabels[status]}</span>`;
+            }
             if (status === 'approved') return '<span class="badge badge-light-success">Disetujui</span>';
             return '<span class="badge badge-light-warning">Menunggu</span>';
         };
@@ -315,7 +344,7 @@
         };
 
         const clearErrors = () => {
-            ['error_transacted_at','error_ref_no','error_note','error_warehouse_id'].forEach(id => {
+            ['error_transacted_at','error_ref_no','error_surat_jalan_no','error_surat_jalan_at','error_note','error_warehouse_id'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.textContent = '';
             });
@@ -421,6 +450,9 @@
             if (transactedAtEl) {
                 fpTransacted = flatpickr(transactedAtEl, { enableTime: true, dateFormat: 'Y-m-d H:i', allowInput: true });
             }
+            if (suratJalanAtEl) {
+                fpSuratJalan = flatpickr(suratJalanAtEl, { dateFormat: 'Y-m-d', allowInput: true });
+            }
         }
 
         if (warehouseFilter && typeof $ !== 'undefined' && $.fn.select2) {
@@ -504,6 +536,11 @@
                 transactedAtEl.value = nowJkt;
             }
             applyWarehouseVisibility(defaultTypeFilter || '');
+            if (fpSuratJalan) {
+                fpSuratJalan.clear();
+            } else if (suratJalanAtEl) {
+                suratJalanAtEl.value = '';
+            }
             itemsContainer.innerHTML = '';
             createItemRow();
             clearErrors();
@@ -583,15 +620,17 @@
                 { data: 'id', orderable:false, searchable:false, className:'text-end', render: (data, type, row)=>{
                     const rowType = row?.type || defaultTypeFilter;
                     const perms = permMap?.[rowType] || {};
-                    const isApproved = row?.status === 'approved';
+                    const isLocked = Array.isArray(lockedStatuses)
+                        ? lockedStatuses.includes(row?.status)
+                        : row?.status === 'approved';
                     const detailItem = `<div class="menu-item px-3"><a href="${resolveRoute(rowType, 'detail').replace(':id', data)}" class="menu-link px-3">Detail</a></div>`;
-                    const approveItem = (!isApproved && perms.update)
+                    const approveItem = (showApproveAction && !isLocked && perms.update)
                         ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 text-success btn-approve" data-id="${data}" data-type="${rowType}">Approve</a></div>`
                         : '';
-                    const editItem = (!isApproved && perms.update)
+                    const editItem = (!isLocked && perms.update)
                         ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-edit" data-id="${data}" data-type="${rowType}">Edit</a></div>`
                         : '';
-                    const delItem = (!isApproved && perms.delete)
+                    const delItem = (!isLocked && perms.delete)
                         ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 text-danger btn-delete" data-id="${data}" data-type="${rowType}">Hapus</a></div>`
                         : '';
                     const actions = `${detailItem}${approveItem}${editItem}${delItem}`;
@@ -699,6 +738,7 @@
             form.dataset.flowType = rowType;
             if (modalTitle) modalTitle.textContent = `Edit ${json.code || ''}`.trim();
                 document.getElementById('flow_ref_no').value = json.ref_no || '';
+                if (suratJalanNoEl) suratJalanNoEl.value = json.surat_jalan_no || '';
                 document.getElementById('flow_note').value = json.note || '';
                 applyWarehouseVisibility(rowType);
                 if (warehouseSelect) {
@@ -709,6 +749,11 @@
                     fpTransacted.setDate(json.transacted_at || null, true, 'Y-m-d\\TH:i');
                 } else {
                     document.getElementById('flow_transacted_at').value = json.transacted_at || '';
+                }
+                if (fpSuratJalan) {
+                    fpSuratJalan.setDate(json.surat_jalan_at || null, true, 'Y-m-d');
+                } else if (suratJalanAtEl) {
+                    suratJalanAtEl.value = json.surat_jalan_at || '';
                 }
 
                 itemsContainer.innerHTML = '';
@@ -734,7 +779,7 @@
             if (typeof Swal !== 'undefined') {
                 const res = await Swal.fire({
                     title: 'Apakah Anda yakin?',
-                    text: 'Data akan dihapus dan stok akan dikembalikan',
+                    text: deleteWarningText,
                     icon: 'warning',
                     showCancelButton: true,
                     confirmButtonText: 'Hapus',

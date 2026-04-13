@@ -22,10 +22,32 @@
                 <div class="fw-bold text-gray-600">Ref No</div>
                 <div>{{ $transaction->ref_no ?? '-' }}</div>
             </div>
+            @if(isset($transaction->surat_jalan_no) || isset($transaction->surat_jalan_at))
+                <div class="col-md-4">
+                    <div class="fw-bold text-gray-600">Surat Jalan</div>
+                    <div>
+                        {{ $transaction->surat_jalan_no ?? '-' }}
+                        @if(!empty($transaction->surat_jalan_at))
+                            <div class="text-muted fs-7">{{ $transaction->surat_jalan_at?->format('Y-m-d') }}</div>
+                        @endif
+                    </div>
+                </div>
+            @endif
             <div class="col-md-4">
                 <div class="fw-bold text-gray-600">Catatan</div>
                 <div>{{ $transaction->note ?? '-' }}</div>
             </div>
+            @if(!empty($statusLabel ?? null))
+                <div class="col-md-4">
+                    <div class="fw-bold text-gray-600">Status</div>
+                    @php
+                        $statusClass = ($transaction->status ?? '') === 'completed'
+                            ? 'badge-light-success'
+                            : (($transaction->status ?? '') === 'scanning' ? 'badge-light-primary' : 'badge-light-warning');
+                    @endphp
+                    <div><span class="badge {{ $statusClass }}">{{ $statusLabel }}</span></div>
+                </div>
+            @endif
             @if(!empty($warehouseLabel ?? null))
                 <div class="col-md-4">
                     <div class="fw-bold text-gray-600">Gudang</div>
@@ -53,6 +75,24 @@
                     <div>{{ ($totalKoli ?? 0) > 0 ? $totalKoli : '-' }}</div>
                 </div>
             @endif
+            @if(!empty($scanSession ?? null))
+                <div class="col-md-4">
+                    <div class="fw-bold text-gray-600">Progress Scan</div>
+                    <div>
+                        Qty {{ $scanSummary['scanned_qty'] ?? 0 }}/{{ $scanSummary['expected_qty'] ?? 0 }}
+                        <div class="text-muted fs-7">Koli {{ $scanSummary['scanned_koli'] ?? 0 }}/{{ $scanSummary['expected_koli'] ?? 0 }}</div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="fw-bold text-gray-600">Audit Scan</div>
+                    <div class="text-muted fs-7">
+                        Mulai: {{ $scanSession->started_at?->format('Y-m-d H:i') ?? '-' }} / {{ $scanSession->starter?->name ?? '-' }}
+                    </div>
+                    <div class="text-muted fs-7">
+                        Selesai: {{ $scanSession->completed_at?->format('Y-m-d H:i') ?? '-' }} / {{ $scanSession->completer?->name ?? '-' }}
+                    </div>
+                </div>
+            @endif
         </div>
 
         <div class="table-responsive">
@@ -64,17 +104,30 @@
                             <th>Koli</th>
                         @endif
                         <th>Qty</th>
+                        @if(!empty($scanSession ?? null))
+                            <th>Scan Koli</th>
+                            <th>Scan Qty</th>
+                        @endif
                         <th>Catatan</th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach($transaction->items as $row)
+                        @php
+                            $scanItem = !empty($scanSession ?? null)
+                                ? $scanSession->items->firstWhere('item_id', $row->item_id)
+                                : null;
+                        @endphp
                         <tr>
                             <td>{{ $row->item?->sku }} - {{ $row->item?->name }}</td>
                             @if(!empty($showKoli ?? false))
                                 <td>{{ $row->koli ?? '-' }}</td>
                             @endif
                             <td>{{ $row->qty }}</td>
+                            @if(!empty($scanSession ?? null))
+                                <td>{{ $scanItem?->scanned_koli ?? '-' }}</td>
+                                <td>{{ $scanItem?->scanned_qty ?? '-' }}</td>
+                            @endif
                             <td>{{ $row->note ?? '-' }}</td>
                         </tr>
                     @endforeach

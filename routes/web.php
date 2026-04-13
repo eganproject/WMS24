@@ -34,6 +34,7 @@ use App\Http\Controllers\Admin\LocationController;
 use App\Http\Controllers\Admin\KurirController;
 use App\Http\Controllers\Mobile\StockOpnameMobileController;
 use App\Http\Controllers\Picker\PickerDashboardController;
+use App\Http\Controllers\Picker\InboundScanController;
 use App\Http\Controllers\Picker\PackerScanController;
 use App\Http\Controllers\Picker\PackerScanOutController;
 use App\Http\Controllers\Picker\QcScanController;
@@ -62,6 +63,12 @@ Route::middleware('auth')->group(function () {
 
 Route::middleware('auth')->prefix('picker')->as('picker.')->group(function () {
     Route::get('/dashboard', [PickerDashboardController::class, 'index'])->name('dashboard');
+    Route::get('/inbound-scan', [InboundScanController::class, 'index'])->name('inbound-scan.index');
+    Route::get('/inbound-scan/transactions', [InboundScanController::class, 'transactions'])->name('inbound-scan.transactions');
+    Route::post('/inbound-scan/open', [InboundScanController::class, 'open'])->name('inbound-scan.open');
+    Route::post('/inbound-scan/scan-sku', [InboundScanController::class, 'scanSku'])->name('inbound-scan.scan-sku');
+    Route::post('/inbound-scan/complete', [InboundScanController::class, 'complete'])->name('inbound-scan.complete');
+    Route::post('/inbound-scan/reset', [InboundScanController::class, 'reset'])->name('inbound-scan.reset');
     Route::get('/qc', [QcScanController::class, 'index'])->name('qc.index');
     Route::post('/qc/scan', [QcScanController::class, 'scanResi'])->name('qc.scan');
     Route::post('/qc/scan-sku', [QcScanController::class, 'scanSku'])->name('qc.scan-sku');

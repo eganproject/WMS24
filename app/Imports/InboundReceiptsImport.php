@@ -3,6 +3,7 @@
 namespace App\Imports;
 
 use App\Models\Item;
+use App\Support\InboundScanExpectation;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 use Maatwebsite\Excel\Concerns\SkipsEmptyRows;
@@ -11,7 +12,7 @@ use Maatwebsite\Excel\Concerns\WithHeadingRow;
 
 class InboundReceiptsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
 {
-    /** @var array<string,array{ref_no:?string,note:?string,transacted_at:?string,items:array<int,array{item_id:int,qty:int,koli:?int,note:?string}>}> */
+    /** @var array<string,array{ref_no:?string,surat_jalan_no:?string,surat_jalan_at:?string,note:?string,transacted_at:?string,items:array<int,array{item_id:int,qty:int,koli:int,note:?string}>}> */
     public array $groups = [];
 
     public function collection(Collection $rows)
@@ -61,35 +62,55 @@ class InboundReceiptsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
             $item = $skuMap[$sku];
             $qty = $qtyKey ? $this->parseQty($row, $qtyKey) : 0;
             $koli = $koliKey ? $this->parseQty($row, $koliKey) : 0;
-            if ($qty <= 0 && $koliKey) {
-                if ($koli > 0) {
-                    $koliQty = (int) ($item->koli_qty ?? 0);
-                    if ($koliQty <= 0) {
-                        $errors[] = "Baris {$rowIndex}: isi per koli belum diisi untuk SKU {$sku}";
-                        continue;
-                    }
-                    $qty = $koli * $koliQty;
+            if ($qty <= 0 && $koli > 0) {
+                $koliQty = (int) ($item->koli_qty ?? 0);
+                if ($koliQty <= 0) {
+                    $errors[] = "Baris {$rowIndex}: isi per koli belum diisi untuk SKU {$sku}";
+                    continue;
                 }
+                $qty = $koli * $koliQty;
             }
             if ($qty <= 0) {
                 $errors[] = "Baris {$rowIndex}: qty/koli tidak valid untuk SKU {$sku}";
                 continue;
             }
 
+            try {
+                $resolved = InboundScanExpectation::resolve($item, $qty, $koli > 0 ? $koli : null);
+            } catch (ValidationException $e) {
+                $errors[] = "Baris {$rowIndex}: ".(collect($e->errors())->flatten()->first() ?? $e->getMessage());
+                continue;
+            }
+
             $ref = trim((string) ($row['ref_no'] ?? ''));
+            $suratJalanNo = trim((string) ($row['surat_jalan_no'] ?? $row['sj_no'] ?? ''));
+            $suratJalanAt = trim((string) ($row['surat_jalan_at'] ?? $row['tanggal_surat_jalan'] ?? ''));
             $note = trim((string) ($row['note'] ?? ''));
             $itemNote = trim((string) ($row['item_note'] ?? $row['note_item'] ?? ''));
             $transactedAt = trim((string) ($row['transacted_at'] ?? $row['tanggal'] ?? ''));
 
-            $groupKey = $ref !== '' ? $ref : '__default__';
+            $groupKeyParts = [
+                $ref !== '' ? $ref : '__ref__',
+                $suratJalanNo !== '' ? $suratJalanNo : '__sj__',
+                $transactedAt !== '' ? $transactedAt : '__date__',
+            ];
+            $groupKey = implode('|', $groupKeyParts);
             if (!isset($this->groups[$groupKey])) {
                 $this->groups[$groupKey] = [
                     'ref_no' => $ref !== '' ? $ref : null,
+                    'surat_jalan_no' => $suratJalanNo !== '' ? $suratJalanNo : null,
+                    'surat_jalan_at' => $suratJalanAt !== '' ? $suratJalanAt : null,
                     'note' => $note !== '' ? $note : null,
                     'transacted_at' => $transactedAt !== '' ? $transactedAt : null,
                     'items' => [],
                 ];
             } else {
+                if ($this->groups[$groupKey]['surat_jalan_no'] === null && $suratJalanNo !== '') {
+                    $this->groups[$groupKey]['surat_jalan_no'] = $suratJalanNo;
+                }
+                if ($this->groups[$groupKey]['surat_jalan_at'] === null && $suratJalanAt !== '') {
+                    $this->groups[$groupKey]['surat_jalan_at'] = $suratJalanAt;
+                }
                 if ($this->groups[$groupKey]['note'] === null && $note !== '') {
                     $this->groups[$groupKey]['note'] = $note;
                 }
@@ -99,19 +120,16 @@ class InboundReceiptsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
             }
 
             $itemId = (int) $item->id;
-            $koliValue = $koli > 0 ? $koli : null;
             if (!isset($this->groups[$groupKey]['items'][$itemId])) {
                 $this->groups[$groupKey]['items'][$itemId] = [
                     'item_id' => $itemId,
-                    'qty' => $qty,
-                    'koli' => $koliValue,
+                    'qty' => $resolved['qty'],
+                    'koli' => $resolved['koli'],
                     'note' => $itemNote !== '' ? $itemNote : null,
                 ];
             } else {
-                $this->groups[$groupKey]['items'][$itemId]['qty'] += $qty;
-                if ($koliValue !== null) {
-                    $this->groups[$groupKey]['items'][$itemId]['koli'] = (int) ($this->groups[$groupKey]['items'][$itemId]['koli'] ?? 0) + $koliValue;
-                }
+                $this->groups[$groupKey]['items'][$itemId]['qty'] += $resolved['qty'];
+                $this->groups[$groupKey]['items'][$itemId]['koli'] += $resolved['koli'];
                 if ($itemNote !== '' && empty($this->groups[$groupKey]['items'][$itemId]['note'])) {
                     $this->groups[$groupKey]['items'][$itemId]['note'] = $itemNote;
                 }

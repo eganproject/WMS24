@@ -13,6 +13,7 @@ use App\Exports\ItemsTemplateExport;
 use App\Imports\ItemsImport;
 use App\Support\LocationService;
 use App\Support\StockService;
+use App\Support\InboundScanStatus;
 use App\Support\WarehouseService;
 use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Http\Request;
@@ -278,7 +279,7 @@ class ItemController extends Controller
                     'warehouse_id' => (int) $warehouseId,
                     'transacted_at' => $transactedAt,
                     'created_by' => auth()->id(),
-                    'status' => 'approved',
+                    'status' => InboundScanStatus::COMPLETED,
                     'approved_at' => $transactedAt,
                     'approved_by' => auth()->id(),
                 ]);

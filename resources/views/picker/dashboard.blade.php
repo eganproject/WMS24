@@ -39,6 +39,10 @@
         background: linear-gradient(135deg, rgba(249,115,22,0.2), rgba(251,191,36,0.2));
         border-color: rgba(249,115,22,0.25);
     }
+    .menu-icon.inbound-scan {
+        background: linear-gradient(135deg, rgba(15,118,110,0.2), rgba(20,184,166,0.18));
+        border-color: rgba(15,118,110,0.25);
+    }
     .menu-icon.qc {
         background: linear-gradient(135deg, rgba(16,185,129,0.2), rgba(34,197,94,0.2));
         border-color: rgba(16,185,129,0.25);
@@ -116,6 +120,16 @@
                 <div>
                     <div class="menu-title">Picking</div>
                     <div class="menu-desc">Input barang yang dibawa oleh picker.</div>
+                </div>
+            </a>
+        @endif
+
+        @if(!empty($showInboundScan))
+            <a class="menu-card" href="{{ $routes['inboundScan'] }}">
+                <div class="menu-icon inbound-scan">IB</div>
+                <div>
+                    <div class="menu-title">Scan Inbound</div>
+                    <div class="menu-desc">Scan SKU per koli sebelum stok inbound masuk.</div>
                 </div>
             </a>
         @endif

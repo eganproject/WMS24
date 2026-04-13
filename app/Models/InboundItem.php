@@ -17,6 +17,11 @@ class InboundItem extends Model
         'note',
     ];
 
+    protected $casts = [
+        'qty' => 'integer',
+        'koli' => 'integer',
+    ];
+
     public function transaction()
     {
         return $this->belongsTo(InboundTransaction::class, 'inbound_transaction_id');

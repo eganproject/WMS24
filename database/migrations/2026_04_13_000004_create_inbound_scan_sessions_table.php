@@ -37,7 +37,8 @@ return new class extends Migration {
             $table->text('note')->nullable();
             $table->timestamps();
 
-            $table->unique(['inbound_scan_session_id', 'item_id']);
+            // MySQL has 64-char limit for index identifiers; keep this short.
+            $table->unique(['inbound_scan_session_id', 'item_id'], 'uq_inb_scan_sess_item');
             $table->index(['sku']);
         });
     }

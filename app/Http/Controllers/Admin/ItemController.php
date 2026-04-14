@@ -120,18 +120,13 @@ class ItemController extends Controller
             'address' => ['nullable', 'string'],
             'description' => ['nullable', 'string'],
             'safety_stock' => ['nullable', 'integer', 'min:0'],
-            'koli_qty' => ['nullable', 'integer', 'min:0'],
+            'koli_qty' => ['nullable', 'integer', 'min:0', 'max:4294967295'],
         ]);
 
         $catId = $request->input('category_id');
         $validated['category_id'] = ($catId === null || (int)$catId === 0) ? 0 : $catId;
         if (array_key_exists('safety_stock', $validated)) {
             $validated['safety_stock'] = max(0, (int) $validated['safety_stock']);
-        }
-        if (array_key_exists('koli_qty', $validated)) {
-            $validated['koli_qty'] = $validated['koli_qty'] === null || $validated['koli_qty'] === ''
-                ? null
-                : max(0, (int) $validated['koli_qty']);
         }
         if (array_key_exists('koli_qty', $validated)) {
             $validated['koli_qty'] = $validated['koli_qty'] === null || $validated['koli_qty'] === ''
@@ -188,13 +183,18 @@ class ItemController extends Controller
             'address' => ['nullable', 'string'],
             'description' => ['nullable', 'string'],
             'safety_stock' => ['nullable', 'integer', 'min:0'],
-            'koli_qty' => ['nullable', 'integer', 'min:0'],
+            'koli_qty' => ['nullable', 'integer', 'min:0', 'max:4294967295'],
         ]);
 
         $catId = $request->input('category_id');
         $validated['category_id'] = ($catId === null || (int)$catId === 0) ? 0 : $catId;
         if (array_key_exists('safety_stock', $validated)) {
             $validated['safety_stock'] = max(0, (int) $validated['safety_stock']);
+        }
+        if (array_key_exists('koli_qty', $validated)) {
+            $validated['koli_qty'] = $validated['koli_qty'] === null || $validated['koli_qty'] === ''
+                ? null
+                : max(0, (int) $validated['koli_qty']);
         }
 
         $this->applyLocationPayload($validated);

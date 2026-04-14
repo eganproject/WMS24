@@ -15,6 +15,9 @@ use Maatwebsite\Excel\Concerns\WithHeadingRow;
 
 class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
 {
+    // MySQL INT UNSIGNED max. (items.koli_qty uses unsignedInteger)
+    private const MAX_KOLI_QTY = 4294967295;
+
     public int $created = 0;
     public int $updated = 0;
     /** @var array<int,int> */
@@ -44,6 +47,7 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             ]);
         }
 
+        $excelRow = 2; // heading row is row 1
         foreach ($rows as $row) {
             $sku = trim((string) ($row['sku'] ?? ''));
             $name = trim((string) ($row['name'] ?? ''));
@@ -66,10 +70,19 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             $stockByWarehouse = $this->parseStockByWarehouse($row);
             $safetyByWarehouse = $this->parseSafetyStockByWarehouse($row);
             $safetyStock = $this->parseSafetyStock($row);
-            $koliQty = $this->parseKoliQty($row);
 
             if ($sku === '' || $name === '') {
+                $excelRow++;
                 continue;
+            }
+
+            $rawKoliQty = null;
+            $koliQty = $this->parseKoliQty($row, $rawKoliQty);
+            if ($koliQty !== null && $koliQty > self::MAX_KOLI_QTY) {
+                $rawLabel = $rawKoliQty !== null && $rawKoliQty !== '' ? " (raw: {$rawKoliQty})" : '';
+                throw ValidationException::withMessages([
+                    'file' => "Baris {$excelRow} (SKU {$sku}): nilai koli_qty terlalu besar{$rawLabel}. Maksimal ".self::MAX_KOLI_QTY.'.',
+                ]);
             }
 
             $parentCategoryId = 0;
@@ -140,6 +153,8 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
                     $this->initialStocks[$item->id] = ($this->initialStocks[$item->id] ?? 0) + $defaultQty;
                 }
             }
+
+            $excelRow++;
         }
     }
 
@@ -294,7 +309,7 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
         return $value > 0 ? $value : 0;
     }
 
-    protected function parseKoliQty($row): ?int
+    protected function parseKoliQty($row, ?string &$rawOut = null): ?int
     {
         $raw = null;
         $hasKey = false;
@@ -316,8 +331,10 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             }
         }
         if (!$hasKey) {
+            $rawOut = null;
             return null;
         }
+        $rawOut = $raw === null ? null : trim((string) $raw);
         if ($raw === null || $raw === '') {
             return 0;
         }

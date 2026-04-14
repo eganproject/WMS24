@@ -64,7 +64,9 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             ]);
             if ($hasAddressHeader) {
                 $address = trim((string) ($row['address'] ?? ''));
-            } elseif ($hasLocationHeaders) {
+            }
+            // If address column exists but is empty, allow lane/rack/column/row to act as fallback.
+            if ($address === '' && $hasLocationHeaders) {
                 $address = $this->composeAddress($row);
             }
             $stockByWarehouse = $this->parseStockByWarehouse($row);

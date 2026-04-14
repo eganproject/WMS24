@@ -27,7 +27,6 @@ class ItemsTemplateExport implements FromCollection, WithHeadings
             'safety_stock_gudang_display',
             'safety_stock',
             'koli_qty',
-            'address',
             'lane',
             'rack',
             'column',

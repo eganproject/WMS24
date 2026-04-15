@@ -451,6 +451,7 @@
         el.searchResults.innerHTML = transactions.map((row) => {
             const summary = row.summary || {};
             const meta = [
+                row.warehouse ? `Gudang: ${escapeHtml(row.warehouse)}` : null,
                 row.ref_no ? `Ref: ${escapeHtml(row.ref_no)}` : null,
                 row.surat_jalan_no ? `SJ: ${escapeHtml(row.surat_jalan_no)}` : null,
                 row.transacted_at ? `Tanggal: ${escapeHtml(row.transacted_at)}` : null,
@@ -489,6 +490,7 @@
         const audit = session.audit || {};
         const items = Array.isArray(transaction.items) ? transaction.items : [];
         const meta = [
+            transaction.warehouse ? `Gudang: ${transaction.warehouse}` : null,
             transaction.ref_no ? `Ref: ${transaction.ref_no}` : null,
             transaction.surat_jalan_no ? `SJ: ${transaction.surat_jalan_no}` : null,
             transaction.surat_jalan_at ? `Tgl SJ: ${transaction.surat_jalan_at}` : null,
@@ -580,10 +582,15 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ transaction_id: transactionId, _token: csrfToken }),
             });
-            renderTransaction(data.transaction || null);
+            const tx = data.transaction || null;
+            renderTransaction(tx);
             setStatus(el.searchStatus, data.message || 'Inbound siap discan.', 'success');
-            setStatus(el.scanStatus, 'Scan SKU untuk menambah 1 koli.', 'muted');
-            el.skuCode.focus();
+            if (tx?.status === 'completed') {
+                setStatus(el.scanStatus, 'Inbound sudah selesai discan.', 'success');
+            } else {
+                setStatus(el.scanStatus, 'Scan SKU untuk menambah 1 koli.', 'muted');
+                el.skuCode.focus();
+            }
         } catch (error) {
             showError(error.message || 'Gagal membuka inbound.', error.details || []);
             setStatus(el.searchStatus, error.message || 'Gagal membuka inbound.', 'error');

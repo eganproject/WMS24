@@ -8,7 +8,6 @@ use App\Models\InboundScanSessionItem;
 use App\Models\InboundTransaction;
 use App\Support\InboundScanStatus;
 use App\Support\StockService;
-use App\Support\WarehouseService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -34,21 +33,32 @@ class InboundScanController extends Controller
     {
         $query = trim((string) $request->input('query', ''));
 
+        $limit = $query !== '' ? 50 : 12;
+        $statusFilter = $query === ''
+            ? [InboundScanStatus::PENDING_SCAN, InboundScanStatus::SCANNING]
+            : InboundScanStatus::all();
+
         $builder = InboundTransaction::query()
-            ->with(['items.item', 'scanSession.items'])
-            ->where('warehouse_id', WarehouseService::defaultWarehouseId())
-            ->whereIn('status', [
-                InboundScanStatus::PENDING_SCAN,
-                InboundScanStatus::SCANNING,
-            ])
+            ->with(['items.item', 'scanSession.items', 'warehouse'])
+            ->whereIn('status', $statusFilter)
             ->orderByDesc('transacted_at')
-            ->limit(12);
+            ->limit($limit);
 
         if ($query !== '') {
             $builder->where(function ($q) use ($query) {
-                $q->where('code', 'like', "%{$query}%")
-                    ->orWhere('ref_no', 'like', "%{$query}%")
-                    ->orWhere('surat_jalan_no', 'like', "%{$query}%");
+                $like = "%{$query}%";
+                $loose = '%'.preg_replace('/[^A-Za-z0-9]+/', '%', $query).'%';
+
+                $q->where('code', 'like', $like)
+                    ->orWhere('code', 'like', $loose)
+                    ->orWhere('ref_no', 'like', $like)
+                    ->orWhere('ref_no', 'like', $loose)
+                    ->orWhere('surat_jalan_no', 'like', $like)
+                    ->orWhere('surat_jalan_no', 'like', $loose);
+
+                if (ctype_digit($query)) {
+                    $q->orWhere('id', (int) $query);
+                }
             });
         }
 
@@ -72,43 +82,33 @@ class InboundScanController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            if ((int) $transaction->warehouse_id !== WarehouseService::defaultWarehouseId()) {
-                DB::rollBack();
-                return response()->json([
-                    'message' => 'Inbound ini bukan untuk gudang besar.',
-                ], 422);
-            }
-
             if (($transaction->status ?? '') === InboundScanStatus::COMPLETED) {
-                DB::rollBack();
-                return response()->json([
-                    'message' => 'Inbound sudah selesai discan.',
-                ], 422);
+                DB::commit();
+            } else {
+                if ($transaction->items->isEmpty()) {
+                    DB::rollBack();
+                    return response()->json([
+                        'message' => 'Item inbound belum tersedia.',
+                    ], 422);
+                }
+
+                $session = $transaction->scanSession;
+                if (!$session) {
+                    $session = InboundScanSession::create([
+                        'inbound_transaction_id' => $transaction->id,
+                        'started_by' => auth()->id(),
+                        'started_at' => now(),
+                    ]);
+                    $this->syncSessionItems($session, $transaction);
+                } elseif ($session->items->isEmpty()) {
+                    $this->syncSessionItems($session, $transaction);
+                }
+
+                $transaction->status = InboundScanStatus::SCANNING;
+                $transaction->save();
+
+                DB::commit();
             }
-
-            if ($transaction->items->isEmpty()) {
-                DB::rollBack();
-                return response()->json([
-                    'message' => 'Item inbound belum tersedia.',
-                ], 422);
-            }
-
-            $session = $transaction->scanSession;
-            if (!$session) {
-                $session = InboundScanSession::create([
-                    'inbound_transaction_id' => $transaction->id,
-                    'started_by' => auth()->id(),
-                    'started_at' => now(),
-                ]);
-                $this->syncSessionItems($session, $transaction);
-            } elseif ($session->items->isEmpty()) {
-                $this->syncSessionItems($session, $transaction);
-            }
-
-            $transaction->status = InboundScanStatus::SCANNING;
-            $transaction->save();
-
-            DB::commit();
         } catch (ValidationException $e) {
             DB::rollBack();
             throw $e;
@@ -122,6 +122,7 @@ class InboundScanController extends Controller
 
         $transaction = InboundTransaction::with([
             'items.item',
+            'warehouse',
             'scanSession.items',
             'scanSession.starter:id,name',
             'scanSession.lastScanner:id,name',
@@ -130,7 +131,9 @@ class InboundScanController extends Controller
         ])->findOrFail((int) $validated['transaction_id']);
 
         return response()->json([
-            'message' => 'Inbound siap discan.',
+            'message' => ($transaction->status ?? '') === InboundScanStatus::COMPLETED
+                ? 'Inbound sudah selesai discan.'
+                : 'Inbound siap discan.',
             'transaction' => $this->serializeTransactionDetail($transaction),
         ]);
     }
@@ -474,6 +477,11 @@ class InboundScanController extends Controller
         $scannedQty = (int) $scanItems->sum('scanned_qty');
         $scannedKoli = (int) $scanItems->sum('scanned_koli');
 
+        if (($transaction->status ?? '') === InboundScanStatus::COMPLETED && $scanItems->isEmpty()) {
+            $scannedQty = $expectedQty;
+            $scannedKoli = $expectedKoli;
+        }
+
         return [
             'id' => $transaction->id,
             'code' => $transaction->code,
@@ -482,6 +490,8 @@ class InboundScanController extends Controller
             'surat_jalan_no' => $transaction->surat_jalan_no,
             'surat_jalan_at' => $transaction->surat_jalan_at?->format('Y-m-d'),
             'transacted_at' => $transaction->transacted_at?->format('Y-m-d H:i'),
+            'warehouse_id' => (int) ($transaction->warehouse_id ?? 0),
+            'warehouse' => $transaction->warehouse?->name,
             'status' => $transaction->status ?? InboundScanStatus::PENDING_SCAN,
             'summary' => [
                 'expected_qty' => $expectedQty,
@@ -496,11 +506,25 @@ class InboundScanController extends Controller
     private function serializeTransactionDetail(InboundTransaction $transaction): array
     {
         $session = $transaction->scanSession;
-        $items = $session?->items ?? collect();
-        $expectedQty = (int) $items->sum('expected_qty');
-        $expectedKoli = (int) $items->sum('expected_koli');
-        $scannedQty = (int) $items->sum('scanned_qty');
-        $scannedKoli = (int) $items->sum('scanned_koli');
+        $sessionItems = $session?->items ?? collect();
+        $hasSessionItems = $sessionItems->isNotEmpty();
+
+        $items = $hasSessionItems
+            ? $sessionItems
+            : ($transaction->relationLoaded('items') ? $transaction->items : $transaction->items()->with('item')->get());
+
+        if ($hasSessionItems) {
+            $expectedQty = (int) $items->sum('expected_qty');
+            $expectedKoli = (int) $items->sum('expected_koli');
+            $scannedQty = (int) $items->sum('scanned_qty');
+            $scannedKoli = (int) $items->sum('scanned_koli');
+        } else {
+            $expectedQty = (int) $items->sum('qty');
+            $expectedKoli = (int) $items->sum(fn ($row) => (int) ($row->koli ?? 0));
+            $isCompleted = ($transaction->status ?? '') === InboundScanStatus::COMPLETED;
+            $scannedQty = $isCompleted ? $expectedQty : 0;
+            $scannedKoli = $isCompleted ? $expectedKoli : 0;
+        }
 
         return [
             'id' => $transaction->id,
@@ -510,6 +534,8 @@ class InboundScanController extends Controller
             'surat_jalan_no' => $transaction->surat_jalan_no,
             'surat_jalan_at' => $transaction->surat_jalan_at?->format('Y-m-d'),
             'transacted_at' => $transaction->transacted_at?->format('Y-m-d H:i'),
+            'warehouse_id' => (int) ($transaction->warehouse_id ?? 0),
+            'warehouse' => $transaction->warehouse?->name,
             'status' => $transaction->status ?? InboundScanStatus::PENDING_SCAN,
             'session' => [
                 'id' => $session?->id,
@@ -533,17 +559,43 @@ class InboundScanController extends Controller
                 'scanned_koli' => $scannedKoli,
                 'remaining_koli' => max(0, $expectedKoli - $scannedKoli),
             ],
-            'items' => $items->map(function (InboundScanSessionItem $item) {
-                return [
-                    'sku' => $item->sku,
-                    'item_name' => $item->item_name,
-                    'qty_per_koli' => (int) $item->qty_per_koli,
-                    'expected_qty' => (int) $item->expected_qty,
-                    'expected_koli' => (int) $item->expected_koli,
-                    'scanned_qty' => (int) $item->scanned_qty,
-                    'scanned_koli' => (int) $item->scanned_koli,
-                ];
-            })->values(),
+            'items' => $hasSessionItems
+                ? $items->map(function (InboundScanSessionItem $item) {
+                    return [
+                        'sku' => $item->sku,
+                        'item_name' => $item->item_name,
+                        'qty_per_koli' => (int) $item->qty_per_koli,
+                        'expected_qty' => (int) $item->expected_qty,
+                        'expected_koli' => (int) $item->expected_koli,
+                        'scanned_qty' => (int) $item->scanned_qty,
+                        'scanned_koli' => (int) $item->scanned_koli,
+                    ];
+                })->values()
+                : $items->map(function ($row) use ($transaction) {
+                    $item = $row->item ?? null;
+                    $qty = (int) ($row->qty ?? 0);
+                    $koli = (int) ($row->koli ?? 0);
+                    $qtyPerKoli = 0;
+                    if ($qty > 0 && $koli > 0 && $qty % $koli === 0) {
+                        $qtyPerKoli = (int) ($qty / $koli);
+                    } elseif ($item) {
+                        $qtyPerKoli = (int) ($item->koli_qty ?? 0);
+                    }
+
+                    $isCompleted = ($transaction->status ?? '') === InboundScanStatus::COMPLETED;
+                    $scannedQty = $isCompleted ? $qty : 0;
+                    $scannedKoli = $isCompleted ? $koli : 0;
+
+                    return [
+                        'sku' => $item?->sku ?? null,
+                        'item_name' => $item?->name ?? null,
+                        'qty_per_koli' => $qtyPerKoli,
+                        'expected_qty' => $qty,
+                        'expected_koli' => $koli,
+                        'scanned_qty' => $scannedQty,
+                        'scanned_koli' => $scannedKoli,
+                    ];
+                })->values(),
         ];
     }
 }

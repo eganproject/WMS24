@@ -10,6 +10,8 @@ use App\Http\Controllers\Admin\StockMutationController;
 use App\Http\Controllers\Admin\StockOpnameController;
 use App\Http\Controllers\Admin\StockAdjustmentController;
 use App\Http\Controllers\Admin\DamagedGoodsController;
+use App\Http\Controllers\Admin\DamagedAllocationController;
+use App\Http\Controllers\Admin\ReworkRecipeController;
 use App\Http\Controllers\Admin\ResiImportController;
 use App\Http\Controllers\Admin\PickerTransitController;
 use App\Http\Controllers\Admin\PickingListController;
@@ -219,6 +221,25 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::put('/damaged-goods/{id}', [DamagedGoodsController::class, 'update'])->name('damaged-goods.update');
         Route::delete('/damaged-goods/{id}', [DamagedGoodsController::class, 'destroy'])->name('damaged-goods.destroy');
         Route::post('/damaged-goods/{id}/approve', [DamagedGoodsController::class, 'approve'])->name('damaged-goods.approve');
+
+        // Damaged Goods Allocations
+        Route::get('/damaged-allocations', [DamagedAllocationController::class, 'index'])->name('damaged-allocations.index');
+        Route::get('/damaged-allocations/data', [DamagedAllocationController::class, 'data'])->name('damaged-allocations.data');
+        Route::get('/damaged-allocations/source-items', [DamagedAllocationController::class, 'sourceItems'])->name('damaged-allocations.source-items');
+        Route::post('/damaged-allocations', [DamagedAllocationController::class, 'store'])->name('damaged-allocations.store');
+        Route::get('/damaged-allocations/{id}', [DamagedAllocationController::class, 'show'])->name('damaged-allocations.show');
+        Route::put('/damaged-allocations/{id}', [DamagedAllocationController::class, 'update'])->name('damaged-allocations.update');
+        Route::delete('/damaged-allocations/{id}', [DamagedAllocationController::class, 'destroy'])->name('damaged-allocations.destroy');
+        Route::post('/damaged-allocations/{id}/approve', [DamagedAllocationController::class, 'approve'])->name('damaged-allocations.approve');
+
+        // Rework Recipes
+        Route::get('/rework-recipes', [ReworkRecipeController::class, 'index'])->name('rework-recipes.index');
+        Route::get('/rework-recipes/data', [ReworkRecipeController::class, 'data'])->name('rework-recipes.data');
+        Route::get('/rework-recipes/options', [ReworkRecipeController::class, 'options'])->name('rework-recipes.options');
+        Route::post('/rework-recipes', [ReworkRecipeController::class, 'store'])->name('rework-recipes.store');
+        Route::get('/rework-recipes/{id}', [ReworkRecipeController::class, 'show'])->name('rework-recipes.show');
+        Route::put('/rework-recipes/{id}', [ReworkRecipeController::class, 'update'])->name('rework-recipes.update');
+        Route::delete('/rework-recipes/{id}', [ReworkRecipeController::class, 'destroy'])->name('rework-recipes.destroy');
 
         // Resi Import
         Route::get('/resi-import', [ResiImportController::class, 'index'])->name('resi-import.index');

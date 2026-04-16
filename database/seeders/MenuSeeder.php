@@ -30,6 +30,8 @@ class MenuSeeder extends Seeder
             ['name' => 'Stock Opname', 'slug' => 'stock-opname', 'route' => 'admin.inventory.stock-opname.index', 'icon' => 'fa-solid fa-clipboard-check', 'parent_slug' => 'inventory', 'sort_order' => 12],
             ['name' => 'Penyesuaian Stok', 'slug' => 'stock-adjustments', 'route' => 'admin.inventory.stock-adjustments.index', 'icon' => 'fa-solid fa-sliders', 'parent_slug' => 'inventory', 'sort_order' => 12.5],
             ['name' => 'Barang Rusak', 'slug' => 'damaged-goods', 'route' => 'admin.inventory.damaged-goods.index', 'icon' => 'fa-solid fa-triangle-exclamation', 'parent_slug' => 'inventory', 'sort_order' => 13],
+            ['name' => 'Alokasi Barang Rusak', 'slug' => 'damaged-allocations', 'route' => 'admin.inventory.damaged-allocations.index', 'icon' => 'fa-solid fa-recycle', 'parent_slug' => 'inventory', 'sort_order' => 13.25],
+            ['name' => 'Resep Rework', 'slug' => 'rework-recipes', 'route' => 'admin.inventory.rework-recipes.index', 'icon' => 'fa-solid fa-flask-vial', 'parent_slug' => 'inventory', 'sort_order' => 13.3],
             ['name' => 'Import Resi', 'slug' => 'resi-import', 'route' => 'admin.inventory.resi-import.index', 'icon' => 'fa-solid fa-file-import', 'parent_slug' => 'inventory', 'sort_order' => 13.5],
             ['name' => 'Transit', 'slug' => 'picker-transit', 'route' => 'admin.inventory.picker-transit.index', 'icon' => 'fa-solid fa-box-open', 'parent_slug' => 'inventory', 'sort_order' => 14],
             ['name' => 'Picking List', 'slug' => 'picking-list', 'route' => 'admin.inventory.picking-list.index', 'icon' => 'fa-solid fa-list-check', 'parent_slug' => 'inventory', 'sort_order' => 14.5],

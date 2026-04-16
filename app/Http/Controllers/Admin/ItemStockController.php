@@ -19,12 +19,15 @@ class ItemStockController extends Controller
     {
         $defaultId = WarehouseService::defaultWarehouseId();
         $displayId = WarehouseService::displayWarehouseId();
+        $damagedId = WarehouseService::damagedWarehouseId();
         $defaultLabel = Warehouse::where('id', $defaultId)->value('name') ?? 'Gudang Besar';
         $displayLabel = Warehouse::where('id', $displayId)->value('name') ?? 'Gudang Display';
+        $damagedLabel = Warehouse::where('id', $damagedId)->value('name') ?? 'Gudang Rusak';
 
         return view('admin.inventory.item-stocks.index', [
             'defaultWarehouseLabel' => $defaultLabel,
             'displayWarehouseLabel' => $displayLabel,
+            'damagedWarehouseLabel' => $damagedLabel,
             'updateSafetyUrl' => route('admin.inventory.item-stocks.update-safety'),
         ]);
     }
@@ -33,8 +36,9 @@ class ItemStockController extends Controller
     {
         $defaultId = WarehouseService::defaultWarehouseId();
         $displayId = WarehouseService::displayWarehouseId();
-        $query = Item::with(['stocks' => function ($q) use ($defaultId, $displayId) {
-            $q->whereIn('warehouse_id', [$defaultId, $displayId]);
+        $damagedId = WarehouseService::damagedWarehouseId();
+        $query = Item::with(['stocks' => function ($q) use ($defaultId, $displayId, $damagedId) {
+            $q->whereIn('warehouse_id', [$defaultId, $displayId, $damagedId]);
         }])->orderBy('name');
 
         $search = trim((string) $request->input('q', ''));
@@ -56,22 +60,26 @@ class ItemStockController extends Controller
             $query->skip($start)->take($length);
         }
 
-        $data = $query->get()->map(function ($i) use ($defaultId, $displayId) {
+        $data = $query->get()->map(function ($i) use ($defaultId, $displayId, $damagedId) {
             $stocks = $i->stocks?->keyBy('warehouse_id') ?? collect();
             $baseSafety = (int) ($i->safety_stock ?? 0);
             $stockMain = (int) ($stocks->get($defaultId)?->stock ?? 0);
             $stockDisplay = (int) ($stocks->get($displayId)?->stock ?? 0);
+            $stockDamaged = (int) ($stocks->get($damagedId)?->stock ?? 0);
             $safetyMainRaw = $stocks->get($defaultId)?->safety_stock;
             $safetyDisplayRaw = $stocks->get($displayId)?->safety_stock;
             $safetyMain = $safetyMainRaw !== null ? (int) $safetyMainRaw : $baseSafety;
             $safetyDisplay = $safetyDisplayRaw !== null ? (int) $safetyDisplayRaw : $baseSafety;
+            $stockGoodTotal = $stockMain + $stockDisplay;
             return [
                 'id' => $i->id,
                 'sku' => $i->sku,
                 'name' => $i->name,
                 'stock_main' => $stockMain,
                 'stock_display' => $stockDisplay,
-                'stock_total' => $stockMain + $stockDisplay,
+                'stock_damaged' => $stockDamaged,
+                'stock_good_total' => $stockGoodTotal,
+                'stock_total' => $stockGoodTotal + $stockDamaged,
                 'safety_main' => $safetyMain,
                 'safety_display' => $safetyDisplay,
                 'safety_base' => $baseSafety,

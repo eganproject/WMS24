@@ -33,7 +33,9 @@
                         <th class="text-end">Safety {{ $defaultWarehouseLabel ?? 'Gudang Besar' }}</th>
                         <th class="text-end">Stok {{ $displayWarehouseLabel ?? 'Gudang Display' }}</th>
                         <th class="text-end">Safety {{ $displayWarehouseLabel ?? 'Gudang Display' }}</th>
-                        <th class="text-end">Total</th>
+                        <th class="text-end">Stok {{ $damagedWarehouseLabel ?? 'Gudang Rusak' }}</th>
+                        <th class="text-end">Total Stok Baik</th>
+                        <th class="text-end">Total Fisik</th>
                         <th class="text-end">Aksi</th>
                     </tr>
                 </thead>
@@ -134,6 +136,8 @@
                 { data: 'safety_main', className: 'text-end', render: (data) => data ?? 0 },
                 { data: 'stock_display', className: 'text-end', render: (data) => data ?? 0 },
                 { data: 'safety_display', className: 'text-end', render: (data) => data ?? 0 },
+                { data: 'stock_damaged', className: 'text-end', render: (data) => data ?? 0 },
+                { data: 'stock_good_total', className: 'text-end', render: (data) => data ?? 0 },
                 { data: 'stock_total', className: 'text-end', render: (data) => data ?? 0 },
                 { data: 'id', orderable:false, searchable:false, className: 'text-end', render: (data, type, row) => {
                     return `<button type="button" class="btn btn-light-primary btn-sm btn-safety" data-id="${data}" data-sku="${row.sku}" data-name="${row.name}" data-safety-main="${row.safety_main_raw ?? ''}" data-safety-display="${row.safety_display_raw ?? ''}" data-safety-base="${row.safety_base ?? 0}">Set Safety</button>`;

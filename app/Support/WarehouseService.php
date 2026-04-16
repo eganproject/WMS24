@@ -19,6 +19,11 @@ class WarehouseService
         return (string) config('inventory.display_warehouse_code', 'GUDANG_DISPLAY');
     }
 
+    public static function damagedWarehouseCode(): string
+    {
+        return (string) config('inventory.damaged_warehouse_code', 'GUDANG_RUSAK');
+    }
+
     public static function warehouseIdByCode(string $code): ?int
     {
         if (array_key_exists($code, self::$codeCache)) {
@@ -37,5 +42,10 @@ class WarehouseService
     public static function displayWarehouseId(): int
     {
         return self::warehouseIdByCode(self::displayWarehouseCode()) ?? 2;
+    }
+
+    public static function damagedWarehouseId(): int
+    {
+        return self::warehouseIdByCode(self::damagedWarehouseCode()) ?? 0;
     }
 }

@@ -12,6 +12,7 @@ class DamagedGood extends Model
     protected $fillable = [
         'code',
         'source_type',
+        'source_warehouse_id',
         'source_ref',
         'transacted_at',
         'note',
@@ -36,8 +37,25 @@ class DamagedGood extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    public function sourceWarehouse()
+    {
+        return $this->belongsTo(Warehouse::class, 'source_warehouse_id');
+    }
+
     public function approver()
     {
         return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function allocationSourceItems()
+    {
+        return $this->hasManyThrough(
+            DamagedAllocationItem::class,
+            DamagedGoodItem::class,
+            'damaged_good_id',
+            'damaged_good_item_id',
+            'id',
+            'id'
+        );
     }
 }

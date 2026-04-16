@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\DamagedGood;
+use App\Models\DamagedAllocation;
 use App\Models\InboundTransaction;
 use App\Models\OutboundTransaction;
 use App\Models\PickerSession;
@@ -27,6 +28,7 @@ class StockMutationController extends Controller
             'warehouses' => $warehouses,
             'defaultWarehouseId' => $warehouseId,
             'displayWarehouseId' => WarehouseService::displayWarehouseId(),
+            'damagedWarehouseId' => WarehouseService::damagedWarehouseId(),
             'warehouseLabel' => $warehouseLabel,
         ]);
     }
@@ -236,14 +238,22 @@ class StockMutationController extends Controller
                 }
                 break;
             case 'damaged':
-                $damage = DamagedGood::with('items.item')->find($mutation->source_id);
+                $damage = DamagedGood::with(['items.item', 'sourceWarehouse'])->find($mutation->source_id);
                 if ($damage) {
+                    $sourceWarehouse = $damage->sourceWarehouse?->name ?? '-';
+                    $damagedWarehouse = Warehouse::where('id', WarehouseService::damagedWarehouseId())->value('name') ?? 'Gudang Rusak';
+                    $ref = $damage->source_ref
+                        ? $damage->source_ref.' | Gudang Asal: '.$sourceWarehouse
+                        : 'Gudang Asal: '.$sourceWarehouse;
+                    $note = $damage->note
+                        ? $damage->note.' | Gudang Rusak: '.$damagedWarehouse
+                        : 'Gudang Rusak: '.$damagedWarehouse;
                     $sourceSummary = [
-                        'label' => 'Barang Rusak / '.$damage->source_type,
+                        'label' => 'Intake Barang Rusak / '.$damage->source_type,
                         'code' => $damage->code,
-                        'ref' => $damage->source_ref ?? '-',
+                        'ref' => $ref,
                         'date' => $damage->transacted_at?->format('Y-m-d H:i'),
-                        'note' => $damage->note ?? '-',
+                        'note' => $note,
                     ];
                     $sourceItems = $damage->items->map(function ($row) {
                         return [
@@ -252,6 +262,67 @@ class StockMutationController extends Controller
                             'note' => $row->note ?? '-',
                         ];
                     })->values()->all();
+                }
+                break;
+            case 'damaged_allocation':
+                $allocation = DamagedAllocation::with([
+                    'sourceItems.item',
+                    'sourceItems.damagedGoodItem.damagedGood',
+                    'outputItems.item',
+                    'supplier',
+                    'targetWarehouse',
+                    'recipe',
+                ])->find($mutation->source_id);
+                if ($allocation) {
+                    $typeLabel = match ($allocation->type) {
+                        'return_supplier' => 'Retur Supplier',
+                        'disposal' => 'Disposal',
+                        'rework' => 'Rework SKU',
+                        default => $allocation->type,
+                    };
+                    $refParts = [];
+                    if ($allocation->source_ref) {
+                        $refParts[] = $allocation->source_ref;
+                    }
+                    if ($allocation->type === 'return_supplier' && $allocation->supplier) {
+                        $refParts[] = 'Supplier: '.$allocation->supplier->name;
+                    }
+                    if ($allocation->type === 'rework' && $allocation->targetWarehouse) {
+                        $refParts[] = 'Gudang Hasil: '.$allocation->targetWarehouse->name;
+                    }
+                    if ($allocation->type === 'rework' && $allocation->recipe) {
+                        $refParts[] = 'Resep: '.$allocation->recipe->code;
+                        if ((int) ($allocation->recipe_multiplier ?? 0) > 0) {
+                            $refParts[] = 'Batch: '.$allocation->recipe_multiplier;
+                        }
+                    }
+                    $sourceSummary = [
+                        'label' => 'Alokasi Barang Rusak / '.$typeLabel,
+                        'code' => $allocation->code,
+                        'ref' => !empty($refParts) ? implode(' | ', $refParts) : '-',
+                        'date' => $allocation->transacted_at?->format('Y-m-d H:i'),
+                        'note' => $allocation->note ?? '-',
+                    ];
+                    $sourceItems = collect()
+                        ->merge($allocation->sourceItems->map(function ($row) {
+                            return [
+                                'label' => trim(($row->item?->sku ?? '').' - '.($row->item?->name ?? '')),
+                                'qty' => (int) $row->qty,
+                                'note' => $row->note ?? '-',
+                                'meta' => 'Sumber rusak dari intake '.($row->damagedGoodItem?->damagedGood?->code ?? '-'),
+                            ];
+                        }))
+                        ->merge($allocation->outputItems->map(function ($row) use ($allocation) {
+                            $target = $allocation->targetWarehouse?->name ?? '-';
+                            return [
+                                'label' => trim(($row->item?->sku ?? '').' - '.($row->item?->name ?? '')),
+                                'qty' => (int) $row->qty,
+                                'note' => $row->note ?? '-',
+                                'meta' => 'Hasil rework ke gudang '.$target,
+                            ];
+                        }))
+                        ->values()
+                        ->all();
                 }
                 break;
             case 'transfer':

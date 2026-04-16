@@ -25,6 +25,9 @@
             </div>
         </div>
         <div class="card-toolbar">
+            @if(!empty($damagedWarehouseLabel ?? null))
+                <span class="badge badge-light-danger me-4">Gudang Rusak: {{ $damagedWarehouseLabel }}</span>
+            @endif
             @if($canCreate)
                 <button type="button" class="btn btn-primary" id="btn_open_damage" data-bs-toggle="modal" data-bs-target="#modal_damaged_goods">Tambah</button>
             @endif
@@ -37,12 +40,15 @@
                     <tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0">
                         <th>ID</th>
                         <th>Kode</th>
-                        <th>Sumber</th>
+                        <th>Sumber Intake</th>
                         <th>Status</th>
                         <th>Tanggal</th>
                         <th>Submit By</th>
+                        <th>Gudang Asal</th>
                         <th>Item</th>
-                        <th>Qty</th>
+                        <th class="text-end">Qty Intake</th>
+                        <th class="text-end">Dialokasikan</th>
+                        <th class="text-end">Sisa</th>
                         <th>Catatan</th>
                         <th class="text-end">Aksi</th>
                     </tr>
@@ -72,17 +78,32 @@
                     @csrf
                     <div class="row g-3 mb-6">
                         <div class="col-md-6">
-                            <label class="required fs-6 fw-bold form-label mb-2">Sumber</label>
+                            <label class="required fs-6 fw-bold form-label mb-2">Sumber Intake</label>
                             <select class="form-select form-select-solid" name="source_type" id="damage_source_type" required>
-                                <option value="">Pilih sumber</option>
-                                <option value="display">Display (Mengurangi stok)</option>
-                                <option value="inbound_return">Retur Inbound (Tidak mengurangi stok)</option>
+                                <option value="">Pilih sumber intake</option>
+                                <option value="warehouse">Stok Gudang</option>
+                                <option value="inbound_return">Retur Inbound</option>
+                                <option value="manual">Manual</option>
                             </select>
                             <div class="invalid-feedback" id="error_source_type"></div>
                         </div>
                         <div class="col-md-6">
+                            <label class="required fs-6 fw-bold form-label mb-2">Gudang Asal</label>
+                            <select class="form-select form-select-solid" name="source_warehouse_id" id="damage_source_warehouse_id" required>
+                                <option value="">Pilih gudang asal</option>
+                                @foreach(($sourceWarehouses ?? []) as $warehouse)
+                                    <option value="{{ $warehouse->id }}">{{ $warehouse->name }}</option>
+                                @endforeach
+                            </select>
+                            <div class="invalid-feedback" id="error_source_warehouse_id"></div>
+                            <div class="form-text text-muted">Saat approve, stok akan dipindahkan ke {{ $damagedWarehouseLabel ?? 'Gudang Rusak' }}.</div>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-6">
+                        <div class="col-md-6">
                             <label class="fs-6 fw-bold form-label mb-2">Ref Sumber</label>
-                            <input type="text" class="form-control form-control-solid" name="source_ref" id="damage_source_ref" placeholder="Contoh: Kode retur inbound" />
+                            <input type="text" class="form-control form-control-solid" name="source_ref" id="damage_source_ref" placeholder="Contoh: kode retur, BA, atau referensi internal" />
                             <div class="invalid-feedback" id="error_source_ref"></div>
                         </div>
                     </div>
@@ -129,6 +150,7 @@
     const canUpdate = {{ $canUpdate ? 'true' : 'false' }};
     const canDelete = {{ $canDelete ? 'true' : 'false' }};
     const itemOptionsHtml = `@foreach($items as $item)<option value="{{ $item->id }}">{{ $item->sku }} - {{ $item->name }}</option>@endforeach`;
+    const defaultSourceWarehouseId = {{ isset($defaultSourceWarehouseId) ? (int) $defaultSourceWarehouseId : 'null' }};
 
     document.addEventListener('DOMContentLoaded', () => {
         const tableEl = $('#damaged_goods_table');
@@ -141,6 +163,8 @@
         const openBtn = document.getElementById('btn_open_damage');
         const modalTitle = document.getElementById('damage_modal_title');
         const transactedAtEl = document.getElementById('damage_transacted_at');
+        const sourceTypeEl = document.getElementById('damage_source_type');
+        const sourceWarehouseEl = document.getElementById('damage_source_warehouse_id');
         let fpTransacted = null;
 
         const formatDateTime = (date) => {
@@ -159,7 +183,7 @@
         };
 
         const clearErrors = () => {
-            ['error_source_type','error_source_ref','error_transacted_at','error_note'].forEach(id => {
+            ['error_source_type','error_source_warehouse_id','error_source_ref','error_transacted_at','error_note'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.textContent = '';
             });
@@ -265,6 +289,13 @@
             form?.reset();
             form.dataset.editId = '';
             if (modalTitle) modalTitle.textContent = 'Tambah Barang Rusak';
+            if (sourceTypeEl) sourceTypeEl.value = 'warehouse';
+            if (sourceWarehouseEl) {
+                sourceWarehouseEl.value = defaultSourceWarehouseId ? String(defaultSourceWarehouseId) : '';
+                if (typeof $ !== 'undefined' && $(sourceWarehouseEl).data('select2')) {
+                    $(sourceWarehouseEl).val(sourceWarehouseEl.value).trigger('change.select2');
+                }
+            }
             const nowJkt = getJakartaNow();
             if (fpTransacted) {
                 fpTransacted.setDate(nowJkt, true, 'Y-m-d H:i');
@@ -303,6 +334,16 @@
             fpTransacted = flatpickr(transactedAtEl, { enableTime: true, dateFormat: 'Y-m-d H:i', allowInput: true });
         }
 
+        if (sourceWarehouseEl && typeof $ !== 'undefined' && $.fn.select2) {
+            $(sourceWarehouseEl).select2({
+                placeholder: 'Pilih gudang asal',
+                allowClear: true,
+                width: '100%',
+                dropdownParent: modalEl,
+                minimumResultsForSearch: 0,
+            });
+        }
+
         if (!tableEl.length || !$.fn.DataTable) {
             console.error('DataTables unavailable');
             return;
@@ -327,8 +368,11 @@
                 { data: 'status', orderable: false, searchable: false, render: (data) => statusLabel(data) },
                 { data: 'transacted_at' },
                 { data: 'submit_by' },
+                { data: 'source_warehouse' },
                 { data: 'item' },
-                { data: 'qty' },
+                { data: 'qty', className: 'text-end' },
+                { data: 'allocated_qty', className: 'text-end' },
+                { data: 'remaining_qty', className: 'text-end' },
                 { data: 'note' },
                 { data: 'id', orderable: false, searchable: false, className: 'text-end', render: (data, type, row) => {
                     const isApproved = row?.status === 'approved';
@@ -379,6 +423,12 @@
                 form.dataset.editId = id;
                 if (modalTitle) modalTitle.textContent = `Edit ${json.code || ''}`.trim();
                 document.getElementById('damage_source_type').value = json.source_type || '';
+                if (sourceWarehouseEl) {
+                    sourceWarehouseEl.value = json.source_warehouse_id ? String(json.source_warehouse_id) : '';
+                    if (typeof $ !== 'undefined' && $(sourceWarehouseEl).data('select2')) {
+                        $(sourceWarehouseEl).val(sourceWarehouseEl.value).trigger('change.select2');
+                    }
+                }
                 document.getElementById('damage_source_ref').value = json.source_ref || '';
                 document.getElementById('damage_note').value = json.note || '';
                 if (fpTransacted) {

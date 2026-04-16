@@ -24,6 +24,8 @@
                     $warehouseBadge = 'badge-light-secondary';
                     if (!empty($displayWarehouseId) && $currentWarehouseId == $displayWarehouseId) {
                         $warehouseBadge = 'badge-light-success';
+                    } elseif (!empty($damagedWarehouseId) && $currentWarehouseId == $damagedWarehouseId) {
+                        $warehouseBadge = 'badge-light-danger';
                     } elseif (!empty($defaultWarehouseId) && $currentWarehouseId == $defaultWarehouseId) {
                         $warehouseBadge = 'badge-light-primary';
                     }
@@ -186,6 +188,7 @@
     const detailUrlTpl = '{{ route('admin.inventory.stock-mutations.show', ':id') }}';
     const defaultWarehouseId = {{ !empty($defaultWarehouseId) ? (int) $defaultWarehouseId : 'null' }};
     const displayWarehouseId = {{ !empty($displayWarehouseId) ? (int) $displayWarehouseId : 'null' }};
+    const damagedWarehouseId = {{ !empty($damagedWarehouseId) ? (int) $damagedWarehouseId : 'null' }};
 
     document.addEventListener('DOMContentLoaded', () => {
         const tableEl = $('#stock_mutations_table');
@@ -220,6 +223,7 @@
             const id = Number(warehouseId || 0);
             if (displayWarehouseId && id === Number(displayWarehouseId)) return 'badge-light-success';
             if (defaultWarehouseId && id === Number(defaultWarehouseId)) return 'badge-light-primary';
+            if (damagedWarehouseId && id === Number(damagedWarehouseId)) return 'badge-light-danger';
             return 'badge-light-secondary';
         };
 

@@ -3,6 +3,7 @@
 namespace App\Exports;
 
 use App\Models\Item;
+use App\Models\Warehouse;
 use App\Support\WarehouseService;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
@@ -20,8 +21,9 @@ class ItemStocksExport implements FromCollection, WithHeadings, WithMapping, Sho
     {
         $defaultId = WarehouseService::defaultWarehouseId();
         $displayId = WarehouseService::displayWarehouseId();
-        $query = Item::with(['stocks' => function ($q) use ($defaultId, $displayId) {
-            $q->whereIn('warehouse_id', [$defaultId, $displayId]);
+        $damagedId = WarehouseService::damagedWarehouseId();
+        $query = Item::with(['stocks' => function ($q) use ($defaultId, $displayId, $damagedId) {
+            $q->whereIn('warehouse_id', [$defaultId, $displayId, $damagedId]);
         }])->orderBy('name');
         $search = trim($this->search);
         if ($search !== '') {
@@ -37,21 +39,39 @@ class ItemStocksExport implements FromCollection, WithHeadings, WithMapping, Sho
 
     public function headings(): array
     {
-        return ['ID', 'SKU', 'Nama', 'Stok Gudang Besar', 'Safety Gudang Besar', 'Stok Gudang Display', 'Safety Gudang Display', 'Total'];
+        $defaultLabel = Warehouse::where('id', WarehouseService::defaultWarehouseId())->value('name') ?? 'Gudang Besar';
+        $displayLabel = Warehouse::where('id', WarehouseService::displayWarehouseId())->value('name') ?? 'Gudang Display';
+        $damagedLabel = Warehouse::where('id', WarehouseService::damagedWarehouseId())->value('name') ?? 'Gudang Rusak';
+
+        return [
+            'ID',
+            'SKU',
+            'Nama',
+            "Stok {$defaultLabel}",
+            "Safety {$defaultLabel}",
+            "Stok {$displayLabel}",
+            "Safety {$displayLabel}",
+            "Stok {$damagedLabel}",
+            'Total Stok Baik',
+            'Total Fisik',
+        ];
     }
 
     public function map($row): array
     {
         $defaultId = WarehouseService::defaultWarehouseId();
         $displayId = WarehouseService::displayWarehouseId();
+        $damagedId = WarehouseService::damagedWarehouseId();
         $stocks = $row->stocks?->keyBy('warehouse_id') ?? collect();
         $stockMain = (int) ($stocks->get($defaultId)?->stock ?? 0);
         $stockDisplay = (int) ($stocks->get($displayId)?->stock ?? 0);
+        $stockDamaged = (int) ($stocks->get($damagedId)?->stock ?? 0);
         $baseSafety = (int) ($row->safety_stock ?? 0);
         $safetyMainRaw = $stocks->get($defaultId)?->safety_stock;
         $safetyDisplayRaw = $stocks->get($displayId)?->safety_stock;
         $safetyMain = $safetyMainRaw !== null ? (int) $safetyMainRaw : $baseSafety;
         $safetyDisplay = $safetyDisplayRaw !== null ? (int) $safetyDisplayRaw : $baseSafety;
+        $stockGoodTotal = $stockMain + $stockDisplay;
         return [
             $row->id,
             $row->sku,
@@ -60,7 +80,9 @@ class ItemStocksExport implements FromCollection, WithHeadings, WithMapping, Sho
             $safetyMain,
             $stockDisplay,
             $safetyDisplay,
-            $stockMain + $stockDisplay,
+            $stockDamaged,
+            $stockGoodTotal,
+            $stockGoodTotal + $stockDamaged,
         ];
     }
 }

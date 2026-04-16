@@ -6,10 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Models\OutboundItem;
 use App\Models\OutboundTransaction;
 use App\Models\Item;
+use App\Models\Supplier;
 use App\Models\Warehouse;
 use App\Models\StockMutation;
 use App\Imports\OutboundReturnsImport;
 use App\Support\StockService;
+use App\Support\Permission;
 use App\Support\WarehouseService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -146,7 +148,7 @@ class OutboundController extends Controller
             'file' => ['required', 'file', 'mimes:xlsx,xls', 'max:5120'],
         ]);
 
-        $import = new OutboundReturnsImport();
+        $import = new OutboundReturnsImport(false);
         DB::beginTransaction();
         try {
             Excel::import($import, $request->file('file'));
@@ -179,6 +181,7 @@ class OutboundController extends Controller
                     'code' => $this->generateCode('OUT-MNL'),
                     'type' => 'manual',
                     'ref_no' => $group['ref_no'] ?? null,
+                    'supplier_id' => null,
                     'note' => $group['note'] ?? null,
                     'warehouse_id' => $warehouseId,
                     'transacted_at' => $transactedAt,
@@ -223,7 +226,7 @@ class OutboundController extends Controller
             'file' => ['required', 'file', 'mimes:xlsx,xls', 'max:5120'],
         ]);
 
-        $import = new OutboundReturnsImport();
+        $import = new OutboundReturnsImport(true);
         $warehouseId = WarehouseService::displayWarehouseId();
         DB::beginTransaction();
         try {
@@ -253,6 +256,7 @@ class OutboundController extends Controller
                     'code' => $this->generateCode('OUT-RET'),
                     'type' => 'return',
                     'ref_no' => $group['ref_no'] ?? null,
+                    'supplier_id' => $group['supplier_id'] ?? null,
                     'note' => $group['note'] ?? null,
                     'warehouse_id' => $warehouseId,
                     'transacted_at' => $transactedAt,
@@ -295,6 +299,9 @@ class OutboundController extends Controller
     {
         $items = Item::orderBy('name')->get(['id', 'sku', 'name', 'koli_qty']);
         $warehouses = Warehouse::orderBy('name')->get(['id', 'name', 'code']);
+        $suppliers = $this->usesSupplier($type)
+            ? Supplier::orderBy('name')->get(['id', 'name'])
+            : collect();
         $baseOptions = $this->typeOptions();
         $typeOptions = ['all' => 'Semua'] + $baseOptions;
         $routeMap = [
@@ -342,6 +349,13 @@ class OutboundController extends Controller
             'defaultWarehouseId' => WarehouseService::defaultWarehouseId(),
             'displayWarehouseId' => WarehouseService::displayWarehouseId(),
             'enableWarehouseSelect' => $type === 'manual',
+            'suppliers' => $suppliers,
+            'supplierFlowTypes' => $this->usesSupplier($type) ? [$type] : [],
+            'showSupplierColumn' => $this->usesSupplier($type),
+            'supplierManageUrl' => $this->usesSupplier($type) && Permission::can(auth()->user(), 'admin.masterdata.suppliers.index')
+                ? route('admin.masterdata.suppliers.index')
+                : null,
+            'importRequiresSupplier' => $this->usesSupplier($type),
             'typeOptions' => $typeOptions,
             'typeDefault' => $type,
             'routeMap' => $routeMap,
@@ -372,13 +386,14 @@ class OutboundController extends Controller
         }
 
         $query = OutboundTransaction::query()
-            ->with(['items.item', 'creator', 'warehouse'])
+            ->with(['items.item', 'creator', 'warehouse', 'supplier'])
             ->select([
                 'outbound_transactions.id',
                 'outbound_transactions.code',
                 'outbound_transactions.transacted_at',
                 'outbound_transactions.type',
                 'outbound_transactions.ref_no',
+                'outbound_transactions.supplier_id',
                 'outbound_transactions.note',
                 'outbound_transactions.warehouse_id',
                 'outbound_transactions.status',
@@ -394,6 +409,9 @@ class OutboundController extends Controller
             $query->where(function ($q) use ($search) {
                 $q->where('outbound_transactions.code', 'like', "%{$search}%")
                     ->orWhere('outbound_transactions.ref_no', 'like', "%{$search}%")
+                    ->orWhereHas('supplier', function ($supplierQ) use ($search) {
+                        $supplierQ->where('name', 'like', "%{$search}%");
+                    })
                     ->orWhereHas('items.item', function ($itemQ) use ($search) {
                         $itemQ->where('sku', 'like', "%{$search}%")
                             ->orWhere('name', 'like', "%{$search}%");
@@ -441,6 +459,7 @@ class OutboundController extends Controller
                 'submit_by' => $row->creator?->name ?? '-',
                 'warehouse' => $row->warehouse?->name ?? '-',
                 'warehouse_id' => $row->warehouse_id,
+                'supplier' => $row->supplier?->name ?? '-',
                 'item' => $itemLabel ?: '-',
                 'qty' => $totalQty,
                 'note' => $row->note ?? '',
@@ -459,7 +478,7 @@ class OutboundController extends Controller
 
     private function show(string $type, int $id)
     {
-        $tx = OutboundTransaction::with('items')
+        $tx = OutboundTransaction::with(['items', 'supplier'])
             ->where('type', $type)
             ->findOrFail($id);
 
@@ -467,6 +486,8 @@ class OutboundController extends Controller
             'id' => $tx->id,
             'code' => $tx->code,
             'ref_no' => $tx->ref_no,
+            'supplier_id' => $tx->supplier_id,
+            'supplier' => $tx->supplier?->name,
             'note' => $tx->note,
             'status' => $tx->status ?? 'pending',
             'warehouse_id' => $tx->warehouse_id,
@@ -483,7 +504,7 @@ class OutboundController extends Controller
 
     private function detail(string $type, string $pageTitle, string $routeBase, int $id)
     {
-        $tx = OutboundTransaction::with(['items.item', 'warehouse'])
+        $tx = OutboundTransaction::with(['items.item', 'warehouse', 'supplier'])
             ->where('type', $type)
             ->findOrFail($id);
 
@@ -493,6 +514,7 @@ class OutboundController extends Controller
             'pageTitle' => $pageTitle,
             'transaction' => $tx,
             'totalQty' => $totalQty,
+            'showSupplierField' => $this->usesSupplier($type),
             'warehouseLabel' => $tx->warehouse?->name,
             'backUrl' => route("admin.outbound.{$routeBase}.index"),
         ]);
@@ -500,7 +522,7 @@ class OutboundController extends Controller
 
     private function store(Request $request, string $type)
     {
-        $validated = $this->validatePayload($request);
+        $validated = $this->validatePayload($request, $type);
 
         $warehouseId = (int) ($validated['warehouse_id'] ?? 0);
         if ($type === 'manual') {
@@ -528,6 +550,7 @@ class OutboundController extends Controller
                 'code' => $code,
                 'type' => $type,
                 'ref_no' => $validated['ref_no'] ?? null,
+                'supplier_id' => $validated['supplier_id'] ?? null,
                 'note' => $validated['note'] ?? null,
                 'warehouse_id' => $warehouseId,
                 'transacted_at' => $transactedAt,
@@ -563,7 +586,7 @@ class OutboundController extends Controller
 
     private function update(Request $request, string $type, int $id)
     {
-        $validated = $this->validatePayload($request);
+        $validated = $this->validatePayload($request, $type);
 
         $warehouseId = (int) ($validated['warehouse_id'] ?? 0);
         if ($type === 'manual') {
@@ -590,6 +613,7 @@ class OutboundController extends Controller
 
             $tx->update([
                 'ref_no' => $validated['ref_no'] ?? null,
+                'supplier_id' => $validated['supplier_id'] ?? null,
                 'note' => $validated['note'] ?? null,
                 'warehouse_id' => $warehouseId,
                 'transacted_at' => $validated['transacted_at'] ?? $tx->transacted_at,
@@ -712,18 +736,28 @@ class OutboundController extends Controller
         return response()->json(['message' => 'Outbound berhasil disetujui']);
     }
 
-    private function validatePayload(Request $request): array
+    private function validatePayload(Request $request, string $type): array
     {
+        $usesSupplier = $this->usesSupplier($type);
         $validated = $request->validate([
             'items' => ['required', 'array', 'min:1'],
             'items.*.item_id' => ['required', 'integer', 'exists:items,id'],
             'items.*.qty' => ['required', 'integer', 'min:1'],
             'items.*.note' => ['nullable', 'string'],
             'ref_no' => ['nullable', 'string', 'max:100'],
+            'supplier_id' => $usesSupplier
+                ? ['required', 'integer', 'exists:suppliers,id']
+                : ['nullable'],
             'note' => ['nullable', 'string'],
             'transacted_at' => ['required', 'date'],
             'warehouse_id' => ['nullable', 'integer', 'exists:warehouses,id'],
         ]);
+
+        if (!$usesSupplier && $request->filled('supplier_id')) {
+            throw ValidationException::withMessages([
+                'supplier_id' => 'Supplier hanya digunakan untuk outbound retur.',
+            ]);
+        }
 
         $items = collect($validated['items'] ?? [])
             ->filter(fn ($row) => (int) ($row['qty'] ?? 0) > 0 && (int) ($row['item_id'] ?? 0) > 0)
@@ -759,6 +793,7 @@ class OutboundController extends Controller
         })->values()->all();
 
         $validated['items'] = $normalized;
+        $validated['supplier_id'] = $usesSupplier ? (int) ($validated['supplier_id'] ?? 0) : null;
         if (!empty($validated['transacted_at'])) {
             $validated['transacted_at'] = Carbon::parse($validated['transacted_at']);
         } else {
@@ -799,5 +834,10 @@ class OutboundController extends Controller
     private function generateCode(string $prefix): string
     {
         return $prefix.'-'.now()->format('YmdHis').'-'.Str::upper(Str::random(4));
+    }
+
+    private function usesSupplier(string $type): bool
+    {
+        return $type === 'return';
     }
 }

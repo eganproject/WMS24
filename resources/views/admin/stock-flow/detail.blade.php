@@ -22,6 +22,12 @@
                 <div class="fw-bold text-gray-600">Ref No</div>
                 <div>{{ $transaction->ref_no ?? '-' }}</div>
             </div>
+            @if(!empty($showSupplierField ?? false))
+                <div class="col-md-4">
+                    <div class="fw-bold text-gray-600">Supplier</div>
+                    <div>{{ $transaction->supplier?->name ?? '-' }}</div>
+                </div>
+            @endif
             @if(isset($transaction->surat_jalan_no) || isset($transaction->surat_jalan_at))
                 <div class="col-md-4">
                     <div class="fw-bold text-gray-600">Surat Jalan</div>

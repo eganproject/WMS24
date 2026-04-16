@@ -13,6 +13,7 @@ class InboundTransaction extends Model
         'code',
         'type',
         'ref_no',
+        'supplier_id',
         'surat_jalan_no',
         'surat_jalan_at',
         'transacted_at',
@@ -38,6 +39,11 @@ class InboundTransaction extends Model
     public function warehouse()
     {
         return $this->belongsTo(Warehouse::class, 'warehouse_id');
+    }
+
+    public function supplier()
+    {
+        return $this->belongsTo(Supplier::class, 'supplier_id');
     }
 
     public function creator()

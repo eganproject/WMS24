@@ -3,6 +3,7 @@
 namespace App\Imports;
 
 use App\Models\Item;
+use App\Models\Supplier;
 use App\Models\Warehouse;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
@@ -12,8 +13,12 @@ use Maatwebsite\Excel\Concerns\WithHeadingRow;
 
 class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
 {
-    /** @var array<string,array{ref_no:?string,note:?string,transacted_at:?string,warehouse_id:?int,items:array<int,array{item_id:int,qty:int,note:?string}>}> */
+    /** @var array<string,array{ref_no:?string,supplier_id:?int,note:?string,transacted_at:?string,warehouse_id:?int,items:array<int,array{item_id:int,qty:int,note:?string}>}> */
     public array $groups = [];
+
+    public function __construct(private readonly bool $requireSupplier = false)
+    {
+    }
 
     public function collection(Collection $rows)
     {
@@ -36,8 +41,14 @@ class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
                 'file' => 'Header qty wajib (gunakan: qty/quantity/jumlah/stok/stock)',
             ]);
         }
+        if ($this->requireSupplier && $this->detectSupplierKey($headers) === null) {
+            throw ValidationException::withMessages([
+                'file' => 'Header supplier wajib untuk import retur outbound (gunakan: supplier/supplier_name/nama_supplier)',
+            ]);
+        }
 
         $warehouseMaps = $this->buildWarehouseMaps();
+        $supplierMaps = $this->requireSupplier ? $this->buildSupplierMaps() : ['ids' => [], 'names' => []];
 
         $skus = $rows->map(fn ($row) => trim((string) ($row['sku'] ?? '')))
             ->filter()
@@ -67,21 +78,32 @@ class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
             }
 
             $ref = trim((string) ($row['ref_no'] ?? ''));
+            $supplierId = $this->requireSupplier
+                ? $this->parseSupplierId($row, $supplierMaps, $errors, $rowIndex)
+                : null;
             $note = trim((string) ($row['note'] ?? ''));
             $itemNote = trim((string) ($row['item_note'] ?? $row['note_item'] ?? ''));
             $transactedAt = trim((string) ($row['transacted_at'] ?? $row['tanggal'] ?? ''));
             $warehouseId = $this->parseWarehouseId($row, $warehouseMaps, $errors, $rowIndex);
 
-            $groupKey = ($ref !== '' ? $ref : '__default__').'::'.((string) ($warehouseId ?: 'null'));
+            $groupKey = implode('::', [
+                $ref !== '' ? $ref : '__default__',
+                $this->requireSupplier && $supplierId ? (string) $supplierId : 'null_supplier',
+                (string) ($warehouseId ?: 'null'),
+            ]);
             if (!isset($this->groups[$groupKey])) {
                 $this->groups[$groupKey] = [
                     'ref_no' => $ref !== '' ? $ref : null,
+                    'supplier_id' => $supplierId,
                     'note' => $note !== '' ? $note : null,
                     'transacted_at' => $transactedAt !== '' ? $transactedAt : null,
                     'warehouse_id' => $warehouseId,
                     'items' => [],
                 ];
             } else {
+                if ($this->groups[$groupKey]['supplier_id'] === null && $supplierId) {
+                    $this->groups[$groupKey]['supplier_id'] = $supplierId;
+                }
                 if ($this->groups[$groupKey]['note'] === null && $note !== '') {
                     $this->groups[$groupKey]['note'] = $note;
                 }
@@ -140,6 +162,16 @@ class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
     private function detectQtyKey(array $headers): ?string
     {
         foreach (['qty', 'quantity', 'jumlah', 'stok', 'stock'] as $key) {
+            if (in_array($key, $headers, true)) {
+                return $key;
+            }
+        }
+        return null;
+    }
+
+    private function detectSupplierKey(array $headers): ?string
+    {
+        foreach (['supplier', 'supplier_name', 'nama_supplier'] as $key) {
             if (in_array($key, $headers, true)) {
                 return $key;
             }
@@ -244,10 +276,86 @@ class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
         ];
     }
 
+    /**
+     * @return array{ids:array<int,bool>,names:array<string,int>}
+     */
+    private function buildSupplierMaps(): array
+    {
+        $ids = [];
+        $names = [];
+        $suppliers = Supplier::query()->get(['id', 'name']);
+
+        foreach ($suppliers as $supplier) {
+            $id = (int) $supplier->id;
+            $ids[$id] = true;
+            $name = $this->normalizeSupplierName((string) $supplier->name);
+            if ($name !== '') {
+                $names[$name] = $id;
+            }
+        }
+
+        return [
+            'ids' => $ids,
+            'names' => $names,
+        ];
+    }
+
+    /**
+     * @param array{ids:array<int,bool>,names:array<string,int>} $maps
+     * @param array<int,string> $errors
+     */
+    private function parseSupplierId($row, array $maps, array &$errors, int $rowIndex): ?int
+    {
+        $raw = null;
+        foreach (['supplier', 'supplier_name', 'nama_supplier'] as $key) {
+            if (is_array($row) && array_key_exists($key, $row)) {
+                $raw = $row[$key];
+                break;
+            }
+            if ($row instanceof Collection && $row->has($key)) {
+                $raw = $row->get($key);
+                break;
+            }
+            if (isset($row[$key])) {
+                $raw = $row[$key];
+                break;
+            }
+        }
+
+        if ($raw === null || trim((string) $raw) === '') {
+            if ($this->requireSupplier) {
+                $errors[] = "Baris {$rowIndex}: supplier wajib diisi";
+            }
+            return null;
+        }
+
+        $value = trim((string) $raw);
+        if (ctype_digit($value)) {
+            $id = (int) $value;
+            if ($id > 0 && isset($maps['ids'][$id])) {
+                return $id;
+            }
+        }
+
+        $normalizedName = $this->normalizeSupplierName($value);
+        if (isset($maps['names'][$normalizedName])) {
+            return $maps['names'][$normalizedName];
+        }
+
+        $errors[] = "Baris {$rowIndex}: supplier tidak ditemukan ({$value})";
+        return null;
+    }
+
     private function normalizeWarehouseName(string $value): string
     {
         $value = strtolower(trim($value));
         $value = preg_replace('/\\s+/', ' ', $value) ?? $value;
         return $value;
+    }
+
+    private function normalizeSupplierName(string $value): string
+    {
+        $value = strtolower(trim($value));
+        return preg_replace('/\\s+/', ' ', $value) ?? $value;
     }
 }

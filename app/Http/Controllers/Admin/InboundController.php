@@ -9,9 +9,11 @@ use App\Imports\InboundReturnsImport;
 use App\Models\InboundItem;
 use App\Models\InboundTransaction;
 use App\Models\Item;
+use App\Models\Supplier;
 use App\Models\Warehouse;
 use App\Support\InboundScanExpectation;
 use App\Support\InboundScanStatus;
+use App\Support\Permission;
 use App\Support\WarehouseService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -153,7 +155,7 @@ class InboundController extends Controller
     {
         return $this->importGroups(
             $request,
-            new InboundReceiptsImport(),
+            new InboundReceiptsImport(false),
             'manual',
             'INB-MNL',
             'Import inbound manual berhasil',
@@ -177,7 +179,7 @@ class InboundController extends Controller
     {
         return $this->importGroups(
             $request,
-            new InboundReceiptsImport(),
+            new InboundReceiptsImport(true),
             'receipt',
             'INB-RCV',
             'Import penerimaan barang berhasil',
@@ -189,6 +191,9 @@ class InboundController extends Controller
     {
         $items = Item::orderBy('name')->get(['id', 'sku', 'name', 'koli_qty']);
         $warehouses = Warehouse::orderBy('name')->get(['id', 'name', 'code']);
+        $suppliers = $this->usesSupplier($type)
+            ? Supplier::orderBy('name')->get(['id', 'name'])
+            : collect();
         $baseOptions = $this->typeOptions();
         $typeOptions = ['all' => 'Semua'] + $baseOptions;
         $statusLabels = [
@@ -245,6 +250,13 @@ class InboundController extends Controller
             'statusLabels' => $statusLabels,
             'lockedStatuses' => [InboundScanStatus::SCANNING, InboundScanStatus::COMPLETED, 'approved'],
             'showDeliveryNoteFields' => true,
+            'suppliers' => $suppliers,
+            'supplierFlowTypes' => $this->usesSupplier($type) ? [$type] : [],
+            'showSupplierColumn' => $this->usesSupplier($type),
+            'supplierManageUrl' => $this->usesSupplier($type) && Permission::can(auth()->user(), 'admin.masterdata.suppliers.index')
+                ? route('admin.masterdata.suppliers.index')
+                : null,
+            'importRequiresSupplier' => $this->usesSupplier($type),
             'deleteWarningText' => 'Data akan dihapus sebelum proses scan inbound.',
             'importUrl' => match ($type) {
                 'receipt' => route('admin.inbound.receipts.import'),
@@ -279,13 +291,14 @@ class InboundController extends Controller
         }
 
         $query = InboundTransaction::query()
-            ->with(['items.item', 'creator', 'warehouse', 'scanSession.items'])
+            ->with(['items.item', 'creator', 'warehouse', 'supplier', 'scanSession.items'])
             ->select([
                 'inbound_transactions.id',
                 'inbound_transactions.code',
                 'inbound_transactions.transacted_at',
                 'inbound_transactions.type',
                 'inbound_transactions.ref_no',
+                'inbound_transactions.supplier_id',
                 'inbound_transactions.surat_jalan_no',
                 'inbound_transactions.note',
                 'inbound_transactions.warehouse_id',
@@ -304,6 +317,9 @@ class InboundController extends Controller
                 $q->where('inbound_transactions.code', 'like', "%{$search}%")
                     ->orWhere('inbound_transactions.ref_no', 'like', "%{$search}%")
                     ->orWhere('inbound_transactions.surat_jalan_no', 'like', "%{$search}%")
+                    ->orWhereHas('supplier', function ($supplierQ) use ($search) {
+                        $supplierQ->where('name', 'like', "%{$search}%");
+                    })
                     ->orWhereHas('items.item', function ($itemQ) use ($search) {
                         $itemQ->where('sku', 'like', "%{$search}%")
                             ->orWhere('name', 'like', "%{$search}%");
@@ -358,6 +374,7 @@ class InboundController extends Controller
                 'submit_by' => $row->creator?->name ?? '-',
                 'warehouse' => $row->warehouse?->name ?? $defaultWarehouseLabel,
                 'warehouse_id' => $row->warehouse_id,
+                'supplier' => $row->supplier?->name ?? '-',
                 'item' => $labels->implode(', ') ?: '-',
                 'qty' => $expectedQty,
                 'scan_progress' => [
@@ -382,7 +399,7 @@ class InboundController extends Controller
 
     private function show(string $type, int $id)
     {
-        $transaction = InboundTransaction::with('items')
+        $transaction = InboundTransaction::with(['items', 'supplier'])
             ->where('type', $type)
             ->findOrFail($id);
 
@@ -390,6 +407,8 @@ class InboundController extends Controller
             'id' => $transaction->id,
             'code' => $transaction->code,
             'ref_no' => $transaction->ref_no,
+            'supplier_id' => $transaction->supplier_id,
+            'supplier' => $transaction->supplier?->name,
             'surat_jalan_no' => $transaction->surat_jalan_no,
             'surat_jalan_at' => $transaction->surat_jalan_at?->format('Y-m-d'),
             'note' => $transaction->note,
@@ -412,6 +431,7 @@ class InboundController extends Controller
         $transaction = InboundTransaction::with([
             'items.item',
             'warehouse',
+            'supplier',
             'scanSession.items',
             'scanSession.starter:id,name',
             'scanSession.lastScanner:id,name',
@@ -440,6 +460,7 @@ class InboundController extends Controller
             'totalQty' => $totalQty,
             'totalKoli' => $totalKoli,
             'showKoli' => true,
+            'showSupplierField' => $this->usesSupplier($type),
             'warehouseLabel' => $warehouseLabel,
             'backUrl' => route("admin.inbound.{$routeBase}.index"),
             'scanSession' => $transaction->scanSession,
@@ -450,7 +471,7 @@ class InboundController extends Controller
 
     private function store(Request $request, string $type)
     {
-        $validated = $this->validatePayload($request);
+        $validated = $this->validatePayload($request, $type);
         $prefix = match ($type) {
             'receipt' => 'INB-RCV',
             'return' => 'INB-RET',
@@ -463,6 +484,7 @@ class InboundController extends Controller
                 'code' => $this->generateCode($prefix),
                 'type' => $type,
                 'ref_no' => $validated['ref_no'] ?? null,
+                'supplier_id' => $validated['supplier_id'] ?? null,
                 'surat_jalan_no' => $validated['surat_jalan_no'] ?? null,
                 'surat_jalan_at' => $validated['surat_jalan_at'] ?? null,
                 'note' => $validated['note'] ?? null,
@@ -502,7 +524,7 @@ class InboundController extends Controller
 
     private function update(Request $request, string $type, int $id)
     {
-        $validated = $this->validatePayload($request);
+        $validated = $this->validatePayload($request, $type);
 
         DB::beginTransaction();
         try {
@@ -522,6 +544,7 @@ class InboundController extends Controller
 
             $transaction->update([
                 'ref_no' => $validated['ref_no'] ?? null,
+                'supplier_id' => $validated['supplier_id'] ?? null,
                 'surat_jalan_no' => $validated['surat_jalan_no'] ?? null,
                 'surat_jalan_at' => $validated['surat_jalan_at'] ?? null,
                 'note' => $validated['note'] ?? null,
@@ -605,8 +628,9 @@ class InboundController extends Controller
         ], 422);
     }
 
-    private function validatePayload(Request $request): array
+    private function validatePayload(Request $request, string $type): array
     {
+        $usesSupplier = $this->usesSupplier($type);
         $validated = $request->validate([
             'items' => ['required', 'array', 'min:1'],
             'items.*.item_id' => ['required', 'integer', 'exists:items,id'],
@@ -614,11 +638,20 @@ class InboundController extends Controller
             'items.*.koli' => ['nullable', 'integer', 'min:1'],
             'items.*.note' => ['nullable', 'string'],
             'ref_no' => ['nullable', 'string', 'max:100'],
+            'supplier_id' => $usesSupplier
+                ? ['required', 'integer', 'exists:suppliers,id']
+                : ['nullable'],
             'surat_jalan_no' => ['nullable', 'string', 'max:100'],
             'surat_jalan_at' => ['nullable', 'date'],
             'note' => ['nullable', 'string'],
             'transacted_at' => ['required', 'date'],
         ]);
+
+        if (!$usesSupplier && $request->filled('supplier_id')) {
+            throw ValidationException::withMessages([
+                'supplier_id' => 'Supplier hanya digunakan untuk inbound penerimaan barang.',
+            ]);
+        }
 
         $items = collect($validated['items'] ?? [])
             ->filter(fn ($row) => (int) ($row['qty'] ?? 0) > 0 && (int) ($row['item_id'] ?? 0) > 0)
@@ -667,6 +700,7 @@ class InboundController extends Controller
         })->values()->all();
 
         $validated['items'] = $normalized;
+        $validated['supplier_id'] = $usesSupplier ? (int) ($validated['supplier_id'] ?? 0) : null;
         $validated['transacted_at'] = !empty($validated['transacted_at'])
             ? Carbon::parse($validated['transacted_at'])
             : null;
@@ -709,6 +743,7 @@ class InboundController extends Controller
                     'code' => $this->generateCode($prefix),
                     'type' => $type,
                     'ref_no' => $group['ref_no'] ?? null,
+                    'supplier_id' => $this->usesSupplier($type) ? ($group['supplier_id'] ?? null) : null,
                     'surat_jalan_no' => $group['surat_jalan_no'] ?? null,
                     'surat_jalan_at' => $suratJalanAt,
                     'note' => $group['note'] ?? null,
@@ -759,6 +794,11 @@ class InboundController extends Controller
             'manual' => 'Manual',
             'opening' => 'Saldo Awal',
         ];
+    }
+
+    private function usesSupplier(string $type): bool
+    {
+        return $type === 'receipt';
     }
 
     private function applyDateFilter($query, Request $request): void

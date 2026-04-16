@@ -63,6 +63,11 @@
             </div>
         </div>
         <div class="card-toolbar">
+            @if(!empty($supplierManageUrl ?? null))
+                <a href="{{ $supplierManageUrl }}" class="btn btn-light-info me-3">
+                    Kelola Supplier
+                </a>
+            @endif
             <div class="d-flex align-items-center gap-2 me-4">
                 @if(!empty($warehouses ?? []))
                     <select class="form-select form-select-solid w-200px" id="filter_warehouse">
@@ -101,6 +106,9 @@
                         <th>Tanggal</th>
                         <th>Submit By</th>
                         <th>Gudang</th>
+                        @if(!empty($showSupplierColumn ?? false))
+                            <th>Supplier</th>
+                        @endif
                         <th>Item</th>
                         <th>Qty</th>
                         @if(!empty($showScanProgressColumn ?? false))
@@ -159,6 +167,18 @@
                         <input type="text" class="form-control form-control-solid" name="ref_no" id="flow_ref_no" />
                         <div class="invalid-feedback" id="error_ref_no"></div>
                     </div>
+                    @if(isset($supplierFlowTypes) && count($supplierFlowTypes) > 0)
+                        <div class="fv-row mb-7" id="flow_supplier_row" style="display:none;">
+                            <label class="fs-6 fw-bold form-label mb-2">Supplier</label>
+                            <select class="form-select form-select-solid" name="supplier_id" id="flow_supplier_id">
+                                <option value="">Pilih Supplier</option>
+                                @foreach(($suppliers ?? []) as $supplier)
+                                    <option value="{{ $supplier->id }}">{{ $supplier->name }}</option>
+                                @endforeach
+                            </select>
+                            <div class="invalid-feedback" id="error_supplier_id"></div>
+                        </div>
+                    @endif
                     @if(!empty($showDeliveryNoteFields ?? false))
                         <div class="fv-row mb-7">
                             <label class="fs-6 fw-bold form-label mb-2">No Surat Jalan</label>
@@ -209,10 +229,14 @@
                     <div class="mb-6">
                         <div class="text-muted fs-7">
                             @if(!empty($enableKoli ?? false))
-                                Header minimal: <strong>sku</strong>, <strong>qty</strong> atau <strong>koli</strong>.<br>
+                                Header minimal: <strong>sku</strong>, <strong>qty</strong> atau <strong>koli</strong>
                             @else
-                                Header minimal: <strong>sku</strong>, <strong>qty</strong>.<br>
+                                Header minimal: <strong>sku</strong>, <strong>qty</strong>
                             @endif
+                            @if(!empty($importRequiresSupplier ?? false))
+                                , <strong>supplier</strong>
+                            @endif
+                            .<br>
                             Opsional: <strong>ref_no</strong>
                             @if(!empty($showDeliveryNoteFields ?? false))
                                 , <strong>surat_jalan_no</strong>, <strong>surat_jalan_at</strong>
@@ -269,6 +293,7 @@
     const canCreateDefault = {{ $canCreateDefault ? 'true' : 'false' }};
     const enableKoli = {{ !empty($enableKoli ?? false) ? 'true' : 'false' }};
     const enableWarehouseSelect = {{ !empty($enableWarehouseSelect ?? false) ? 'true' : 'false' }};
+    const supplierFlowTypes = @json($supplierFlowTypes ?? []);
     const displayWarehouseId = {{ isset($displayWarehouseId) ? (int) $displayWarehouseId : 'null' }};
     const defaultWarehouseId = {{ isset($defaultWarehouseId) ? (int) $defaultWarehouseId : 'null' }};
     const statusLabels = @json($statusLabels ?? []);
@@ -301,6 +326,8 @@
         const importSubmit = document.getElementById('btn_import_flow_submit');
         const warehouseRow = document.getElementById('flow_warehouse_row');
         const warehouseSelect = document.getElementById('flow_warehouse_id');
+        const supplierRow = document.getElementById('flow_supplier_row');
+        const supplierSelect = document.getElementById('flow_supplier_id');
         const suratJalanNoEl = document.getElementById('flow_surat_jalan_no');
         const suratJalanAtEl = document.getElementById('flow_surat_jalan_at');
         let fpFrom = null;
@@ -367,7 +394,7 @@
         };
 
         const clearErrors = () => {
-            ['error_transacted_at','error_ref_no','error_surat_jalan_no','error_surat_jalan_at','error_note','error_warehouse_id'].forEach(id => {
+            ['error_transacted_at','error_ref_no','error_supplier_id','error_surat_jalan_no','error_surat_jalan_at','error_note','error_warehouse_id'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.textContent = '';
             });
@@ -463,6 +490,19 @@
             }
         };
 
+        const applySupplierVisibility = (flowType) => {
+            if (!supplierRow || !supplierSelect) return;
+            const shouldShow = Array.isArray(supplierFlowTypes) && supplierFlowTypes.includes(flowType);
+            supplierRow.style.display = shouldShow ? '' : 'none';
+            supplierSelect.required = shouldShow;
+            if (!shouldShow) {
+                supplierSelect.value = '';
+                if (typeof $ !== 'undefined' && $(supplierSelect).data('select2')) {
+                    $(supplierSelect).val('').trigger('change.select2');
+                }
+            }
+        };
+
         if (typeof flatpickr !== 'undefined') {
             if (dateFromEl) {
                 fpFrom = flatpickr(dateFromEl, { dateFormat: 'Y-m-d', allowInput: true });
@@ -480,6 +520,15 @@
 
         if (warehouseFilter && typeof $ !== 'undefined' && $.fn.select2) {
             $(warehouseFilter).select2({ placeholder: 'Semua Gudang', allowClear: true, width: '200px' });
+        }
+        if (supplierSelect && typeof $ !== 'undefined' && $.fn.select2) {
+            $(supplierSelect).select2({
+                placeholder: 'Pilih supplier',
+                allowClear: true,
+                width: '100%',
+                dropdownParent: modalEl,
+                minimumResultsForSearch: 0,
+            });
         }
 
         const renumberRows = () => {
@@ -559,6 +608,13 @@
                 transactedAtEl.value = nowJkt;
             }
             applyWarehouseVisibility(defaultTypeFilter || '');
+            applySupplierVisibility(defaultTypeFilter || '');
+            if (supplierSelect) {
+                supplierSelect.value = '';
+                if (typeof $ !== 'undefined' && $(supplierSelect).data('select2')) {
+                    $(supplierSelect).val('').trigger('change.select2');
+                }
+            }
             if (fpSuratJalan) {
                 fpSuratJalan.clear();
             } else if (suratJalanAtEl) {
@@ -637,6 +693,9 @@
                 { data: 'transacted_at' },
                 { data: 'submit_by' },
                 { data: 'warehouse', render: (data, type, row) => renderWarehouseBadge(data, row?.warehouse_id) },
+                @if(!empty($showSupplierColumn ?? false))
+                    { data: 'supplier' },
+                @endif
                 { data: 'item' },
                 { data: 'qty' },
                 @if(!empty($showScanProgressColumn ?? false))
@@ -764,6 +823,13 @@
             form.dataset.flowType = rowType;
             if (modalTitle) modalTitle.textContent = `Edit ${json.code || ''}`.trim();
                 document.getElementById('flow_ref_no').value = json.ref_no || '';
+                applySupplierVisibility(rowType);
+                if (supplierSelect) {
+                    supplierSelect.value = json.supplier_id ? String(json.supplier_id) : '';
+                    if (typeof $ !== 'undefined' && $(supplierSelect).data('select2')) {
+                        $(supplierSelect).val(supplierSelect.value).trigger('change.select2');
+                    }
+                }
                 if (suratJalanNoEl) suratJalanNoEl.value = json.surat_jalan_no || '';
                 document.getElementById('flow_note').value = json.note || '';
                 applyWarehouseVisibility(rowType);

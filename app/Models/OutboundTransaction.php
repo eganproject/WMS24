@@ -13,6 +13,7 @@ class OutboundTransaction extends Model
         'code',
         'type',
         'ref_no',
+        'supplier_id',
         'transacted_at',
         'note',
         'warehouse_id',
@@ -35,6 +36,11 @@ class OutboundTransaction extends Model
     public function warehouse()
     {
         return $this->belongsTo(Warehouse::class, 'warehouse_id');
+    }
+
+    public function supplier()
+    {
+        return $this->belongsTo(Supplier::class, 'supplier_id');
     }
 
     public function creator()

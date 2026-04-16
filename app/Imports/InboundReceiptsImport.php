@@ -3,6 +3,7 @@
 namespace App\Imports;
 
 use App\Models\Item;
+use App\Models\Supplier;
 use App\Support\InboundScanExpectation;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
@@ -12,8 +13,12 @@ use Maatwebsite\Excel\Concerns\WithHeadingRow;
 
 class InboundReceiptsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
 {
-    /** @var array<string,array{ref_no:?string,surat_jalan_no:?string,surat_jalan_at:?string,note:?string,transacted_at:?string,items:array<int,array{item_id:int,qty:int,koli:int,note:?string}>}> */
+    /** @var array<string,array{ref_no:?string,supplier_id:?int,surat_jalan_no:?string,surat_jalan_at:?string,note:?string,transacted_at:?string,items:array<int,array{item_id:int,qty:int,koli:int,note:?string}>}> */
     public array $groups = [];
+
+    public function __construct(private readonly bool $requireSupplier = false)
+    {
+    }
 
     public function collection(Collection $rows)
     {
@@ -37,6 +42,13 @@ class InboundReceiptsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
                 'file' => 'Header qty/koli wajib (gunakan: qty/quantity/jumlah/stok/stock atau koli/kolian/isi_koli)',
             ]);
         }
+        if ($this->requireSupplier && $this->detectSupplierKey($headers) === null) {
+            throw ValidationException::withMessages([
+                'file' => 'Header supplier wajib untuk import penerimaan barang (gunakan: supplier/supplier_name/nama_supplier)',
+            ]);
+        }
+
+        $supplierMaps = $this->requireSupplier ? $this->buildSupplierMaps() : ['ids' => [], 'names' => []];
 
         $skus = $rows->map(fn ($row) => trim((string) ($row['sku'] ?? '')))
             ->filter()
@@ -83,6 +95,9 @@ class InboundReceiptsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
             }
 
             $ref = trim((string) ($row['ref_no'] ?? ''));
+            $supplierId = $this->requireSupplier
+                ? $this->parseSupplierId($row, $supplierMaps, $errors, $rowIndex)
+                : null;
             $suratJalanNo = trim((string) ($row['surat_jalan_no'] ?? $row['sj_no'] ?? ''));
             $suratJalanAt = trim((string) ($row['surat_jalan_at'] ?? $row['tanggal_surat_jalan'] ?? ''));
             $note = trim((string) ($row['note'] ?? ''));
@@ -91,6 +106,7 @@ class InboundReceiptsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
 
             $groupKeyParts = [
                 $ref !== '' ? $ref : '__ref__',
+                $this->requireSupplier && $supplierId ? (string) $supplierId : '__supplier__',
                 $suratJalanNo !== '' ? $suratJalanNo : '__sj__',
                 $transactedAt !== '' ? $transactedAt : '__date__',
             ];
@@ -98,6 +114,7 @@ class InboundReceiptsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
             if (!isset($this->groups[$groupKey])) {
                 $this->groups[$groupKey] = [
                     'ref_no' => $ref !== '' ? $ref : null,
+                    'supplier_id' => $supplierId,
                     'surat_jalan_no' => $suratJalanNo !== '' ? $suratJalanNo : null,
                     'surat_jalan_at' => $suratJalanAt !== '' ? $suratJalanAt : null,
                     'note' => $note !== '' ? $note : null,
@@ -105,6 +122,9 @@ class InboundReceiptsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
                     'items' => [],
                 ];
             } else {
+                if ($this->groups[$groupKey]['supplier_id'] === null && $supplierId) {
+                    $this->groups[$groupKey]['supplier_id'] = $supplierId;
+                }
                 if ($this->groups[$groupKey]['surat_jalan_no'] === null && $suratJalanNo !== '') {
                     $this->groups[$groupKey]['surat_jalan_no'] = $suratJalanNo;
                 }
@@ -185,6 +205,16 @@ class InboundReceiptsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
         return null;
     }
 
+    private function detectSupplierKey(array $headers): ?string
+    {
+        foreach (['supplier', 'supplier_name', 'nama_supplier'] as $key) {
+            if (in_array($key, $headers, true)) {
+                return $key;
+            }
+        }
+        return null;
+    }
+
     private function parseQty($row, string $key): int
     {
         $raw = null;
@@ -200,5 +230,81 @@ class InboundReceiptsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
         }
         $value = is_numeric($raw) ? (int) $raw : (int) preg_replace('/[^0-9\-]/', '', (string) $raw);
         return $value > 0 ? $value : 0;
+    }
+
+    /**
+     * @return array{ids:array<int,bool>,names:array<string,int>}
+     */
+    private function buildSupplierMaps(): array
+    {
+        $ids = [];
+        $names = [];
+        $suppliers = Supplier::query()->get(['id', 'name']);
+
+        foreach ($suppliers as $supplier) {
+            $id = (int) $supplier->id;
+            $ids[$id] = true;
+            $name = $this->normalizeSupplierName((string) $supplier->name);
+            if ($name !== '') {
+                $names[$name] = $id;
+            }
+        }
+
+        return [
+            'ids' => $ids,
+            'names' => $names,
+        ];
+    }
+
+    /**
+     * @param array{ids:array<int,bool>,names:array<string,int>} $maps
+     * @param array<int,string> $errors
+     */
+    private function parseSupplierId($row, array $maps, array &$errors, int $rowIndex): ?int
+    {
+        $raw = null;
+        foreach (['supplier', 'supplier_name', 'nama_supplier'] as $key) {
+            if (is_array($row) && array_key_exists($key, $row)) {
+                $raw = $row[$key];
+                break;
+            }
+            if ($row instanceof Collection && $row->has($key)) {
+                $raw = $row->get($key);
+                break;
+            }
+            if (isset($row[$key])) {
+                $raw = $row[$key];
+                break;
+            }
+        }
+
+        if ($raw === null || trim((string) $raw) === '') {
+            if ($this->requireSupplier) {
+                $errors[] = "Baris {$rowIndex}: supplier wajib diisi";
+            }
+            return null;
+        }
+
+        $value = trim((string) $raw);
+        if (ctype_digit($value)) {
+            $id = (int) $value;
+            if ($id > 0 && isset($maps['ids'][$id])) {
+                return $id;
+            }
+        }
+
+        $normalizedName = $this->normalizeSupplierName($value);
+        if (isset($maps['names'][$normalizedName])) {
+            return $maps['names'][$normalizedName];
+        }
+
+        $errors[] = "Baris {$rowIndex}: supplier tidak ditemukan ({$value})";
+        return null;
+    }
+
+    private function normalizeSupplierName(string $value): string
+    {
+        $value = strtolower(trim($value));
+        return preg_replace('/\\s+/', ' ', $value) ?? $value;
     }
 }

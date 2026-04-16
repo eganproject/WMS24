@@ -32,6 +32,7 @@ use App\Http\Controllers\Admin\DivisiController;
 use App\Http\Controllers\Admin\LaneController;
 use App\Http\Controllers\Admin\LocationController;
 use App\Http\Controllers\Admin\KurirController;
+use App\Http\Controllers\Admin\SupplierController;
 use App\Http\Controllers\Mobile\StockOpnameMobileController;
 use App\Http\Controllers\Picker\PickerDashboardController;
 use App\Http\Controllers\Picker\InboundScanController;
@@ -140,6 +141,10 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         // Kurir
         Route::get('/kurir/data', [KurirController::class, 'data'])->name('kurir.data');
         Route::resource('kurir', KurirController::class)->except(['create','show','edit'])->names('kurir');
+
+        // Supplier
+        Route::get('/suppliers/data', [SupplierController::class, 'data'])->name('suppliers.data');
+        Route::resource('suppliers', SupplierController::class)->except(['create','show','edit'])->names('suppliers');
 
         // Menus DataTables
         Route::get('/menus/data', [MenuController::class, 'data'])->name('menus.data');

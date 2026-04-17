@@ -24,6 +24,7 @@ class PickingListMobileController extends Controller
             'routes' => [
                 'dashboard' => route('picker.dashboard'),
                 'data' => route('picker.picking-list.data'),
+                'itemsStore' => route('picker.items.store'),
                 'logout' => route('logout'),
             ],
             'lanes' => $laneQuery->get(['id', 'code', 'name']),
@@ -87,6 +88,7 @@ class PickingListMobileController extends Controller
             ->map(function ($row) {
             $address = $row->item?->location?->code ?? ($row->item?->address ?? '');
             return [
+                'item_id' => $row->item?->id,
                 'sku' => $row->sku ?? '-',
                 'name' => $row->item?->name ?? '-',
                 'address' => $address,

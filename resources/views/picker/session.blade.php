@@ -81,6 +81,63 @@
         color: var(--muted);
         margin-top: 6px;
     }
+    .item-stats {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 6px;
+        font-size: 11px;
+        color: var(--muted);
+    }
+    .remaining-chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 10px;
+        font-weight: 700;
+        background: rgba(249, 115, 22, 0.12);
+        color: #c2410c;
+    }
+    .list-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 8px;
+    }
+    .list-header-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .refresh-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 34px;
+        height: 34px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: #fff;
+        color: var(--brand);
+        padding: 0;
+        transition: transform 0.2s ease, opacity 0.2s ease;
+    }
+    .refresh-btn:disabled {
+        opacity: 0.6;
+    }
+    .refresh-btn.is-loading svg {
+        animation: spin-refresh 0.85s linear infinite;
+    }
+    .refresh-btn svg {
+        width: 16px;
+        height: 16px;
+    }
+    @keyframes spin-refresh {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
     .scanner-modal {
         position: fixed;
         inset: 0;
@@ -170,9 +227,19 @@
     </div>
 
     <div class="card">
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+        <div class="list-header">
             <div style="font-weight:700;">Daftar Barang Dibawa</div>
-            <div class="muted" id="total_items">0 item</div>
+            <div class="list-header-meta">
+                <div class="muted" id="total_items">0 item</div>
+                <button type="button" class="refresh-btn" id="btn_refresh_items" aria-label="Refresh daftar barang" title="Refresh daftar barang">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M21 2v6h-6"></path>
+                        <path d="M3 12a9 9 0 0 1 15.55-6.36L21 8"></path>
+                        <path d="M3 22v-6h6"></path>
+                        <path d="M21 12a9 9 0 0 1-15.55 6.36L3 16"></path>
+                    </svg>
+                </button>
+            </div>
         </div>
         <div class="muted" id="items_empty">Belum ada barang ditambahkan.</div>
         <div class="items-list" id="items_list"></div>
@@ -228,6 +295,7 @@
         totalItems: document.getElementById('total_items'),
         totalQty: document.getElementById('total_qty'),
         saveStatus: document.getElementById('save_status'),
+        btnRefreshItems: document.getElementById('btn_refresh_items'),
         btnSubmit: document.getElementById('btn_submit'),
         searchCard: document.getElementById('search_card'),
         scanCard: document.getElementById('scan_card'),
@@ -251,6 +319,12 @@
         if (!el.scanStatus) return;
         el.scanStatus.textContent = text;
         el.scanStatus.style.color = pending ? '#f97316' : '#6b7280';
+    };
+
+    const setRefreshState = (loading = false) => {
+        if (!el.btnRefreshItems) return;
+        el.btnRefreshItems.disabled = loading;
+        el.btnRefreshItems.classList.toggle('is-loading', loading);
     };
 
     const fetchJson = async (url, options = {}) => {
@@ -343,6 +417,7 @@
         el.itemsEmpty.style.display = 'none';
         el.itemsList.innerHTML = items.map((row) => {
             const address = row.address && row.address.trim() ? row.address : 'Belum diisi';
+            const remaining = Number(row.picking_remaining_qty ?? 0);
             return `
                 <div class="item-row" data-id="${row.id}" data-qty="${row.qty}">
                     <div class="item-meta">
@@ -351,7 +426,10 @@
                             <span class="address-tag">Lokasi</span>
                             <span class="address-text">${address}</span>
                         </div>
-                        <span>Qty tercatat: ${row.qty}</span>
+                        <div class="item-stats">
+                            <span>Qty tercatat: ${row.qty}</span>
+                            <span class="remaining-chip">Sisa picking: ${remaining}</span>
+                        </div>
                     </div>
                     <div style="display:flex; align-items:center; gap:8px;">
                         <div class="qty-controls">
@@ -389,10 +467,25 @@
         }).join('');
     };
 
-    const refreshSession = async () => {
-        const json = await fetchJson(routes.current);
-        state.session = json.session;
-        renderSession();
+    const refreshSession = async (showStatus = true) => {
+        try {
+            setRefreshState(true);
+            if (showStatus) {
+                setSaveStatus('Memuat ulang daftar...', true);
+            }
+            const json = await fetchJson(routes.current);
+            state.session = json.session;
+            renderSession();
+            if (showStatus) {
+                setSaveStatus('Daftar barang diperbarui');
+            }
+        } catch (err) {
+            if (showStatus) {
+                setSaveStatus(err.message || 'Gagal memuat ulang daftar');
+            }
+        } finally {
+            setRefreshState(false);
+        }
     };
 
     const startSession = async () => {
@@ -783,6 +876,10 @@
     el.btnSubmit.addEventListener('click', async () => {
         if (!state.session || state.session.status !== 'draft') return;
         await submitSession();
+    });
+
+    el.btnRefreshItems?.addEventListener('click', async () => {
+        await refreshSession(true);
     });
 
     const runSearch = debounce(async () => {

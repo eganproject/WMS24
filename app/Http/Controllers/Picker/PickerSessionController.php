@@ -526,25 +526,54 @@ class PickerSessionController extends Controller
 
     private function serializeSession(PickerSession $session): array
     {
+        $items = $session->items;
+        $remainingBySku = $this->getPickingRemainingBySku($session, $items);
+
         return [
             'id' => $session->id,
             'code' => $session->code,
             'status' => $session->status,
             'started_at' => $session->started_at?->format('Y-m-d H:i'),
             'submitted_at' => $session->submitted_at?->format('Y-m-d H:i'),
-            'items' => $session->items->map(function ($row) {
+            'items' => $items->map(function ($row) use ($remainingBySku) {
+                $sku = trim((string) ($row->item?->sku ?? ''));
                 $address = $row->item?->location?->code ?? ($row->item?->address ?? '');
                 return [
                     'id' => $row->id,
                     'item_id' => $row->item_id,
-                    'sku' => $row->item?->sku ?? '',
+                    'sku' => $sku,
                     'name' => $row->item?->name ?? '',
                     'address' => $address,
                     'qty' => (int) $row->qty,
                     'note' => $row->note,
+                    'picking_remaining_qty' => (int) ($remainingBySku[$sku] ?? 0),
                 ];
             })->values(),
         ];
+    }
+
+    private function getPickingRemainingBySku(PickerSession $session, $items): array
+    {
+        $pickedDate = $session->started_at?->toDateString();
+        if (!$pickedDate) {
+            return [];
+        }
+
+        $skus = $items->map(function ($row) {
+            return trim((string) ($row->item?->sku ?? ''));
+        })->filter()->unique()->values();
+
+        if ($skus->isEmpty()) {
+            return [];
+        }
+
+        return PickingList::where('list_date', $pickedDate)
+            ->whereIn('sku', $skus->all())
+            ->pluck('remaining_qty', 'sku')
+            ->map(function ($qty) {
+                return (int) $qty;
+            })
+            ->all();
     }
 
     private function generateCode(string $prefix): string

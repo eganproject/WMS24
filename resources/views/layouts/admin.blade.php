@@ -41,6 +41,14 @@
             border-radius: 0.475rem;
             border: 1px solid #e4e6ef;
         }
+
+        .select2-container--open {
+            z-index: 2000;
+        }
+
+        .flatpickr-calendar {
+            z-index: 2000 !important;
+        }
     </style>
     @stack('styles')
     @yield('styles')
@@ -90,6 +98,118 @@
     <script src="{{ asset('metronic/plugins/custom/datatables/datatables.bundle.js') }}"></script>
     <script>
         (function () {
+            const modalRefreshRaf = new WeakMap();
+
+            const getClosestModal = (element) => {
+                if (!element || typeof element.closest !== 'function') {
+                    return null;
+                }
+                return element.closest('.modal');
+            };
+
+            const queueModalFloatingRefresh = (modalEl) => {
+                if (!modalEl || typeof window.requestAnimationFrame !== 'function') {
+                    return;
+                }
+
+                const existing = modalRefreshRaf.get(modalEl);
+                if (existing) {
+                    return;
+                }
+
+                const rafId = window.requestAnimationFrame(() => {
+                    modalRefreshRaf.delete(modalEl);
+
+                    modalEl.querySelectorAll('input, textarea, select').forEach((field) => {
+                        const fp = field?._flatpickr;
+                        if (!fp || !fp.isOpen || typeof fp._positionCalendar !== 'function') {
+                            return;
+                        }
+
+                        try {
+                            fp._positionCalendar();
+                        } catch (error) {
+                            // ignore flatpickr internal positioning errors
+                        }
+                    });
+
+                    if (typeof window.jQuery !== 'undefined' && window.jQuery.fn?.select2) {
+                        window.jQuery(modalEl)
+                            .find('select.select2-hidden-accessible')
+                            .each(function () {
+                                const instance = window.jQuery(this).data('select2');
+                                const container = instance?.$container;
+                                const isOpen = !!container && container.hasClass('select2-container--open');
+                                if (!isOpen) {
+                                    return;
+                                }
+
+                                try {
+                                    instance.dropdown?._positionDropdown?.();
+                                    instance.dropdown?._resizeDropdown?.();
+                                } catch (error) {
+                                    // ignore select2 internal positioning errors
+                                }
+                            });
+                    }
+                });
+
+                modalRefreshRaf.set(modalEl, rafId);
+            };
+
+            const patchSelect2ForModals = () => {
+                if (typeof window.jQuery === 'undefined' || !window.jQuery.fn?.select2 || window.__modalSelect2Patched) {
+                    return;
+                }
+
+                const originalSelect2 = window.jQuery.fn.select2;
+
+                const buildOptions = (element, options) => {
+                    if (options == null) {
+                        options = {};
+                    }
+
+                    if (typeof options !== 'object' || Array.isArray(options) || options.dropdownParent) {
+                        return options;
+                    }
+
+                    const modalEl = getClosestModal(element);
+                    if (!modalEl) {
+                        return options;
+                    }
+
+                    return {
+                        ...options,
+                        dropdownParent: window.jQuery(modalEl),
+                    };
+                };
+
+                const wrappedSelect2 = function (options, ...rest) {
+                    if (typeof options === 'string') {
+                        return originalSelect2.call(this, options, ...rest);
+                    }
+
+                    if (this.length <= 1) {
+                        return originalSelect2.call(this, buildOptions(this[0], options), ...rest);
+                    }
+
+                    this.each(function () {
+                        originalSelect2.call(window.jQuery(this), buildOptions(this, options), ...rest);
+                    });
+
+                    return this;
+                };
+
+                Object.keys(originalSelect2).forEach((key) => {
+                    wrappedSelect2[key] = originalSelect2[key];
+                });
+                wrappedSelect2.amd = originalSelect2.amd;
+                wrappedSelect2.defaults = originalSelect2.defaults;
+
+                window.jQuery.fn.select2 = wrappedSelect2;
+                window.__modalSelect2Patched = true;
+            };
+
             const applyModalStaticBackdrop = (modalEl) => {
                 if (!modalEl || !modalEl.setAttribute) return;
                 modalEl.setAttribute('data-bs-backdrop', 'static');
@@ -122,6 +242,7 @@
 
             enforceModalBackdrops();
             enforceSweetalertBackdrop();
+            patchSelect2ForModals();
 
             if (!window.AppSwal) {
                 window.AppSwal = {
@@ -156,6 +277,25 @@
 
             document.addEventListener('DOMContentLoaded', () => {
                 enforceModalBackdrops();
+                patchSelect2ForModals();
+
+                document.addEventListener('shown.bs.modal', (event) => {
+                    queueModalFloatingRefresh(event.target);
+                });
+
+                document.addEventListener('scroll', (event) => {
+                    const modalEl = getClosestModal(event.target);
+                    if (!modalEl) {
+                        return;
+                    }
+
+                    queueModalFloatingRefresh(modalEl);
+                }, true);
+
+                window.addEventListener('resize', () => {
+                    document.querySelectorAll('.modal.show').forEach(queueModalFloatingRefresh);
+                });
+
                 if (document.body && !window.__modalBackdropObserver) {
                     const observer = new MutationObserver((mutations) => {
                         mutations.forEach((mutation) => {
@@ -163,8 +303,12 @@
                                 if (!node || node.nodeType !== 1) return;
                                 if (node.classList?.contains('modal')) {
                                     applyModalStaticBackdrop(node);
+                                    queueModalFloatingRefresh(node);
                                 }
-                                node.querySelectorAll?.('.modal')?.forEach(applyModalStaticBackdrop);
+                                node.querySelectorAll?.('.modal')?.forEach((modalEl) => {
+                                    applyModalStaticBackdrop(modalEl);
+                                    queueModalFloatingRefresh(modalEl);
+                                });
                             });
                         });
                     });

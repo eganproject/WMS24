@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Item;
 use App\Models\Lane;
 use App\Models\Location;
 use App\Support\LocationService;
@@ -167,6 +168,11 @@ class LocationController extends Controller
                 'row_no' => $row,
                 'code' => $code,
             ]);
+
+            Item::where('location_id', $location->id)->update([
+                'lane_id' => $lane->id,
+                'address' => $location->code,
+            ]);
             DB::commit();
 
             return response()->json([
@@ -189,6 +195,11 @@ class LocationController extends Controller
     {
         DB::beginTransaction();
         try {
+            $location->loadMissing('lane');
+            Item::where('location_id', $location->id)->update([
+                'lane_id' => $location->lane_id,
+                'address' => $location->lane?->code ?? $location->code,
+            ]);
             $location->delete();
             DB::commit();
             return response()->json(['message' => 'Lokasi berhasil dihapus']);

@@ -13,6 +13,7 @@ class Item extends Model
         'sku',
         'name',
         'category_id',
+        'lane_id',
         'location_id',
         'address',
         'description',
@@ -36,6 +37,11 @@ class Item extends Model
             ->where('warehouse_id', \App\Support\WarehouseService::defaultWarehouseId());
     }
 
+    public function lane()
+    {
+        return $this->belongsTo(Lane::class, 'lane_id');
+    }
+
     public function stocks()
     {
         return $this->hasMany(ItemStock::class, 'item_id');
@@ -44,5 +50,15 @@ class Item extends Model
     public function location()
     {
         return $this->belongsTo(Location::class, 'location_id');
+    }
+
+    public function resolvedLane(): ?Lane
+    {
+        return $this->location?->lane ?: $this->lane;
+    }
+
+    public function resolvedAddress(): string
+    {
+        return $this->location?->code ?? (string) ($this->address ?? '');
     }
 }

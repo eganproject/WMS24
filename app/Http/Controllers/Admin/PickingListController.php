@@ -35,7 +35,7 @@ class PickingListController extends Controller
     public function data(Request $request)
     {
         $baseQuery = PickingList::query()
-            ->with('item.location.lane')
+            ->with('item', 'item.location.lane', 'item.lane')
             ->orderBy('list_date', 'desc')
             ->orderBy('sku');
         $this->applyPackerExceptionFilter($baseQuery);
@@ -72,7 +72,7 @@ class PickingListController extends Controller
 
         $data = $query->get()->map(function ($row) {
             $item = $row->item;
-            $lane = $item?->location?->lane;
+            $lane = $item?->resolvedLane();
             return [
                 'date' => $row->list_date?->format('Y-m-d') ?? '-',
                 'sku' => $row->sku ?? '-',
@@ -419,7 +419,7 @@ class PickingListController extends Controller
         }
 
         $query = PickingList::query()
-            ->with('item.location.lane.divisi')
+            ->with('item', 'item.location.lane.divisi', 'item.lane.divisi')
             ->orderBy('list_date', 'desc')
             ->orderBy('sku');
         $this->applyPackerExceptionFilter($query);
@@ -434,14 +434,14 @@ class PickingListController extends Controller
             });
         }
 
-        $query->where('list_date', $date);
+        $query->whereDate('list_date', $date);
         $this->applyLaneDivisiFilter($query, $request);
         $this->applyStatusFilter($query, $request);
 
         $rows = $query->get()->map(function ($row) {
             $item = $row->item;
-            $lane = $item?->location?->lane;
-            $address = $item?->location?->code ?? ($item?->address ?? '-');
+            $lane = $item?->resolvedLane();
+            $address = $item?->resolvedAddress() ?: '-';
             return [
                 'sku' => $row->sku ?? '-',
                 'name' => $item?->name ?? '-',
@@ -619,7 +619,7 @@ class PickingListController extends Controller
         try {
             if ($date) {
                 $target = Carbon::parse($date)->toDateString();
-                $query->where('list_date', $target);
+                $query->whereDate('list_date', $target);
             }
         } catch (\Throwable) {
             // ignore invalid date filters
@@ -645,15 +645,15 @@ class PickingListController extends Controller
     {
         $laneId = $request->input('lane_id');
         if (!empty($laneId)) {
-            $query->whereHas('item.location.lane', function ($laneQ) use ($laneId) {
-                $laneQ->where('id', (int) $laneId);
+            $query->whereHas('item', function ($itemQ) use ($laneId) {
+                $itemQ->where('lane_id', (int) $laneId);
             });
             return;
         }
 
         $divisiId = $request->input('divisi_id');
         if (!empty($divisiId)) {
-            $query->whereHas('item.location.lane', function ($laneQ) use ($divisiId) {
+            $query->whereHas('item.lane', function ($laneQ) use ($divisiId) {
                 $laneQ->where('divisi_id', (int) $divisiId);
             });
         }

@@ -34,7 +34,7 @@ class ItemController extends Controller
 
     public function data(Request $request)
     {
-        $query = Item::with(['category', 'location.lane'])->orderBy('name');
+        $query = Item::with(['category', 'location.lane', 'lane'])->orderBy('name');
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
@@ -43,6 +43,10 @@ class ItemController extends Controller
                     ->orWhere('name', 'like', "%{$search}%")
                     ->orWhere('address', 'like', "%{$search}%")
                     ->orWhere('description', 'like', "%{$search}%")
+                    ->orWhereHas('lane', function ($laneQ) use ($search) {
+                        $laneQ->where('code', 'like', "%{$search}%")
+                            ->orWhere('name', 'like', "%{$search}%");
+                    })
                     ->orWhereHas('location', function ($locQ) use ($search) {
                         $locQ->where('code', 'like', "%{$search}%")
                             ->orWhere('rack_code', 'like', "%{$search}%")
@@ -74,8 +78,8 @@ class ItemController extends Controller
 
         $data = $query->get()->map(function ($i) {
             $location = $i->location;
-            $lane = $location?->lane;
-            $address = $location?->code ?? ($i->address ?? '');
+            $lane = $i->resolvedLane();
+            $address = $i->resolvedAddress();
             return [
                 'id' => $i->id,
                 'sku' => $i->sku,
@@ -371,17 +375,16 @@ class ItemController extends Controller
     private function applyLocationPayload(array &$validated): void
     {
         $laneId = $validated['lane_id'] ?? null;
-        $rack = $validated['rack_code'] ?? null;
+        $rack = trim((string) ($validated['rack_code'] ?? ''));
         $col = $validated['column_no'] ?? null;
         $row = $validated['row_no'] ?? null;
 
-        $hasLaneParts = ($laneId !== null && $laneId !== '') ||
-            ($rack !== null && $rack !== '') ||
+        $hasDetailedParts = $rack !== '' ||
             ($col !== null && $col !== '') ||
             ($row !== null && $row !== '');
 
-        if ($hasLaneParts) {
-            if ($laneId === null || $laneId === '' || $rack === null || $rack === '' || $col === null || $col === '' || $row === null || $row === '') {
+        if ($hasDetailedParts) {
+            if ($laneId === null || $laneId === '' || $rack === '' || $col === null || $col === '' || $row === null || $row === '') {
                 throw ValidationException::withMessages([
                     'rack_code' => 'Lengkapi lane, rack, kolom, dan baris.',
                 ]);
@@ -389,21 +392,44 @@ class ItemController extends Controller
 
             $location = LocationService::resolveLocationFromParts((int) $laneId, (string) $rack, (int) $col, (int) $row);
             if ($location) {
+                $validated['lane_id'] = $location->lane_id;
                 $validated['location_id'] = $location->id;
                 $validated['address'] = $location->code;
                 return;
             }
         }
 
+        if ($laneId !== null && $laneId !== '') {
+            $lane = Lane::find((int) $laneId);
+            if ($lane) {
+                $validated['lane_id'] = $lane->id;
+                $validated['location_id'] = null;
+                $validated['address'] = $lane->code;
+                return;
+            }
+        }
+
         if (array_key_exists('address', $validated)) {
-            $address = (string) ($validated['address'] ?? '');
+            $address = trim((string) ($validated['address'] ?? ''));
             $location = LocationService::resolveLocation($address);
             if ($location) {
+                $validated['lane_id'] = $location->lane_id;
                 $validated['location_id'] = $location->id;
                 $validated['address'] = $location->code;
-            } else {
-                $validated['location_id'] = null;
+                return;
             }
+
+            $lane = LocationService::resolveLane($address);
+            if ($lane) {
+                $validated['lane_id'] = $lane->id;
+                $validated['location_id'] = null;
+                $validated['address'] = $lane->code;
+                return;
+            }
+
+            $validated['lane_id'] = null;
+            $validated['location_id'] = null;
+            $validated['address'] = $address;
         }
     }
 }

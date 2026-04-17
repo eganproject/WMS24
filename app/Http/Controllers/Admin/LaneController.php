@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Divisi;
+use App\Models\Item;
 use App\Models\Lane;
 use App\Support\LocationService;
 use Illuminate\Http\Request;
@@ -125,6 +126,14 @@ class LaneController extends Controller
                     );
                     $location->save();
                 });
+
+                Item::with('location')
+                    ->where('lane_id', $lane->id)
+                    ->get()
+                    ->each(function ($item) use ($lane) {
+                        $item->address = $item->location?->code ?? $lane->code;
+                        $item->save();
+                    });
             }
 
             DB::commit();

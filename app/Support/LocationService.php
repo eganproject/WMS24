@@ -7,6 +7,48 @@ use App\Models\Location;
 
 class LocationService
 {
+    public static function normalizeLaneCode(string $laneCode): ?string
+    {
+        $lane = strtoupper(trim($laneCode));
+        if ($lane === '') {
+            return null;
+        }
+
+        if (!preg_match('/^[A-Z0-9]+$/', $lane)) {
+            return null;
+        }
+
+        return $lane;
+    }
+
+    public static function resolveLane(string $laneCode): ?Lane
+    {
+        $normalized = self::normalizeLaneCode($laneCode);
+        if ($normalized === null) {
+            return null;
+        }
+
+        $lane = Lane::query()
+            ->whereRaw('UPPER(code) = ?', [$normalized])
+            ->first();
+
+        if ($lane) {
+            if ($lane->code !== $normalized) {
+                $lane->code = $normalized;
+                $lane->save();
+            }
+
+            return $lane;
+        }
+
+        return Lane::create([
+            'code' => $normalized,
+            'name' => $normalized,
+            'divisi_id' => null,
+            'is_active' => true,
+        ]);
+    }
+
     /**
      * Parse address code in format: LANE-RACK-COLUMN-ROW (e.g. KAB-A-3-5).
      *
@@ -25,13 +67,13 @@ class LocationService
         }
 
         [$laneRaw, $rackRaw, $colRaw, $rowRaw] = $parts;
-        $lane = strtoupper(trim($laneRaw));
+        $lane = self::normalizeLaneCode($laneRaw);
         $rack = strtoupper(trim($rackRaw));
 
-        if ($lane === '' || $rack === '') {
+        if ($lane === null || $rack === '') {
             return null;
         }
-        if (!preg_match('/^[A-Z0-9]+$/', $lane) || !preg_match('/^[A-Z0-9]+$/', $rack)) {
+        if (!preg_match('/^[A-Z0-9]+$/', $rack)) {
             return null;
         }
 
@@ -75,14 +117,10 @@ class LocationService
             return null;
         }
 
-        $lane = Lane::firstOrCreate(
-            ['code' => $parsed['lane_code']],
-            [
-                'name' => $parsed['lane_code'],
-                'divisi_id' => null,
-                'is_active' => true,
-            ]
-        );
+        $lane = self::resolveLane($parsed['lane_code']);
+        if (!$lane) {
+            return null;
+        }
 
         $location = Location::firstOrCreate(
             [

@@ -20,7 +20,7 @@ class PickingListExport implements FromCollection, WithHeadings, WithMapping, Sh
     public function collection(): Collection
     {
         $query = PickingList::query()
-            ->with('item.location.lane')
+            ->with('item', 'item.location.lane', 'item.lane')
             ->orderBy('list_date', 'desc')
             ->orderBy('sku');
         $query->whereNotIn('sku', PackerScanException::query()->select('sku'));
@@ -41,7 +41,7 @@ class PickingListExport implements FromCollection, WithHeadings, WithMapping, Sh
         }
         try {
             $target = Carbon::parse($date)->toDateString();
-            $query->where('list_date', $target);
+            $query->whereDate('list_date', $target);
         } catch (\Throwable) {
             // ignore invalid date
         }
@@ -55,13 +55,13 @@ class PickingListExport implements FromCollection, WithHeadings, WithMapping, Sh
 
         $laneId = $this->filters['lane_id'] ?? null;
         if (!empty($laneId)) {
-            $query->whereHas('item.location.lane', function ($laneQ) use ($laneId) {
-                $laneQ->where('id', (int) $laneId);
+            $query->whereHas('item', function ($itemQ) use ($laneId) {
+                $itemQ->where('lane_id', (int) $laneId);
             });
         } else {
             $divisiId = $this->filters['divisi_id'] ?? null;
             if (!empty($divisiId)) {
-                $query->whereHas('item.location.lane', function ($laneQ) use ($divisiId) {
+                $query->whereHas('item.lane', function ($laneQ) use ($divisiId) {
                     $laneQ->where('divisi_id', (int) $divisiId);
                 });
             }
@@ -78,8 +78,8 @@ class PickingListExport implements FromCollection, WithHeadings, WithMapping, Sh
     public function map($row): array
     {
         $item = $row->item;
-        $lane = $item?->location?->lane;
-        $address = $item?->location?->code ?? ($item?->address ?? '-');
+        $lane = $item?->resolvedLane();
+        $address = $item?->resolvedAddress() ?: '-';
         return [
             $row->sku ?? '-',
             $item?->name ?? '-',

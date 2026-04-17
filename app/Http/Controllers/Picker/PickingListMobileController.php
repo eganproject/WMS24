@@ -42,15 +42,15 @@ class PickingListMobileController extends Controller
         }
 
         $query = PickingList::query()
-            ->with('item.location')
-            ->where('list_date', $date)
+            ->with('item', 'item.location.lane', 'item.lane')
+            ->whereDate('list_date', $date)
             ->orderBy('sku');
         $this->applyPackerExceptionFilter($query);
 
         $authUser = $request->user();
         $divisiId = $authUser?->divisi_id;
         if ($divisiId !== null && (int) $divisiId !== 1) {
-            $query->whereHas('item.location.lane', function ($laneQ) use ($divisiId) {
+            $query->whereHas('item.lane', function ($laneQ) use ($divisiId) {
                 $laneQ->where('divisi_id', (int) $divisiId);
             });
         }
@@ -67,8 +67,8 @@ class PickingListMobileController extends Controller
 
         $laneId = $request->input('lane_id');
         if ($laneId) {
-            $query->whereHas('item.location.lane', function ($laneQ) use ($laneId) {
-                $laneQ->where('id', (int) $laneId);
+            $query->whereHas('item', function ($itemQ) use ($laneId) {
+                $itemQ->where('lane_id', (int) $laneId);
             });
         }
 
@@ -86,12 +86,12 @@ class PickingListMobileController extends Controller
             ->take($perPage)
             ->get()
             ->map(function ($row) {
-            $address = $row->item?->location?->code ?? ($row->item?->address ?? '');
+            $item = $row->item;
             return [
-                'item_id' => $row->item?->id,
+                'item_id' => $item?->id,
                 'sku' => $row->sku ?? '-',
-                'name' => $row->item?->name ?? '-',
-                'address' => $address,
+                'name' => $item?->name ?? '-',
+                'address' => $item?->resolvedAddress() ?? '',
                 'qty' => (int) $row->qty,
                 'remaining_qty' => (int) $row->remaining_qty,
             ];

@@ -161,9 +161,9 @@
                             <div class="invalid-feedback" id="error_row_no"></div>
                         </div>
                         <div class="col-md-6">
-                            <label class="fs-6 fw-bold form-label mb-2">Alamat (auto)</label>
-                            <input type="text" class="form-control form-control-solid" name="address" id="item_address" placeholder="KAB-A-03-05" />
-                            <div class="form-text">Diisi otomatis jika lane/rack/kolom/baris lengkap.</div>
+                            <label class="fs-6 fw-bold form-label mb-2">Alamat</label>
+                            <input type="text" class="form-control form-control-solid" name="address" id="item_address" placeholder="KAB atau KAB-A-03-05" />
+                            <div class="form-text">Boleh hanya lane jika slot detail belum ada. Jika rack, kolom, atau baris diisi, semuanya wajib lengkap.</div>
                             <div class="invalid-feedback" id="error_address"></div>
                         </div>
                     </div>
@@ -228,12 +228,15 @@
                         <li><strong>safety_stock_gudang_display</strong> / <strong>stok_pengaman_gudang_display</strong> (opsional, safety stock gudang display)</li>
                         <li><strong>safety_stock</strong> / <strong>stok_pengaman</strong> (opsional, jumlah stok pengaman)</li>
                         <li><strong>koli_qty</strong> / <strong>isi_koli</strong> (opsional, isi per koli/pcs)</li>
-                        <li><strong>lane</strong> + <strong>rack</strong> + <strong>column</strong> + <strong>row</strong> (opsional, lokasi item; otomatis membuat lane & lokasi bila valid)</li>
+                        <li><strong>address</strong> (opsional, bisa diisi <code>KAB</code> atau alamat detail seperti <code>KAB-A-03-05</code>)</li>
+                        <li><strong>lane</strong> (opsional, boleh berdiri sendiri sebagai alamat sementara)</li>
+                        <li><strong>lane</strong> + <strong>rack</strong> + <strong>column</strong> + <strong>row</strong> (opsional, jika ingin alamat detail; jika salah satu detail diisi maka semuanya wajib)</li>
                         <li><strong>description</strong> (opsional)</li>
                     </ul>
                     <p class="text-muted small mb-1">Contoh header: <code>sku,name,parent_category,category,stock_gudang_besar,stock_gudang_display,stock,safety_stock_gudang_besar,safety_stock_gudang_display,safety_stock,koli_qty,lane,rack,column,row,description</code></p>
                     <p class="text-muted small mb-1">Gunakan format Excel (.xlsx/.xls) dengan header di baris pertama.</p>
-                    <p class="text-muted small mb-0">Jika kolom category dikosongkan, item otomatis dimasukkan ke kategori "Tanpa Kategori".</p>
+                    <p class="text-muted small mb-1">Jika kolom category dikosongkan, item otomatis dimasukkan ke kategori "Tanpa Kategori".</p>
+                    <p class="text-muted small mb-0">Catatan: gunakan <code>lane</code> saja jika baru tahu area umum. Jika ingin alamat detail, lengkapi <code>lane</code>, <code>rack</code>, <code>column</code>, dan <code>row</code>.</p>
                     <div class="mt-4">
                         <a href="{{ route('admin.masterdata.items.template') }}" class="btn btn-light-primary">
                             Download Template Header
@@ -494,9 +497,13 @@
             const laneOpt = formLane.options[formLane.selectedIndex];
             const laneCode = laneOpt ? (laneOpt.getAttribute('data-code') || '').trim() : '';
             const rack = (formRack.value || '').trim().toUpperCase();
+            const rawCol = (formColumn.value || '').trim();
+            const rawRow = (formRow.value || '').trim();
             const col = parseInt(formColumn.value || '', 10);
             const row = parseInt(formRow.value || '', 10);
-            if (!laneCode || !rack || !col || !row) return '';
+            if (!laneCode) return '';
+            if (!rack && !rawCol && !rawRow) return laneCode;
+            if (!rack || !col || !row) return '';
             const colLabel = String(col).padStart(2, '0');
             const rowLabel = String(row).padStart(2, '0');
             return `${laneCode}-${rack}-${colLabel}-${rowLabel}`;

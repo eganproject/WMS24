@@ -54,6 +54,12 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             $parentCategoryName = trim((string) ($row['parent_category'] ?? ''));
             $categoryName = trim((string) ($row['category'] ?? ''));
             $description = trim((string) ($row['description'] ?? ''));
+
+            if ($sku === '' || $name === '') {
+                $excelRow++;
+                continue;
+            }
+
             $address = '';
             $hasAddressHeader = $this->hasAnyKey($row, ['address']);
             $hasLocationHeaders = $this->hasAnyKey($row, [
@@ -62,21 +68,23 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
                 'column', 'col', 'kolom',
                 'row', 'baris',
             ]);
+            $locationParts = $this->extractLocationParts($row);
             if ($hasAddressHeader) {
                 $address = trim((string) ($row['address'] ?? ''));
             }
             // If address column exists but is empty, allow lane/rack/column/row to act as fallback.
             if ($address === '' && $hasLocationHeaders) {
-                $address = $this->composeAddress($row);
+                if ($this->hasAnyDetailedLocationValue($locationParts) && !$this->hasCompleteLocationValue($locationParts)) {
+                    throw ValidationException::withMessages([
+                        'file' => "Baris {$excelRow} (SKU {$sku}): lengkapi lane, rack, kolom, dan baris jika ingin mengisi lokasi item.",
+                    ]);
+                }
+
+                $address = $this->composeAddressFromParts($locationParts);
             }
             $stockByWarehouse = $this->parseStockByWarehouse($row);
             $safetyByWarehouse = $this->parseSafetyStockByWarehouse($row);
             $safetyStock = $this->parseSafetyStock($row);
-
-            if ($sku === '' || $name === '') {
-                $excelRow++;
-                continue;
-            }
 
             $rawKoliQty = null;
             $koliQty = $this->parseKoliQty($row, $rawKoliQty);
@@ -107,11 +115,14 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             if ($hasAddressHeader || $hasLocationHeaders) {
                 $location = LocationService::resolveLocation($address);
                 if ($location) {
+                    $payload['lane_id'] = $location->lane_id;
                     $payload['location_id'] = $location->id;
                     $payload['address'] = $location->code;
                 } else {
+                    $lane = LocationService::resolveLane($address);
+                    $payload['lane_id'] = $lane?->id;
                     $payload['location_id'] = null;
-                    $payload['address'] = $address;
+                    $payload['address'] = $lane?->code ?? $address;
                 }
             }
             if ($safetyStock !== null) {
@@ -378,23 +389,58 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
         return $this->defaultCategoryId;
     }
 
-    private function composeAddress($row): string
+    private function composeAddressFromParts(array $parts): string
     {
-        $lane = $this->getValue($row, ['lane', 'lane_code', 'ruang', 'ruangan', 'room']);
-        $rack = $this->getValue($row, ['rack', 'rak']);
-        $col = $this->getValue($row, ['column', 'col', 'kolom']);
-        $rowNo = $this->getValue($row, ['row', 'baris']);
+        $lane = $parts['lane'] ?? '';
+        $rack = $parts['rack'] ?? '';
+        $col = $parts['column'] ?? '';
+        $rowNo = $parts['row'] ?? '';
 
-        $lane = trim((string) ($lane ?? ''));
-        $rack = trim((string) ($rack ?? ''));
-        $col = trim((string) ($col ?? ''));
-        $rowNo = trim((string) ($rowNo ?? ''));
+        if ($lane === '') {
+            return '';
+        }
 
-        if ($lane === '' || $rack === '' || $col === '' || $rowNo === '') {
+        if ($rack === '' && $col === '' && $rowNo === '') {
+            return $lane;
+        }
+
+        if ($rack === '' || $col === '' || $rowNo === '') {
             return '';
         }
 
         return "{$lane}-{$rack}-{$col}-{$rowNo}";
+    }
+
+    private function extractLocationParts($row): array
+    {
+        return [
+            'lane' => trim((string) ($this->getValue($row, ['lane', 'lane_code', 'ruang', 'ruangan', 'room']) ?? '')),
+            'rack' => trim((string) ($this->getValue($row, ['rack', 'rak']) ?? '')),
+            'column' => trim((string) ($this->getValue($row, ['column', 'col', 'kolom']) ?? '')),
+            'row' => trim((string) ($this->getValue($row, ['row', 'baris']) ?? '')),
+        ];
+    }
+
+    private function hasAnyDetailedLocationValue(array $parts): bool
+    {
+        foreach (['rack', 'column', 'row'] as $key) {
+            if (trim((string) ($parts[$key] ?? '')) !== '') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function hasCompleteLocationValue(array $parts): bool
+    {
+        foreach (['lane', 'rack', 'column', 'row'] as $key) {
+            if (trim((string) ($parts[$key] ?? '')) === '') {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function getValue($row, array $keys): mixed

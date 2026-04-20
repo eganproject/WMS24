@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Picker;
 
 use App\Http\Controllers\Controller;
 use App\Models\Lane;
-use App\Models\PackerScanException;
+use App\Models\QcScanException;
 use App\Models\PickingList;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -24,7 +24,6 @@ class PickingListMobileController extends Controller
             'routes' => [
                 'dashboard' => route('picker.dashboard'),
                 'data' => route('picker.picking-list.data'),
-                'itemsStore' => route('picker.items.store'),
                 'logout' => route('logout'),
             ],
             'lanes' => $laneQuery->get(['id', 'code', 'name']),
@@ -109,6 +108,6 @@ class PickingListMobileController extends Controller
 
     private function applyPackerExceptionFilter($query): void
     {
-        $query->whereNotIn('sku', PackerScanException::query()->select('sku'));
+        $query->whereNotIn('sku', QcScanException::query()->select('sku'));
     }
 }

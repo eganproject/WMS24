@@ -4,29 +4,18 @@ namespace App\Http\Controllers\Picker;
 
 use App\Http\Controllers\Controller;
 use App\Models\Kurir;
-use App\Models\PackerScanOut;
-use App\Models\PackerTransitHistory;
+use App\Models\QcResiScan;
 use App\Models\Resi;
+use App\Models\ShipmentScanOut;
+use App\Support\QcTransitStatus;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
-class PackerScanOutController extends Controller
+class ScanOutController extends Controller
 {
     public function index()
     {
         return view('picker.scan-out', [
-            'routes' => [
-                'dashboard' => route('picker.dashboard'),
-                'scan' => route('picker.scan-out.scan'),
-                'history' => route('picker.scan-out.history'),
-                'logout' => route('logout'),
-            ],
-        ]);
-    }
-
-    public function indexV2()
-    {
-        return view('picker.scan-out-v2', [
             'routes' => [
                 'dashboard' => route('picker.dashboard'),
                 'scan' => route('picker.scan-out.scan'),
@@ -51,7 +40,7 @@ class PackerScanOutController extends Controller
 
     public function historyData(Request $request)
     {
-        $query = PackerScanOut::query()
+        $query = ShipmentScanOut::query()
             ->with('resi')
             ->orderByDesc('scanned_at')
             ->orderByDesc('id');
@@ -69,9 +58,7 @@ class PackerScanOutController extends Controller
 
         $date = $request->input('date') ?: now()->toDateString();
         try {
-            if ($date) {
-                $query->whereDate('scan_date', $date);
-            }
+            $query->whereDate('scan_date', $date);
         } catch (\Throwable) {
             // ignore invalid date
         }
@@ -127,7 +114,7 @@ class PackerScanOutController extends Controller
 
         DB::beginTransaction();
         try {
-            $existingScan = PackerScanOut::where('resi_id', $resi->id)
+            $existingScan = ShipmentScanOut::where('resi_id', $resi->id)
                 ->lockForUpdate()
                 ->first();
             if ($existingScan) {
@@ -137,21 +124,15 @@ class PackerScanOutController extends Controller
                 ], 422);
             }
 
-            $transit = PackerTransitHistory::where('resi_id', $resi->id)
+            $qc = QcResiScan::query()
+                ->where('resi_id', $resi->id)
                 ->lockForUpdate()
                 ->first();
 
-            if (!$transit) {
+            if (!$qc || ($qc->status ?? '') !== QcTransitStatus::PASSED) {
                 DB::rollBack();
                 return response()->json([
-                    'message' => 'Resi belum masuk transit packer.',
-                ], 422);
-            }
-
-            if (($transit->status ?? '') === 'selesai') {
-                DB::rollBack();
-                return response()->json([
-                    'message' => 'Resi sudah selesai scan out.',
+                    'message' => 'Resi belum lolos QC dan belum siap scan out.',
                 ], 422);
             }
 
@@ -163,7 +144,7 @@ class PackerScanOutController extends Controller
                 }
             }
 
-            PackerScanOut::create([
+            ShipmentScanOut::create([
                 'resi_id' => $resi->id,
                 'kurir_id' => $kurirId,
                 'scan_type' => $type,
@@ -172,9 +153,6 @@ class PackerScanOutController extends Controller
                 'scanned_at' => now(),
                 'scanned_by' => auth()->id(),
             ]);
-
-            $transit->status = 'selesai';
-            $transit->save();
 
             DB::commit();
         } catch (\Throwable $e) {

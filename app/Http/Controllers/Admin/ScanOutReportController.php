@@ -3,66 +3,66 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\PackerResiScan;
 use App\Models\Resi;
+use App\Models\ShipmentScanOut;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
-class PackerPackingReportController extends Controller
+class ScanOutReportController extends Controller
 {
     public function index()
     {
-        $packerIds = PackerResiScan::query()
+        $operatorIds = ShipmentScanOut::query()
             ->whereNotNull('scanned_by')
             ->distinct()
             ->pluck('scanned_by');
 
-        $packers = User::query()
-            ->whereIn('id', $packerIds)
+        $operators = User::query()
+            ->whereIn('id', $operatorIds)
             ->orderBy('name')
             ->get(['id', 'name']);
 
-        return view('admin.outbound.packer-packing-reports.index', [
-            'dataUrl' => route('admin.reports.packer-packing-reports.data'),
-            'packers' => $packers,
+        return view('admin.reports.scan-out-reports.index', [
+            'dataUrl' => route('admin.reports.scan-out-reports.data'),
+            'operators' => $operators,
             'today' => now()->toDateString(),
         ]);
     }
 
     public function data(Request $request)
     {
-        $query = DB::table('packer_resi_scans as ps')
-            ->join('users as u', 'u.id', '=', 'ps.scanned_by')
-            ->selectRaw('ps.scan_date, ps.scanned_by, u.name as packer_name, COUNT(*) as total_scan, COUNT(DISTINCT ps.resi_id) as unique_scan, MIN(ps.scanned_at) as first_scan, MAX(ps.scanned_at) as last_scan')
-            ->groupBy('ps.scan_date', 'ps.scanned_by', 'u.name');
+        $query = DB::table('shipment_scan_outs as so')
+            ->join('users as u', 'u.id', '=', 'so.scanned_by')
+            ->selectRaw('so.scan_date, so.scanned_by, u.name as operator_name, COUNT(*) as total_scan, COUNT(DISTINCT so.scan_code) as unique_scan, MIN(so.scanned_at) as first_scan, MAX(so.scanned_at) as last_scan')
+            ->groupBy('so.scan_date', 'so.scanned_by', 'u.name');
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
             $query->where(function ($q) use ($search) {
                 $q->where('u.name', 'like', "%{$search}%")
-                    ->orWhere('ps.scan_date', 'like', "%{$search}%");
+                    ->orWhere('so.scan_date', 'like', "%{$search}%");
             });
         }
 
-        $packerId = $request->input('packer_id');
-        if ($packerId) {
-            $query->where('ps.scanned_by', $packerId);
+        $operatorId = $request->input('operator_id');
+        if ($operatorId) {
+            $query->where('so.scanned_by', $operatorId);
         }
 
         $dateFrom = $this->parseDate($request->input('date_from'));
         $dateTo = $this->parseDate($request->input('date_to'));
         if ($dateFrom) {
-            $query->where('ps.scan_date', '>=', $dateFrom);
+            $query->where('so.scan_date', '>=', $dateFrom);
         }
         if ($dateTo) {
-            $query->where('ps.scan_date', '<=', $dateTo);
+            $query->where('so.scan_date', '<=', $dateTo);
         }
 
         $rows = $query
-            ->orderByDesc('ps.scan_date')
-            ->orderBy('packer_name')
+            ->orderByDesc('so.scan_date')
+            ->orderBy('operator_name')
             ->limit(500)
             ->get();
 
@@ -80,8 +80,7 @@ class PackerPackingReportController extends Controller
 
             return [
                 'date' => Carbon::parse($row->scan_date)->format('Y-m-d'),
-                'packer_id' => (int) $row->scanned_by,
-                'packer' => $row->packer_name ?? '-',
+                'operator' => $row->operator_name ?? '-',
                 'total_scan' => (int) $row->total_scan,
                 'unique_scan' => (int) $row->unique_scan,
                 'avg_per_hour' => $avgPerHour,
@@ -95,81 +94,6 @@ class PackerPackingReportController extends Controller
         return response()->json([
             'data' => $data,
             'comparison' => $comparison,
-        ]);
-    }
-
-    public function detail(Request $request)
-    {
-        $validated = $request->validate([
-            'packer_id' => ['required', 'integer', 'exists:users,id'],
-            'date' => ['required', 'date'],
-        ]);
-
-        $rows = PackerResiScan::query()
-            ->with(['resi', 'scanner'])
-            ->where('scanned_by', (int) $validated['packer_id'])
-            ->whereDate('scan_date', $validated['date'])
-            ->orderByDesc('scanned_at')
-            ->limit(500)
-            ->get();
-
-        $data = $rows->map(function ($row) {
-            return [
-                'id_pesanan' => $row->resi?->id_pesanan ?? '-',
-                'no_resi' => $row->resi?->no_resi ?? '-',
-                'scan_type' => $row->scan_type ?? '-',
-                'scan_code' => $row->scan_code ?? '-',
-                'scanned_at' => $row->scanned_at
-                    ? Carbon::parse($row->scanned_at)->format('Y-m-d H:i')
-                    : '-',
-            ];
-        });
-
-        return response()->json([
-            'data' => $data,
-        ]);
-    }
-
-    public function searchResi(Request $request)
-    {
-        $validated = $request->validate([
-            'q' => ['required', 'string', 'max:100'],
-        ]);
-
-        $keyword = trim($validated['q']);
-        if ($keyword === '') {
-            return response()->json([
-                'message' => 'Nomor resi tidak boleh kosong.',
-            ], 422);
-        }
-
-        $scan = PackerResiScan::query()
-            ->with(['resi', 'scanner'])
-            ->whereHas('resi', function ($q) use ($keyword) {
-                $q->where('no_resi', $keyword)
-                    ->orWhere('id_pesanan', $keyword);
-            })
-            ->orderByDesc('scanned_at')
-            ->first();
-
-        if (!$scan) {
-            return response()->json([
-                'message' => 'Resi belum siap scan out atau tidak ditemukan.',
-            ], 404);
-        }
-
-        return response()->json([
-            'data' => [
-                'packer' => $scan->scanner?->name ?? '-',
-                'scan_date' => $scan->scan_date
-                    ? Carbon::parse($scan->scan_date)->format('Y-m-d')
-                    : '-',
-                'scanned_at' => $scan->scanned_at
-                    ? Carbon::parse($scan->scanned_at)->format('Y-m-d H:i')
-                    : '-',
-                'id_pesanan' => $scan->resi?->id_pesanan ?? '-',
-                'no_resi' => $scan->resi?->no_resi ?? '-',
-            ],
         ]);
     }
 
@@ -202,18 +126,16 @@ class PackerPackingReportController extends Controller
         });
 
         $importTotal = (clone $activeResiQuery)->count();
-
-        $packedTotal = 0;
-        if ($importTotal > 0) {
-            $packedTotal = PackerResiScan::query()
+        $scannedTotal = $importTotal > 0
+            ? ShipmentScanOut::query()
                 ->whereIn('resi_id', (clone $activeResiQuery)->select('id'))
                 ->distinct('resi_id')
-                ->count('resi_id');
-        }
+                ->count('resi_id')
+            : 0;
 
         $missingBase = (clone $activeResiQuery)
-            ->leftJoin('packer_resi_scans as ps', 'ps.resi_id', '=', 'resis.id')
-            ->whereNull('ps.id')
+            ->leftJoin('shipment_scan_outs as so', 'so.resi_id', '=', 'resis.id')
+            ->whereNull('so.id')
             ->select('resis.id_pesanan', 'resis.no_resi', 'resis.tanggal_upload');
 
         $missingTotal = (clone $missingBase)->count();
@@ -233,7 +155,7 @@ class PackerPackingReportController extends Controller
 
         return [
             'import_total' => $importTotal,
-            'scanned_total' => $packedTotal,
+            'scanned_total' => $scannedTotal,
             'missing_total' => $missingTotal,
             'missing_samples' => $missingSamples,
             'canceled_total' => $canceledTotal,

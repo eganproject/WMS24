@@ -1,13 +1,13 @@
 @extends('layouts.admin')
 
-@section('title', 'SKU Exception Packer')
-@section('page_title', 'SKU Exception Packer')
+@section('title', 'SKU Exception QC')
+@section('page_title', 'SKU Exception QC')
 
 @php
     use App\Support\Permission as Perm;
-    $canCreate = Perm::can(auth()->user(), 'admin.outbound.packer-scan-exceptions.index', 'create');
-    $canUpdate = Perm::can(auth()->user(), 'admin.outbound.packer-scan-exceptions.index', 'update');
-    $canDelete = Perm::can(auth()->user(), 'admin.outbound.packer-scan-exceptions.index', 'delete');
+    $canCreate = Perm::can(auth()->user(), 'admin.outbound.qc-scan-exceptions.index', 'create');
+    $canUpdate = Perm::can(auth()->user(), 'admin.outbound.qc-scan-exceptions.index', 'update');
+    $canDelete = Perm::can(auth()->user(), 'admin.outbound.qc-scan-exceptions.index', 'delete');
 @endphp
 
 @section('content')
@@ -21,14 +21,14 @@
                         <path d="M11 19C6.55556 19 3 15.4444 3 11C3 6.55556 6.55556 3 11 3C15.4444 3 19 6.55556 19 11C19 15.4444 15.4444 19 11 19ZM11 5C7.53333 5 5 7.53333 5 11C5 14.4667 7.53333 17 11 17C14.4667 17 17.53333 14.4667 17.53333 11C17.53333 7.53333 14.4667 5 11 5Z" fill="black" />
                     </svg>
                 </span>
-                <input type="text" class="form-control form-control-solid w-250px ps-14" placeholder="Search SKU / Catatan" data-kt-filter="search" />
+                <input type="text" class="form-control form-control-solid w-250px ps-14" placeholder="Cari SKU / catatan" data-kt-filter="search" />
             </div>
         </div>
         <div class="card-toolbar">
             <div class="d-flex justify-content-end">
                 @if($canCreate)
                     <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modal_exception_form" id="btn_open_create">
-                        Add SKU Exception
+                        Tambah SKU Exception
                     </button>
                 @endif
             </div>
@@ -55,7 +55,7 @@
     <div class="modal-dialog modal-dialog-centered mw-650px">
         <div class="modal-content">
             <div class="modal-header">
-                <h2 class="fw-bolder" id="modal_exception_title">Add SKU Exception</h2>
+                <h2 class="fw-bolder" id="modal_exception_title">Tambah SKU Exception</h2>
                 <div class="btn btn-icon btn-sm btn-active-icon-primary" data-bs-dismiss="modal">
                     <span class="svg-icon svg-icon-1">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
@@ -97,10 +97,10 @@
 @push('scripts')
 <script>
     const csrfToken = '{{ csrf_token() }}';
-    const dataUrl   = '{{ route('admin.outbound.packer-scan-exceptions.data') }}';
-    const storeUrl  = '{{ route('admin.outbound.packer-scan-exceptions.store') }}';
-    const updateTpl = '{{ route('admin.outbound.packer-scan-exceptions.update', ':id') }}';
-    const deleteTpl = '{{ route('admin.outbound.packer-scan-exceptions.destroy', ':id') }}';
+    const dataUrl   = '{{ route('admin.outbound.qc-scan-exceptions.data') }}';
+    const storeUrl  = '{{ route('admin.outbound.qc-scan-exceptions.store') }}';
+    const updateTpl = '{{ route('admin.outbound.qc-scan-exceptions.update', ':id') }}';
+    const deleteTpl = '{{ route('admin.outbound.qc-scan-exceptions.destroy', ':id') }}';
     const canUpdate = {{ $canUpdate ? 'true' : 'false' }};
     const canDelete = {{ $canDelete ? 'true' : 'false' }};
 
@@ -176,7 +176,7 @@
             form.reset();
             formId.value = '';
             clearErrors();
-            if (titleEl) titleEl.textContent = 'Add SKU Exception';
+            if (titleEl) titleEl.textContent = 'Tambah SKU Exception';
         });
 
         const clearErrors = () => {
@@ -211,7 +211,7 @@
                 }
                 if (!res.ok) {
                     if (json?.errors) {
-                        Object.entries(json.errors).forEach(([key, msgs])=>{
+                        Object.entries(json.errors).forEach(([key, msgs]) => {
                             const errEl = document.getElementById(`error_${key}`);
                             if (errEl) errEl.textContent = msgs.join(', ');
                         });
@@ -245,8 +245,7 @@
         tableEl.on('click', '.btn-delete', async function(e) {
             e.preventDefault();
             const id = this.getAttribute('data-id');
-            if (!id) return;
-            if (typeof Swal === 'undefined') return;
+            if (!id || typeof Swal === 'undefined') return;
             const confirm = await Swal.fire({
                 title: 'Hapus SKU Exception?',
                 text: 'Data yang dihapus tidak bisa dikembalikan.',

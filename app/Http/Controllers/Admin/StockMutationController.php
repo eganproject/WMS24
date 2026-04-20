@@ -7,7 +7,6 @@ use App\Models\DamagedGood;
 use App\Models\DamagedAllocation;
 use App\Models\InboundTransaction;
 use App\Models\OutboundTransaction;
-use App\Models\PickerSession;
 use App\Models\StockMutation;
 use App\Models\StockOpname;
 use App\Models\StockTransfer;
@@ -346,21 +345,21 @@ class StockMutationController extends Controller
                     })->values()->all();
                 }
                 break;
-            case 'picker':
-                $session = PickerSession::with('items.item', 'user')->find($mutation->source_id);
-                if ($session) {
+            case 'qc_shipment':
+                $qc = \App\Models\QcResiScan::with(['items', 'resi'])->find($mutation->source_id);
+                if ($qc) {
                     $sourceSummary = [
-                        'label' => 'Picker Mobile',
-                        'code' => $session->code,
-                        'ref' => $session->user?->name ?? '-',
-                        'date' => ($session->submitted_at ?? $session->started_at)?->format('Y-m-d H:i'),
-                        'note' => $session->note ?? '-',
+                        'label' => 'QC Pengiriman',
+                        'code' => $qc->scan_code ?: ($qc->resi?->no_resi ?? '-'),
+                        'ref' => $qc->resi?->id_pesanan ?? '-',
+                        'date' => $qc->completed_at?->format('Y-m-d H:i'),
+                        'note' => 'Stok dikunci keluar saat QC selesai',
                     ];
-                    $sourceItems = $session->items->map(function ($row) {
+                    $sourceItems = $qc->items->map(function ($row) {
                         return [
-                            'label' => trim(($row->item?->sku ?? '').' - '.($row->item?->name ?? '')),
-                            'qty' => (int) $row->qty,
-                            'note' => $row->note ?? '-',
+                            'label' => (string) ($row->sku ?? '-'),
+                            'qty' => (int) $row->scanned_qty,
+                            'note' => '-',
                         ];
                     })->values()->all();
                 }

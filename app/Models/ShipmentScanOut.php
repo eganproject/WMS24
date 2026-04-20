@@ -5,9 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class PackerScanOut extends Model
+class ShipmentScanOut extends Model
 {
     use HasFactory;
+
+    protected $table = 'shipment_scan_outs';
 
     protected $fillable = [
         'resi_id',

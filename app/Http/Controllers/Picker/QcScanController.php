@@ -3,14 +3,16 @@
 namespace App\Http\Controllers\Picker;
 
 use App\Http\Controllers\Controller;
-use App\Models\PackerResiScan;
-use App\Models\PackerScanOut;
 use App\Models\QcResiScan;
 use App\Models\QcResiScanItem;
 use App\Models\Resi;
 use App\Models\ResiDetail;
-use App\Support\PickerTransitAllocator;
+use App\Models\ShipmentScanOut;
+use App\Support\QcScanExceptionRegistry;
+use App\Support\QcInventoryService;
 use App\Support\QcTransitStatus;
+use App\Support\StockService;
+use App\Support\WarehouseService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -65,14 +67,9 @@ class QcScanController extends Controller
                 'message' => 'Resi sudah dibatalkan.',
             ], 422);
         }
-        if (PackerScanOut::where('resi_id', $resi->id)->exists()) {
+        if (ShipmentScanOut::where('resi_id', $resi->id)->exists()) {
             return response()->json([
                 'message' => 'Resi sudah scan out.',
-            ], 422);
-        }
-        if (PackerResiScan::where('resi_id', $resi->id)->exists()) {
-            return response()->json([
-                'message' => 'Resi sudah dipacking.',
             ], 422);
         }
 
@@ -233,21 +230,18 @@ class QcScanController extends Controller
                 ], 422);
             }
 
-            if (!PickerTransitAllocator::isExceptionSku((string) $target->sku)) {
-                $availability = PickerTransitAllocator::availableQtyForAdditionalScan(
-                    (string) $target->sku,
-                    now()->toDateString()
-                );
+            if (!QcScanExceptionRegistry::contains((string) $target->sku)) {
+                $availability = QcInventoryService::availableQtyForAdditionalScan((string) $target->sku, $qc->id);
 
                 if (($availability['available'] ?? 0) < $qty) {
                     DB::rollBack();
                     return response()->json([
-                        'message' => 'Sisa transit picker tidak mencukupi untuk scan SKU ini.',
+                        'message' => 'Stok display tidak mencukupi untuk scan SKU ini.',
                         'details' => [[
                             'sku' => $target->sku,
                             'required' => $qty,
                             'available' => (int) ($availability['available'] ?? 0),
-                            'reason' => $availability['reason'] ?? 'Sisa transit tidak mencukupi',
+                            'reason' => $availability['reason'] ?? 'Stok display tidak mencukupi',
                         ]],
                     ], 422);
                 }
@@ -384,18 +378,42 @@ class QcScanController extends Controller
             }
 
             $completedAt = now();
-            [$skuTotals] = PickerTransitAllocator::splitSkuTotals($items, 'expected_qty');
-            $allocation = PickerTransitAllocator::prepareAllocations($skuTotals, $completedAt->toDateString());
+            QcInventoryService::assertAvailabilityForCompletion($qc, $items);
+            $itemMap = QcInventoryService::itemMapForQcItems($items);
 
-            if (!empty($allocation['issues'])) {
-                DB::rollBack();
-                return response()->json([
-                    'message' => 'Masih ada SKU dengan sisa transit picker tidak mencukupi.',
-                    'details' => $allocation['issues'],
-                ], 422);
+            foreach ($items as $row) {
+                $sku = trim((string) $row->sku);
+                $qty = (int) $row->scanned_qty;
+                if ($sku === '' || $qty <= 0 || QcScanExceptionRegistry::contains($sku)) {
+                    continue;
+                }
+
+                $item = $itemMap->get($sku);
+                if (!$item) {
+                    DB::rollBack();
+                    return response()->json([
+                        'message' => 'Master item untuk SKU QC tidak ditemukan.',
+                        'details' => [[
+                            'sku' => $sku,
+                            'reason' => 'Master item tidak ditemukan',
+                        ]],
+                    ], 422);
+                }
+
+                StockService::mutate([
+                    'item_id' => $item->id,
+                    'warehouse_id' => WarehouseService::displayWarehouseId(),
+                    'direction' => 'out',
+                    'qty' => $qty,
+                    'source_type' => 'qc_shipment',
+                    'source_subtype' => 'resi',
+                    'source_id' => $qc->id,
+                    'source_code' => $qc->scan_code ?: ($qc->resi?->no_resi ?? null),
+                    'note' => 'Barang lolos QC dan siap scan out',
+                    'occurred_at' => $completedAt,
+                    'created_by' => auth()->id(),
+                ]);
             }
-
-            PickerTransitAllocator::applyAllocations($allocation['updates']);
 
             $qc->status = QcTransitStatus::PASSED;
             $qc->completed_at = $completedAt;
@@ -415,7 +433,7 @@ class QcScanController extends Controller
         }
 
         return response()->json([
-            'message' => 'QC selesai dan resi siap dipacking.',
+            'message' => 'QC selesai dan resi siap scan out.',
             'qc' => $this->serializeQc($this->loadQcRelations($qc->fresh())),
         ]);
     }

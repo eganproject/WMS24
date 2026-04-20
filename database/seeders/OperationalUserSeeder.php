@@ -24,11 +24,6 @@ class OperationalUserSeeder extends Seeder
                 'role_slug' => 'qc',
             ],
             [
-                'name' => 'Packer Operasional',
-                'email' => 'packer@wms24.test',
-                'role_slug' => 'packer',
-            ],
-            [
                 'name' => 'Scan Out Operasional',
                 'email' => 'scanout@wms24.test',
                 'role_slug' => 'admin-scan',

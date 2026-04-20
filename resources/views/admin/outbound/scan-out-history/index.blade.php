@@ -1,7 +1,7 @@
 @extends('layouts.admin')
 
-@section('title', 'Riwayat Packing')
-@section('page_title', 'Riwayat Packing')
+@section('title', 'Riwayat Scan Out')
+@section('page_title', 'Riwayat Scan Out')
 
 @section('content')
 <div class="card">
@@ -14,7 +14,7 @@
                         <path d="M11 19C6.55556 19 3 15.4444 3 11C3 6.55556 6.55556 3 11 3C15.4444 3 19 6.55556 19 11C19 15.4444 15.4444 19 11 19ZM11 5C7.53333 5 5 7.53333 5 11C5 14.4667 7.53333 17 11 17C14.4667 17 17 14.4667 17 11C17 7.53333 14.4667 5 11 5Z" fill="black" />
                     </svg>
                 </span>
-                <input type="text" class="form-control form-control-solid w-250px ps-14" placeholder="Cari Packer / Resi / SKU" data-kt-filter="search" />
+                <input type="text" class="form-control form-control-solid w-250px ps-14" placeholder="Cari operator / resi" data-kt-filter="search" />
             </div>
         </div>
         <div class="card-toolbar">
@@ -28,20 +28,17 @@
     </div>
     <div class="card-body py-6">
         <div class="table-responsive">
-            <table class="table align-middle table-row-dashed fs-6 gy-5" id="packer_history_table">
+            <table class="table align-middle table-row-dashed fs-6 gy-5" id="scan_out_history_table">
                 <thead>
                     <tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0">
-                        <th>ID</th>
+                        <th>No</th>
                         <th>Tanggal</th>
                         <th>Jam Scan</th>
-                        <th>Packer</th>
+                        <th>Operator</th>
                         <th>Jenis Scan</th>
                         <th>Kode Scan</th>
                         <th>ID Pesanan</th>
                         <th>No Resi</th>
-                        <th>SKU</th>
-                        <th>Total SKU</th>
-                        <th>Total Qty</th>
                     </tr>
                 </thead>
                 <tbody></tbody>
@@ -57,7 +54,7 @@
     const todayStr = '{{ $today ?? '' }}';
 
     document.addEventListener('DOMContentLoaded', () => {
-        const tableEl = $('#packer_history_table');
+        const tableEl = $('#scan_out_history_table');
         const searchInput = document.querySelector('[data-kt-filter="search"]');
         const dateFromEl = document.getElementById('filter_date_from');
         const dateToEl = document.getElementById('filter_date_to');
@@ -97,7 +94,7 @@
                 }
             },
             columns: [
-                { data: 'id' },
+                { data: null, orderable: false, searchable: false, render: (data, type, row, meta) => meta.row + meta.settings._iDisplayStart + 1 },
                 { data: 'scan_date' },
                 { data: 'scanned_at' },
                 { data: 'scanner' },
@@ -109,9 +106,6 @@
                 { data: 'scan_code' },
                 { data: 'id_pesanan' },
                 { data: 'no_resi' },
-                { data: 'sku_list' },
-                { data: 'total_sku' },
-                { data: 'total_qty' },
             ]
         });
 

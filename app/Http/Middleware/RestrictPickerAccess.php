@@ -17,14 +17,14 @@ class RestrictPickerAccess
 
         $roles = $user->roles()->pluck('slug');
         $hasPicker = $roles->contains('picker');
-        $hasPacker = $roles->contains('packer');
         $hasAdminScan = $roles->contains('admin-scan');
         $hasQc = $roles->contains('qc');
-        if (!$hasPicker && !$hasPacker && !$hasAdminScan && !$hasQc) {
+        $hasInboundScan = $roles->contains('inbound-scan');
+        if (!$hasPicker && !$hasAdminScan && !$hasQc && !$hasInboundScan) {
             return $next($request);
         }
 
-        $hasOtherRoles = $roles->diff(['picker', 'packer', 'admin-scan', 'qc'])->isNotEmpty();
+        $hasOtherRoles = $roles->diff(['picker', 'admin-scan', 'qc', 'inbound-scan'])->isNotEmpty();
         if ($hasOtherRoles) {
             return $next($request);
         }
@@ -33,14 +33,13 @@ class RestrictPickerAccess
         $path = trim($request->path(), '/');
 
         $isDashboardRoute = $routeName === 'picker.dashboard' || $path === 'picker/dashboard';
-        $isPackerRoute = str_starts_with($routeName, 'picker.packer') || str_starts_with($path, 'picker/packer');
         $isQcRoute = str_starts_with($routeName, 'picker.qc') || str_starts_with($path, 'picker/qc');
+        $isInboundScanRoute = str_starts_with($routeName, 'picker.inbound-scan')
+            || str_starts_with($path, 'picker/inbound-scan');
         $isScanOutRoute = str_starts_with($routeName, 'picker.scan-out')
-            || str_starts_with($routeName, 'picker.scan-out-v2')
-            || str_starts_with($path, 'picker/scan-out')
-            || str_starts_with($path, 'picker/scan-out-v2');
-        $isPickerRoute = (str_starts_with($routeName, 'picker.') || str_starts_with($path, 'picker'))
-            && !$isPackerRoute
+            || str_starts_with($path, 'picker/scan-out');
+        $isPickingListRoute = (str_starts_with($routeName, 'picker.') || str_starts_with($path, 'picker'))
+            && !$isInboundScanRoute
             && !$isQcRoute
             && !$isScanOutRoute
             && !$isDashboardRoute;
@@ -52,13 +51,13 @@ class RestrictPickerAccess
         }
 
         $allowed = false;
-        if ($hasPicker && $isPickerRoute) {
+        if ($hasPicker && $isPickingListRoute) {
             $allowed = true;
         }
         if ($hasQc && $isQcRoute) {
             $allowed = true;
         }
-        if ($hasPacker && $isPackerRoute) {
+        if ($hasInboundScan && $isInboundScanRoute) {
             $allowed = true;
         }
         if ($hasAdminScan && $isScanOutRoute) {

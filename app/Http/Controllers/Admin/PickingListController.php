@@ -9,10 +9,7 @@ use App\Models\Item;
 use App\Models\Lane;
 use App\Models\PickingList;
 use App\Models\PickingListException;
-use App\Models\PackerScanException;
-use App\Models\PickerTransitItem;
-use App\Support\StockService;
-use App\Support\WarehouseService;
+use App\Models\QcScanException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -173,55 +170,12 @@ class PickingListController extends Controller
                 ]);
             }
 
-            $item = Item::where('sku', $sku)->first();
-            if (!$item) {
-                throw ValidationException::withMessages([
-                    'sku' => 'SKU tidak ditemukan.',
-                ]);
-            }
-
-            $transit = PickerTransitItem::where('item_id', $item->id)
-                ->where('picked_date', $listDate)
-                ->lockForUpdate()
-                ->first();
-
-            $remainingTransit = (int) ($transit?->remaining_qty ?? 0);
-            if (!$transit || $remainingTransit < $qty) {
-                throw ValidationException::withMessages([
-                    'qty' => 'Sisa transit tidak mencukupi untuk retur.',
-                ]);
-            }
-
-            $exceptionId = $exception->id;
-
             $exception->qty = $currentQty - $qty;
             if ($exception->qty <= 0) {
                 $exception->delete();
             } else {
                 $exception->save();
             }
-
-            $transit->qty = max(0, (int) $transit->qty - $qty);
-            $transit->remaining_qty = max(0, (int) $transit->remaining_qty - $qty);
-            if ($transit->qty <= 0) {
-                $transit->delete();
-            } else {
-                $transit->save();
-            }
-
-            StockService::mutate([
-                'item_id' => $item->id,
-                'direction' => 'in',
-                'qty' => $qty,
-                'warehouse_id' => WarehouseService::displayWarehouseId(),
-                'source_type' => 'picking_exception',
-                'source_subtype' => 'return',
-                'source_id' => $exceptionId,
-                'source_code' => $sku,
-                'note' => 'Retur dari picking exception',
-                'occurred_at' => now(),
-                'created_by' => auth()->id(),
-            ]);
 
             DB::commit();
         } catch (ValidationException $e) {
@@ -277,11 +231,13 @@ class PickingListController extends Controller
                 $required[$sku] = $qty;
             }
 
-            $pickedRows = DB::table('picker_transit_items as pt')
-                ->join('items as i', 'i.id', '=', 'pt.item_id')
-                ->whereDate('pt.picked_date', $listDate)
-                ->select('i.sku', DB::raw('SUM(pt.qty) as qty'))
-                ->groupBy('i.sku')
+            $pickedRows = DB::table('qc_resi_scan_items as qci')
+                ->join('qc_resi_scans as qc', 'qc.id', '=', 'qci.qc_resi_scan_id')
+                ->join('resis as r', 'r.id', '=', 'qc.resi_id')
+                ->where('qc.status', 'passed')
+                ->whereDate('r.tanggal_upload', $listDate)
+                ->select('qci.sku', DB::raw('SUM(qci.expected_qty) as qty'))
+                ->groupBy('qci.sku')
                 ->get();
 
             $picked = [];
@@ -576,14 +532,17 @@ class PickingListController extends Controller
 
     private function getPickedQty(string $date, string $sku): int
     {
-        $itemId = Item::where('sku', $sku)->value('id');
-        if (!$itemId) {
+        if (!Item::where('sku', $sku)->exists()) {
             return 0;
         }
 
-        return (int) PickerTransitItem::where('item_id', $itemId)
-            ->where('picked_date', $date)
-            ->value('qty');
+        return (int) DB::table('qc_resi_scan_items as qci')
+            ->join('qc_resi_scans as qc', 'qc.id', '=', 'qci.qc_resi_scan_id')
+            ->join('resis as r', 'r.id', '=', 'qc.resi_id')
+            ->where('qc.status', 'passed')
+            ->whereDate('r.tanggal_upload', $date)
+            ->where('qci.sku', $sku)
+            ->sum('qci.expected_qty');
     }
 
     private function syncPickingException(string $date, string $sku, int $exceptionQty): void
@@ -638,7 +597,7 @@ class PickingListController extends Controller
 
     private function applyPackerExceptionFilter($query): void
     {
-        $query->whereNotIn('sku', PackerScanException::query()->select('sku'));
+        $query->whereNotIn('sku', QcScanException::query()->select('sku'));
     }
 
     private function applyLaneDivisiFilter($query, Request $request): void

@@ -10,8 +10,7 @@ class QcTransitStatus
 
     public const NEXT_IN_PROGRESS = 'in_progress';
     public const NEXT_ON_HOLD = 'on_hold';
-    public const NEXT_READY_PACKING = 'ready_packing';
-    public const NEXT_FORWARDED = 'forwarded';
+    public const NEXT_READY_SCAN_OUT = 'ready_scan_out';
 
     public static function scanStatusLabel(?string $status): string
     {
@@ -31,7 +30,7 @@ class QcTransitStatus
         };
     }
 
-    public static function nextStageKey(?string $status, bool $packerScanned): string
+    public static function nextStageKey(?string $status): string
     {
         if (($status ?? self::DRAFT) === self::HOLD) {
             return self::NEXT_ON_HOLD;
@@ -41,19 +40,14 @@ class QcTransitStatus
             return self::NEXT_IN_PROGRESS;
         }
 
-        if ($packerScanned) {
-            return self::NEXT_FORWARDED;
-        }
-
-        return self::NEXT_READY_PACKING;
+        return self::NEXT_READY_SCAN_OUT;
     }
 
     public static function nextStageLabel(string $key): string
     {
         return match ($key) {
-            self::NEXT_FORWARDED => 'Sudah ke Packer',
             self::NEXT_ON_HOLD => 'Menunggu Transit',
-            self::NEXT_READY_PACKING => 'Siap Packing',
+            self::NEXT_READY_SCAN_OUT => 'Siap Scan Out',
             default => 'QC Berjalan',
         };
     }
@@ -61,9 +55,8 @@ class QcTransitStatus
     public static function nextStageBadgeClass(string $key): string
     {
         return match ($key) {
-            self::NEXT_FORWARDED => 'badge-light-success',
             self::NEXT_ON_HOLD => 'badge-light-danger',
-            self::NEXT_READY_PACKING => 'badge-light-info',
+            self::NEXT_READY_SCAN_OUT => 'badge-light-info',
             default => 'badge-light-warning',
         };
     }

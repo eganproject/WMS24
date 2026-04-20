@@ -14,17 +14,17 @@
                         <path d="M11 19C6.55556 19 3 15.4444 3 11C3 6.55556 6.55556 3 11 3C15.4444 3 19 6.55556 19 11C19 15.4444 15.4444 19 11 19ZM11 5C7.53333 5 5 7.53333 5 11C5 14.4667 7.53333 17 11 17C14.4667 17 17 14.4667 17 11C17 7.53333 14.4667 5 11 5Z" fill="black" />
                     </svg>
                 </span>
-                <input type="text" class="form-control form-control-solid w-250px ps-14" placeholder="Cari Petugas / Tanggal" data-kt-filter="search" />
+                <input type="text" class="form-control form-control-solid w-250px ps-14" placeholder="Cari operator / tanggal" data-kt-filter="search" />
             </div>
         </div>
         <div class="card-toolbar">
             <div class="d-flex align-items-center gap-2 flex-wrap">
                 <input type="text" class="form-control form-control-solid w-150px" id="filter_date_from" placeholder="Dari" value="{{ $today ?? '' }}">
                 <input type="text" class="form-control form-control-solid w-150px" id="filter_date_to" placeholder="Sampai" value="{{ $today ?? '' }}">
-                <select class="form-select form-select-solid w-200px" id="filter_packer">
-                    <option value="">Semua Petugas</option>
-                    @foreach($packers as $packer)
-                        <option value="{{ $packer->id }}">{{ $packer->name }}</option>
+                <select class="form-select form-select-solid w-200px" id="filter_operator">
+                    <option value="">Semua Operator</option>
+                    @foreach($operators as $operator)
+                        <option value="{{ $operator->id }}">{{ $operator->name }}</option>
                     @endforeach
                 </select>
                 <button type="button" class="btn btn-light" id="filter_apply">Terapkan</button>
@@ -37,7 +37,7 @@
             <div class="col-md-4">
                 <div class="card card-flush h-100">
                     <div class="card-body">
-                        <div class="text-muted">Total Scan Out Selesai</div>
+                        <div class="text-muted">Total Scan Out</div>
                         <div class="fs-2 fw-bold" id="summary_total_scan">0</div>
                     </div>
                 </div>
@@ -45,46 +45,44 @@
             <div class="col-md-4">
                 <div class="card card-flush h-100">
                     <div class="card-body">
-                        <div class="text-muted">Total Petugas</div>
-                        <div class="fs-2 fw-bold" id="summary_total_packer">0</div>
+                        <div class="text-muted">Total Operator</div>
+                        <div class="fs-2 fw-bold" id="summary_total_operator">0</div>
                     </div>
                 </div>
             </div>
             <div class="col-md-4">
                 <div class="card card-flush h-100">
                     <div class="card-body">
-                        <div class="text-muted">Rata-rata Scan Out / Jam</div>
+                        <div class="text-muted">Rata-rata Scan / Jam</div>
                         <div class="fs-2 fw-bold" id="summary_avg_hour">0</div>
                     </div>
                 </div>
             </div>
         </div>
-        <div class="border border-dashed rounded-3 p-5 mb-8" id="comparison_card">
+        <div class="border border-dashed rounded-3 p-5 mb-8">
             <div class="d-flex align-items-center justify-content-between flex-wrap gap-4 mb-4">
                 <div>
                     <div class="fs-4 fw-bold">Komparasi Import Resi vs Scan Out</div>
-                    <div class="text-muted">Memastikan seluruh ID Pesanan / No Resi hasil import telah scan out.</div>
+                    <div class="text-muted">Memastikan seluruh resi aktif hasil import sudah selesai scan out.</div>
                 </div>
-                <div class="text-muted">
-                    Menampilkan maksimal 50 data resi yang belum scan out.
-                </div>
+                <div class="text-muted">Menampilkan maksimal 50 resi aktif yang belum scan out.</div>
             </div>
             <div class="row g-4 mb-4">
                 <div class="col-md-3">
                     <div class="bg-light-primary rounded-3 px-4 py-3 h-100">
-                        <div class="text-muted">Total Import (Aktif)</div>
+                        <div class="text-muted">Total Import Aktif</div>
                         <div class="fs-2 fw-bold" id="comparison_import_total">0</div>
                     </div>
                 </div>
                 <div class="col-md-3">
                     <div class="bg-light-success rounded-3 px-4 py-3 h-100">
-                        <div class="text-muted">Scan Out Selesai</div>
+                        <div class="text-muted">Sudah Scan Out</div>
                         <div class="fs-2 fw-bold" id="comparison_scanned_total">0</div>
                     </div>
                 </div>
                 <div class="col-md-3">
                     <div class="bg-light-warning rounded-3 px-4 py-3 h-100">
-                        <div class="text-muted">Sisa Siap Scan Out</div>
+                        <div class="text-muted">Belum Scan Out</div>
                         <div class="fs-2 fw-bold" id="comparison_missing_total">0</div>
                     </div>
                 </div>
@@ -104,11 +102,9 @@
                             <th width="30%">Tanggal Upload</th>
                         </tr>
                     </thead>
-                    <tbody id="missing_transit_body">
+                    <tbody id="missing_scan_out_body">
                         <tr>
-                            <td colspan="3" class="text-center text-muted py-6" id="missing_transit_empty">
-                                Tidak ada data tertinggal.
-                            </td>
+                            <td colspan="3" class="text-center text-muted py-6">Tidak ada data tertinggal.</td>
                         </tr>
                     </tbody>
                 </table>
@@ -122,13 +118,13 @@
             </div>
         </div>
         <div class="table-responsive">
-            <table class="table align-middle table-row-dashed fs-6 gy-5" id="packer_report_table">
+            <table class="table align-middle table-row-dashed fs-6 gy-5" id="scan_out_report_table">
                 <thead>
                     <tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0">
                         <th width="5%">No</th>
                         <th>Tanggal</th>
-                        <th>Petugas</th>
-                        <th class="text-end">Total Scan Out Selesai</th>
+                        <th>Operator</th>
+                        <th class="text-end">Total Scan</th>
                         <th class="text-end">Unik Resi</th>
                         <th class="text-end">Avg / Jam</th>
                         <th>Scan Pertama</th>
@@ -148,7 +144,7 @@
     const todayStr = '{{ $today ?? '' }}';
 
     document.addEventListener('DOMContentLoaded', () => {
-        const tableEl = $('#packer_report_table');
+        const tableEl = $('#scan_out_report_table');
         if (!tableEl.length || !$.fn.DataTable) {
             console.error('DataTable unavailable');
             return;
@@ -156,18 +152,18 @@
 
         const dateFromEl = document.getElementById('filter_date_from');
         const dateToEl = document.getElementById('filter_date_to');
-        const packerSelect = document.getElementById('filter_packer');
+        const operatorSelect = document.getElementById('filter_operator');
         const searchInput = document.querySelector('[data-kt-filter="search"]');
         const applyBtn = document.getElementById('filter_apply');
         const resetBtn = document.getElementById('filter_reset');
         const summaryTotalScan = document.getElementById('summary_total_scan');
-        const summaryTotalPacker = document.getElementById('summary_total_packer');
+        const summaryTotalOperator = document.getElementById('summary_total_operator');
         const summaryAvgHour = document.getElementById('summary_avg_hour');
         const comparisonImportEl = document.getElementById('comparison_import_total');
         const comparisonScannedEl = document.getElementById('comparison_scanned_total');
         const comparisonMissingEl = document.getElementById('comparison_missing_total');
         const comparisonCanceledEl = document.getElementById('comparison_canceled_total');
-        const missingBody = document.getElementById('missing_transit_body');
+        const missingBody = document.getElementById('missing_scan_out_body');
         const missingPagination = document.getElementById('missing_pagination');
         const missingPrevBtn = document.getElementById('missing_prev');
         const missingNextBtn = document.getElementById('missing_next');
@@ -181,23 +177,20 @@
         let fpTo = null;
 
         if (typeof flatpickr !== 'undefined') {
-            if (dateFromEl) {
-                fpFrom = flatpickr(dateFromEl, { dateFormat: 'Y-m-d', allowInput: true });
-            }
-            if (dateToEl) {
-                fpTo = flatpickr(dateToEl, { dateFormat: 'Y-m-d', allowInput: true });
-            }
+            if (dateFromEl) fpFrom = flatpickr(dateFromEl, { dateFormat: 'Y-m-d', allowInput: true });
+            if (dateToEl) fpTo = flatpickr(dateToEl, { dateFormat: 'Y-m-d', allowInput: true });
         }
 
-        const updateSummary = (data) => {
-            const rows = Array.isArray(data) ? data : [];
-            const totalScan = rows.reduce((sum, row) => sum + (Number(row.total_scan) || 0), 0);
-            const avgHour = rows.length
-                ? (rows.reduce((sum, row) => sum + (Number(row.avg_per_hour) || 0), 0) / rows.length)
+        const updateSummary = (rows) => {
+            const data = Array.isArray(rows) ? rows : [];
+            const totalScan = data.reduce((sum, row) => sum + (Number(row.total_scan) || 0), 0);
+            const avgHour = data.length
+                ? data.reduce((sum, row) => sum + (Number(row.avg_per_hour) || 0), 0) / data.length
                 : 0;
-            const totalPacker = new Set(rows.map((row) => row.packer)).size;
+            const totalOperator = new Set(data.map((row) => row.operator)).size;
+
             if (summaryTotalScan) summaryTotalScan.textContent = totalScan.toLocaleString('id-ID');
-            if (summaryTotalPacker) summaryTotalPacker.textContent = totalPacker.toString();
+            if (summaryTotalOperator) summaryTotalOperator.textContent = totalOperator.toString();
             if (summaryAvgHour) summaryAvgHour.textContent = avgHour.toFixed(2);
         };
 
@@ -211,11 +204,7 @@
             const paginated = samples.slice(start, start + perPage);
 
             if (!paginated.length) {
-                missingBody.innerHTML = `
-                    <tr>
-                        <td colspan="3" class="text-center text-muted py-6">Tidak ada data tertinggal.</td>
-                    </tr>
-                `;
+                missingBody.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-6">Tidak ada data tertinggal.</td></tr>';
             } else {
                 missingBody.innerHTML = paginated.map((sample) => `
                     <tr>
@@ -226,20 +215,23 @@
                 `).join('');
             }
 
-            if (missingPagination) {
-                if (total <= perPage) {
-                    missingPagination.style.display = 'none';
-                } else {
-                    missingPagination.style.display = 'flex';
-                    if (missingSummary) {
-                        const from = total ? start + 1 : 0;
-                        const to = Math.min(total, start + paginated.length);
-                        missingSummary.textContent = `Menampilkan ${from} - ${to} dari ${total} data`;
-                    }
-                    if (missingPrevBtn) missingPrevBtn.disabled = comparisonState.page <= 1;
-                    if (missingNextBtn) missingNextBtn.disabled = comparisonState.page >= maxPage;
-                }
+            if (!missingPagination) {
+                return;
             }
+
+            if (total <= perPage) {
+                missingPagination.style.display = 'none';
+                return;
+            }
+
+            missingPagination.style.display = 'flex';
+            if (missingSummary) {
+                const from = total ? start + 1 : 0;
+                const to = Math.min(total, start + paginated.length);
+                missingSummary.textContent = `Menampilkan ${from} - ${to} dari ${total} data`;
+            }
+            if (missingPrevBtn) missingPrevBtn.disabled = comparisonState.page <= 1;
+            if (missingNextBtn) missingNextBtn.disabled = comparisonState.page >= maxPage;
         };
 
         const updateComparison = (comparison) => {
@@ -247,13 +239,13 @@
             const scannedTotal = Number(comparison?.scanned_total ?? 0);
             const missingTotal = Number(comparison?.missing_total ?? 0);
             const canceledTotal = Number(comparison?.canceled_total ?? 0);
+
             if (comparisonImportEl) comparisonImportEl.textContent = importTotal.toLocaleString('id-ID');
             if (comparisonScannedEl) comparisonScannedEl.textContent = scannedTotal.toLocaleString('id-ID');
             if (comparisonMissingEl) comparisonMissingEl.textContent = missingTotal.toLocaleString('id-ID');
             if (comparisonCanceledEl) comparisonCanceledEl.textContent = canceledTotal.toLocaleString('id-ID');
-            comparisonState.samples = Array.isArray(comparison?.missing_samples)
-                ? comparison.missing_samples
-                : [];
+
+            comparisonState.samples = Array.isArray(comparison?.missing_samples) ? comparison.missing_samples : [];
             comparisonState.page = 1;
             renderMissingRows();
         };
@@ -265,28 +257,23 @@
             ajax: {
                 url: dataUrl,
                 dataSrc: function(json) {
-                    const data = json?.data || [];
-                    updateSummary(data);
+                    const rows = json?.data || [];
+                    updateSummary(rows);
                     updateComparison(json?.comparison || null);
-                    return data;
+                    return rows;
                 },
                 data: function(params) {
                     params.date_from = dateFromEl?.value || '';
                     params.date_to = dateToEl?.value || '';
-                    params.packer_id = packerSelect?.value || '';
+                    params.operator_id = operatorSelect?.value || '';
                     params.q = searchInput?.value || '';
                 }
             },
             order: [[0, 'desc']],
             columns: [
-                {
-                    data: null,
-                    render: function(data, type, row, meta) {
-                        return meta.row + 1;
-                    },
-                },
+                { data: null, render: (data, type, row, meta) => meta.row + 1 },
                 { data: 'date' },
-                { data: 'packer' },
+                { data: 'operator' },
                 { data: 'total_scan', className: 'text-end' },
                 { data: 'unique_scan', className: 'text-end' },
                 { data: 'avg_per_hour', className: 'text-end' },
@@ -297,22 +284,16 @@
 
         const reloadTable = () => dt.ajax.reload();
 
-        applyBtn?.addEventListener('click', () => {
-            reloadTable();
-        });
-
-        packerSelect?.addEventListener('change', reloadTable);
-
-        searchInput?.addEventListener('keyup', (e) => {
-            if (e.key === 'Enter') {
-                reloadTable();
-            }
+        applyBtn?.addEventListener('click', reloadTable);
+        operatorSelect?.addEventListener('change', reloadTable);
+        searchInput?.addEventListener('keyup', (event) => {
+            if (event.key === 'Enter') reloadTable();
         });
 
         resetBtn?.addEventListener('click', () => {
             if (fpFrom) fpFrom.clear(); else if (dateFromEl) dateFromEl.value = todayStr || '';
             if (fpTo) fpTo.clear(); else if (dateToEl) dateToEl.value = todayStr || '';
-            if (packerSelect) packerSelect.value = '';
+            if (operatorSelect) operatorSelect.value = '';
             if (searchInput) searchInput.value = '';
             reloadTable();
         });

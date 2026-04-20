@@ -13,16 +13,11 @@ use App\Http\Controllers\Admin\DamagedGoodsController;
 use App\Http\Controllers\Admin\DamagedAllocationController;
 use App\Http\Controllers\Admin\ReworkRecipeController;
 use App\Http\Controllers\Admin\ResiImportController;
-use App\Http\Controllers\Admin\PickerTransitController;
 use App\Http\Controllers\Admin\PickingListController;
-use App\Http\Controllers\Admin\PickerHistoryController;
 use App\Http\Controllers\Admin\QcHistoryController;
-use App\Http\Controllers\Admin\PackerHistoryController;
-use App\Http\Controllers\Admin\PackerScanExceptionController;
-use App\Http\Controllers\Admin\PackerPackingReportController;
-use App\Http\Controllers\Admin\PackerReportController;
-use App\Http\Controllers\Admin\PackerScanOutHistoryController;
-use App\Http\Controllers\Admin\PickerReportController;
+use App\Http\Controllers\Admin\QcScanExceptionController;
+use App\Http\Controllers\Admin\ScanOutHistoryController;
+use App\Http\Controllers\Admin\ScanOutReportController;
 use App\Http\Controllers\Admin\LowStockReportController;
 use App\Http\Controllers\Admin\ActivityLogController;
 use App\Http\Controllers\Admin\StockOpnameReportController;
@@ -38,11 +33,9 @@ use App\Http\Controllers\Admin\SupplierController;
 use App\Http\Controllers\Mobile\StockOpnameMobileController;
 use App\Http\Controllers\Picker\PickerDashboardController;
 use App\Http\Controllers\Picker\InboundScanController;
-use App\Http\Controllers\Picker\PackerScanController;
-use App\Http\Controllers\Picker\PackerScanOutController;
+use App\Http\Controllers\Picker\ScanOutController;
 use App\Http\Controllers\Picker\QcScanController;
 use App\Http\Controllers\Picker\PickingListMobileController;
-use App\Http\Controllers\Picker\PickerSessionController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -78,24 +71,12 @@ Route::middleware('auth')->prefix('picker')->as('picker.')->group(function () {
     Route::post('/qc/hold', [QcScanController::class, 'hold'])->name('qc.hold');
     Route::post('/qc/complete', [QcScanController::class, 'complete'])->name('qc.complete');
     Route::post('/qc/reset', [QcScanController::class, 'reset'])->name('qc.reset');
-    Route::get('/packer', [PackerScanController::class, 'index'])->name('packer.index');
-    Route::post('/packer/scan', [PackerScanController::class, 'scan'])->name('packer.scan');
-    Route::get('/scan-out', [PackerScanOutController::class, 'index'])->name('scan-out.index');
-    Route::post('/scan-out/scan', [PackerScanOutController::class, 'scan'])->name('scan-out.scan');
-    Route::get('/scan-out/history', [PackerScanOutController::class, 'history'])->name('scan-out.history');
-    Route::get('/scan-out/history/data', [PackerScanOutController::class, 'historyData'])->name('scan-out.history-data');
-    Route::get('/scan-out-v2', [PackerScanOutController::class, 'indexV2'])->name('scan-out-v2.index');
+    Route::get('/scan-out', [ScanOutController::class, 'index'])->name('scan-out.index');
+    Route::post('/scan-out/scan', [ScanOutController::class, 'scan'])->name('scan-out.scan');
+    Route::get('/scan-out/history', [ScanOutController::class, 'history'])->name('scan-out.history');
+    Route::get('/scan-out/history/data', [ScanOutController::class, 'historyData'])->name('scan-out.history-data');
     Route::get('/picking-list', [PickingListMobileController::class, 'index'])->name('picking-list.index');
     Route::get('/picking-list/data', [PickingListMobileController::class, 'data'])->name('picking-list.data');
-    Route::get('/', [PickerSessionController::class, 'index'])->name('index');
-    Route::get('/current', [PickerSessionController::class, 'current'])->name('current');
-    Route::post('/start', [PickerSessionController::class, 'start'])->name('start');
-    Route::get('/items/search', [PickerSessionController::class, 'searchItems'])->name('items.search');
-    Route::post('/items', [PickerSessionController::class, 'storeItem'])->name('items.store');
-    Route::put('/items/{id}', [PickerSessionController::class, 'updateItem'])->name('items.update');
-    Route::delete('/items/{id}', [PickerSessionController::class, 'destroyItem'])->name('items.destroy');
-    Route::post('/scan-item', [PickerSessionController::class, 'scanItem'])->name('scan-item');
-    Route::post('/submit', [PickerSessionController::class, 'submit'])->name('submit');
 });
 
 Route::middleware('auth')->prefix('opname')->as('opname.')->group(function () {
@@ -249,15 +230,6 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::post('/resi-import/cancel', [ResiImportController::class, 'cancel'])->name('resi-import.cancel');
         Route::post('/resi-import/uncancel', [ResiImportController::class, 'uncancel'])->name('resi-import.uncancel');
 
-        // Picker Transit
-        Route::get('/picker-transit', [PickerTransitController::class, 'index'])->name('picker-transit.index');
-        Route::get('/picker-transit/data', [PickerTransitController::class, 'data'])->name('picker-transit.data');
-        Route::get('/picker-transit/qc-data', [PickerTransitController::class, 'dataQc'])->name('picker-transit.qc-data');
-        Route::get('/picker-transit/packer-data', [PickerTransitController::class, 'dataPacker'])->name('picker-transit.packer-data');
-        Route::get('/picker-transit/export-picker', [PickerTransitController::class, 'exportPickerStatus'])->name('picker-transit.export-picker');
-        Route::get('/picker-transit/export-qc', [PickerTransitController::class, 'exportQcStatus'])->name('picker-transit.export-qc');
-        Route::get('/picker-transit/export-packer', [PickerTransitController::class, 'exportPackerStatus'])->name('picker-transit.export-packer');
-
         // Picking List
         Route::get('/picking-list', [PickingListController::class, 'index'])->name('picking-list.index');
         Route::get('/picking-list/data', [PickingListController::class, 'data'])->name('picking-list.data');
@@ -332,39 +304,23 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/returns/{id}/detail', [OutboundController::class, 'returnsDetail'])->name('returns.detail');
         Route::post('/returns/{id}/approve', [OutboundController::class, 'returnsApprove'])->name('returns.approve');
 
-        Route::get('/picker-sessions', [PickerHistoryController::class, 'index'])->name('picker-sessions.index');
-        Route::get('/picker-sessions/data', [PickerHistoryController::class, 'data'])->name('picker-sessions.data');
-        Route::post('/picker-sessions/{id}/submit', [PickerHistoryController::class, 'submit'])->name('picker-sessions.submit');
-        Route::delete('/picker-sessions/{id}', [PickerHistoryController::class, 'destroy'])->name('picker-sessions.destroy');
-
         Route::get('/qc-history', [QcHistoryController::class, 'index'])->name('qc-history.index');
         Route::get('/qc-history/data', [QcHistoryController::class, 'data'])->name('qc-history.data');
-        Route::get('/packer-history', [PackerHistoryController::class, 'index'])->name('packer-history.index');
-        Route::get('/packer-history/data', [PackerHistoryController::class, 'data'])->name('packer-history.data');
-        Route::get('/packer-scan-outs', [PackerScanOutHistoryController::class, 'index'])->name('packer-scan-outs.index');
-        Route::get('/packer-scan-outs/data', [PackerScanOutHistoryController::class, 'data'])->name('packer-scan-outs.data');
-        Route::get('/packer-scan-exceptions', [PackerScanExceptionController::class, 'index'])->name('packer-scan-exceptions.index');
-        Route::get('/packer-scan-exceptions/data', [PackerScanExceptionController::class, 'data'])->name('packer-scan-exceptions.data');
-        Route::post('/packer-scan-exceptions', [PackerScanExceptionController::class, 'store'])->name('packer-scan-exceptions.store');
-        Route::put('/packer-scan-exceptions/{exception}', [PackerScanExceptionController::class, 'update'])->name('packer-scan-exceptions.update');
-        Route::delete('/packer-scan-exceptions/{exception}', [PackerScanExceptionController::class, 'destroy'])->name('packer-scan-exceptions.destroy');
-
-        Route::get('/picker-reports', [PickerReportController::class, 'index'])->name('picker-reports.index');
-        Route::get('/picker-reports/data', [PickerReportController::class, 'data'])->name('picker-reports.data');
-        Route::get('/picker-reports/detail', [PickerReportController::class, 'detail'])->name('picker-reports.detail');
-        Route::get('/picker-reports/sku', [PickerReportController::class, 'skuSummary'])->name('picker-reports.sku');
+        Route::get('/scan-out-history', [ScanOutHistoryController::class, 'index'])->name('scan-out-history.index');
+        Route::get('/scan-out-history/data', [ScanOutHistoryController::class, 'data'])->name('scan-out-history.data');
+        Route::get('/qc-scan-exceptions', [QcScanExceptionController::class, 'index'])->name('qc-scan-exceptions.index');
+        Route::get('/qc-scan-exceptions/data', [QcScanExceptionController::class, 'data'])->name('qc-scan-exceptions.data');
+        Route::post('/qc-scan-exceptions', [QcScanExceptionController::class, 'store'])->name('qc-scan-exceptions.store');
+        Route::put('/qc-scan-exceptions/{exception}', [QcScanExceptionController::class, 'update'])->name('qc-scan-exceptions.update');
+        Route::delete('/qc-scan-exceptions/{exception}', [QcScanExceptionController::class, 'destroy'])->name('qc-scan-exceptions.destroy');
     });
 
     Route::prefix('reports')->as('reports.')->group(function () {
         Route::get('/activity-logs', [ActivityLogController::class, 'index'])->name('activity-logs.index');
         Route::get('/activity-logs/data', [ActivityLogController::class, 'data'])->name('activity-logs.data');
         Route::get('/activity-logs/{id}', [ActivityLogController::class, 'show'])->name('activity-logs.show');
-        Route::get('/packer-reports', [PackerReportController::class, 'index'])->name('packer-reports.index');
-        Route::get('/packer-reports/data', [PackerReportController::class, 'data'])->name('packer-reports.data');
-        Route::get('/packer-packing-reports', [PackerPackingReportController::class, 'index'])->name('packer-packing-reports.index');
-        Route::get('/packer-packing-reports/data', [PackerPackingReportController::class, 'data'])->name('packer-packing-reports.data');
-        Route::get('/packer-packing-reports/detail', [PackerPackingReportController::class, 'detail'])->name('packer-packing-reports.detail');
-        Route::get('/packer-packing-reports/search-resi', [PackerPackingReportController::class, 'searchResi'])->name('packer-packing-reports.search-resi');
+        Route::get('/scan-out-reports', [ScanOutReportController::class, 'index'])->name('scan-out-reports.index');
+        Route::get('/scan-out-reports/data', [ScanOutReportController::class, 'data'])->name('scan-out-reports.data');
         Route::get('/low-stock', [LowStockReportController::class, 'index'])->name('low-stock.index');
         Route::get('/low-stock/data', [LowStockReportController::class, 'data'])->name('low-stock.data');
         Route::get('/replenishment', [ReplenishmentReportController::class, 'index'])->name('replenishment.index');

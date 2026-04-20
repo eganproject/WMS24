@@ -32,12 +32,11 @@ class AuthenticatedSessionController extends Controller
         if ($user) {
             $roles = $user->roles()->pluck('slug');
             $hasPicker = $roles->contains('picker');
-            $hasPacker = $roles->contains('packer');
             $hasAdminScan = $roles->contains('admin-scan');
             $hasQc = $roles->contains('qc');
             $hasInboundScan = $roles->contains('inbound-scan');
-            $hasOtherRoles = $roles->diff(['picker', 'packer', 'admin-scan', 'qc', 'inbound-scan'])->isNotEmpty();
-            if (!$hasOtherRoles && ($hasPicker || $hasPacker || $hasAdminScan || $hasQc || $hasInboundScan)) {
+            $hasOtherRoles = $roles->diff(['picker', 'admin-scan', 'qc', 'inbound-scan'])->isNotEmpty();
+            if (!$hasOtherRoles && ($hasPicker || $hasAdminScan || $hasQc || $hasInboundScan)) {
                 return redirect()->route('picker.dashboard');
             }
         }

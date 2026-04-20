@@ -3,21 +3,21 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\PackerScanException;
+use App\Models\QcScanException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
-class PackerScanExceptionController extends Controller
+class QcScanExceptionController extends Controller
 {
     public function index()
     {
-        return view('admin.outbound.packer-scan-exceptions.index');
+        return view('admin.outbound.qc-scan-exceptions.index');
     }
 
     public function data(Request $request)
     {
-        $query = PackerScanException::query()->orderBy('sku');
+        $query = QcScanException::query()->orderBy('sku');
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
@@ -27,7 +27,7 @@ class PackerScanExceptionController extends Controller
             });
         }
 
-        $recordsTotal = PackerScanException::count();
+        $recordsTotal = QcScanException::count();
         $recordsFiltered = (clone $query)->count();
 
         $start = (int) $request->input('start', 0);
@@ -55,7 +55,7 @@ class PackerScanExceptionController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'sku' => ['required', 'string', 'max:100', 'unique:packer_scan_exceptions,sku'],
+            'sku' => ['required', 'string', 'max:100', 'unique:qc_scan_exceptions,sku'],
             'note' => ['nullable', 'string', 'max:255'],
         ]);
 
@@ -63,10 +63,11 @@ class PackerScanExceptionController extends Controller
 
         DB::beginTransaction();
         try {
-            $row = PackerScanException::create($validated);
+            $row = QcScanException::create($validated);
             DB::commit();
+
             return response()->json([
-                'message' => 'SKU exception berhasil ditambahkan',
+                'message' => 'SKU exception QC berhasil ditambahkan',
                 'exception' => [
                     'id' => $row->id,
                     'sku' => $row->sku,
@@ -75,17 +76,18 @@ class PackerScanExceptionController extends Controller
             ]);
         } catch (\Throwable $e) {
             DB::rollBack();
+
             return response()->json([
-                'message' => 'Gagal menambahkan SKU exception',
+                'message' => 'Gagal menambahkan SKU exception QC',
                 'error' => $e->getMessage(),
             ], 500);
         }
     }
 
-    public function update(Request $request, PackerScanException $exception)
+    public function update(Request $request, QcScanException $exception)
     {
         $validated = $request->validate([
-            'sku' => ['required', 'string', 'max:100', Rule::unique('packer_scan_exceptions', 'sku')->ignore($exception->id)],
+            'sku' => ['required', 'string', 'max:100', Rule::unique('qc_scan_exceptions', 'sku')->ignore($exception->id)],
             'note' => ['nullable', 'string', 'max:255'],
         ]);
 
@@ -95,8 +97,9 @@ class PackerScanExceptionController extends Controller
         try {
             $exception->update($validated);
             DB::commit();
+
             return response()->json([
-                'message' => 'SKU exception berhasil diperbarui',
+                'message' => 'SKU exception QC berhasil diperbarui',
                 'exception' => [
                     'id' => $exception->id,
                     'sku' => $exception->sku,
@@ -105,24 +108,27 @@ class PackerScanExceptionController extends Controller
             ]);
         } catch (\Throwable $e) {
             DB::rollBack();
+
             return response()->json([
-                'message' => 'Gagal memperbarui SKU exception',
+                'message' => 'Gagal memperbarui SKU exception QC',
                 'error' => $e->getMessage(),
             ], 500);
         }
     }
 
-    public function destroy(PackerScanException $exception)
+    public function destroy(QcScanException $exception)
     {
         DB::beginTransaction();
         try {
             $exception->delete();
             DB::commit();
-            return response()->json(['message' => 'SKU exception berhasil dihapus']);
+
+            return response()->json(['message' => 'SKU exception QC berhasil dihapus']);
         } catch (\Throwable $e) {
             DB::rollBack();
+
             return response()->json([
-                'message' => 'Gagal menghapus SKU exception',
+                'message' => 'Gagal menghapus SKU exception QC',
                 'error' => $e->getMessage(),
             ], 500);
         }

@@ -6,14 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Imports\ResiImport;
 use App\Models\Item;
 use App\Models\Kurir;
-use App\Models\PackerResiScan;
-use App\Models\PackerScanOut;
 use App\Models\PickingList;
 use App\Models\PickingListException;
-use App\Models\PickerTransitItem;
 use App\Models\QcResiScan;
 use App\Models\Resi;
 use App\Models\ResiDetail;
+use App\Models\ShipmentScanOut;
 use App\Support\ResiOperationalStatus;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -80,14 +78,9 @@ class ResiImportController extends Controller
         $query = Resi::query()
             ->select(['id', 'id_pesanan', 'no_resi', 'tanggal_pesanan', 'kurir_id', 'status'])
             ->selectSub(function ($sub) {
-                $sub->from('packer_resi_scans')
+                $sub->from('shipment_scan_outs')
                     ->selectRaw('count(1)')
-                    ->whereColumn('packer_resi_scans.resi_id', 'resis.id');
-            }, 'packer_scan_count')
-            ->selectSub(function ($sub) {
-                $sub->from('packer_scan_outs')
-                    ->selectRaw('count(1)')
-                    ->whereColumn('packer_scan_outs.resi_id', 'resis.id');
+                    ->whereColumn('shipment_scan_outs.resi_id', 'resis.id');
             }, 'scan_out_count')
             ->selectSub(function ($sub) {
                 $sub->from('qc_resi_scans')
@@ -127,13 +120,11 @@ class ResiImportController extends Controller
             $tanggalOrder = $row->tanggal_pesanan?->format('Y-m-d') ?? $row->tanggal_pesanan ?? '-';
             $hasQcScan = (int) ($row->qc_scan_count ?? 0) > 0;
             $hasQcPassed = (int) ($row->qc_passed_count ?? 0) > 0;
-            $hasPackerScan = (int) ($row->packer_scan_count ?? 0) > 0;
             $hasScanOut = (int) ($row->scan_out_count ?? 0) > 0;
             $operationalStatus = ResiOperationalStatus::resolve(
                 $row->status,
                 $hasQcScan,
                 $hasQcPassed,
-                $hasPackerScan,
                 $hasScanOut
             );
             return [
@@ -145,7 +136,6 @@ class ResiImportController extends Controller
                 'tanggal_pesanan' => $tanggalOrder,
                 'status' => $row->status ?? 'active',
                 'has_qc_scan' => $hasQcScan,
-                'has_packer_scan' => $hasPackerScan,
                 'has_scan_out' => $hasScanOut,
                 'operational_status' => $operationalStatus,
                 'operational_status_label' => ResiOperationalStatus::label($operationalStatus),
@@ -239,10 +229,9 @@ class ResiImportController extends Controller
                 $existing = Resi::where('id_pesanan', $group['id_pesanan'])->first();
                 if ($existing) {
                     $hasQc = QcResiScan::where('resi_id', $existing->id)->exists();
-                    $hasPackerScan = PackerResiScan::where('resi_id', $existing->id)->exists();
-                    $hasScanOut = PackerScanOut::where('resi_id', $existing->id)->exists();
+                    $hasScanOut = ShipmentScanOut::where('resi_id', $existing->id)->exists();
 
-                    if ($hasQc || $hasPackerScan || $hasScanOut) {
+                    if ($hasQc || $hasScanOut) {
                         throw ValidationException::withMessages([
                             'file' => 'Resi dengan ID Pesanan '.$group['id_pesanan'].' sudah masuk proses operasional, import ulang diblokir.',
                         ]);
@@ -332,8 +321,7 @@ class ResiImportController extends Controller
             ]);
         }
 
-        $hasPackerScan = PackerResiScan::where('resi_id', $resi->id)->exists();
-        $hasScanOut = PackerScanOut::where('resi_id', $resi->id)->exists();
+        $hasScanOut = ShipmentScanOut::where('resi_id', $resi->id)->exists();
         $hasQc = QcResiScan::where('resi_id', $resi->id)->exists();
         if ($hasScanOut) {
             return response()->json([
@@ -345,12 +333,6 @@ class ResiImportController extends Controller
                 'message' => 'Resi sudah QC, tidak bisa dibatalkan.',
             ], 422);
         }
-        if ($hasPackerScan) {
-            return response()->json([
-                'message' => 'Resi sudah dipacking, tidak bisa dibatalkan.',
-            ], 422);
-        }
-
         DB::beginTransaction();
         try {
             $resi->status = 'canceled';
@@ -397,11 +379,10 @@ class ResiImportController extends Controller
             ], 422);
         }
 
-        $hasPackerScan = PackerResiScan::where('resi_id', $resi->id)->exists();
-        $hasScanOut = PackerScanOut::where('resi_id', $resi->id)->exists();
-        if ($hasScanOut || $hasPackerScan) {
+        $hasScanOut = ShipmentScanOut::where('resi_id', $resi->id)->exists();
+        if ($hasScanOut) {
             return response()->json([
-                'message' => 'Resi sudah memiliki proses packer/scan out, batal cancel tidak diizinkan.',
+                'message' => 'Resi sudah memiliki proses scan out, batal cancel tidak diizinkan.',
             ], 422);
         }
 
@@ -532,9 +513,13 @@ class ResiImportController extends Controller
             return 0;
         }
 
-        return (int) PickerTransitItem::where('item_id', $itemId)
-            ->where('picked_date', $date)
-            ->value('qty');
+        return (int) DB::table('qc_resi_scan_items as qci')
+            ->join('qc_resi_scans as qc', 'qc.id', '=', 'qci.qc_resi_scan_id')
+            ->join('resis as r', 'r.id', '=', 'qc.resi_id')
+            ->where('qc.status', 'passed')
+            ->whereDate('r.tanggal_upload', $date)
+            ->where('qci.sku', $sku)
+            ->sum('qci.expected_qty');
     }
 
     private function syncPickingException(string $date, string $sku, int $exceptionQty): void

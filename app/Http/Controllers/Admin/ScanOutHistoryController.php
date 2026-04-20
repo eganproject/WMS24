@@ -3,22 +3,22 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\PackerScanOut;
+use App\Models\ShipmentScanOut;
 use Illuminate\Http\Request;
 
-class PackerScanOutHistoryController extends Controller
+class ScanOutHistoryController extends Controller
 {
     public function index()
     {
-        return view('admin.outbound.packer-scan-outs.index', [
-            'dataUrl' => route('admin.outbound.packer-scan-outs.data'),
+        return view('admin.outbound.scan-out-history.index', [
+            'dataUrl' => route('admin.outbound.scan-out-history.data'),
             'today' => now()->toDateString(),
         ]);
     }
 
     public function data(Request $request)
     {
-        $baseQuery = PackerScanOut::query()
+        $baseQuery = ShipmentScanOut::query()
             ->with(['resi', 'scanner'])
             ->orderByDesc('scanned_at');
 

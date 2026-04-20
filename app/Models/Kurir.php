@@ -20,6 +20,6 @@ class Kurir extends Model
 
     public function scanOuts()
     {
-        return $this->hasMany(PackerScanOut::class, 'kurir_id');
+        return $this->hasMany(ShipmentScanOut::class, 'kurir_id');
     }
 }

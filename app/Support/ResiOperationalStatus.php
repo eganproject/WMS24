@@ -7,15 +7,13 @@ class ResiOperationalStatus
     public const CANCELED = 'canceled';
     public const PENDING_QC = 'pending_qc';
     public const QC_IN_PROGRESS = 'qc_in_progress';
-    public const QC_PASSED = 'qc_passed';
-    public const PACKED = 'packed';
+    public const READY_TO_SHIP = 'ready_to_ship';
     public const SCAN_OUT_DONE = 'scan_out_done';
 
     public static function resolve(
         ?string $businessStatus,
         bool $hasQc,
         bool $qcPassed,
-        bool $hasPackerScan,
         bool $hasScanOut
     ): string {
         if (($businessStatus ?? 'active') === 'canceled') {
@@ -26,12 +24,8 @@ class ResiOperationalStatus
             return self::SCAN_OUT_DONE;
         }
 
-        if ($hasPackerScan) {
-            return self::PACKED;
-        }
-
         if ($qcPassed) {
-            return self::QC_PASSED;
+            return self::READY_TO_SHIP;
         }
 
         if ($hasQc) {
@@ -47,8 +41,7 @@ class ResiOperationalStatus
             self::CANCELED => 'Cancel',
             self::PENDING_QC => 'Menunggu QC',
             self::QC_IN_PROGRESS => 'QC Berjalan',
-            self::QC_PASSED => 'Lolos QC',
-            self::PACKED => 'Siap Scan Out',
+            self::READY_TO_SHIP => 'Siap Scan Out',
             self::SCAN_OUT_DONE => 'Scan Out Selesai',
         ];
     }
@@ -59,8 +52,7 @@ class ResiOperationalStatus
             self::CANCELED => 'badge-light-danger',
             self::PENDING_QC => 'badge-light-warning',
             self::QC_IN_PROGRESS => 'badge-light-primary',
-            self::QC_PASSED => 'badge-light-info',
-            self::PACKED => 'badge-light-success',
+            self::READY_TO_SHIP => 'badge-light-success',
             self::SCAN_OUT_DONE => 'badge-light-dark',
             default => 'badge-light',
         };
@@ -110,26 +102,13 @@ class ResiOperationalStatus
         if ($status === self::SCAN_OUT_DONE) {
             $query->whereExists(function ($sub) use ($tableAlias) {
                 $sub->selectRaw('1')
-                    ->from('packer_scan_outs')
-                    ->whereColumn('packer_scan_outs.resi_id', $tableAlias.'.id');
+                    ->from('shipment_scan_outs')
+                    ->whereColumn('shipment_scan_outs.resi_id', $tableAlias.'.id');
             });
             return;
         }
 
-        if ($status === self::PACKED) {
-            $query->whereExists(function ($sub) use ($tableAlias) {
-                $sub->selectRaw('1')
-                    ->from('packer_resi_scans')
-                    ->whereColumn('packer_resi_scans.resi_id', $tableAlias.'.id');
-            })->whereNotExists(function ($sub) use ($tableAlias) {
-                $sub->selectRaw('1')
-                    ->from('packer_scan_outs')
-                    ->whereColumn('packer_scan_outs.resi_id', $tableAlias.'.id');
-            });
-            return;
-        }
-
-        if ($status === self::QC_PASSED) {
+        if ($status === self::READY_TO_SHIP) {
             $query->whereExists(function ($sub) use ($tableAlias) {
                 $sub->selectRaw('1')
                     ->from('qc_resi_scans')
@@ -137,12 +116,8 @@ class ResiOperationalStatus
                     ->where('qc_resi_scans.status', 'passed');
             })->whereNotExists(function ($sub) use ($tableAlias) {
                 $sub->selectRaw('1')
-                    ->from('packer_resi_scans')
-                    ->whereColumn('packer_resi_scans.resi_id', $tableAlias.'.id');
-            })->whereNotExists(function ($sub) use ($tableAlias) {
-                $sub->selectRaw('1')
-                    ->from('packer_scan_outs')
-                    ->whereColumn('packer_scan_outs.resi_id', $tableAlias.'.id');
+                    ->from('shipment_scan_outs')
+                    ->whereColumn('shipment_scan_outs.resi_id', $tableAlias.'.id');
             });
             return;
         }
@@ -155,12 +130,8 @@ class ResiOperationalStatus
                     ->where('qc_resi_scans.status', '!=', 'passed');
             })->whereNotExists(function ($sub) use ($tableAlias) {
                 $sub->selectRaw('1')
-                    ->from('packer_resi_scans')
-                    ->whereColumn('packer_resi_scans.resi_id', $tableAlias.'.id');
-            })->whereNotExists(function ($sub) use ($tableAlias) {
-                $sub->selectRaw('1')
-                    ->from('packer_scan_outs')
-                    ->whereColumn('packer_scan_outs.resi_id', $tableAlias.'.id');
+                    ->from('shipment_scan_outs')
+                    ->whereColumn('shipment_scan_outs.resi_id', $tableAlias.'.id');
             });
             return;
         }
@@ -172,12 +143,8 @@ class ResiOperationalStatus
                     ->whereColumn('qc_resi_scans.resi_id', $tableAlias.'.id');
             })->whereNotExists(function ($sub) use ($tableAlias) {
                 $sub->selectRaw('1')
-                    ->from('packer_resi_scans')
-                    ->whereColumn('packer_resi_scans.resi_id', $tableAlias.'.id');
-            })->whereNotExists(function ($sub) use ($tableAlias) {
-                $sub->selectRaw('1')
-                    ->from('packer_scan_outs')
-                    ->whereColumn('packer_scan_outs.resi_id', $tableAlias.'.id');
+                    ->from('shipment_scan_outs')
+                    ->whereColumn('shipment_scan_outs.resi_id', $tableAlias.'.id');
             });
         }
     }

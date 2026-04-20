@@ -35,10 +35,6 @@
         background: linear-gradient(135deg, rgba(14,165,233,0.2), rgba(56,189,248,0.2));
         border-color: rgba(14,165,233,0.25);
     }
-    .menu-icon.packer {
-        background: linear-gradient(135deg, rgba(249,115,22,0.2), rgba(251,191,36,0.2));
-        border-color: rgba(249,115,22,0.25);
-    }
     .menu-icon.inbound-scan {
         background: linear-gradient(135deg, rgba(15,118,110,0.2), rgba(20,184,166,0.18));
         border-color: rgba(15,118,110,0.25);
@@ -50,10 +46,6 @@
     .menu-icon.scan-out {
         background: linear-gradient(135deg, rgba(14,116,144,0.2), rgba(56,189,248,0.2));
         border-color: rgba(14,116,144,0.25);
-    }
-    .menu-icon.scan-out-v2 {
-        background: linear-gradient(135deg, rgba(37,99,235,0.2), rgba(14,165,233,0.2));
-        border-color: rgba(37,99,235,0.25);
     }
     .menu-icon.picking-list {
         background: linear-gradient(135deg, rgba(30,64,175,0.18), rgba(59,130,246,0.2));
@@ -114,16 +106,6 @@
             </div>
         </a>
 
-        @if(!empty($showPicking))
-            <a class="menu-card" href="{{ $routes['picker'] }}">
-                <div class="menu-icon">PK</div>
-                <div>
-                    <div class="menu-title">Picking</div>
-                    <div class="menu-desc">Input barang yang dibawa oleh picker.</div>
-                </div>
-            </a>
-        @endif
-
         @if(!empty($showInboundScan))
             <a class="menu-card" href="{{ $routes['inboundScan'] }}">
                 <div class="menu-icon inbound-scan">IB</div>
@@ -139,17 +121,7 @@
                 <div class="menu-icon qc">QC</div>
                 <div>
                     <div class="menu-title">QC Resi</div>
-                    <div class="menu-desc">Scan resi & SKU sebelum packing.</div>
-                </div>
-            </a>
-        @endif
-
-        @if(!empty($showPacking))
-            <a class="menu-card" href="{{ $routes['packer'] }}">
-                <div class="menu-icon packer">PA</div>
-                <div>
-                    <div class="menu-title">Packer Scan Resi</div>
-                    <div class="menu-desc">Scan resi untuk meneruskan ke transit packer.</div>
+                    <div class="menu-desc">Input dan scan utama sebelum resi siap kirim.</div>
                 </div>
             </a>
         @endif
@@ -164,22 +136,12 @@
             </a>
         @endif
 
-        @if(!empty($showScanOutV2))
-            <a class="menu-card" href="{{ $routes['scanOutV2'] }}">
-                <div class="menu-icon scan-out-v2">S2</div>
-                <div>
-                    <div class="menu-title">Scan Out V2</div>
-                    <div class="menu-desc">Auto proses setelah scan.</div>
-                </div>
-            </a>
-        @endif
-
         @if(!empty($showPickingList))
             <a class="menu-card" href="{{ $routes['pickingList'] }}">
                 <div class="menu-icon picking-list">PL</div>
                 <div>
                     <div class="menu-title">Picking List</div>
-                    <div class="menu-desc">Lihat picking list & sisa qty.</div>
+                    <div class="menu-desc">Lihat daftar kerja picker tanpa input scan.</div>
                 </div>
             </a>
         @endif

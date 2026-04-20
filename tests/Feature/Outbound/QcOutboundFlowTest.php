@@ -3,13 +3,15 @@
 namespace Tests\Feature\Outbound;
 
 use App\Models\Item;
+use App\Models\ItemStock;
 use App\Models\Kurir;
-use App\Models\PickerTransitItem;
 use App\Models\QcResiScan;
 use App\Models\Resi;
 use App\Models\ResiDetail;
 use App\Models\Role;
+use App\Models\StockMutation;
 use App\Models\User;
+use App\Models\Warehouse;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -19,8 +21,8 @@ class QcOutboundFlowTest extends TestCase
 
     public function test_full_outbound_flow_uses_qc_snapshot_until_scan_out(): void
     {
+        [$displayWarehouse] = $this->createWarehouseFixtures();
         $qcUser = $this->createUserWithRole('qc');
-        $packerUser = $this->createUserWithRole('packer');
         $scanOutUser = $this->createUserWithRole('admin-scan');
         $uploader = User::factory()->create();
         $kurir = Kurir::create(['name' => 'JNE']);
@@ -30,28 +32,17 @@ class QcOutboundFlowTest extends TestCase
             'category_id' => 0,
         ]);
 
-        $resi = Resi::create([
-            'id_pesanan' => 'ORD-001',
-            'tanggal_pesanan' => now()->toDateString(),
-            'tanggal_upload' => now()->toDateString(),
-            'no_resi' => 'RESI-001',
-            'kurir_id' => $kurir->id,
-            'uploader_id' => $uploader->id,
-            'status' => 'active',
+        ItemStock::create([
+            'item_id' => $item->id,
+            'warehouse_id' => $displayWarehouse->id,
+            'stock' => 2,
         ]);
 
+        $resi = $this->createResi($uploader->id, $kurir->id, 'ORD-001', 'RESI-001');
         ResiDetail::create([
             'resi_id' => $resi->id,
             'sku' => $item->sku,
             'qty' => 2,
-        ]);
-
-        PickerTransitItem::create([
-            'item_id' => $item->id,
-            'picked_date' => now()->toDateString(),
-            'qty' => 2,
-            'remaining_qty' => 2,
-            'picked_at' => now(),
         ]);
 
         $this->actingAs($qcUser)
@@ -83,7 +74,20 @@ class QcOutboundFlowTest extends TestCase
         $qc->refresh();
         $this->assertSame('passed', $qc->status);
         $this->assertSame($qcUser->id, $qc->completed_by);
-        $this->assertSame(0, (int) PickerTransitItem::firstOrFail()->remaining_qty);
+        $this->assertDatabaseHas('item_stocks', [
+            'item_id' => $item->id,
+            'warehouse_id' => $displayWarehouse->id,
+            'stock' => 0,
+        ]);
+        $this->assertDatabaseHas('stock_mutations', [
+            'item_id' => $item->id,
+            'warehouse_id' => $displayWarehouse->id,
+            'direction' => 'out',
+            'qty' => 2,
+            'source_type' => 'qc_shipment',
+            'source_subtype' => 'resi',
+            'source_id' => $qc->id,
+        ]);
 
         ResiDetail::where('resi_id', $resi->id)->delete();
         ResiDetail::create([
@@ -91,25 +95,6 @@ class QcOutboundFlowTest extends TestCase
             'sku' => 'SKU-001',
             'qty' => 5,
         ]);
-
-        $this->actingAs($packerUser)
-            ->postJson(route('picker.packer.scan'), [
-                'type' => 'no_resi',
-                'code' => 'RESI-001',
-            ])
-            ->assertOk()
-            ->assertJsonPath('items.0.sku', 'SKU-001')
-            ->assertJsonPath('items.0.qty', 2);
-
-        $this->assertDatabaseHas('packer_resi_scans', [
-            'resi_id' => $resi->id,
-            'scanned_by' => $packerUser->id,
-        ]);
-        $this->assertDatabaseHas('packer_transit_histories', [
-            'resi_id' => $resi->id,
-            'status' => 'menunggu scan out',
-        ]);
-        $this->assertSame(0, (int) PickerTransitItem::firstOrFail()->remaining_qty);
 
         $this->actingAs($scanOutUser)
             ->postJson(route('picker.scan-out.scan'), [
@@ -119,64 +104,46 @@ class QcOutboundFlowTest extends TestCase
             ->assertOk()
             ->assertJsonPath('resi.no_resi', 'RESI-001');
 
-        $this->assertDatabaseHas('packer_scan_outs', [
+        $this->assertDatabaseHas('shipment_scan_outs', [
             'resi_id' => $resi->id,
             'scanned_by' => $scanOutUser->id,
             'kurir_id' => $kurir->id,
         ]);
-        $this->assertDatabaseHas('packer_transit_histories', [
-            'resi_id' => $resi->id,
-            'status' => 'selesai',
-        ]);
     }
 
-    public function test_packer_scan_before_qc_fails_without_creating_scan_and_can_succeed_after_qc(): void
+    public function test_scan_out_before_qc_fails_and_qc_after_pass_allows_scan_out(): void
     {
+        [$displayWarehouse] = $this->createWarehouseFixtures();
         $qcUser = $this->createUserWithRole('qc');
-        $packerUser = $this->createUserWithRole('packer');
+        $scanOutUser = $this->createUserWithRole('admin-scan');
         $uploader = User::factory()->create();
         $kurir = Kurir::create(['name' => 'SiCepat']);
         $item = Item::create([
             'sku' => 'SKU-002',
-            'name' => 'Item Packer Guard',
+            'name' => 'Item Guard',
             'category_id' => 0,
         ]);
 
-        $resi = Resi::create([
-            'id_pesanan' => 'ORD-002',
-            'tanggal_pesanan' => now()->toDateString(),
-            'tanggal_upload' => now()->toDateString(),
-            'no_resi' => 'RESI-002',
-            'kurir_id' => $kurir->id,
-            'uploader_id' => $uploader->id,
-            'status' => 'active',
+        ItemStock::create([
+            'item_id' => $item->id,
+            'warehouse_id' => $displayWarehouse->id,
+            'stock' => 1,
         ]);
 
+        $resi = $this->createResi($uploader->id, $kurir->id, 'ORD-002', 'RESI-002');
         ResiDetail::create([
             'resi_id' => $resi->id,
             'sku' => $item->sku,
             'qty' => 1,
         ]);
 
-        PickerTransitItem::create([
-            'item_id' => $item->id,
-            'picked_date' => now()->toDateString(),
-            'qty' => 1,
-            'remaining_qty' => 1,
-            'picked_at' => now(),
-        ]);
-
-        $this->actingAs($packerUser)
-            ->postJson(route('picker.packer.scan'), [
+        $this->actingAs($scanOutUser)
+            ->postJson(route('picker.scan-out.scan'), [
                 'type' => 'no_resi',
                 'code' => 'RESI-002',
             ])
             ->assertStatus(422)
-            ->assertJsonPath('message', 'Resi belum QC selesai.');
-
-        $this->assertDatabaseMissing('packer_resi_scans', [
-            'resi_id' => $resi->id,
-        ]);
+            ->assertJsonPath('message', 'Resi belum lolos QC dan belum siap scan out.');
 
         $this->actingAs($qcUser)
             ->postJson(route('picker.qc.scan'), [
@@ -202,90 +169,17 @@ class QcOutboundFlowTest extends TestCase
             ->assertOk()
             ->assertJsonPath('qc.status', 'passed');
 
-        $this->actingAs($packerUser)
-            ->postJson(route('picker.packer.scan'), [
+        $this->actingAs($scanOutUser)
+            ->postJson(route('picker.scan-out.scan'), [
                 'type' => 'no_resi',
                 'code' => 'RESI-002',
             ])
-            ->assertOk()
-            ->assertJsonPath('resi.no_resi', 'RESI-002');
-
-        $this->assertDatabaseHas('packer_resi_scans', [
-            'resi_id' => $resi->id,
-            'scanned_by' => $packerUser->id,
-        ]);
-    }
-
-    public function test_scan_sku_blocks_when_picker_transit_available_qty_is_exhausted(): void
-    {
-        $qcUser = $this->createUserWithRole('qc');
-        $uploader = User::factory()->create();
-        $kurir = Kurir::create(['name' => 'JNT']);
-        $item = Item::create([
-            'sku' => 'SKU-TRANSIT-001',
-            'name' => 'Item Transit QC',
-            'category_id' => 0,
-        ]);
-
-        $resi = Resi::create([
-            'id_pesanan' => 'ORD-TRANSIT-001',
-            'tanggal_pesanan' => now()->toDateString(),
-            'tanggal_upload' => now()->toDateString(),
-            'no_resi' => 'RESI-TRANSIT-001',
-            'kurir_id' => $kurir->id,
-            'uploader_id' => $uploader->id,
-            'status' => 'active',
-        ]);
-
-        ResiDetail::create([
-            'resi_id' => $resi->id,
-            'sku' => $item->sku,
-            'qty' => 2,
-        ]);
-
-        PickerTransitItem::create([
-            'item_id' => $item->id,
-            'picked_date' => now()->toDateString(),
-            'qty' => 1,
-            'remaining_qty' => 1,
-            'picked_at' => now(),
-        ]);
-
-        $this->actingAs($qcUser)
-            ->postJson(route('picker.qc.scan'), [
-                'type' => 'no_resi',
-                'code' => $resi->no_resi,
-            ])
             ->assertOk();
-
-        $qc = QcResiScan::where('resi_id', $resi->id)->firstOrFail();
-
-        $this->actingAs($qcUser)
-            ->postJson(route('picker.qc.scan-sku'), [
-                'qc_id' => $qc->id,
-                'code' => $item->sku,
-                'qty' => 1,
-            ])
-            ->assertOk()
-            ->assertJsonPath('qc.summary.total_scanned', 1);
-
-        $this->actingAs($qcUser)
-            ->postJson(route('picker.qc.scan-sku'), [
-                'qc_id' => $qc->id,
-                'code' => $item->sku,
-                'qty' => 1,
-            ])
-            ->assertStatus(422)
-            ->assertJsonPath('message', 'Sisa transit picker tidak mencukupi untuk scan SKU ini.')
-            ->assertJsonPath('details.0.sku', $item->sku)
-            ->assertJsonPath('details.0.required', 1)
-            ->assertJsonPath('details.0.available', 0);
-
-        $this->assertSame(1, (int) PickerTransitItem::firstOrFail()->remaining_qty);
     }
 
     public function test_qc_hold_reservation_blocks_other_qc_until_reset_releases_it(): void
     {
+        [$displayWarehouse] = $this->createWarehouseFixtures();
         $qcUser = $this->createUserWithRole('qc');
         $uploader = User::factory()->create();
         $kurir = Kurir::create(['name' => 'Ninja']);
@@ -295,24 +189,14 @@ class QcOutboundFlowTest extends TestCase
             'category_id' => 0,
         ]);
 
-        $resiA = Resi::create([
-            'id_pesanan' => 'ORD-HOLD-001',
-            'tanggal_pesanan' => now()->toDateString(),
-            'tanggal_upload' => now()->toDateString(),
-            'no_resi' => 'RESI-HOLD-001',
-            'kurir_id' => $kurir->id,
-            'uploader_id' => $uploader->id,
-            'status' => 'active',
+        ItemStock::create([
+            'item_id' => $item->id,
+            'warehouse_id' => $displayWarehouse->id,
+            'stock' => 1,
         ]);
-        $resiB = Resi::create([
-            'id_pesanan' => 'ORD-HOLD-002',
-            'tanggal_pesanan' => now()->toDateString(),
-            'tanggal_upload' => now()->toDateString(),
-            'no_resi' => 'RESI-HOLD-002',
-            'kurir_id' => $kurir->id,
-            'uploader_id' => $uploader->id,
-            'status' => 'active',
-        ]);
+
+        $resiA = $this->createResi($uploader->id, $kurir->id, 'ORD-HOLD-001', 'RESI-HOLD-001');
+        $resiB = $this->createResi($uploader->id, $kurir->id, 'ORD-HOLD-002', 'RESI-HOLD-002');
 
         ResiDetail::create([
             'resi_id' => $resiA->id,
@@ -323,14 +207,6 @@ class QcOutboundFlowTest extends TestCase
             'resi_id' => $resiB->id,
             'sku' => $item->sku,
             'qty' => 1,
-        ]);
-
-        PickerTransitItem::create([
-            'item_id' => $item->id,
-            'picked_date' => now()->toDateString(),
-            'qty' => 1,
-            'remaining_qty' => 1,
-            'picked_at' => now(),
         ]);
 
         $this->actingAs($qcUser)
@@ -353,18 +229,10 @@ class QcOutboundFlowTest extends TestCase
         $this->actingAs($qcUser)
             ->postJson(route('picker.qc.hold'), [
                 'qc_id' => $qcA->id,
-                'reason' => 'Transit diparkir sementara',
+                'reason' => 'Menunggu pengecekan fisik',
             ])
             ->assertOk()
-            ->assertJsonPath('qc.status', 'hold')
-            ->assertJsonPath('qc.audit.hold_reason', 'Transit diparkir sementara');
-
-        $this->assertDatabaseHas('qc_resi_scans', [
-            'id' => $qcA->id,
-            'status' => 'hold',
-            'hold_by' => $qcUser->id,
-            'hold_reason' => 'Transit diparkir sementara',
-        ]);
+            ->assertJsonPath('qc.status', 'hold');
 
         $this->actingAs($qcUser)
             ->postJson(route('picker.qc.scan'), [
@@ -382,13 +250,13 @@ class QcOutboundFlowTest extends TestCase
                 'qty' => 1,
             ])
             ->assertStatus(422)
-            ->assertJsonPath('message', 'Sisa transit picker tidak mencukupi untuk scan SKU ini.')
+            ->assertJsonPath('message', 'Stok display tidak mencukupi untuk scan SKU ini.')
             ->assertJsonPath('details.0.available', 0);
 
         $this->actingAs($qcUser)
             ->postJson(route('picker.qc.reset'), [
                 'qc_id' => $qcA->id,
-                'reason' => 'Transit dilepas untuk resi lain',
+                'reason' => 'Alokasi dibatalkan',
             ])
             ->assertOk()
             ->assertJsonPath('qc.status', 'draft')
@@ -403,154 +271,49 @@ class QcOutboundFlowTest extends TestCase
             ->assertOk()
             ->assertJsonPath('qc.summary.total_scanned', 1);
 
-        $this->assertSame(1, (int) PickerTransitItem::firstOrFail()->remaining_qty);
-    }
-
-    public function test_qc_can_be_held_resumed_and_only_then_forwarded_to_packer(): void
-    {
-        $qcUser = $this->createUserWithRole('qc');
-        $packerUser = $this->createUserWithRole('packer');
-        $uploader = User::factory()->create();
-        $kurir = Kurir::create(['name' => 'AnterAja']);
-        $item = Item::create([
-            'sku' => 'SKU-HOLD-RESUME-001',
-            'name' => 'Item Hold Resume',
-            'category_id' => 0,
-        ]);
-
-        $resi = Resi::create([
-            'id_pesanan' => 'ORD-HOLD-RESUME-001',
-            'tanggal_pesanan' => now()->toDateString(),
-            'tanggal_upload' => now()->toDateString(),
-            'no_resi' => 'RESI-HOLD-RESUME-001',
-            'kurir_id' => $kurir->id,
-            'uploader_id' => $uploader->id,
-            'status' => 'active',
-        ]);
-
-        ResiDetail::create([
-            'resi_id' => $resi->id,
-            'sku' => $item->sku,
-            'qty' => 2,
-        ]);
-
-        $transit = PickerTransitItem::create([
+        $this->assertDatabaseHas('item_stocks', [
             'item_id' => $item->id,
-            'picked_date' => now()->toDateString(),
-            'qty' => 1,
-            'remaining_qty' => 1,
-            'picked_at' => now(),
+            'warehouse_id' => $displayWarehouse->id,
+            'stock' => 1,
         ]);
-
-        $this->actingAs($qcUser)
-            ->postJson(route('picker.qc.scan'), [
-                'type' => 'no_resi',
-                'code' => $resi->no_resi,
-            ])
-            ->assertOk();
-
-        $qc = QcResiScan::where('resi_id', $resi->id)->firstOrFail();
-
-        $this->actingAs($qcUser)
-            ->postJson(route('picker.qc.scan-sku'), [
-                'qc_id' => $qc->id,
-                'code' => $item->sku,
-                'qty' => 1,
-            ])
-            ->assertOk()
-            ->assertJsonPath('qc.summary.total_scanned', 1);
-
-        $this->actingAs($qcUser)
-            ->postJson(route('picker.qc.hold'), [
-                'qc_id' => $qc->id,
-                'reason' => 'Menunggu tambahan transit',
-            ])
-            ->assertOk()
-            ->assertJsonPath('qc.status', 'hold');
-
-        $this->actingAs($packerUser)
-            ->postJson(route('picker.packer.scan'), [
-                'type' => 'no_resi',
-                'code' => $resi->no_resi,
-            ])
-            ->assertStatus(422)
-            ->assertJsonPath('message', 'Resi belum QC selesai.');
-
-        $transit->update([
-            'qty' => 2,
-            'remaining_qty' => 2,
-        ]);
-
-        $this->actingAs($qcUser)
-            ->postJson(route('picker.qc.scan'), [
-                'type' => 'no_resi',
-                'code' => $resi->no_resi,
-            ])
-            ->assertOk()
-            ->assertJsonPath('qc.status', 'hold');
-
-        $this->actingAs($qcUser)
-            ->postJson(route('picker.qc.scan-sku'), [
-                'qc_id' => $qc->id,
-                'code' => $item->sku,
-                'qty' => 1,
-            ])
-            ->assertOk()
-            ->assertJsonPath('qc.status', 'draft')
-            ->assertJsonPath('qc.summary.total_scanned', 2);
-
-        $this->actingAs($qcUser)
-            ->postJson(route('picker.qc.complete'), [
-                'qc_id' => $qc->id,
-            ])
-            ->assertOk()
-            ->assertJsonPath('qc.status', 'passed');
-
-        $this->assertSame(0, (int) PickerTransitItem::firstOrFail()->remaining_qty);
-
-        $this->actingAs($packerUser)
-            ->postJson(route('picker.packer.scan'), [
-                'type' => 'no_resi',
-                'code' => $resi->no_resi,
-            ])
-            ->assertOk()
-            ->assertJsonPath('resi.no_resi', $resi->no_resi);
     }
 
     public function test_operational_mobile_routes_are_enforced_per_role(): void
     {
+        $pickerUser = $this->createUserWithRole('picker');
         $qcUser = $this->createUserWithRole('qc');
-        $packerUser = $this->createUserWithRole('packer');
         $scanOutUser = $this->createUserWithRole('admin-scan');
+        $inboundScanUser = $this->createUserWithRole('inbound-scan');
+
+        $this->actingAs($pickerUser)
+            ->get(route('picker.picking-list.index'))
+            ->assertOk();
 
         $this->actingAs($qcUser)
             ->get(route('picker.qc.index'))
-            ->assertOk();
-
-        $this->actingAs($packerUser)
-            ->get(route('picker.packer.index'))
             ->assertOk();
 
         $this->actingAs($scanOutUser)
             ->get(route('picker.scan-out.index'))
             ->assertOk();
 
-        $this->actingAs($qcUser)
-            ->postJson(route('picker.packer.scan'), [
-                'type' => 'no_resi',
-                'code' => 'FORBIDDEN',
-            ])
-            ->assertForbidden();
+        $this->actingAs($inboundScanUser)
+            ->get(route('picker.inbound-scan.index'))
+            ->assertOk();
 
-        $this->actingAs($packerUser)
+        $this->actingAs($qcUser)
+            ->get(route('picker.scan-out.index'))
+            ->assertRedirect(route('picker.dashboard'));
+
+        $this->actingAs($scanOutUser)
             ->postJson(route('picker.qc.scan'), [
                 'type' => 'no_resi',
                 'code' => 'FORBIDDEN',
             ])
             ->assertForbidden();
 
-        $this->actingAs($scanOutUser)
-            ->postJson(route('picker.packer.scan'), [
+        $this->actingAs($pickerUser)
+            ->postJson(route('picker.scan-out.scan'), [
                 'type' => 'no_resi',
                 'code' => 'FORBIDDEN',
             ])
@@ -571,5 +334,33 @@ class QcOutboundFlowTest extends TestCase
         $user->roles()->attach($role);
 
         return $user;
+    }
+
+    private function createWarehouseFixtures(): array
+    {
+        $default = Warehouse::firstOrCreate(
+            ['code' => 'GUDANG_BESAR'],
+            ['name' => 'Gudang Besar']
+        );
+
+        $display = Warehouse::firstOrCreate(
+            ['code' => 'GUDANG_DISPLAY'],
+            ['name' => 'Gudang Display']
+        );
+
+        return [$display, $default];
+    }
+
+    private function createResi(int $uploaderId, int $kurirId, string $orderId, string $resiNo): Resi
+    {
+        return Resi::create([
+            'id_pesanan' => $orderId,
+            'tanggal_pesanan' => now()->toDateString(),
+            'tanggal_upload' => now()->toDateString(),
+            'no_resi' => $resiNo,
+            'kurir_id' => $kurirId,
+            'uploader_id' => $uploaderId,
+            'status' => 'active',
+        ]);
     }
 }

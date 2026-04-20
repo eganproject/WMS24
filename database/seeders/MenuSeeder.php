@@ -43,6 +43,7 @@ class MenuSeeder extends Seeder
             // ['name' => 'Picker', 'slug' => 'outbound-picker', 'route' => 'admin.outbound.pickers.index', 'icon' => 'fa-solid fa-people-carry-box', 'parent_slug' => 'outbound', 'sort_order' => 10],
             ['name' => 'Manual', 'slug' => 'outbound-manual', 'route' => 'admin.outbound.manuals.index', 'icon' => 'fa-solid fa-pen-to-square', 'parent_slug' => 'outbound', 'sort_order' => 11],
             ['name' => 'Retur', 'slug' => 'outbound-return', 'route' => 'admin.outbound.returns.index', 'icon' => 'fa-solid fa-rotate-left', 'parent_slug' => 'outbound', 'sort_order' => 12],
+            ['name' => 'QC Scan Desktop', 'slug' => 'outbound-qc-scan', 'route' => 'admin.outbound.qc-scan.index', 'icon' => 'fa-solid fa-barcode', 'parent_slug' => 'outbound', 'sort_order' => 13],
             ['name' => 'History QC', 'slug' => 'outbound-qc-history', 'route' => 'admin.outbound.qc-history.index', 'icon' => 'fa-solid fa-magnifying-glass', 'parent_slug' => 'outbound', 'sort_order' => 13.25],
             ['name' => 'Riwayat Scan Out', 'slug' => 'outbound-scan-out-history', 'route' => 'admin.outbound.scan-out-history.index', 'icon' => 'fa-solid fa-truck-ramp-box', 'parent_slug' => 'outbound', 'sort_order' => 13.5],
             ['name' => 'SKU Exception QC', 'slug' => 'outbound-qc-scan-exceptions', 'route' => 'admin.outbound.qc-scan-exceptions.index', 'icon' => 'fa-solid fa-ban', 'parent_slug' => 'outbound', 'sort_order' => 13.8],

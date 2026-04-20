@@ -15,6 +15,7 @@ use App\Http\Controllers\Admin\ReworkRecipeController;
 use App\Http\Controllers\Admin\ResiImportController;
 use App\Http\Controllers\Admin\PickingListController;
 use App\Http\Controllers\Admin\QcHistoryController;
+use App\Http\Controllers\Admin\QcScanWorkbenchController;
 use App\Http\Controllers\Admin\QcScanExceptionController;
 use App\Http\Controllers\Admin\ScanOutHistoryController;
 use App\Http\Controllers\Admin\ScanOutReportController;
@@ -304,6 +305,12 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/returns/{id}/detail', [OutboundController::class, 'returnsDetail'])->name('returns.detail');
         Route::post('/returns/{id}/approve', [OutboundController::class, 'returnsApprove'])->name('returns.approve');
 
+        Route::get('/qc-scan', [QcScanWorkbenchController::class, 'index'])->name('qc-scan.index');
+        Route::post('/qc-scan/scan', [QcScanWorkbenchController::class, 'scanResi'])->name('qc-scan.scan');
+        Route::post('/qc-scan/scan-sku', [QcScanWorkbenchController::class, 'scanSku'])->name('qc-scan.scan-sku');
+        Route::post('/qc-scan/hold', [QcScanWorkbenchController::class, 'hold'])->name('qc-scan.hold');
+        Route::post('/qc-scan/complete', [QcScanWorkbenchController::class, 'complete'])->name('qc-scan.complete');
+        Route::post('/qc-scan/reset', [QcScanWorkbenchController::class, 'reset'])->name('qc-scan.reset');
         Route::get('/qc-history', [QcHistoryController::class, 'index'])->name('qc-history.index');
         Route::get('/qc-history/data', [QcHistoryController::class, 'data'])->name('qc-history.data');
         Route::get('/scan-out-history', [ScanOutHistoryController::class, 'index'])->name('scan-out-history.index');

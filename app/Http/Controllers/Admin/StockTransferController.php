@@ -34,6 +34,7 @@ class StockTransferController extends Controller
             'showUrlTpl' => route('admin.inventory.stock-transfers.show', ':id'),
             'detailUrlTpl' => route('admin.inventory.stock-transfers.detail', ':id'),
             'qcUrlTpl' => route('admin.inventory.stock-transfers.qc', ':id'),
+            'cancelUrlTpl' => route('admin.inventory.stock-transfers.cancel', ':id'),
             'defaultFrom' => WarehouseService::defaultWarehouseId(),
             'defaultTo' => WarehouseService::displayWarehouseId(),
         ]);
@@ -314,6 +315,53 @@ class StockTransferController extends Controller
         ]);
     }
 
+    public function cancel(Request $request, int $id)
+    {
+        $transfer = StockTransfer::with('items')->findOrFail($id);
+        if (($transfer->status ?? 'qc_pending') !== 'qc_pending') {
+            return response()->json([
+                'message' => 'Transfer hanya bisa dibatalkan sebelum QC diproses.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'reason' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        DB::beginTransaction();
+        try {
+            StockService::rollbackBySource('transfer', $transfer->id);
+
+            $reason = trim((string) ($validated['reason'] ?? ''));
+            $cancelNote = 'Transfer dibatalkan sebelum QC';
+            if ($reason !== '') {
+                $cancelNote .= ': '.$reason;
+            }
+
+            $transfer->update([
+                'status' => 'canceled',
+                'note' => $this->mergeCancelNote($transfer->note, $cancelNote),
+                'qc_at' => null,
+                'qc_by' => null,
+            ]);
+
+            DB::commit();
+        } catch (ValidationException $e) {
+            DB::rollBack();
+            throw $e;
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return response()->json([
+                'message' => 'Gagal membatalkan transfer gudang',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+
+        return response()->json([
+            'message' => 'Transfer gudang berhasil dibatalkan',
+        ]);
+    }
+
     private function validatePayload(Request $request): array
     {
         $validated = $request->validate([
@@ -395,5 +443,15 @@ class StockTransferController extends Controller
     private function generateCode(string $prefix): string
     {
         return $prefix.'-'.now()->format('YmdHis').'-'.Str::upper(Str::random(4));
+    }
+
+    private function mergeCancelNote(?string $existingNote, string $cancelNote): string
+    {
+        $current = trim((string) $existingNote);
+        if ($current === '') {
+            return $cancelNote;
+        }
+
+        return $current.PHP_EOL.'[CANCELED] '.$cancelNote;
     }
 }

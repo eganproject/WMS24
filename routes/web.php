@@ -169,6 +169,7 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/stock-transfers/{id}', [\App\Http\Controllers\Admin\StockTransferController::class, 'show'])->name('stock-transfers.show');
         Route::get('/stock-transfers/{id}/detail', [\App\Http\Controllers\Admin\StockTransferController::class, 'detail'])->name('stock-transfers.detail');
         Route::post('/stock-transfers/{id}/qc', [\App\Http\Controllers\Admin\StockTransferController::class, 'qc'])->name('stock-transfers.qc');
+        Route::post('/stock-transfers/{id}/cancel', [\App\Http\Controllers\Admin\StockTransferController::class, 'cancel'])->name('stock-transfers.cancel');
 
         // Stock Opname
         Route::get('/stock-opname', [StockOpnameController::class, 'index'])->name('stock-opname.index');

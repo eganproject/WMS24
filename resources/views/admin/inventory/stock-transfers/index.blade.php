@@ -166,6 +166,7 @@
     const showUrlTpl = '{{ $showUrlTpl }}';
     const detailUrlTpl = '{{ $detailUrlTpl }}';
     const qcUrlTpl = '{{ $qcUrlTpl }}';
+    const cancelUrlTpl = '{{ $cancelUrlTpl }}';
     const csrfToken = '{{ csrf_token() }}';
     const canUpdate = {{ $canUpdate ? 'true' : 'false' }};
     const itemOptionsHtml = `@foreach($items as $item)<option value="{{ $item->id }}">{{ $item->sku }} - {{ $item->name }}</option>@endforeach`;
@@ -210,6 +211,7 @@
 
         const statusLabel = (status) => {
             if (status === 'completed') return '<span class="badge badge-light-success">Selesai</span>';
+            if (status === 'canceled') return '<span class="badge badge-light-danger">Dibatalkan</span>';
             return '<span class="badge badge-light-warning">Menunggu QC</span>';
         };
 
@@ -462,7 +464,10 @@
                     const qcItem = (row?.status === 'qc_pending' && canUpdate)
                         ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 text-success btn-qc" data-id="${data}">QC</a></div>`
                         : '';
-                    const actions = `${detailItem}${qcItem}`;
+                    const cancelItem = (row?.status === 'qc_pending' && canUpdate)
+                        ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 text-danger btn-cancel-transfer" data-id="${data}" data-code="${row.code}">Batalkan</a></div>`
+                        : '';
+                    const actions = `${detailItem}${qcItem}${cancelItem}`;
                     if (!actions) return '';
                     return `
                         <div class="text-end">
@@ -599,6 +604,70 @@
                 qcModal?.show();
             } catch (err) {
                 if (typeof Swal !== 'undefined') Swal.fire('Error', 'Gagal memuat data', 'error');
+            }
+        });
+
+        tableEl.on('click', '.btn-cancel-transfer', async function(e) {
+            e.preventDefault();
+            const id = this.getAttribute('data-id');
+            const code = this.getAttribute('data-code') || '';
+            if (!id) return;
+
+            let reason = '';
+            let confirmed = true;
+
+            if (typeof Swal !== 'undefined') {
+                const result = await Swal.fire({
+                    title: `Batalkan transfer ${code || ''}`.trim(),
+                    text: 'Transfer akan dikembalikan ke gudang asal dan tidak bisa di-QC.',
+                    input: 'textarea',
+                    inputLabel: 'Alasan pembatalan',
+                    inputPlaceholder: 'Opsional',
+                    showCancelButton: true,
+                    confirmButtonText: 'Ya, batalkan',
+                    cancelButtonText: 'Batal',
+                    buttonsStyling: false,
+                    customClass: {
+                        confirmButton: 'btn btn-danger',
+                        cancelButton: 'btn btn-light'
+                    }
+                });
+                confirmed = result.isConfirmed;
+                reason = (result.value || '').trim();
+            }
+
+            if (!confirmed) return;
+
+            const formData = new FormData();
+            if (reason !== '') {
+                formData.append('reason', reason);
+            }
+
+            try {
+                const res = await fetch(cancelUrlTpl.replace(':id', id), {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Accept': 'application/json',
+                    },
+                    body: formData,
+                });
+                const text = await res.text();
+                let json;
+                try { json = JSON.parse(text); } catch (err) {
+                    if (typeof Swal !== 'undefined') Swal.fire('Error', 'Respons server tidak valid', 'error');
+                    return;
+                }
+
+                if (!res.ok) {
+                    if (typeof Swal !== 'undefined') Swal.fire('Error', json.message || 'Gagal membatalkan transfer', 'error');
+                    return;
+                }
+
+                if (typeof Swal !== 'undefined') Swal.fire('Berhasil', json.message || 'Transfer dibatalkan', 'success');
+                reloadTable();
+            } catch (err) {
+                if (typeof Swal !== 'undefined') Swal.fire('Error', 'Gagal membatalkan transfer', 'error');
             }
         });
 

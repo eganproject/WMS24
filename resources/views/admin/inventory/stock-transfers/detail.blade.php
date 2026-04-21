@@ -46,7 +46,22 @@
             </div>
             <div class="col-md-4">
                 <div class="fw-bold text-gray-600">Status</div>
-                <div>{{ $transfer->status ?? '-' }}</div>
+                <div>
+                    @php
+                        $status = $transfer->status ?? 'qc_pending';
+                        $statusBadge = match ($status) {
+                            'completed' => 'badge-light-success',
+                            'canceled' => 'badge-light-danger',
+                            default => 'badge-light-warning',
+                        };
+                        $statusLabel = match ($status) {
+                            'completed' => 'Selesai',
+                            'canceled' => 'Dibatalkan',
+                            default => 'Menunggu QC',
+                        };
+                    @endphp
+                    <span class="badge {{ $statusBadge }}">{{ $statusLabel }}</span>
+                </div>
             </div>
         </div>
         <div class="row mb-6">

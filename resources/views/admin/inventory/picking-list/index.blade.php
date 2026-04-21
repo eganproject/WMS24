@@ -25,10 +25,10 @@
                     <option value="ongoing">Dalam Proses</option>
                     <option value="done">Selesai</option>
                 </select>
-                <select class="form-select form-select-solid w-200px" id="filter_lane">
-                    <option value="">Semua Lane</option>
-                    @foreach($lanes as $lane)
-                        <option value="{{ $lane->id }}">{{ $lane->code }} - {{ $lane->name }}</option>
+                <select class="form-select form-select-solid w-200px" id="filter_area">
+                    <option value="">Semua Area</option>
+                    @foreach($areas as $area)
+                        <option value="{{ $area->id }}">{{ $area->code }} - {{ $area->name }}</option>
                     @endforeach
                 </select>
                 <button type="button" class="btn btn-light" id="filter_apply">Filter</button>
@@ -77,7 +77,7 @@
                                 <th>Tanggal</th>
                                 <th>SKU</th>
                                 <th>Nama</th>
-                                <th>Lane</th>
+                                <th>Area</th>
                                 <th class="text-end">Qty</th>
                                 <th class="text-end">Remaining</th>
                             </tr>
@@ -230,7 +230,7 @@
         const searchInput = document.querySelector('[data-kt-filter="search"]');
         const dateEl = document.getElementById('filter_date');
         const statusEl = document.getElementById('filter_status');
-        const laneEl = document.getElementById('filter_lane');
+        const areaEl = document.getElementById('filter_area');
         const filterApplyBtn = document.getElementById('filter_apply');
         const filterResetBtn = document.getElementById('filter_reset');
         const recalcBtn = document.getElementById('btn_recalculate_picking');
@@ -331,14 +331,14 @@
                     params.q = searchInput?.value || '';
                     if (dateEl?.value) params.date = dateEl.value;
                     if (statusEl?.value) params.status = statusEl.value;
-                    if (laneEl?.value) params.lane_id = laneEl.value;
+                    if (areaEl?.value) params.area_id = areaEl.value;
                 }
             },
             columns: [
                 { data: 'date' },
                 { data: 'sku' },
                 { data: 'name' },
-                { data: 'lane' },
+                { data: 'area' },
                 { data: 'qty', className: 'text-end' },
                 { data: 'remaining_qty', className: 'text-end' },
             ]
@@ -355,7 +355,7 @@
                 data: function(params) {
                     params.q = searchInput?.value || '';
                     if (dateEl?.value) params.date = dateEl.value;
-                    if (laneEl?.value) params.lane_id = laneEl.value;
+                    if (areaEl?.value) params.area_id = areaEl.value;
                 }
             },
             columns: [
@@ -387,7 +387,7 @@
         filterApplyBtn?.addEventListener('click', reloadAll);
         dateEl?.addEventListener('change', updateRecalcState);
         statusEl?.addEventListener('change', reloadAll);
-        laneEl?.addEventListener('change', reloadAll);
+        areaEl?.addEventListener('change', reloadAll);
         filterResetBtn?.addEventListener('click', () => {
             if (fpDate && todayStr) {
                 fpDate.setDate(todayStr, true);
@@ -396,7 +396,7 @@
             }
             if (searchInput) searchInput.value = '';
             if (statusEl) statusEl.value = '';
-            if (laneEl) laneEl.value = '';
+            if (areaEl) areaEl.value = '';
             updateRecalcState();
             reloadAll();
         });
@@ -407,7 +407,7 @@
             if (q) params.set('q', q);
             if (dateEl?.value) params.set('date', dateEl.value);
             if (statusEl?.value) params.set('status', statusEl.value);
-            if (laneEl?.value) params.set('lane_id', laneEl.value);
+            if (areaEl?.value) params.set('area_id', areaEl.value);
             const url = params.toString() ? `${exportUrl}?${params.toString()}` : exportUrl;
             window.location.href = url;
         });
@@ -418,7 +418,7 @@
             if (q) params.set('q', q);
             if (dateEl?.value) params.set('date', dateEl.value);
             if (statusEl?.value) params.set('status', statusEl.value);
-            if (laneEl?.value) params.set('lane_id', laneEl.value);
+            if (areaEl?.value) params.set('area_id', areaEl.value);
             const url = params.toString() ? `${printUrl}?${params.toString()}` : printUrl;
             window.open(url, '_blank');
         });

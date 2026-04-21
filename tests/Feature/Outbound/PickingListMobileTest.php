@@ -3,7 +3,7 @@
 namespace Tests\Feature\Outbound;
 
 use App\Models\Item;
-use App\Models\Lane;
+use App\Models\Area;
 use App\Models\PickingList;
 use App\Models\Role;
 use App\Models\User;
@@ -40,14 +40,14 @@ class PickingListMobileTest extends TestCase
             ->assertJsonPath('items.0.remaining_qty', 5);
     }
 
-    public function test_picker_mobile_list_filters_items_by_user_lane_assignment(): void
+    public function test_picker_mobile_list_filters_items_by_user_area_assignment(): void
     {
-        $laneA = Lane::create([
+        $areaA = Area::create([
             'code' => 'KAB',
             'name' => 'Kabinet',
             'is_active' => true,
         ]);
-        $laneB = Lane::create([
+        $areaB = Area::create([
             'code' => 'DSP',
             'name' => 'Display',
             'is_active' => true,
@@ -55,17 +55,17 @@ class PickingListMobileTest extends TestCase
 
         $visibleItem = Item::create([
             'sku' => 'SKU-PICK-LIST-002',
-            'name' => 'Lane Only Item',
+            'name' => 'Area Only Item',
             'category_id' => 0,
-            'lane_id' => $laneA->id,
-            'address' => $laneA->code,
+            'area_id' => $areaA->id,
+            'address' => $areaA->code,
         ]);
         $hiddenItem = Item::create([
             'sku' => 'SKU-PICK-LIST-003',
-            'name' => 'Other Lane Item',
+            'name' => 'Other Area Item',
             'category_id' => 0,
-            'lane_id' => $laneB->id,
-            'address' => $laneB->code,
+            'area_id' => $areaB->id,
+            'address' => $areaB->code,
         ]);
 
         PickingList::create([
@@ -82,29 +82,29 @@ class PickingListMobileTest extends TestCase
         ]);
 
         $user = $this->createUserWithRole('picker');
-        $user->lane_id = $laneA->id;
+        $user->area_id = $areaA->id;
         $user->save();
 
         $this->actingAs($user)
             ->getJson(route('picker.picking-list.data', [
                 'date' => now()->toDateString(),
-                'lane_id' => $laneA->id,
+                'area_id' => $areaA->id,
             ]))
             ->assertOk()
             ->assertJsonCount(1, 'items')
             ->assertJsonPath('items.0.item_id', $visibleItem->id)
             ->assertJsonPath('items.0.sku', $visibleItem->sku)
-            ->assertJsonPath('items.0.address', $laneA->code);
+            ->assertJsonPath('items.0.address', $areaA->code);
     }
 
-    public function test_picker_without_lane_assignment_can_see_all_lanes(): void
+    public function test_picker_without_area_assignment_can_see_all_areas(): void
     {
-        $laneA = Lane::create([
+        $areaA = Area::create([
             'code' => 'KAB',
             'name' => 'Kabinet',
             'is_active' => true,
         ]);
-        $laneB = Lane::create([
+        $areaB = Area::create([
             'code' => 'DSP',
             'name' => 'Display',
             'is_active' => true,
@@ -112,17 +112,17 @@ class PickingListMobileTest extends TestCase
 
         $itemA = Item::create([
             'sku' => 'SKU-PICK-LIST-004',
-            'name' => 'Lane A Item',
+            'name' => 'Area A Item',
             'category_id' => 0,
-            'lane_id' => $laneA->id,
-            'address' => $laneA->code,
+            'area_id' => $areaA->id,
+            'address' => $areaA->code,
         ]);
         $itemB = Item::create([
             'sku' => 'SKU-PICK-LIST-005',
-            'name' => 'Lane B Item',
+            'name' => 'Area B Item',
             'category_id' => 0,
-            'lane_id' => $laneB->id,
-            'address' => $laneB->code,
+            'area_id' => $areaB->id,
+            'address' => $areaB->code,
         ]);
 
         PickingList::create([

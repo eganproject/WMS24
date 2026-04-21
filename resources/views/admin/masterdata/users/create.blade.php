@@ -45,14 +45,14 @@
                         @error('roles')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
                     <div class="mb-10">
-                        <label class="form-label">Lane</label>
-                        <select name="lane_id" class="form-select @error('lane_id') is-invalid @enderror form-select-solid" data-placeholder="Pilih Lane" data-control="select2">
+                        <label class="form-label">Area</label>
+                        <select name="area_id" class="form-select @error('area_id') is-invalid @enderror form-select-solid" data-placeholder="Pilih Area" data-control="select2">
                             <option value="">Semua picking list</option>
-                            @foreach($lanes as $lane)
-                                <option value="{{ $lane->id }}" @selected(old('lane_id') == $lane->id)>{{ $lane->code }} - {{ $lane->name }}</option>
+                            @foreach($areas as $area)
+                                <option value="{{ $area->id }}" @selected(old('area_id') == $area->id)>{{ $area->code }} - {{ $area->name }}</option>
                             @endforeach
                         </select>
-                        @error('lane_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        @error('area_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
                         <div class="form-text">Kosongkan jika user boleh melihat semua data picking list.</div>
                     </div>
                     <div class="mb-10">

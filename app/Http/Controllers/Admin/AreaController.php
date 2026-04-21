@@ -3,23 +3,23 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Area;
 use App\Models\Item;
-use App\Models\Lane;
 use App\Support\LocationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
-class LaneController extends Controller
+class AreaController extends Controller
 {
     public function index()
     {
-        return view('admin.masterdata.lanes.index');
+        return view('admin.masterdata.areas.index');
     }
 
     public function data(Request $request)
     {
-        $query = Lane::orderBy('code');
+        $query = Area::orderBy('code');
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
@@ -29,7 +29,7 @@ class LaneController extends Controller
             });
         }
 
-        $recordsTotal = Lane::count();
+        $recordsTotal = Area::count();
         $recordsFiltered = (clone $query)->count();
 
         $start = (int) $request->input('start', 0);
@@ -38,13 +38,13 @@ class LaneController extends Controller
             $query->skip($start)->take($length);
         }
 
-        $data = $query->get()->map(function ($lane) {
+        $data = $query->get()->map(function ($area) {
             return [
-                'id' => $lane->id,
-                'code' => $lane->code,
-                'name' => $lane->name,
-                'is_active' => (bool) $lane->is_active,
-                'sort_order' => $lane->sort_order,
+                'id' => $area->id,
+                'code' => $area->code,
+                'name' => $area->name,
+                'is_active' => (bool) $area->is_active,
+                'sort_order' => $area->sort_order,
             ];
         });
 
@@ -59,7 +59,7 @@ class LaneController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'code' => ['required', 'string', 'max:50', 'unique:lanes,code'],
+            'code' => ['required', 'string', 'max:50', 'unique:areas,code'],
             'name' => ['required', 'string', 'max:150'],
             'is_active' => ['nullable', 'boolean'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
@@ -70,30 +70,30 @@ class LaneController extends Controller
 
         DB::beginTransaction();
         try {
-            $lane = Lane::create($validated);
+            $area = Area::create($validated);
             DB::commit();
 
             return response()->json([
-                'message' => 'Lane berhasil dibuat',
-                'lane' => [
-                    'id' => $lane->id,
-                    'code' => $lane->code,
-                    'name' => $lane->name,
+                'message' => 'Area berhasil dibuat',
+                'area' => [
+                    'id' => $area->id,
+                    'code' => $area->code,
+                    'name' => $area->name,
                 ],
             ]);
         } catch (\Throwable $e) {
             DB::rollBack();
             return response()->json([
-                'message' => 'Gagal membuat lane',
+                'message' => 'Gagal membuat area',
                 'error' => $e->getMessage(),
             ], 500);
         }
     }
 
-    public function update(Request $request, Lane $lane)
+    public function update(Request $request, Area $area)
     {
         $validated = $request->validate([
-            'code' => ['required', 'string', 'max:50', Rule::unique('lanes', 'code')->ignore($lane->id)],
+            'code' => ['required', 'string', 'max:50', Rule::unique('areas', 'code')->ignore($area->id)],
             'name' => ['required', 'string', 'max:150'],
             'is_active' => ['nullable', 'boolean'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
@@ -104,13 +104,13 @@ class LaneController extends Controller
 
         DB::beginTransaction();
         try {
-            $oldCode = $lane->code;
-            $lane->update($validated);
+            $oldCode = $area->code;
+            $area->update($validated);
 
-            if ($oldCode !== $lane->code) {
-                $lane->locations()->get()->each(function ($location) use ($lane) {
+            if ($oldCode !== $area->code) {
+                $area->locations()->get()->each(function ($location) use ($area) {
                     $location->code = LocationService::buildAddress(
-                        $lane->code,
+                        $area->code,
                         $location->rack_code,
                         (int) $location->column_no,
                         (int) $location->row_no
@@ -119,10 +119,10 @@ class LaneController extends Controller
                 });
 
                 Item::with('location')
-                    ->where('lane_id', $lane->id)
+                    ->where('area_id', $area->id)
                     ->get()
-                    ->each(function ($item) use ($lane) {
-                        $item->address = $item->location?->code ?? $lane->code;
+                    ->each(function ($item) use ($area) {
+                        $item->address = $item->location?->code ?? $area->code;
                         $item->save();
                     });
             }
@@ -130,33 +130,33 @@ class LaneController extends Controller
             DB::commit();
 
             return response()->json([
-                'message' => 'Lane berhasil diperbarui',
-                'lane' => [
-                    'id' => $lane->id,
-                    'code' => $lane->code,
-                    'name' => $lane->name,
+                'message' => 'Area berhasil diperbarui',
+                'area' => [
+                    'id' => $area->id,
+                    'code' => $area->code,
+                    'name' => $area->name,
                 ],
             ]);
         } catch (\Throwable $e) {
             DB::rollBack();
             return response()->json([
-                'message' => 'Gagal memperbarui lane',
+                'message' => 'Gagal memperbarui area',
                 'error' => $e->getMessage(),
             ], 500);
         }
     }
 
-    public function destroy(Lane $lane)
+    public function destroy(Area $area)
     {
         DB::beginTransaction();
         try {
-            $lane->delete();
+            $area->delete();
             DB::commit();
-            return response()->json(['message' => 'Lane berhasil dihapus']);
+            return response()->json(['message' => 'Area berhasil dihapus']);
         } catch (\Throwable $e) {
             DB::rollBack();
             return response()->json([
-                'message' => 'Gagal menghapus lane',
+                'message' => 'Gagal menghapus area',
                 'error' => $e->getMessage(),
             ], 500);
         }

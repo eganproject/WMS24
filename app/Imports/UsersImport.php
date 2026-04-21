@@ -36,7 +36,7 @@ class UsersImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             $detected = implode(', ', array_filter($headers));
             throw ValidationException::withMessages([
                 'file' => 'Header wajib: Nama, Email, Password. '
-                    .'Roles dan Lane opsional. Pastikan header berada di baris pertama. '
+                    .'Roles dan Area opsional. Pastikan header berada di baris pertama. '
                     .($detected !== '' ? 'Header terdeteksi: '.$detected : ''),
             ]);
         }
@@ -52,7 +52,7 @@ class UsersImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             $email = strtolower(trim((string) ($rowData['email'] ?? '')));
             $password = (string) ($rowData['password'] ?? '');
             $roles = trim((string) ($rowData['roles'] ?? $rowData['role'] ?? ''));
-            $lane = trim((string) ($rowData['lane'] ?? $rowData['lane_code'] ?? $rowData['lane_id'] ?? ''));
+            $area = trim((string) ($rowData['area'] ?? $rowData['area_code'] ?? $rowData['area_id'] ?? $rowData['lane'] ?? $rowData['lane_code'] ?? $rowData['lane_id'] ?? ''));
 
             if ($name === '' || $email === '' || $password === '') {
                 $errors[] = "Baris {$rowIndex}: Nama, Email, dan Password wajib diisi";
@@ -76,7 +76,7 @@ class UsersImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
                 'email' => $email,
                 'password' => $password,
                 'roles_raw' => $roles,
-                'lane_raw' => $lane,
+                'area_raw' => $area,
             ];
         }
 
@@ -120,9 +120,9 @@ class UsersImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
         return match ($key) {
             'nama', 'nama_user', 'user_name' => 'name',
             'role' => 'roles',
-            'lane_id', 'id_lane' => 'lane_id',
-            'lane', 'jalur' => 'lane',
-            'lane_code', 'kode_lane' => 'lane_code',
+            'area_id', 'id_area', 'lane_id', 'id_lane' => 'area_id',
+            'area', 'jalur', 'lane' => 'area',
+            'area_code', 'kode_area', 'lane_code', 'kode_lane' => 'area_code',
             default => $key,
         };
     }

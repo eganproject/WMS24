@@ -22,7 +22,7 @@ class User extends Authenticatable
         'email',
         'password',
         'avatar',
-        'lane_id',
+        'area_id',
     ];
 
     /**
@@ -53,9 +53,9 @@ class User extends Authenticatable
         return $this->belongsToMany(Role::class, 'role_user');
     }
 
-    public function lane()
+    public function area()
     {
-        return $this->belongsTo(Lane::class, 'lane_id');
+        return $this->belongsTo(Area::class, 'area_id');
     }
 
     public static function defaultAvatar(): string

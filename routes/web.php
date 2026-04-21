@@ -26,7 +26,7 @@ use App\Http\Controllers\Admin\ReplenishmentReportController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\MenuController;
 use App\Http\Controllers\Admin\PermissionController;
-use App\Http\Controllers\Admin\LaneController;
+use App\Http\Controllers\Admin\AreaController;
 use App\Http\Controllers\Admin\LocationController;
 use App\Http\Controllers\Admin\KurirController;
 use App\Http\Controllers\Admin\SupplierController;
@@ -109,9 +109,9 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         // Roles CRUD
         Route::resource('roles', RoleController::class)->except(['show'])->names('roles');
 
-        // Lanes
-        Route::get('/lanes/data', [LaneController::class, 'data'])->name('lanes.data');
-        Route::resource('lanes', LaneController::class)->except(['create','show','edit'])->names('lanes');
+        // Areas
+        Route::get('/areas/data', [AreaController::class, 'data'])->name('areas.data');
+        Route::resource('areas', AreaController::class)->except(['create','show','edit'])->names('areas');
 
         // Locations
         Route::get('/locations/data', [LocationController::class, 'data'])->name('locations.data');

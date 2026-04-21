@@ -144,14 +144,14 @@
                         <div class="invalid-feedback" id="error_category_id"></div>
                     </div>
                     <div class="fv-row mb-7">
-                        <label class="fs-6 fw-bold form-label mb-2">Lane</label>
-                        <select name="lane_id" id="item_lane_id" class="form-select form-select-solid" data-control="select2" data-placeholder="Pilih lane">
-                            <option value="">Pilih lane</option>
-                            @foreach($lanes as $lane)
-                                <option value="{{ $lane->id }}" data-code="{{ $lane->code }}">{{ $lane->code }} - {{ $lane->name }}</option>
+                        <label class="fs-6 fw-bold form-label mb-2">Area</label>
+                        <select name="area_id" id="item_area_id" class="form-select form-select-solid" data-control="select2" data-placeholder="Pilih area">
+                            <option value="">Pilih area</option>
+                            @foreach($areas as $area)
+                                <option value="{{ $area->id }}" data-code="{{ $area->code }}">{{ $area->code }} - {{ $area->name }}</option>
                             @endforeach
                         </select>
-                        <div class="invalid-feedback" id="error_lane_id"></div>
+                        <div class="invalid-feedback" id="error_area_id"></div>
                     </div>
                     <div class="row g-3 mb-7">
                         <div class="col-md-6">
@@ -174,7 +174,7 @@
                         <div class="col-md-6">
                             <label class="fs-6 fw-bold form-label mb-2">Alamat</label>
                             <input type="text" class="form-control form-control-solid" name="address" id="item_address" placeholder="KAB atau KAB-A-03-05" />
-                            <div class="form-text">Boleh hanya lane jika slot detail belum ada. Jika rack, kolom, atau baris diisi, semuanya wajib lengkap.</div>
+                            <div class="form-text">Boleh hanya area jika slot detail belum ada. Jika rack, kolom, atau baris diisi, semuanya wajib lengkap.</div>
                             <div class="invalid-feedback" id="error_address"></div>
                         </div>
                     </div>
@@ -259,15 +259,15 @@
                         <li><strong>safety_stock</strong> / <strong>stok_pengaman</strong> (opsional, jumlah stok pengaman)</li>
                         <li><strong>koli_qty</strong> / <strong>isi_koli</strong> (opsional, isi per koli/pcs)</li>
                         <li><strong>address</strong> (opsional, bisa diisi <code>KAB</code> atau alamat detail seperti <code>KAB-A-03-05</code>)</li>
-                        <li><strong>lane</strong> (opsional, boleh berdiri sendiri sebagai alamat sementara)</li>
-                        <li><strong>lane</strong> + <strong>rack</strong> + <strong>column</strong> + <strong>row</strong> (opsional, jika ingin alamat detail; jika salah satu detail diisi maka semuanya wajib)</li>
+                        <li><strong>area</strong> (opsional, boleh berdiri sendiri sebagai alamat sementara)</li>
+                        <li><strong>area</strong> + <strong>rack</strong> + <strong>column</strong> + <strong>row</strong> (opsional, jika ingin alamat detail; jika salah satu detail diisi maka semuanya wajib)</li>
                         <li><strong>description</strong> (opsional)</li>
                     </ul>
                     <p class="text-muted small mb-1">Jika Anda menambahkan kolom <code>item_type</code>, nilainya hanya boleh <code>single</code>. Nilai <code>bundle</code> akan ditolak.</p>
-                    <p class="text-muted small mb-1">Contoh header: <code>sku,name,item_type,parent_category,category,stock_gudang_besar,stock_gudang_display,stock,safety_stock_gudang_besar,safety_stock_gudang_display,safety_stock,koli_qty,lane,rack,column,row,description</code></p>
+                    <p class="text-muted small mb-1">Contoh header: <code>sku,name,item_type,parent_category,category,stock_gudang_besar,stock_gudang_display,stock,safety_stock_gudang_besar,safety_stock_gudang_display,safety_stock,koli_qty,area,rack,column,row,description</code></p>
                     <p class="text-muted small mb-1">Gunakan format Excel (.xlsx/.xls) dengan header di baris pertama.</p>
                     <p class="text-muted small mb-1">Jika kolom category dikosongkan, item otomatis dimasukkan ke kategori "Tanpa Kategori".</p>
-                    <p class="text-muted small mb-0">Catatan: gunakan <code>lane</code> saja jika baru tahu area umum. Jika ingin alamat detail, lengkapi <code>lane</code>, <code>rack</code>, <code>column</code>, dan <code>row</code>.</p>
+                    <p class="text-muted small mb-0">Catatan: gunakan <code>area</code> saja jika baru tahu area umum. Jika ingin alamat detail, lengkapi <code>area</code>, <code>rack</code>, <code>column</code>, dan <code>row</code>.</p>
                     <div class="mt-4">
                         <a href="{{ route('admin.masterdata.items.template') }}" class="btn btn-light-primary">
                             Download Template Header
@@ -331,7 +331,7 @@
         const formName = document.getElementById('item_name');
         const formType = document.getElementById('item_type');
         const formCategory = document.getElementById('item_category_id');
-        const formLane = document.getElementById('item_lane_id');
+        const formArea = document.getElementById('item_area_id');
         const formRack = document.getElementById('item_rack_code');
         const formColumn = document.getElementById('item_column_no');
         const formRow = document.getElementById('item_row_no');
@@ -411,12 +411,12 @@
             }
         };
 
-        const setLaneValue = (val) => {
-            if (!formLane) return;
+        const setAreaValue = (val) => {
+            if (!formArea) return;
             const normalized = (val === null || val === undefined || val === '' || val === 'null') ? '' : String(val);
-            formLane.value = normalized;
-            if (typeof $ !== 'undefined' && $(formLane).data('select2')) {
-                $(formLane).val(normalized).trigger('change');
+            formArea.value = normalized;
+            if (typeof $ !== 'undefined' && $(formArea).data('select2')) {
+                $(formArea).val(normalized).trigger('change');
             }
         };
 
@@ -476,13 +476,13 @@
                 bundleCard.style.display = isBundle ? '' : 'none';
             }
 
-            [formLane, formRack, formColumn, formRow, formAddress, formKoliQty, formSafetyStock].forEach((field) => {
+            [formArea, formRack, formColumn, formRow, formAddress, formKoliQty, formSafetyStock].forEach((field) => {
                 if (!field) return;
                 field.disabled = isBundle;
             });
 
             if (isBundle) {
-                setLaneValue('');
+                setAreaValue('');
                 if (formRack) formRack.value = '';
                 if (formColumn) formColumn.value = '';
                 if (formRow) formRow.value = '';
@@ -511,8 +511,8 @@
                 allowClear: true,
                 width: '100%'
             });
-            $(formLane).select2({
-                placeholder: 'Pilih lane',
+            $(formArea).select2({
+                placeholder: 'Pilih area',
                 allowClear: true,
                 width: '100%'
             });
@@ -551,7 +551,7 @@
                 { data: 'safety_stock', className:'text-end', render: (data, type, row)=> row.item_type === 'bundle' ? '-' : (data ?? 0) },
                 { data: 'id', orderable:false, searchable:false, className:'text-end', render: (data, type, row)=>{
                     const components = encodeURIComponent(JSON.stringify(row.bundle_components || []));
-                    const editItem = canUpdate ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-edit" data-id="${data}" data-sku="${row.sku}" data-name="${row.name}" data-item-type="${row.item_type}" data-category="${row.category_id}" data-address="${row.address ?? ''}" data-lane-id="${row.lane_id ?? ''}" data-rack-code="${row.rack_code ?? ''}" data-column-no="${row.column_no ?? ''}" data-row-no="${row.row_no ?? ''}" data-description="${row.description}" data-koli-qty="${row.koli_qty ?? ''}" data-safety-stock="${row.safety_stock ?? 0}" data-bundle-components="${components}">Edit</a></div>` : '';
+                    const editItem = canUpdate ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-edit" data-id="${data}" data-sku="${row.sku}" data-name="${row.name}" data-item-type="${row.item_type}" data-category="${row.category_id}" data-address="${row.address ?? ''}" data-area-id="${row.area_id ?? ''}" data-rack-code="${row.rack_code ?? ''}" data-column-no="${row.column_no ?? ''}" data-row-no="${row.row_no ?? ''}" data-description="${row.description}" data-koli-qty="${row.koli_qty ?? ''}" data-safety-stock="${row.safety_stock ?? 0}" data-bundle-components="${components}">Edit</a></div>` : '';
                     const delItem = canDelete ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 text-danger btn-delete" data-id="${data}">Hapus</a></div>` : '';
                     const actions = `${editItem}${delItem}`;
                     if (!actions) return '';
@@ -600,27 +600,27 @@
         });
 
         const clearErrors = () => {
-            ['error_sku','error_name','error_item_type','error_category_id','error_lane_id','error_rack_code','error_column_no','error_row_no','error_address','error_description','error_koli_qty','error_safety_stock','error_bundle_components'].forEach(id => {
+            ['error_sku','error_name','error_item_type','error_category_id','error_area_id','error_rack_code','error_column_no','error_row_no','error_address','error_description','error_koli_qty','error_safety_stock','error_bundle_components'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.textContent = '';
             });
         };
 
         const buildAddress = () => {
-            if (!formLane || !formRack || !formColumn || !formRow) return '';
-            const laneOpt = formLane.options[formLane.selectedIndex];
-            const laneCode = laneOpt ? (laneOpt.getAttribute('data-code') || '').trim() : '';
+            if (!formArea || !formRack || !formColumn || !formRow) return '';
+            const areaOpt = formArea.options[formArea.selectedIndex];
+            const areaCode = areaOpt ? (areaOpt.getAttribute('data-code') || '').trim() : '';
             const rack = (formRack.value || '').trim().toUpperCase();
             const rawCol = (formColumn.value || '').trim();
             const rawRow = (formRow.value || '').trim();
             const col = parseInt(formColumn.value || '', 10);
             const row = parseInt(formRow.value || '', 10);
-            if (!laneCode) return '';
-            if (!rack && !rawCol && !rawRow) return laneCode;
+            if (!areaCode) return '';
+            if (!rack && !rawCol && !rawRow) return areaCode;
             if (!rack || !col || !row) return '';
             const colLabel = String(col).padStart(2, '0');
             const rowLabel = String(row).padStart(2, '0');
-            return `${laneCode}-${rack}-${colLabel}-${rowLabel}`;
+            return `${areaCode}-${rack}-${colLabel}-${rowLabel}`;
         };
 
         const syncAddress = () => {
@@ -640,7 +640,7 @@
             if (formKoliQty) formKoliQty.value = '';
             if (formSafetyStock) formSafetyStock.value = 0;
             setCategoryValue('0');
-            setLaneValue('');
+            setAreaValue('');
             if (formRack) formRack.value = '';
             if (formColumn) formColumn.value = '';
             if (formRow) formRow.value = '';
@@ -760,7 +760,7 @@
             const itemType = this.getAttribute('data-item-type') || 'single';
             const categoryId = this.getAttribute('data-category');
             const address = this.getAttribute('data-address') || '';
-            const laneId = this.getAttribute('data-lane-id') || '';
+            const areaId = this.getAttribute('data-area-id') || '';
             const rackCode = this.getAttribute('data-rack-code') || '';
             const columnNo = this.getAttribute('data-column-no') || '';
             const rowNo = this.getAttribute('data-row-no') || '';
@@ -774,7 +774,7 @@
             formName.value = name;
             if (formType) formType.value = itemType;
             if (formAddress) formAddress.value = address;
-            setLaneValue(laneId);
+            setAreaValue(areaId);
             if (formRack) formRack.value = rackCode;
             if (formColumn) formColumn.value = columnNo;
             if (formRow) formRow.value = rowNo;
@@ -795,7 +795,7 @@
             modal?.show();
         });
 
-        [formLane, formRack, formColumn, formRow].forEach((field) => {
+        [formArea, formRack, formColumn, formRow].forEach((field) => {
             field?.addEventListener('input', syncAddress);
             field?.addEventListener('change', syncAddress);
         });
@@ -875,3 +875,4 @@
 @endpush
 
 @include('layouts.partials.form-submit-confirmation')
+

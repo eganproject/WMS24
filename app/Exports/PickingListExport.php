@@ -20,7 +20,7 @@ class PickingListExport implements FromCollection, WithHeadings, WithMapping, Sh
     public function collection(): Collection
     {
         $query = PickingList::query()
-            ->with('item', 'item.location.lane', 'item.lane')
+            ->with('item', 'item.location.area', 'item.area')
             ->orderBy('list_date', 'desc')
             ->orderBy('sku');
         $query->whereNotIn('sku', QcScanException::query()->select('sku'));
@@ -53,10 +53,10 @@ class PickingListExport implements FromCollection, WithHeadings, WithMapping, Sh
             $query->where('remaining_qty', '<=', 0);
         }
 
-        $laneId = $this->filters['lane_id'] ?? null;
-        if (!empty($laneId)) {
-            $query->whereHas('item', function ($itemQ) use ($laneId) {
-                $itemQ->where('lane_id', (int) $laneId);
+        $areaId = $this->filters['area_id'] ?? null;
+        if (!empty($areaId)) {
+            $query->whereHas('item', function ($itemQ) use ($areaId) {
+                $itemQ->where('area_id', (int) $areaId);
             });
         }
 
@@ -65,18 +65,18 @@ class PickingListExport implements FromCollection, WithHeadings, WithMapping, Sh
 
     public function headings(): array
     {
-        return ['SKU', 'Nama', 'Lane', 'Alamat', 'Qty', 'Remaining'];
+        return ['SKU', 'Nama', 'Area', 'Alamat', 'Qty', 'Remaining'];
     }
 
     public function map($row): array
     {
         $item = $row->item;
-        $lane = $item?->resolvedLane();
+        $area = $item?->resolvedArea();
         $address = $item?->resolvedAddress() ?: '-';
         return [
             $row->sku ?? '-',
             $item?->name ?? '-',
-            $lane?->code ?? '-',
+            $area?->code ?? '-',
             $address,
             (int) $row->qty,
             (int) $row->remaining_qty,

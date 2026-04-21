@@ -41,7 +41,7 @@
                     <tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0">
                         <th>ID</th>
                         <th>Kode</th>
-                        <th>Lane</th>
+                        <th>Area</th>
                         <th>Rack</th>
                         <th>Kolom</th>
                         <th>Baris</th>
@@ -74,14 +74,14 @@
                     @csrf
                     <input type="hidden" name="location_id" id="location_id" />
                     <div class="fv-row mb-7">
-                        <label class="required fs-6 fw-bold form-label mb-2">Lane</label>
-                        <select name="lane_id" id="location_lane_id" class="form-select form-select-solid" data-control="select2" data-placeholder="Pilih lane" required>
-                            <option value="">Pilih lane</option>
-                            @foreach($lanes as $lane)
-                                <option value="{{ $lane->id }}" data-code="{{ $lane->code }}">{{ $lane->code }} - {{ $lane->name }}</option>
+                        <label class="required fs-6 fw-bold form-label mb-2">Area</label>
+                        <select name="area_id" id="location_area_id" class="form-select form-select-solid" data-control="select2" data-placeholder="Pilih area" required>
+                            <option value="">Pilih area</option>
+                            @foreach($areas as $area)
+                                <option value="{{ $area->id }}" data-code="{{ $area->code }}">{{ $area->code }} - {{ $area->name }}</option>
                             @endforeach
                         </select>
-                        <div class="invalid-feedback" id="error_lane_id"></div>
+                        <div class="invalid-feedback" id="error_area_id"></div>
                     </div>
                     <div class="row g-3 mb-7">
                         <div class="col-md-6">
@@ -103,7 +103,7 @@
                     <div class="fv-row mb-7">
                         <label class="fs-6 fw-bold form-label mb-2">Kode Lokasi</label>
                         <input type="text" class="form-control form-control-solid" id="location_code_preview" readonly />
-                        <div class="form-text">Kode akan dibuat otomatis (Lane-Rack-Kolom-Baris).</div>
+                        <div class="form-text">Kode akan dibuat otomatis (Area-Rack-Kolom-Baris).</div>
                     </div>
                     <div class="text-end pt-3">
                         <button type="button" class="btn btn-light me-3" data-bs-dismiss="modal">Batal</button>
@@ -138,7 +138,7 @@
         const modalEl = document.getElementById('modal_location_form');
         const modal = modalEl ? new bootstrap.Modal(modalEl) : null;
         const formId = document.getElementById('location_id');
-        const formLane = document.getElementById('location_lane_id');
+        const formArea = document.getElementById('location_area_id');
         const formRack = document.getElementById('location_rack_code');
         const formColumn = document.getElementById('location_column_no');
         const formRow = document.getElementById('location_row_no');
@@ -151,7 +151,7 @@
         }
 
         if (typeof $ !== 'undefined' && $.fn.select2) {
-            $(formLane).select2({ placeholder: 'Pilih lane', allowClear: true, width: '100%' });
+            $(formArea).select2({ placeholder: 'Pilih area', allowClear: true, width: '100%' });
         }
 
         const refreshMenus = () => {
@@ -161,14 +161,14 @@
         };
 
         const buildCode = () => {
-            if (!formLane || !formRack || !formColumn || !formRow) return '';
-            const laneOpt = formLane.options[formLane.selectedIndex];
-            const laneCode = laneOpt ? (laneOpt.getAttribute('data-code') || '').trim() : '';
+            if (!formArea || !formRack || !formColumn || !formRow) return '';
+            const areaOpt = formArea.options[formArea.selectedIndex];
+            const areaCode = areaOpt ? (areaOpt.getAttribute('data-code') || '').trim() : '';
             const rack = (formRack.value || '').trim().toUpperCase();
             const col = parseInt(formColumn.value || '', 10);
             const row = parseInt(formRow.value || '', 10);
-            if (!laneCode || !rack || !col || !row) return '';
-            return `${laneCode}-${rack}-${String(col).padStart(2,'0')}-${String(row).padStart(2,'0')}`;
+            if (!areaCode || !rack || !col || !row) return '';
+            return `${areaCode}-${rack}-${String(col).padStart(2,'0')}-${String(row).padStart(2,'0')}`;
         };
 
         const syncPreview = () => {
@@ -191,12 +191,12 @@
             columns: [
                 { data: 'id' },
                 { data: 'code' },
-                { data: 'lane_code', render: (val, type, row) => `${row.lane_code || '-'} - ${row.lane_name || '-'}` },
+                { data: 'area_code', render: (val, type, row) => `${row.area_code || '-'} - ${row.area_name || '-'}` },
                 { data: 'rack_code' },
                 { data: 'column_no' },
                 { data: 'row_no' },
                 { data: 'id', orderable:false, searchable:false, className:'text-end', render: (data, type, row)=>{
-                    const editItem = canUpdate ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-edit" data-id="${data}" data-lane-id="${row.lane_id}" data-rack-code="${row.rack_code}" data-column-no="${row.column_no}" data-row-no="${row.row_no}">Edit</a></div>` : '';
+                    const editItem = canUpdate ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-edit" data-id="${data}" data-area-id="${row.area_id}" data-rack-code="${row.rack_code}" data-column-no="${row.column_no}" data-row-no="${row.row_no}">Edit</a></div>` : '';
                     const delItem = canDelete ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 text-danger btn-delete" data-id="${data}">Hapus</a></div>` : '';
                     const actions = `${editItem}${delItem}`;
                     if (!actions) return '';
@@ -228,8 +228,8 @@
             if (!form) return;
             form.reset();
             formId.value = '';
-            if (typeof $ !== 'undefined' && $(formLane).data('select2')) {
-                $(formLane).val('').trigger('change');
+            if (typeof $ !== 'undefined' && $(formArea).data('select2')) {
+                $(formArea).val('').trigger('change');
             }
             syncPreview();
             clearErrors();
@@ -237,7 +237,7 @@
         });
 
         const clearErrors = () => {
-            ['error_lane_id','error_rack_code','error_column_no','error_row_no'].forEach(id => {
+            ['error_area_id','error_rack_code','error_column_no','error_row_no'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.textContent = '';
             });
@@ -290,16 +290,16 @@
         tableEl.on('click', '.btn-edit', function(e) {
             e.preventDefault();
             const id = this.getAttribute('data-id');
-            const laneId = this.getAttribute('data-lane-id');
+            const areaId = this.getAttribute('data-area-id');
             const rackCode = this.getAttribute('data-rack-code');
             const columnNo = this.getAttribute('data-column-no');
             const rowNo = this.getAttribute('data-row-no');
             if (!form) return;
             formId.value = id;
-            if (typeof $ !== 'undefined' && $(formLane).data('select2')) {
-                $(formLane).val(laneId || '').trigger('change');
-            } else if (formLane) {
-                formLane.value = laneId || '';
+            if (typeof $ !== 'undefined' && $(formArea).data('select2')) {
+                $(formArea).val(areaId || '').trigger('change');
+            } else if (formArea) {
+                formArea.value = areaId || '';
             }
             if (formRack) formRack.value = rackCode || '';
             if (formColumn) formColumn.value = columnNo || '';
@@ -360,7 +360,7 @@
             }
         });
 
-        [formLane, formRack, formColumn, formRow].forEach((el) => {
+        [formArea, formRack, formColumn, formRow].forEach((el) => {
             el?.addEventListener('input', syncPreview);
             el?.addEventListener('change', syncPreview);
         });
@@ -369,3 +369,4 @@
 @endpush
 
 @include('layouts.partials.form-submit-confirmation')
+

@@ -8,14 +8,14 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
-        if (Schema::hasTable('users') && !Schema::hasColumn('users', 'lane_id')) {
+        if (Schema::hasTable('users') && !Schema::hasColumn('users', 'area_id')) {
             Schema::table('users', function (Blueprint $table) {
-                $table->foreignId('lane_id')->nullable()->after('id')->constrained('lanes')->nullOnDelete();
+                $table->foreignId('area_id')->nullable()->after('id')->constrained('areas')->nullOnDelete();
             });
         }
 
-        if (Schema::hasTable('lanes') && Schema::hasColumn('lanes', 'divisi_id')) {
-            Schema::table('lanes', function (Blueprint $table) {
+        if (Schema::hasTable('areas') && Schema::hasColumn('areas', 'divisi_id')) {
+            Schema::table('areas', function (Blueprint $table) {
                 $table->dropConstrainedForeignId('divisi_id');
             });
         }
@@ -51,8 +51,8 @@ return new class extends Migration {
             });
         }
 
-        if (Schema::hasTable('lanes') && !Schema::hasColumn('lanes', 'divisi_id')) {
-            Schema::table('lanes', function (Blueprint $table) {
+        if (Schema::hasTable('areas') && !Schema::hasColumn('areas', 'divisi_id')) {
+            Schema::table('areas', function (Blueprint $table) {
                 $table->foreignId('divisi_id')->nullable()->after('name')->constrained('divisis')->nullOnDelete();
             });
         }
@@ -63,9 +63,9 @@ return new class extends Migration {
             });
         }
 
-        if (Schema::hasTable('users') && Schema::hasColumn('users', 'lane_id')) {
+        if (Schema::hasTable('users') && Schema::hasColumn('users', 'area_id')) {
             Schema::table('users', function (Blueprint $table) {
-                $table->dropConstrainedForeignId('lane_id');
+                $table->dropConstrainedForeignId('area_id');
             });
         }
     }

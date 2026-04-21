@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Picker;
 
 use App\Http\Controllers\Controller;
-use App\Models\Lane;
+use App\Models\Area;
 use App\Models\QcScanException;
 use App\Models\PickingList;
 use Illuminate\Http\Request;
@@ -14,12 +14,12 @@ class PickingListMobileController extends Controller
     public function index()
     {
         $authUser = auth()->user();
-        $laneQuery = Lane::query()
+        $areaQuery = Area::query()
             ->where('is_active', true)
             ->orderBy('code');
 
-        if ($authUser?->lane_id) {
-            $laneQuery->whereKey((int) $authUser->lane_id);
+        if ($authUser?->area_id) {
+            $areaQuery->whereKey((int) $authUser->area_id);
         }
 
         return view('picker.picking-list', [
@@ -28,7 +28,7 @@ class PickingListMobileController extends Controller
                 'data' => route('picker.picking-list.data'),
                 'logout' => route('logout'),
             ],
-            'lanes' => $laneQuery->get(['id', 'code', 'name']),
+            'areas' => $areaQuery->get(['id', 'code', 'name']),
             'today' => now()->toDateString(),
         ]);
     }
@@ -43,16 +43,16 @@ class PickingListMobileController extends Controller
         }
 
         $query = PickingList::query()
-            ->with('item', 'item.location.lane', 'item.lane')
+            ->with('item', 'item.location.area', 'item.area')
             ->whereDate('list_date', $date)
             ->orderBy('sku');
         $this->applyPackerExceptionFilter($query);
 
         $authUser = $request->user();
-        $userLaneId = $authUser?->lane_id ? (int) $authUser->lane_id : null;
-        if ($userLaneId) {
-            $query->whereHas('item', function ($itemQ) use ($userLaneId) {
-                $itemQ->where('lane_id', $userLaneId);
+        $userAreaId = $authUser?->area_id ? (int) $authUser->area_id : null;
+        if ($userAreaId) {
+            $query->whereHas('item', function ($itemQ) use ($userAreaId) {
+                $itemQ->where('area_id', $userAreaId);
             });
         }
 
@@ -66,10 +66,10 @@ class PickingListMobileController extends Controller
             });
         }
 
-        $laneId = $userLaneId ?: $request->integer('lane_id');
-        if ($laneId) {
-            $query->whereHas('item', function ($itemQ) use ($laneId) {
-                $itemQ->where('lane_id', (int) $laneId);
+        $areaId = $userAreaId ?: $request->integer('area_id');
+        if ($areaId) {
+            $query->whereHas('item', function ($itemQ) use ($areaId) {
+                $itemQ->where('area_id', (int) $areaId);
             });
         }
 

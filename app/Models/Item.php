@@ -17,7 +17,7 @@ class Item extends Model
         'name',
         'item_type',
         'category_id',
-        'lane_id',
+        'area_id',
         'location_id',
         'address',
         'description',
@@ -41,9 +41,9 @@ class Item extends Model
             ->where('warehouse_id', \App\Support\WarehouseService::defaultWarehouseId());
     }
 
-    public function lane()
+    public function area()
     {
-        return $this->belongsTo(Lane::class, 'lane_id');
+        return $this->belongsTo(Area::class, 'area_id');
     }
 
     public function stocks()
@@ -56,9 +56,9 @@ class Item extends Model
         return $this->belongsTo(Location::class, 'location_id');
     }
 
-    public function resolvedLane(): ?Lane
+    public function resolvedArea(): ?Area
     {
-        return $this->location?->lane ?: $this->lane;
+        return $this->location?->area ?: $this->area;
     }
 
     public function resolvedAddress(): string

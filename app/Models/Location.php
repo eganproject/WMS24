@@ -10,7 +10,7 @@ class Location extends Model
     use HasFactory;
 
     protected $fillable = [
-        'lane_id',
+        'area_id',
         'rack_code',
         'column_no',
         'row_no',
@@ -22,9 +22,9 @@ class Location extends Model
         'row_no' => 'integer',
     ];
 
-    public function lane()
+    public function area()
     {
-        return $this->belongsTo(Lane::class, 'lane_id');
+        return $this->belongsTo(Area::class, 'area_id');
     }
 
     public function items()

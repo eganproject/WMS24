@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Area;
 use App\Models\Item;
-use App\Models\Lane;
 use App\Models\Location;
 use App\Support\LocationService;
 use Illuminate\Http\Request;
@@ -15,21 +15,21 @@ class LocationController extends Controller
 {
     public function index()
     {
-        $lanes = Lane::orderBy('code')->get(['id', 'code', 'name']);
-        return view('admin.masterdata.locations.index', compact('lanes'));
+        $areas = Area::orderBy('code')->get(['id', 'code', 'name']);
+        return view('admin.masterdata.locations.index', compact('areas'));
     }
 
     public function data(Request $request)
     {
-        $query = Location::with('lane')->orderBy('code');
+        $query = Location::with('area')->orderBy('code');
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
             $query->where(function ($q) use ($search) {
                 $q->where('code', 'like', "%{$search}%")
                     ->orWhere('rack_code', 'like', "%{$search}%")
-                    ->orWhereHas('lane', function ($laneQ) use ($search) {
-                        $laneQ->where('code', 'like', "%{$search}%")
+                    ->orWhereHas('area', function ($areaQ) use ($search) {
+                        $areaQ->where('code', 'like', "%{$search}%")
                             ->orWhere('name', 'like', "%{$search}%");
                     });
             });
@@ -48,9 +48,9 @@ class LocationController extends Controller
             return [
                 'id' => $loc->id,
                 'code' => $loc->code,
-                'lane_id' => $loc->lane_id,
-                'lane_code' => $loc->lane?->code ?? '-',
-                'lane_name' => $loc->lane?->name ?? '-',
+                'area_id' => $loc->area_id,
+                'area_code' => $loc->area?->code ?? '-',
+                'area_name' => $loc->area?->name ?? '-',
                 'rack_code' => $loc->rack_code,
                 'column_no' => (int) $loc->column_no,
                 'row_no' => (int) $loc->row_no,
@@ -68,16 +68,16 @@ class LocationController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'lane_id' => ['required', 'integer', 'exists:lanes,id'],
+            'area_id' => ['required', 'integer', 'exists:areas,id'],
             'rack_code' => ['required', 'string', 'max:20'],
             'column_no' => ['required', 'integer', 'min:1'],
             'row_no' => ['required', 'integer', 'min:1'],
         ]);
 
-        $lane = Lane::find((int) $validated['lane_id']);
-        if (!$lane) {
+        $area = Area::find((int) $validated['area_id']);
+        if (!$area) {
             throw ValidationException::withMessages([
-                'lane_id' => 'Lane tidak ditemukan.',
+                'area_id' => 'Area tidak ditemukan.',
             ]);
         }
 
@@ -85,23 +85,23 @@ class LocationController extends Controller
         $col = (int) $validated['column_no'];
         $row = (int) $validated['row_no'];
 
-        $exists = Location::where('lane_id', $lane->id)
+        $exists = Location::where('area_id', $area->id)
             ->where('rack_code', $rack)
             ->where('column_no', $col)
             ->where('row_no', $row)
             ->exists();
         if ($exists) {
             throw ValidationException::withMessages([
-                'rack_code' => 'Lokasi sudah ada untuk lane tersebut.',
+                'rack_code' => 'Lokasi sudah ada untuk area tersebut.',
             ]);
         }
 
-        $code = LocationService::buildAddress($lane->code, $rack, $col, $row);
+        $code = LocationService::buildAddress($area->code, $rack, $col, $row);
 
         DB::beginTransaction();
         try {
             $location = Location::create([
-                'lane_id' => $lane->id,
+                'area_id' => $area->id,
                 'rack_code' => $rack,
                 'column_no' => $col,
                 'row_no' => $row,
@@ -128,16 +128,16 @@ class LocationController extends Controller
     public function update(Request $request, Location $location)
     {
         $validated = $request->validate([
-            'lane_id' => ['required', 'integer', 'exists:lanes,id'],
+            'area_id' => ['required', 'integer', 'exists:areas,id'],
             'rack_code' => ['required', 'string', 'max:20'],
             'column_no' => ['required', 'integer', 'min:1'],
             'row_no' => ['required', 'integer', 'min:1'],
         ]);
 
-        $lane = Lane::find((int) $validated['lane_id']);
-        if (!$lane) {
+        $area = Area::find((int) $validated['area_id']);
+        if (!$area) {
             throw ValidationException::withMessages([
-                'lane_id' => 'Lane tidak ditemukan.',
+                'area_id' => 'Area tidak ditemukan.',
             ]);
         }
 
@@ -145,7 +145,7 @@ class LocationController extends Controller
         $col = (int) $validated['column_no'];
         $row = (int) $validated['row_no'];
 
-        $exists = Location::where('lane_id', $lane->id)
+        $exists = Location::where('area_id', $area->id)
             ->where('rack_code', $rack)
             ->where('column_no', $col)
             ->where('row_no', $row)
@@ -153,16 +153,16 @@ class LocationController extends Controller
             ->exists();
         if ($exists) {
             throw ValidationException::withMessages([
-                'rack_code' => 'Lokasi sudah ada untuk lane tersebut.',
+                'rack_code' => 'Lokasi sudah ada untuk area tersebut.',
             ]);
         }
 
-        $code = LocationService::buildAddress($lane->code, $rack, $col, $row);
+        $code = LocationService::buildAddress($area->code, $rack, $col, $row);
 
         DB::beginTransaction();
         try {
             $location->update([
-                'lane_id' => $lane->id,
+                'area_id' => $area->id,
                 'rack_code' => $rack,
                 'column_no' => $col,
                 'row_no' => $row,
@@ -170,7 +170,7 @@ class LocationController extends Controller
             ]);
 
             Item::where('location_id', $location->id)->update([
-                'lane_id' => $lane->id,
+                'area_id' => $area->id,
                 'address' => $location->code,
             ]);
             DB::commit();
@@ -195,10 +195,10 @@ class LocationController extends Controller
     {
         DB::beginTransaction();
         try {
-            $location->loadMissing('lane');
+            $location->loadMissing('area');
             Item::where('location_id', $location->id)->update([
-                'lane_id' => $location->lane_id,
-                'address' => $location->lane?->code ?? $location->code,
+                'area_id' => $location->area_id,
+                'address' => $location->area?->code ?? $location->code,
             ]);
             $location->delete();
             DB::commit();

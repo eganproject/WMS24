@@ -136,10 +136,10 @@
         <div style="font-weight: 700; margin-bottom: 8px;">Filter</div>
         <div class="filter-grid">
             <input type="date" class="input" id="filter_date" value="{{ $today ?? '' }}" />
-            <select class="input" id="filter_lane">
-                <option value="">Semua Lane</option>
-                @foreach($lanes as $lane)
-                    <option value="{{ $lane->id }}">{{ $lane->code }} - {{ $lane->name }}</option>
+            <select class="input" id="filter_area">
+                <option value="">Semua Area</option>
+                @foreach($areas as $area)
+                    <option value="{{ $area->id }}">{{ $area->code }} - {{ $area->name }}</option>
                 @endforeach
             </select>
             <input type="text" class="input" id="filter_search" placeholder="Cari SKU atau nama" autocomplete="off" />
@@ -176,7 +176,7 @@
 
     const el = {
         date: document.getElementById('filter_date'),
-        lane: document.getElementById('filter_lane'),
+        area: document.getElementById('filter_area'),
         search: document.getElementById('filter_search'),
         perPage: document.getElementById('filter_per_page'),
         list: document.getElementById('list_items'),
@@ -300,8 +300,8 @@
         if (dateVal) params.set('date', dateVal);
         const q = (el.search?.value || '').trim();
         if (q) params.set('q', q);
-        const laneId = el.lane?.value || '';
-        if (laneId) params.set('lane_id', laneId);
+        const areaId = el.area?.value || '';
+        if (areaId) params.set('area_id', areaId);
         const perPage = Number(el.perPage?.value || 5);
         params.set('per_page', perPage);
         params.set('page', currentPage);
@@ -431,7 +431,7 @@
         currentPage = 1;
         loadData();
     });
-    el.lane?.addEventListener('change', () => {
+    el.area?.addEventListener('change', () => {
         currentPage = 1;
         loadData();
     });

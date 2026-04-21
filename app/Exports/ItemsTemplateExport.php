@@ -28,7 +28,7 @@ class ItemsTemplateExport implements FromCollection, WithHeadings
             'safety_stock_gudang_display',
             'safety_stock',
             'koli_qty',
-            'lane',
+            'area',
             'rack',
             'column',
             'row',
@@ -36,3 +36,4 @@ class ItemsTemplateExport implements FromCollection, WithHeadings
         ];
     }
 }
+

@@ -5,7 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class Lane extends Model
+class Area extends Model
 {
     use HasFactory;
 
@@ -23,6 +23,16 @@ class Lane extends Model
 
     public function locations()
     {
-        return $this->hasMany(Location::class, 'lane_id');
+        return $this->hasMany(Location::class, 'area_id');
+    }
+
+    public function items()
+    {
+        return $this->hasMany(Item::class, 'area_id');
+    }
+
+    public function users()
+    {
+        return $this->hasMany(User::class, 'area_id');
     }
 }

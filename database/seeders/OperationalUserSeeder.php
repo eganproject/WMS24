@@ -39,7 +39,7 @@ class OperationalUserSeeder extends Seeder
                 [
                     'name' => $user['name'],
                     'password' => Hash::make('123456'),
-                    'lane_id' => null,
+                    'area_id' => null,
                     'email_verified_at' => now(),
                     'updated_at' => now(),
                     'created_at' => now(),

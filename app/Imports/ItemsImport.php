@@ -80,7 +80,7 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             $address = '';
             $hasAddressHeader = $this->hasAnyKey($row, ['address']);
             $hasLocationHeaders = $this->hasAnyKey($row, [
-                'lane', 'lane_code', 'ruang', 'ruangan', 'room',
+                'area', 'area_code', 'lane', 'lane_code', 'ruang', 'ruangan', 'room',
                 'rack', 'rak',
                 'column', 'col', 'kolom',
                 'row', 'baris',
@@ -89,11 +89,11 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             if ($hasAddressHeader) {
                 $address = trim((string) ($row['address'] ?? ''));
             }
-            // If address column exists but is empty, allow lane/rack/column/row to act as fallback.
+            // If address column exists but is empty, allow area/rack/column/row to act as fallback.
             if ($address === '' && $hasLocationHeaders) {
                 if ($this->hasAnyDetailedLocationValue($locationParts) && !$this->hasCompleteLocationValue($locationParts)) {
                     throw ValidationException::withMessages([
-                        'file' => "Baris {$excelRow} (SKU {$sku}): lengkapi lane, rack, kolom, dan baris jika ingin mengisi lokasi item.",
+                        'file' => "Baris {$excelRow} (SKU {$sku}): lengkapi area, rack, kolom, dan baris jika ingin mengisi lokasi item.",
                     ]);
                 }
 
@@ -133,14 +133,14 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             if ($hasAddressHeader || $hasLocationHeaders) {
                 $location = LocationService::resolveLocation($address);
                 if ($location) {
-                    $payload['lane_id'] = $location->lane_id;
+                    $payload['area_id'] = $location->area_id;
                     $payload['location_id'] = $location->id;
                     $payload['address'] = $location->code;
                 } else {
-                    $lane = LocationService::resolveLane($address);
-                    $payload['lane_id'] = $lane?->id;
+                    $area = LocationService::resolveArea($address);
+                    $payload['area_id'] = $area?->id;
                     $payload['location_id'] = null;
-                    $payload['address'] = $lane?->code ?? $address;
+                    $payload['address'] = $area?->code ?? $address;
                 }
             }
             if ($safetyStock !== null) {
@@ -411,30 +411,30 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
 
     private function composeAddressFromParts(array $parts): string
     {
-        $lane = $parts['lane'] ?? '';
+        $area = $parts['area'] ?? '';
         $rack = $parts['rack'] ?? '';
         $col = $parts['column'] ?? '';
         $rowNo = $parts['row'] ?? '';
 
-        if ($lane === '') {
+        if ($area === '') {
             return '';
         }
 
         if ($rack === '' && $col === '' && $rowNo === '') {
-            return $lane;
+            return $area;
         }
 
         if ($rack === '' || $col === '' || $rowNo === '') {
             return '';
         }
 
-        return "{$lane}-{$rack}-{$col}-{$rowNo}";
+        return "{$area}-{$rack}-{$col}-{$rowNo}";
     }
 
     private function extractLocationParts($row): array
     {
         return [
-            'lane' => trim((string) ($this->getValue($row, ['lane', 'lane_code', 'ruang', 'ruangan', 'room']) ?? '')),
+            'area' => trim((string) ($this->getValue($row, ['area', 'area_code', 'lane', 'lane_code', 'ruang', 'ruangan', 'room']) ?? '')),
             'rack' => trim((string) ($this->getValue($row, ['rack', 'rak']) ?? '')),
             'column' => trim((string) ($this->getValue($row, ['column', 'col', 'kolom']) ?? '')),
             'row' => trim((string) ($this->getValue($row, ['row', 'baris']) ?? '')),
@@ -454,7 +454,7 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
 
     private function hasCompleteLocationValue(array $parts): bool
     {
-        foreach (['lane', 'rack', 'column', 'row'] as $key) {
+        foreach (['area', 'rack', 'column', 'row'] as $key) {
             if (trim((string) ($parts[$key] ?? '')) === '') {
                 return false;
             }

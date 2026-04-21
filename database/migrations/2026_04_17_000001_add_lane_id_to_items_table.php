@@ -9,49 +9,49 @@ return new class extends Migration {
     public function up(): void
     {
         Schema::table('items', function (Blueprint $table) {
-            $table->foreignId('lane_id')
+            $table->foreignId('area_id')
                 ->nullable()
                 ->after('category_id')
-                ->constrained('lanes')
+                ->constrained('areas')
                 ->nullOnDelete();
         });
 
         $itemsWithLocation = DB::table('items')
             ->join('locations', 'locations.id', '=', 'items.location_id')
-            ->select('items.id', 'locations.lane_id')
+            ->select('items.id', 'locations.area_id')
             ->orderBy('items.id')
             ->get();
 
         foreach ($itemsWithLocation as $row) {
             DB::table('items')
                 ->where('id', $row->id)
-                ->update(['lane_id' => $row->lane_id]);
+                ->update(['area_id' => $row->area_id]);
         }
 
-        $laneIdsByCode = DB::table('lanes')
+        $areaIdsByCode = DB::table('areas')
             ->select('id', 'code')
             ->get()
-            ->mapWithKeys(fn ($lane) => [strtoupper(trim((string) $lane->code)) => (int) $lane->id]);
+            ->mapWithKeys(fn ($area) => [strtoupper(trim((string) $area->code)) => (int) $area->id]);
 
         DB::table('items')
-            ->whereNull('lane_id')
+            ->whereNull('area_id')
             ->whereNotNull('address')
             ->orderBy('id')
-            ->chunkById(200, function ($items) use ($laneIdsByCode) {
+            ->chunkById(200, function ($items) use ($areaIdsByCode) {
                 foreach ($items as $item) {
                     $normalizedAddress = strtoupper(trim((string) ($item->address ?? '')));
                     if ($normalizedAddress === '') {
                         continue;
                     }
 
-                    $laneId = $laneIdsByCode->get($normalizedAddress);
-                    if (!$laneId) {
+                    $areaId = $areaIdsByCode->get($normalizedAddress);
+                    if (!$areaId) {
                         continue;
                     }
 
                     DB::table('items')
                         ->where('id', $item->id)
-                        ->update(['lane_id' => $laneId]);
+                        ->update(['area_id' => $areaId]);
                 }
             });
     }
@@ -59,7 +59,7 @@ return new class extends Migration {
     public function down(): void
     {
         Schema::table('items', function (Blueprint $table) {
-            $table->dropConstrainedForeignId('lane_id');
+            $table->dropConstrainedForeignId('area_id');
         });
     }
 };

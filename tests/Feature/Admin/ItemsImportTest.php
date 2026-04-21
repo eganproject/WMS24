@@ -14,7 +14,7 @@ class ItemsImportTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_import_accepts_lane_only_as_item_address(): void
+    public function test_import_accepts_area_only_as_item_address(): void
     {
         $this->createDefaultWarehouse();
 
@@ -23,16 +23,16 @@ class ItemsImportTest extends TestCase
             new Collection([
                 'sku' => 'SKU-IMPORT-001',
                 'name' => 'Imported Item',
-                'lane' => 'KAB',
+                'area' => 'KAB',
             ]),
         ]));
 
-        $item = Item::with('lane')->where('sku', 'SKU-IMPORT-001')->firstOrFail();
+        $item = Item::with('area')->where('sku', 'SKU-IMPORT-001')->firstOrFail();
 
         $this->assertNull($item->location_id);
-        $this->assertNotNull($item->lane_id);
+        $this->assertNotNull($item->area_id);
         $this->assertSame('KAB', $item->address);
-        $this->assertSame('KAB', $item->lane?->code);
+        $this->assertSame('KAB', $item->area?->code);
     }
 
     public function test_import_rejects_incomplete_detailed_location_parts(): void
@@ -46,7 +46,7 @@ class ItemsImportTest extends TestCase
                 new Collection([
                     'sku' => 'SKU-IMPORT-001A',
                     'name' => 'Imported Item',
-                    'lane' => 'KAB',
+                    'area' => 'KAB',
                     'rack' => 'A',
                 ]),
             ]));
@@ -54,7 +54,7 @@ class ItemsImportTest extends TestCase
             $this->fail('Import seharusnya gagal jika alamat detail diisi tidak lengkap.');
         } catch (ValidationException $exception) {
             $this->assertSame(
-                'Baris 2 (SKU SKU-IMPORT-001A): lengkapi lane, rack, kolom, dan baris jika ingin mengisi lokasi item.',
+                'Baris 2 (SKU SKU-IMPORT-001A): lengkapi area, rack, kolom, dan baris jika ingin mengisi lokasi item.',
                 $exception->errors()['file'][0] ?? null
             );
         }
@@ -73,21 +73,21 @@ class ItemsImportTest extends TestCase
             new Collection([
                 'sku' => 'SKU-IMPORT-002',
                 'name' => 'Imported Item Full Location',
-                'lane' => 'KAB',
+                'area' => 'KAB',
                 'rack' => 'A',
                 'column' => '3',
                 'row' => '5',
             ]),
         ]));
 
-        $item = Item::with('lane', 'location.lane')->where('sku', 'SKU-IMPORT-002')->firstOrFail();
+        $item = Item::with('area', 'location.area')->where('sku', 'SKU-IMPORT-002')->firstOrFail();
 
         $this->assertNotNull($item->location);
-        $this->assertSame($item->location?->lane_id, $item->lane_id);
+        $this->assertSame($item->location?->area_id, $item->area_id);
         $this->assertSame('KAB-A-03-05', $item->address);
         $this->assertSame('KAB-A-03-05', $item->location?->code);
-        $this->assertSame('KAB', $item->lane?->code);
-        $this->assertSame('KAB', $item->location?->lane?->code);
+        $this->assertSame('KAB', $item->area?->code);
+        $this->assertSame('KAB', $item->location?->area?->code);
     }
 
     public function test_import_rejects_bundle_item_type_value(): void

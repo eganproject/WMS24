@@ -8,7 +8,7 @@ use App\Models\InboundItem;
 use App\Models\InboundTransaction;
 use App\Models\Item;
 use App\Models\ItemStock;
-use App\Models\Lane;
+use App\Models\Area;
 use App\Exports\ItemsTemplateExport;
 use App\Imports\ItemsImport;
 use App\Models\ItemBundleComponent;
@@ -30,18 +30,18 @@ class ItemController extends Controller
     public function index()
     {
         $categories = Category::orderBy('name')->get(['id', 'name']);
-        $lanes = Lane::orderBy('code')->get(['id', 'code', 'name']);
+        $areas = Area::orderBy('code')->get(['id', 'code', 'name']);
         $componentItems = Item::query()
             ->where('item_type', Item::TYPE_SINGLE)
             ->orderBy('sku')
             ->get(['id', 'sku', 'name']);
 
-        return view('admin.masterdata.items.index', compact('categories', 'lanes', 'componentItems'));
+        return view('admin.masterdata.items.index', compact('categories', 'areas', 'componentItems'));
     }
 
     public function data(Request $request)
     {
-        $query = Item::with(['category', 'location.lane', 'lane', 'bundleComponents.component'])->orderBy('name');
+        $query = Item::with(['category', 'location.area', 'area', 'bundleComponents.component'])->orderBy('name');
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
@@ -50,15 +50,15 @@ class ItemController extends Controller
                     ->orWhere('name', 'like', "%{$search}%")
                     ->orWhere('address', 'like', "%{$search}%")
                     ->orWhere('description', 'like', "%{$search}%")
-                    ->orWhereHas('lane', function ($laneQ) use ($search) {
-                        $laneQ->where('code', 'like', "%{$search}%")
+                    ->orWhereHas('area', function ($areaQ) use ($search) {
+                        $areaQ->where('code', 'like', "%{$search}%")
                             ->orWhere('name', 'like', "%{$search}%");
                     })
                     ->orWhereHas('location', function ($locQ) use ($search) {
                         $locQ->where('code', 'like', "%{$search}%")
                             ->orWhere('rack_code', 'like', "%{$search}%")
-                            ->orWhereHas('lane', function ($laneQ) use ($search) {
-                                $laneQ->where('code', 'like', "%{$search}%")
+                            ->orWhereHas('area', function ($areaQ) use ($search) {
+                                $areaQ->where('code', 'like', "%{$search}%")
                                     ->orWhere('name', 'like', "%{$search}%");
                             });
                     });
@@ -85,7 +85,7 @@ class ItemController extends Controller
 
         $data = $query->get()->map(function ($i) {
             $location = $i->location;
-            $lane = $i->resolvedLane();
+            $area = $i->resolvedArea();
             $address = $i->resolvedAddress();
             return [
                 'id' => $i->id,
@@ -96,8 +96,8 @@ class ItemController extends Controller
                 'category' => $i->category?->name ?? '-',
                 'category_id' => $i->category_id,
                 'address' => $address,
-                'lane_id' => $lane?->id,
-                'lane_code' => $lane?->code ?? '',
+                'area_id' => $area?->id,
+                'area_code' => $area?->code ?? '',
                 'rack_code' => $location?->rack_code ?? '',
                 'column_no' => $location?->column_no ?? '',
                 'row_no' => $location?->row_no ?? '',
@@ -134,7 +134,7 @@ class ItemController extends Controller
                     $fail('Kategori tidak valid');
                 }
             }],
-            'lane_id' => ['nullable', 'integer', 'exists:lanes,id'],
+            'area_id' => ['nullable', 'integer', 'exists:areas,id'],
             'rack_code' => ['nullable', 'string', 'max:20'],
             'column_no' => ['nullable', 'integer', 'min:1'],
             'row_no' => ['nullable', 'integer', 'min:1'],
@@ -214,7 +214,7 @@ class ItemController extends Controller
                     $fail('Kategori tidak valid');
                 }
             }],
-            'lane_id' => ['nullable', 'integer', 'exists:lanes,id'],
+            'area_id' => ['nullable', 'integer', 'exists:areas,id'],
             'rack_code' => ['nullable', 'string', 'max:20'],
             'column_no' => ['nullable', 'integer', 'min:1'],
             'row_no' => ['nullable', 'integer', 'min:1'],
@@ -441,7 +441,7 @@ class ItemController extends Controller
 
     private function applyLocationPayload(array &$validated): void
     {
-        $laneId = $validated['lane_id'] ?? null;
+        $areaId = $validated['area_id'] ?? null;
         $rack = trim((string) ($validated['rack_code'] ?? ''));
         $col = $validated['column_no'] ?? null;
         $row = $validated['row_no'] ?? null;
@@ -451,27 +451,27 @@ class ItemController extends Controller
             ($row !== null && $row !== '');
 
         if ($hasDetailedParts) {
-            if ($laneId === null || $laneId === '' || $rack === '' || $col === null || $col === '' || $row === null || $row === '') {
+            if ($areaId === null || $areaId === '' || $rack === '' || $col === null || $col === '' || $row === null || $row === '') {
                 throw ValidationException::withMessages([
-                    'rack_code' => 'Lengkapi lane, rack, kolom, dan baris.',
+                    'rack_code' => 'Lengkapi area, rack, kolom, dan baris.',
                 ]);
             }
 
-            $location = LocationService::resolveLocationFromParts((int) $laneId, (string) $rack, (int) $col, (int) $row);
+            $location = LocationService::resolveLocationFromParts((int) $areaId, (string) $rack, (int) $col, (int) $row);
             if ($location) {
-                $validated['lane_id'] = $location->lane_id;
+                $validated['area_id'] = $location->area_id;
                 $validated['location_id'] = $location->id;
                 $validated['address'] = $location->code;
                 return;
             }
         }
 
-        if ($laneId !== null && $laneId !== '') {
-            $lane = Lane::find((int) $laneId);
-            if ($lane) {
-                $validated['lane_id'] = $lane->id;
+        if ($areaId !== null && $areaId !== '') {
+            $area = Area::find((int) $areaId);
+            if ($area) {
+                $validated['area_id'] = $area->id;
                 $validated['location_id'] = null;
-                $validated['address'] = $lane->code;
+                $validated['address'] = $area->code;
                 return;
             }
         }
@@ -480,21 +480,21 @@ class ItemController extends Controller
             $address = trim((string) ($validated['address'] ?? ''));
             $location = LocationService::resolveLocation($address);
             if ($location) {
-                $validated['lane_id'] = $location->lane_id;
+                $validated['area_id'] = $location->area_id;
                 $validated['location_id'] = $location->id;
                 $validated['address'] = $location->code;
                 return;
             }
 
-            $lane = LocationService::resolveLane($address);
-            if ($lane) {
-                $validated['lane_id'] = $lane->id;
+            $area = LocationService::resolveArea($address);
+            if ($area) {
+                $validated['area_id'] = $area->id;
                 $validated['location_id'] = null;
-                $validated['address'] = $lane->code;
+                $validated['address'] = $area->code;
                 return;
             }
 
-            $validated['lane_id'] = null;
+            $validated['area_id'] = null;
             $validated['location_id'] = null;
             $validated['address'] = $address;
         }
@@ -502,7 +502,7 @@ class ItemController extends Controller
 
     private function normalizeBundlePayload(array &$validated): void
     {
-        $validated['lane_id'] = null;
+        $validated['area_id'] = null;
         $validated['location_id'] = null;
         $validated['address'] = null;
         $validated['safety_stock'] = 0;

@@ -9,14 +9,14 @@ return new class extends Migration {
     {
         Schema::create('locations', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('lane_id')->constrained('lanes')->cascadeOnDelete();
+            $table->foreignId('area_id')->constrained('areas')->cascadeOnDelete();
             $table->string('rack_code', 20);
             $table->unsignedSmallInteger('column_no');
             $table->unsignedSmallInteger('row_no');
             $table->string('code', 50)->unique();
             $table->timestamps();
 
-            $table->unique(['lane_id', 'rack_code', 'column_no', 'row_no'], 'locations_unique_slot');
+            $table->unique(['area_id', 'rack_code', 'column_no', 'row_no'], 'locations_unique_slot');
         });
     }
 

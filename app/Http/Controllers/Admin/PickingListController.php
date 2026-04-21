@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Exports\PickingListExport;
 use App\Models\Item;
-use App\Models\Lane;
+use App\Models\Area;
 use App\Models\PickingList;
 use App\Models\PickingListException;
 use App\Models\QcScanException;
@@ -23,7 +23,7 @@ class PickingListController extends Controller
         return view('admin.inventory.picking-list.index', [
             'dataUrl' => route('admin.inventory.picking-list.data'),
             'dataUrlExceptions' => route('admin.inventory.picking-list.exceptions'),
-            'lanes' => Lane::orderBy('code')->get(['id', 'code', 'name']),
+            'areas' => Area::orderBy('code')->get(['id', 'code', 'name']),
             'today' => now()->toDateString(),
         ]);
     }
@@ -31,12 +31,12 @@ class PickingListController extends Controller
     public function data(Request $request)
     {
         $baseQuery = PickingList::query()
-            ->with('item', 'item.location.lane', 'item.lane')
+            ->with('item', 'item.location.area', 'item.area')
             ->orderBy('list_date', 'desc')
             ->orderBy('sku');
         $this->applyPackerExceptionFilter($baseQuery);
         $this->applyDateFilter($baseQuery, $request);
-        $this->applyLaneFilter($baseQuery, $request);
+        $this->applyAreaFilter($baseQuery, $request);
         $recordsTotalQuery = clone $baseQuery;
 
         $search = trim((string) $request->input('q', ''));
@@ -68,12 +68,12 @@ class PickingListController extends Controller
 
         $data = $query->get()->map(function ($row) {
             $item = $row->item;
-            $lane = $item?->resolvedLane();
+            $area = $item?->resolvedArea();
             return [
                 'date' => $row->list_date?->format('Y-m-d') ?? '-',
                 'sku' => $row->sku ?? '-',
                 'name' => $item?->name ?? '-',
-                'lane' => $lane?->code ?? '-',
+                'area' => $area?->code ?? '-',
                 'qty' => (int) $row->qty,
                 'remaining_qty' => (int) $row->remaining_qty,
             ];
@@ -96,7 +96,7 @@ class PickingListController extends Controller
             ->orderBy('sku');
         $this->applyPackerExceptionFilter($baseQuery);
         $this->applyDateFilter($baseQuery, $request);
-        $this->applyLaneFilter($baseQuery, $request);
+        $this->applyAreaFilter($baseQuery, $request);
         $recordsTotalQuery = clone $baseQuery;
 
         $search = trim((string) $request->input('q', ''));
@@ -344,7 +344,7 @@ class PickingListController extends Controller
             'q' => $request->input('q', ''),
             'date' => $request->input('date'),
             'status' => $request->input('status', ''),
-            'lane_id' => $request->input('lane_id'),
+            'area_id' => $request->input('area_id'),
         ];
 
         $date = $filters['date'] ?: now()->toDateString();
@@ -360,7 +360,7 @@ class PickingListController extends Controller
             'q' => trim((string) $request->input('q', '')),
             'date' => $request->input('date'),
             'status' => (string) $request->input('status', ''),
-            'lane_id' => $request->input('lane_id'),
+            'area_id' => $request->input('area_id'),
         ];
 
         $date = $filters['date'] ?: now()->toDateString();
@@ -371,7 +371,7 @@ class PickingListController extends Controller
         }
 
         $query = PickingList::query()
-            ->with('item', 'item.location.lane', 'item.lane')
+            ->with('item', 'item.location.area', 'item.area')
             ->orderBy('list_date', 'desc')
             ->orderBy('sku');
         $this->applyPackerExceptionFilter($query);
@@ -387,26 +387,26 @@ class PickingListController extends Controller
         }
 
         $query->whereDate('list_date', $date);
-        $this->applyLaneFilter($query, $request);
+        $this->applyAreaFilter($query, $request);
         $this->applyStatusFilter($query, $request);
 
         $rows = $query->get()->map(function ($row) {
             $item = $row->item;
-            $lane = $item?->resolvedLane();
+            $area = $item?->resolvedArea();
             $address = $item?->resolvedAddress() ?: '-';
             return [
                 'sku' => $row->sku ?? '-',
                 'name' => $item?->name ?? '-',
-                'lane' => $lane?->code ?? '-',
+                'area' => $area?->code ?? '-',
                 'address' => $address,
                 'qty' => (int) $row->qty,
                 'remaining_qty' => (int) $row->remaining_qty,
             ];
         });
 
-        $laneName = null;
-        if (!empty($filters['lane_id'])) {
-            $laneName = Lane::where('id', (int) $filters['lane_id'])->value('code');
+        $areaName = null;
+        if (!empty($filters['area_id'])) {
+            $areaName = Area::where('id', (int) $filters['area_id'])->value('code');
         }
 
         return view('admin.inventory.picking-list.print', [
@@ -414,7 +414,7 @@ class PickingListController extends Controller
             'date' => $date,
             'status' => $filters['status'] ?: 'all',
             'keyword' => $filters['q'] ?: '',
-            'laneName' => $laneName,
+            'areaName' => $areaName,
         ]);
     }
 
@@ -605,12 +605,12 @@ class PickingListController extends Controller
         $query->whereNotIn('sku', QcScanException::query()->select('sku'));
     }
 
-    private function applyLaneFilter($query, Request $request): void
+    private function applyAreaFilter($query, Request $request): void
     {
-        $laneId = $request->input('lane_id');
-        if (!empty($laneId)) {
-            $query->whereHas('item', function ($itemQ) use ($laneId) {
-                $itemQ->where('lane_id', (int) $laneId);
+        $areaId = $request->input('area_id');
+        if (!empty($areaId)) {
+            $query->whereHas('item', function ($itemQ) use ($areaId) {
+                $itemQ->where('area_id', (int) $areaId);
             });
         }
     }

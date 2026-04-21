@@ -2,46 +2,46 @@
 
 namespace App\Support;
 
-use App\Models\Lane;
+use App\Models\Area;
 use App\Models\Location;
 
 class LocationService
 {
-    public static function normalizeLaneCode(string $laneCode): ?string
+    public static function normalizeAreaCode(string $areaCode): ?string
     {
-        $lane = strtoupper(trim($laneCode));
-        if ($lane === '') {
+        $area = strtoupper(trim($areaCode));
+        if ($area === '') {
             return null;
         }
 
-        if (!preg_match('/^[A-Z0-9]+$/', $lane)) {
+        if (!preg_match('/^[A-Z0-9]+$/', $area)) {
             return null;
         }
 
-        return $lane;
+        return $area;
     }
 
-    public static function resolveLane(string $laneCode): ?Lane
+    public static function resolveArea(string $areaCode): ?Area
     {
-        $normalized = self::normalizeLaneCode($laneCode);
+        $normalized = self::normalizeAreaCode($areaCode);
         if ($normalized === null) {
             return null;
         }
 
-        $lane = Lane::query()
+        $area = Area::query()
             ->whereRaw('UPPER(code) = ?', [$normalized])
             ->first();
 
-        if ($lane) {
-            if ($lane->code !== $normalized) {
-                $lane->code = $normalized;
-                $lane->save();
+        if ($area) {
+            if ($area->code !== $normalized) {
+                $area->code = $normalized;
+                $area->save();
             }
 
-            return $lane;
+            return $area;
         }
 
-        return Lane::create([
+        return Area::create([
             'code' => $normalized,
             'name' => $normalized,
             'is_active' => true,
@@ -49,9 +49,9 @@ class LocationService
     }
 
     /**
-     * Parse address code in format: LANE-RACK-COLUMN-ROW (e.g. KAB-A-3-5).
+     * Parse address code in format: AREA-RACK-COLUMN-ROW (e.g. KAB-A-3-5).
      *
-     * @return array{lane_code:string,rack_code:string,column_no:int,row_no:int,code:string}|null
+     * @return array{area_code:string,rack_code:string,column_no:int,row_no:int,code:string}|null
      */
     public static function parseAddress(string $address): ?array
     {
@@ -65,11 +65,11 @@ class LocationService
             return null;
         }
 
-        [$laneRaw, $rackRaw, $colRaw, $rowRaw] = $parts;
-        $lane = self::normalizeLaneCode($laneRaw);
+        [$areaRaw, $rackRaw, $colRaw, $rowRaw] = $parts;
+        $area = self::normalizeAreaCode($areaRaw);
         $rack = strtoupper(trim($rackRaw));
 
-        if ($lane === null || $rack === '') {
+        if ($area === null || $rack === '') {
             return null;
         }
         if (!preg_match('/^[A-Z0-9]+$/', $rack)) {
@@ -88,10 +88,10 @@ class LocationService
 
         $colLabel = str_pad((string) $col, 2, '0', STR_PAD_LEFT);
         $rowLabel = str_pad((string) $row, 2, '0', STR_PAD_LEFT);
-        $code = "{$lane}-{$rack}-{$colLabel}-{$rowLabel}";
+        $code = "{$area}-{$rack}-{$colLabel}-{$rowLabel}";
 
         return [
-            'lane_code' => $lane,
+            'area_code' => $area,
             'rack_code' => $rack,
             'column_no' => $col,
             'row_no' => $row,
@@ -99,14 +99,14 @@ class LocationService
         ];
     }
 
-    public static function buildAddress(string $laneCode, string $rackCode, int $columnNo, int $rowNo): string
+    public static function buildAddress(string $areaCode, string $rackCode, int $columnNo, int $rowNo): string
     {
-        $lane = strtoupper(trim($laneCode));
+        $area = strtoupper(trim($areaCode));
         $rack = strtoupper(trim($rackCode));
         $colLabel = str_pad((string) $columnNo, 2, '0', STR_PAD_LEFT);
         $rowLabel = str_pad((string) $rowNo, 2, '0', STR_PAD_LEFT);
 
-        return "{$lane}-{$rack}-{$colLabel}-{$rowLabel}";
+        return "{$area}-{$rack}-{$colLabel}-{$rowLabel}";
     }
 
     public static function resolveLocation(string $address): ?Location
@@ -116,14 +116,14 @@ class LocationService
             return null;
         }
 
-        $lane = self::resolveLane($parsed['lane_code']);
-        if (!$lane) {
+        $area = self::resolveArea($parsed['area_code']);
+        if (!$area) {
             return null;
         }
 
         $location = Location::firstOrCreate(
             [
-                'lane_id' => $lane->id,
+                'area_id' => $area->id,
                 'rack_code' => $parsed['rack_code'],
                 'column_no' => $parsed['column_no'],
                 'row_no' => $parsed['row_no'],
@@ -139,21 +139,21 @@ class LocationService
         return $location;
     }
 
-    public static function resolveLocationFromParts(int $laneId, string $rackCode, int $columnNo, int $rowNo): ?Location
+    public static function resolveLocationFromParts(int $areaId, string $rackCode, int $columnNo, int $rowNo): ?Location
     {
-        $lane = Lane::find($laneId);
-        if (!$lane) {
+        $area = Area::find($areaId);
+        if (!$area) {
             return null;
         }
 
         $rack = strtoupper(trim($rackCode));
         $columnNo = max(1, (int) $columnNo);
         $rowNo = max(1, (int) $rowNo);
-        $code = self::buildAddress($lane->code, $rack, $columnNo, $rowNo);
+        $code = self::buildAddress($area->code, $rack, $columnNo, $rowNo);
 
         $location = Location::firstOrCreate(
             [
-                'lane_id' => $lane->id,
+                'area_id' => $area->id,
                 'rack_code' => $rack,
                 'column_no' => $columnNo,
                 'row_no' => $rowNo,

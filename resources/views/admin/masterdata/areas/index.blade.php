@@ -1,13 +1,13 @@
 @extends('layouts.admin')
 
-@section('title', 'Lanes')
-@section('page_title', 'Lanes')
+@section('title', 'Areas')
+@section('page_title', 'Areas')
 
 @php
     use App\Support\Permission as Perm;
-    $canCreate = Perm::can(auth()->user(), 'admin.masterdata.lanes.index', 'create');
-    $canUpdate = Perm::can(auth()->user(), 'admin.masterdata.lanes.index', 'update');
-    $canDelete = Perm::can(auth()->user(), 'admin.masterdata.lanes.index', 'delete');
+    $canCreate = Perm::can(auth()->user(), 'admin.masterdata.areas.index', 'create');
+    $canUpdate = Perm::can(auth()->user(), 'admin.masterdata.areas.index', 'update');
+    $canDelete = Perm::can(auth()->user(), 'admin.masterdata.areas.index', 'delete');
 @endphp
 
 @section('content')
@@ -21,14 +21,14 @@
                         <path d="M11 19C6.55556 19 3 15.4444 3 11C3 6.55556 6.55556 3 11 3C15.4444 3 19 6.55556 19 11C19 15.4444 15.4444 19 11 19ZM11 5C7.53333 5 5 7.53333 5 11C5 14.4667 7.53333 17 11 17C14.4667 17 17.53333 14.4667 17.53333 11C17.53333 7.53333 14.4667 5 11 5Z" fill="black" />
                     </svg>
                 </span>
-                <input type="text" class="form-control form-control-solid w-250px ps-14" placeholder="Search lane" data-kt-filter="search" />
+                <input type="text" class="form-control form-control-solid w-250px ps-14" placeholder="Search area" data-kt-filter="search" />
             </div>
         </div>
         <div class="card-toolbar">
             <div class="d-flex justify-content-end" data-kt-user-table-toolbar="base">
                 @if($canCreate)
-                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modal_lane_form" id="btn_open_create">
-                        Add Lane
+                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modal_area_form" id="btn_open_create">
+                        Add Area
                     </button>
                 @endif
             </div>
@@ -36,7 +36,7 @@
     </div>
     <div class="card-body py-6">
         <div class="table-responsive">
-            <table class="table align-middle table-row-dashed fs-6 gy-5" id="lane_table">
+            <table class="table align-middle table-row-dashed fs-6 gy-5" id="area_table">
                 <thead>
                     <tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0">
                         <th>ID</th>
@@ -54,11 +54,11 @@
 </div>
 
 <!--begin::Modal-->
-<div class="modal fade" id="modal_lane_form" tabindex="-1" aria-hidden="true">
+<div class="modal fade" id="modal_area_form" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered mw-650px">
         <div class="modal-content">
             <div class="modal-header">
-                <h2 class="fw-bolder" id="modal_lane_title">Add Lane</h2>
+                <h2 class="fw-bolder" id="modal_area_title">Add Area</h2>
                 <div class="btn btn-icon btn-sm btn-active-icon-primary" data-bs-dismiss="modal">
                     <span class="svg-icon svg-icon-1">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
@@ -69,23 +69,23 @@
                 </div>
             </div>
             <div class="modal-body scroll-y mx-5 mx-xl-15 my-7">
-                <form class="form" id="lane_form">
+                <form class="form" id="area_form">
                     @csrf
-                    <input type="hidden" name="lane_id" id="lane_id" />
+                    <input type="hidden" name="area_id" id="area_id" />
                     <div class="fv-row mb-7">
                         <label class="required fs-6 fw-bold form-label mb-2">Kode</label>
-                        <input type="text" class="form-control form-control-solid" name="code" id="lane_code" required />
+                        <input type="text" class="form-control form-control-solid" name="code" id="area_code" required />
                         <div class="invalid-feedback" id="error_code"></div>
                     </div>
                     <div class="fv-row mb-7">
                         <label class="required fs-6 fw-bold form-label mb-2">Nama</label>
-                        <input type="text" class="form-control form-control-solid" name="name" id="lane_name" required />
+                        <input type="text" class="form-control form-control-solid" name="name" id="area_name" required />
                         <div class="invalid-feedback" id="error_name"></div>
                     </div>
                     <div class="row g-3 mb-7">
                         <div class="col-md-6">
                             <label class="fs-6 fw-bold form-label mb-2">Status</label>
-                            <select name="is_active" id="lane_is_active" class="form-select form-select-solid">
+                            <select name="is_active" id="area_is_active" class="form-select form-select-solid">
                                 <option value="1">Aktif</option>
                                 <option value="0">Nonaktif</option>
                             </select>
@@ -93,7 +93,7 @@
                         </div>
                         <div class="col-md-6">
                             <label class="fs-6 fw-bold form-label mb-2">Sort Order</label>
-                            <input type="number" min="0" class="form-control form-control-solid" name="sort_order" id="lane_sort_order" />
+                            <input type="number" min="0" class="form-control form-control-solid" name="sort_order" id="area_sort_order" />
                             <div class="invalid-feedback" id="error_sort_order"></div>
                         </div>
                     </div>
@@ -116,25 +116,25 @@
 @push('scripts')
 <script>
     const csrfToken = '{{ csrf_token() }}';
-    const dataUrl   = '{{ route('admin.masterdata.lanes.data') }}';
-    const storeUrl  = '{{ route('admin.masterdata.lanes.store') }}';
-    const updateTpl = '{{ route('admin.masterdata.lanes.update', ':id') }}';
-    const deleteTpl = '{{ route('admin.masterdata.lanes.destroy', ':id') }}';
+    const dataUrl   = '{{ route('admin.masterdata.areas.data') }}';
+    const storeUrl  = '{{ route('admin.masterdata.areas.store') }}';
+    const updateTpl = '{{ route('admin.masterdata.areas.update', ':id') }}';
+    const deleteTpl = '{{ route('admin.masterdata.areas.destroy', ':id') }}';
     const canUpdate = {{ $canUpdate ? 'true' : 'false' }};
     const canDelete = {{ $canDelete ? 'true' : 'false' }};
 
     document.addEventListener('DOMContentLoaded', () => {
-        const tableEl = $('#lane_table');
+        const tableEl = $('#area_table');
         const searchInput = document.querySelector('[data-kt-filter="search"]');
-        const form = document.getElementById('lane_form');
-        const modalEl = document.getElementById('modal_lane_form');
+        const form = document.getElementById('area_form');
+        const modalEl = document.getElementById('modal_area_form');
         const modal = modalEl ? new bootstrap.Modal(modalEl) : null;
-        const formId = document.getElementById('lane_id');
-        const formCode = document.getElementById('lane_code');
-        const formName = document.getElementById('lane_name');
-        const formActive = document.getElementById('lane_is_active');
-        const formSort = document.getElementById('lane_sort_order');
-        const titleEl = document.getElementById('modal_lane_title');
+        const formId = document.getElementById('area_id');
+        const formCode = document.getElementById('area_code');
+        const formName = document.getElementById('area_name');
+        const formActive = document.getElementById('area_is_active');
+        const formSort = document.getElementById('area_sort_order');
+        const titleEl = document.getElementById('modal_area_title');
 
         if (!tableEl.length || !$.fn.DataTable) {
             console.error('DataTables unavailable');
@@ -200,7 +200,7 @@
             formId.value = '';
             if (formActive) formActive.value = '1';
             clearErrors();
-            if (titleEl) titleEl.textContent = 'Add Lane';
+            if (titleEl) titleEl.textContent = 'Add Area';
         });
 
         const clearErrors = () => {
@@ -241,7 +241,7 @@
                             if (errEl) errEl.textContent = msgs.join(', ');
                         });
                     } else if (typeof Swal !== 'undefined') {
-                        Swal.fire('Error', json.message || 'Gagal menyimpan lane', 'error');
+                        Swal.fire('Error', json.message || 'Gagal menyimpan area', 'error');
                     }
                     return;
                 }
@@ -250,7 +250,7 @@
                 reloadTable();
             } catch (err) {
                 console.error(err);
-                if (typeof Swal !== 'undefined') Swal.fire('Error', 'Gagal menyimpan lane', 'error');
+                if (typeof Swal !== 'undefined') Swal.fire('Error', 'Gagal menyimpan area', 'error');
             }
         });
 
@@ -268,7 +268,7 @@
             if (formActive) formActive.value = isActive === '0' ? '0' : '1';
             if (formSort) formSort.value = sortOrder ?? '';
             clearErrors();
-            if (titleEl) titleEl.textContent = 'Edit Lane';
+            if (titleEl) titleEl.textContent = 'Edit Area';
             modal?.show();
         });
 
@@ -279,7 +279,7 @@
             if (typeof Swal !== 'undefined') {
                 const res = await Swal.fire({
                     title: 'Apakah Anda yakin?',
-                    text: 'Lane akan dihapus',
+                    text: 'Area akan dihapus',
                     icon: 'warning',
                     showCancelButton: true,
                     confirmButtonText: 'Hapus',
@@ -311,14 +311,14 @@
                     return;
                 }
                 if (!res.ok) {
-                    if (typeof Swal !== 'undefined') Swal.fire('Error', json.message || 'Gagal menghapus lane', 'error');
+                    if (typeof Swal !== 'undefined') Swal.fire('Error', json.message || 'Gagal menghapus area', 'error');
                     return;
                 }
                 if (typeof Swal !== 'undefined') Swal.fire('Berhasil', json.message || 'Berhasil', 'success');
                 reloadTable();
             } catch (err) {
                 console.error(err);
-                if (typeof Swal !== 'undefined') Swal.fire('Error', 'Gagal menghapus lane', 'error');
+                if (typeof Swal !== 'undefined') Swal.fire('Error', 'Gagal menghapus area', 'error');
             }
         });
     });

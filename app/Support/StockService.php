@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Models\Item;
 use App\Models\ItemStock;
 use App\Models\StockMutation;
 use Illuminate\Validation\ValidationException;
@@ -22,6 +23,18 @@ class StockService
         if ($itemId <= 0 || $qty <= 0) {
             throw ValidationException::withMessages([
                 'qty' => 'Qty tidak valid',
+            ]);
+        }
+
+        $item = Item::query()->find($itemId);
+        if (!$item) {
+            throw ValidationException::withMessages([
+                'item_id' => 'Item tidak ditemukan',
+            ]);
+        }
+        if ($item->isBundle()) {
+            throw ValidationException::withMessages([
+                'item_id' => 'SKU bundle tidak memiliki stok fisik dan tidak boleh dimutasi langsung.',
             ]);
         }
 
@@ -58,6 +71,8 @@ class StockService
 
         StockMutation::create([
             'item_id' => $itemId,
+            'reference_item_id' => $payload['reference_item_id'] ?? $itemId,
+            'reference_sku' => $payload['reference_sku'] ?? $item->sku,
             'warehouse_id' => $warehouseId,
             'direction' => $direction,
             'qty' => $qty,
@@ -109,6 +124,68 @@ class StockService
 
             $stock->stock = $newStock;
             $stock->save();
+        }
+    }
+
+    public static function currentQty(int $itemId, int $warehouseId): int
+    {
+        return (int) (ItemStock::query()
+            ->where('item_id', $itemId)
+            ->where('warehouse_id', $warehouseId)
+            ->value('stock') ?? 0);
+    }
+
+    public static function depleteSellableRows(iterable $rows, int $warehouseId, array $context = []): void
+    {
+        $requirements = BundleService::expandItemRows($rows);
+        if (empty($requirements)) {
+            return;
+        }
+
+        $itemIds = collect($requirements)->pluck('item_id')->unique()->sort()->values()->all();
+        $stocks = ItemStock::query()
+            ->where('warehouse_id', $warehouseId)
+            ->whereIn('item_id', $itemIds)
+            ->lockForUpdate()
+            ->get()
+            ->keyBy('item_id');
+
+        foreach ($itemIds as $itemId) {
+            if (!$stocks->has($itemId)) {
+                $stocks->put($itemId, ItemStock::create([
+                    'item_id' => $itemId,
+                    'warehouse_id' => $warehouseId,
+                    'stock' => 0,
+                ]));
+            }
+        }
+
+        foreach ($requirements as $requirement) {
+            $stock = $stocks->get((int) $requirement['item_id']);
+            $qty = (int) $requirement['qty'];
+            if ((int) $stock->stock < $qty) {
+                throw ValidationException::withMessages([
+                    'qty' => "Stok tidak mencukupi untuk SKU {$requirement['sku']}.",
+                ]);
+            }
+        }
+
+        foreach ($requirements as $requirement) {
+            self::mutate([
+                'item_id' => (int) $requirement['item_id'],
+                'reference_item_id' => (int) ($requirement['reference_item_id'] ?? $requirement['item_id']),
+                'reference_sku' => $requirement['reference_sku'] ?? $requirement['sku'],
+                'warehouse_id' => $warehouseId,
+                'direction' => 'out',
+                'qty' => (int) $requirement['qty'],
+                'source_type' => $context['source_type'] ?? 'outbound',
+                'source_subtype' => $context['source_subtype'] ?? null,
+                'source_id' => $context['source_id'] ?? null,
+                'source_code' => $context['source_code'] ?? null,
+                'note' => $context['note'] ?? null,
+                'occurred_at' => $context['occurred_at'] ?? now(),
+                'created_by' => $context['created_by'] ?? null,
+            ]);
         }
     }
 }

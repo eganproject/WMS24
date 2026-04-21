@@ -21,6 +21,9 @@
             <div class="col-md-4">
                 <div class="fw-bold text-gray-600">Item</div>
                 <div>{{ $mutation->item?->sku }} - {{ $mutation->item?->name }}</div>
+                @if(!empty($mutation->reference_sku) && strcasecmp((string) $mutation->reference_sku, (string) ($mutation->item?->sku ?? '')) !== 0)
+                    <div class="text-muted fs-8">Referensi bundle: {{ $mutation->reference_sku }}</div>
+                @endif
             </div>
             <div class="col-md-2">
                 <div class="fw-bold text-gray-600">Arah</div>

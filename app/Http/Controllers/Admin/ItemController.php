@@ -11,6 +11,8 @@ use App\Models\ItemStock;
 use App\Models\Lane;
 use App\Exports\ItemsTemplateExport;
 use App\Imports\ItemsImport;
+use App\Models\ItemBundleComponent;
+use App\Support\BundleService;
 use App\Support\LocationService;
 use App\Support\StockService;
 use App\Support\InboundScanStatus;
@@ -29,12 +31,17 @@ class ItemController extends Controller
     {
         $categories = Category::orderBy('name')->get(['id', 'name']);
         $lanes = Lane::orderBy('code')->get(['id', 'code', 'name']);
-        return view('admin.masterdata.items.index', compact('categories', 'lanes'));
+        $componentItems = Item::query()
+            ->where('item_type', Item::TYPE_SINGLE)
+            ->orderBy('sku')
+            ->get(['id', 'sku', 'name']);
+
+        return view('admin.masterdata.items.index', compact('categories', 'lanes', 'componentItems'));
     }
 
     public function data(Request $request)
     {
-        $query = Item::with(['category', 'location.lane', 'lane'])->orderBy('name');
+        $query = Item::with(['category', 'location.lane', 'lane', 'bundleComponents.component'])->orderBy('name');
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
@@ -84,6 +91,8 @@ class ItemController extends Controller
                 'id' => $i->id,
                 'sku' => $i->sku,
                 'name' => $i->name,
+                'item_type' => $i->item_type ?: Item::TYPE_SINGLE,
+                'type_label' => $i->isBundle() ? 'Bundle' : 'Single',
                 'category' => $i->category?->name ?? '-',
                 'category_id' => $i->category_id,
                 'address' => $address,
@@ -95,6 +104,13 @@ class ItemController extends Controller
                 'description' => $i->description ?? '',
                 'safety_stock' => (int) ($i->safety_stock ?? 0),
                 'koli_qty' => $i->koli_qty !== null ? (int) $i->koli_qty : null,
+                'bundle_summary' => BundleService::summarize($i),
+                'bundle_components' => $i->bundleComponents->map(fn ($row) => [
+                    'component_item_id' => (int) $row->component_item_id,
+                    'required_qty' => (int) $row->required_qty,
+                    'component_sku' => $row->component?->sku,
+                    'component_name' => $row->component?->name,
+                ])->values()->all(),
             ];
         });
 
@@ -111,6 +127,7 @@ class ItemController extends Controller
         $validated = $request->validate([
             'sku' => ['required', 'string', 'max:100', 'unique:items,sku'],
             'name' => ['required', 'string', 'max:150'],
+            'item_type' => ['required', Rule::in([Item::TYPE_SINGLE, Item::TYPE_BUNDLE])],
             'category_id' => ['nullable', 'integer', 'min:0', function($attr, $value, $fail) {
                 if ((int)$value === 0) return;
                 if (!Category::where('id', $value)->exists()) {
@@ -125,6 +142,9 @@ class ItemController extends Controller
             'description' => ['nullable', 'string'],
             'safety_stock' => ['nullable', 'integer', 'min:0'],
             'koli_qty' => ['nullable', 'integer', 'min:0', 'max:4294967295'],
+            'bundle_components' => ['nullable', 'array'],
+            'bundle_components.*.component_item_id' => ['nullable', 'integer', 'exists:items,id'],
+            'bundle_components.*.required_qty' => ['nullable', 'integer', 'min:1'],
         ]);
 
         $catId = $request->input('category_id');
@@ -138,16 +158,28 @@ class ItemController extends Controller
                 : max(0, (int) $validated['koli_qty']);
         }
 
-        $this->applyLocationPayload($validated);
+        $bundleComponents = $validated['bundle_components'] ?? [];
+        unset($validated['bundle_components']);
+
+        if (($validated['item_type'] ?? Item::TYPE_SINGLE) === Item::TYPE_BUNDLE) {
+            $this->normalizeBundlePayload($validated);
+            BundleService::validateComponents(null, $bundleComponents);
+        } else {
+            $this->applyLocationPayload($validated);
+        }
 
         DB::beginTransaction();
         try {
             $item = Item::create($validated);
-            $warehouseId = WarehouseService::defaultWarehouseId();
-            ItemStock::firstOrCreate(
-                ['item_id' => $item->id, 'warehouse_id' => $warehouseId],
-                ['stock' => 0]
-            );
+            BundleService::syncComponents($item, $bundleComponents);
+
+            if ($item->isSingle()) {
+                $warehouseId = WarehouseService::defaultWarehouseId();
+                ItemStock::firstOrCreate(
+                    ['item_id' => $item->id, 'warehouse_id' => $warehouseId],
+                    ['stock' => 0]
+                );
+            }
             DB::commit();
 
             return response()->json([
@@ -156,6 +188,7 @@ class ItemController extends Controller
                     'id' => $item->id,
                     'sku' => $item->sku,
                     'name' => $item->name,
+                    'item_type' => $item->item_type,
                     'category_id' => $item->category_id,
                     'koli_qty' => $item->koli_qty,
                 ]
@@ -174,6 +207,7 @@ class ItemController extends Controller
         $validated = $request->validate([
             'sku' => ['required', 'string', 'max:100', Rule::unique('items', 'sku')->ignore($item->id)],
             'name' => ['required', 'string', 'max:150'],
+            'item_type' => ['required', Rule::in([Item::TYPE_SINGLE, Item::TYPE_BUNDLE])],
             'category_id' => ['nullable', 'integer', 'min:0', function($attr, $value, $fail) {
                 if ((int)$value === 0) return;
                 if (!Category::where('id', $value)->exists()) {
@@ -188,6 +222,9 @@ class ItemController extends Controller
             'description' => ['nullable', 'string'],
             'safety_stock' => ['nullable', 'integer', 'min:0'],
             'koli_qty' => ['nullable', 'integer', 'min:0', 'max:4294967295'],
+            'bundle_components' => ['nullable', 'array'],
+            'bundle_components.*.component_item_id' => ['nullable', 'integer', 'exists:items,id'],
+            'bundle_components.*.required_qty' => ['nullable', 'integer', 'min:1'],
         ]);
 
         $catId = $request->input('category_id');
@@ -201,11 +238,40 @@ class ItemController extends Controller
                 : max(0, (int) $validated['koli_qty']);
         }
 
-        $this->applyLocationPayload($validated);
+        $bundleComponents = $validated['bundle_components'] ?? [];
+        unset($validated['bundle_components']);
+
+        $switchingToBundle = $item->isSingle() && ($validated['item_type'] ?? Item::TYPE_SINGLE) === Item::TYPE_BUNDLE;
+        $switchingToSingle = $item->isBundle() && ($validated['item_type'] ?? Item::TYPE_SINGLE) === Item::TYPE_SINGLE;
+
+        if (($validated['item_type'] ?? Item::TYPE_SINGLE) === Item::TYPE_BUNDLE) {
+            if ($switchingToBundle && ItemStock::query()->where('item_id', $item->id)->where('stock', '>', 0)->exists()) {
+                throw ValidationException::withMessages([
+                    'item_type' => 'Item tidak bisa diubah menjadi bundle selama masih memiliki stok fisik.',
+                ]);
+            }
+
+            $this->normalizeBundlePayload($validated);
+            BundleService::validateComponents($item, $bundleComponents);
+        } else {
+            $this->applyLocationPayload($validated);
+        }
 
         DB::beginTransaction();
         try {
             $item->update($validated);
+            BundleService::syncComponents($item->fresh(), $bundleComponents);
+
+            if ($switchingToSingle) {
+                ItemStock::firstOrCreate(
+                    ['item_id' => $item->id, 'warehouse_id' => WarehouseService::defaultWarehouseId()],
+                    ['stock' => 0]
+                );
+            }
+
+            if (($validated['item_type'] ?? Item::TYPE_SINGLE) === Item::TYPE_BUNDLE) {
+                ItemStock::query()->where('item_id', $item->id)->update(['safety_stock' => null]);
+            }
             DB::commit();
 
             return response()->json([
@@ -214,6 +280,7 @@ class ItemController extends Controller
                     'id' => $item->id,
                     'sku' => $item->sku,
                     'name' => $item->name,
+                    'item_type' => $item->item_type,
                     'category_id' => $item->category_id,
                     'koli_qty' => $item->koli_qty,
                 ]
@@ -431,5 +498,15 @@ class ItemController extends Controller
             $validated['location_id'] = null;
             $validated['address'] = $address;
         }
+    }
+
+    private function normalizeBundlePayload(array &$validated): void
+    {
+        $validated['lane_id'] = null;
+        $validated['location_id'] = null;
+        $validated['address'] = null;
+        $validated['safety_stock'] = 0;
+        $validated['koli_qty'] = null;
+        unset($validated['rack_code'], $validated['column_no'], $validated['row_no']);
     }
 }

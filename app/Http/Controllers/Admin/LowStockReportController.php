@@ -45,6 +45,7 @@ class LowStockReportController extends Controller
                     ->where('s.warehouse_id', '=', $warehouseId);
             })
             ->leftJoin('categories as c', 'c.id', '=', 'i.category_id')
+            ->where('i.item_type', '!=', 'bundle')
             ->whereRaw("{$safetyExpr} > 0")
             ->whereRaw("{$stockExpr} < {$safetyExpr}");
 

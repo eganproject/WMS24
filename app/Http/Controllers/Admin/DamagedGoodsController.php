@@ -8,6 +8,7 @@ use App\Models\DamagedGoodItem;
 use App\Models\Item;
 use App\Models\StockMutation;
 use App\Models\Warehouse;
+use App\Support\BundleService;
 use App\Support\DamagedStockService;
 use App\Support\StockService;
 use App\Support\WarehouseService;
@@ -22,7 +23,10 @@ class DamagedGoodsController extends Controller
 {
     public function index()
     {
-        $items = Item::orderBy('name')->get(['id', 'sku', 'name']);
+        $items = Item::query()
+            ->where('item_type', Item::TYPE_SINGLE)
+            ->orderBy('name')
+            ->get(['id', 'sku', 'name']);
         $damagedWarehouseId = WarehouseService::damagedWarehouseId();
         $damagedWarehouseLabel = Warehouse::where('id', $damagedWarehouseId)->value('name') ?? 'Gudang Rusak';
         $sourceWarehouses = Warehouse::query()
@@ -418,6 +422,11 @@ class DamagedGoodsController extends Controller
                 'source_warehouse_id' => 'Gudang asal tidak boleh sama dengan Gudang Rusak.',
             ]);
         }
+
+        BundleService::assertPhysicalItems(
+            $items->pluck('item_id')->all(),
+            'Bundle tidak bisa digunakan pada intake barang rusak karena tidak memiliki stok fisik.'
+        );
 
         $validated['items'] = $items->all();
         $validated['source_warehouse_id'] = (int) $validated['source_warehouse_id'];

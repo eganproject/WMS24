@@ -8,6 +8,7 @@ use App\Models\QcResiScanItem;
 use App\Models\Resi;
 use App\Models\ResiDetail;
 use App\Models\ShipmentScanOut;
+use App\Support\BundleService;
 use App\Support\QcScanExceptionRegistry;
 use App\Support\QcInventoryService;
 use App\Support\QcTransitStatus;
@@ -83,9 +84,9 @@ class QcScanController extends Controller
         }
 
         $grouped = [];
-        foreach ($details as $detail) {
-            $sku = trim((string) $detail->sku);
-            $qty = (int) $detail->qty;
+        foreach (BundleService::expandSkuRows($details) as $detail) {
+            $sku = trim((string) ($detail['sku'] ?? ''));
+            $qty = (int) ($detail['qty'] ?? 0);
             if ($sku === '' || $qty <= 0) {
                 continue;
             }

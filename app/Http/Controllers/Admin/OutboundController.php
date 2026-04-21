@@ -10,6 +10,7 @@ use App\Models\Supplier;
 use App\Models\Warehouse;
 use App\Models\StockMutation;
 use App\Imports\OutboundReturnsImport;
+use App\Support\BundleService;
 use App\Support\StockService;
 use App\Support\Permission;
 use App\Support\WarehouseService;
@@ -297,7 +298,7 @@ class OutboundController extends Controller
 
     private function index(string $type, string $pageTitle, string $routeBase)
     {
-        $items = Item::orderBy('name')->get(['id', 'sku', 'name', 'koli_qty']);
+        $items = Item::orderBy('name')->get(['id', 'sku', 'name', 'koli_qty', 'item_type']);
         $warehouses = Warehouse::orderBy('name')->get(['id', 'name', 'code']);
         $suppliers = $this->usesSupplier($type)
             ? Supplier::orderBy('name')->get(['id', 'name'])
@@ -699,21 +700,15 @@ class OutboundController extends Controller
 
             $approvedAt = now();
             if (!$hasMutations) {
-                foreach ($tx->items as $row) {
-                    StockService::mutate([
-                        'item_id' => $row->item_id,
-                        'direction' => 'out',
-                        'qty' => (int) $row->qty,
-                        'warehouse_id' => $tx->warehouse_id,
-                        'source_type' => 'outbound',
-                        'source_subtype' => $tx->type,
-                        'source_id' => $tx->id,
-                        'source_code' => $tx->code,
-                        'note' => $row->note,
-                        'occurred_at' => $approvedAt,
-                        'created_by' => auth()->id(),
-                    ]);
-                }
+                StockService::depleteSellableRows($tx->items, (int) $tx->warehouse_id, [
+                    'source_type' => 'outbound',
+                    'source_subtype' => $tx->type,
+                    'source_id' => $tx->id,
+                    'source_code' => $tx->code,
+                    'note' => 'Outbound approved',
+                    'occurred_at' => $approvedAt,
+                    'created_by' => auth()->id(),
+                ]);
             }
 
             $tx->status = 'approved';
@@ -793,6 +788,23 @@ class OutboundController extends Controller
         })->values()->all();
 
         $validated['items'] = $normalized;
+        $itemMap = Item::query()
+            ->whereIn('id', collect($normalized)->pluck('item_id')->all())
+            ->get(['id', 'sku', 'item_type'])
+            ->keyBy('id');
+
+        foreach ($normalized as $row) {
+            $item = $itemMap->get((int) $row['item_id']);
+            if (!$item) {
+                throw ValidationException::withMessages([
+                    'items' => 'Item outbound tidak ditemukan.',
+                ]);
+            }
+            if ($item->isBundle()) {
+                BundleService::validateComponents($item, $item->bundleComponents()->get(['component_item_id as item_id', 'required_qty as qty'])->toArray());
+            }
+        }
+
         $validated['supplier_id'] = $usesSupplier ? (int) ($validated['supplier_id'] ?? 0) : null;
         if (!empty($validated['transacted_at'])) {
             $validated['transacted_at'] = Carbon::parse($validated['transacted_at']);

@@ -11,6 +11,7 @@ return new class extends Migration {
             $table->id();
             $table->string('sku', 100)->unique();
             $table->string('name', 150);
+            $table->string('item_type', 20)->default('single');
             $table->unsignedBigInteger('category_id')->default(0);
             $table->text('address')->nullable();
             $table->text('description')->nullable();

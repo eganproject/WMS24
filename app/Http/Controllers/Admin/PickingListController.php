@@ -9,6 +9,7 @@ use App\Models\Lane;
 use App\Models\PickingList;
 use App\Models\PickingListException;
 use App\Models\QcScanException;
+use App\Support\BundleService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -215,14 +216,13 @@ class PickingListController extends Controller
                     $q->whereNull('r.status')
                         ->orWhere('r.status', '!=', 'canceled');
                 })
-                ->select('rd.sku', DB::raw('SUM(rd.qty) as qty'))
-                ->groupBy('rd.sku')
+                ->select('rd.sku', 'rd.qty')
                 ->get();
 
             $required = [];
-            foreach ($requiredRows as $row) {
-                $sku = trim((string) ($row->sku ?? ''));
-                $qty = (int) ($row->qty ?? 0);
+            foreach (BundleService::expandSkuRows($requiredRows) as $row) {
+                $sku = trim((string) ($row['sku'] ?? ''));
+                $qty = (int) ($row['qty'] ?? 0);
                 if ($sku === '' || $qty <= 0) {
                     continue;
                 }
@@ -433,6 +433,16 @@ class PickingListController extends Controller
         $mode = $validated['mode'];
         $delta = $mode === 'reduce' ? -$qty : $qty;
 
+        $item = Item::query()
+            ->where('sku', $sku)
+            ->first(['id', 'item_type']);
+
+        if (!$item || $item->isBundle()) {
+            throw ValidationException::withMessages([
+                'sku' => 'SKU picking list harus item stok fisik, bukan bundle virtual.',
+            ]);
+        }
+
         try {
             $row = DB::transaction(function () use ($listDate, $sku, $delta) {
                 $existing = PickingList::where('list_date', $listDate)
@@ -523,7 +533,11 @@ class PickingListController extends Controller
 
     private function getPickedQty(string $date, string $sku): int
     {
-        if (!Item::where('sku', $sku)->exists()) {
+        $item = Item::query()
+            ->where('sku', $sku)
+            ->first(['id', 'item_type']);
+
+        if (!$item || $item->isBundle()) {
             return 0;
         }
 

@@ -7,6 +7,7 @@ use App\Models\Item;
 use App\Models\ItemStock;
 use App\Models\StockOpname;
 use App\Models\StockOpnameItem;
+use App\Support\BundleService;
 use App\Support\WarehouseService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -63,6 +64,7 @@ class StockOpnameMobileController extends Controller
         }
 
         $query = Item::query()
+            ->where('item_type', Item::TYPE_SINGLE)
             ->where(function ($query) use ($q) {
                 $query->where('sku', 'like', "%{$q}%")
                     ->orWhere('name', 'like', "%{$q}%");
@@ -106,6 +108,11 @@ class StockOpnameMobileController extends Controller
             'counted_qty' => ['required', 'integer', 'min:0'],
             'note' => ['nullable', 'string'],
         ]);
+
+        BundleService::assertPhysicalItems(
+            [$validated['item_id']],
+            'Bundle tidak bisa digunakan pada stock opname karena tidak memiliki stok fisik.'
+        );
 
         DB::beginTransaction();
         try {

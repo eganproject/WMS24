@@ -10,6 +10,7 @@ use App\Models\StockOpname;
 use App\Models\StockOpnameItem;
 use App\Models\StockMutation;
 use App\Models\Warehouse;
+use App\Support\BundleService;
 use App\Support\StockService;
 use App\Support\WarehouseService;
 use Illuminate\Http\Request;
@@ -26,7 +27,9 @@ class StockOpnameController extends Controller
         $warehouseId = WarehouseService::defaultWarehouseId();
         $warehouseLabel = Warehouse::where('id', $warehouseId)->value('name') ?? 'Gudang Besar';
         $warehouses = Warehouse::orderBy('name')->get(['id', 'name', 'code']);
-        $items = Item::leftJoin('item_stocks', function ($join) use ($warehouseId) {
+        $items = Item::query()
+            ->where('items.item_type', Item::TYPE_SINGLE)
+            ->leftJoin('item_stocks', function ($join) use ($warehouseId) {
                 $join->on('item_stocks.item_id', '=', 'items.id')
                     ->where('item_stocks.warehouse_id', '=', $warehouseId);
             })
@@ -134,7 +137,9 @@ class StockOpnameController extends Controller
             $warehouseId = WarehouseService::defaultWarehouseId();
         }
 
-        $items = Item::leftJoin('item_stocks', function ($join) use ($warehouseId) {
+        $items = Item::query()
+            ->where('items.item_type', Item::TYPE_SINGLE)
+            ->leftJoin('item_stocks', function ($join) use ($warehouseId) {
                 $join->on('item_stocks.item_id', '=', 'items.id')
                     ->where('item_stocks.warehouse_id', '=', $warehouseId);
             })
@@ -393,6 +398,11 @@ class StockOpnameController extends Controller
                 'items' => 'Item tidak boleh duplikat pada stock opname',
             ]);
         }
+
+        BundleService::assertPhysicalItems(
+            $items->pluck('item_id')->all(),
+            'Bundle tidak bisa digunakan pada stock opname karena tidak memiliki stok fisik.'
+        );
 
         $validated['items'] = $items->all();
         if (!empty($validated['transacted_at'])) {

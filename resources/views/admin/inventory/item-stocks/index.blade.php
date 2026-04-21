@@ -29,6 +29,7 @@
                         <th>ID</th>
                         <th>SKU</th>
                         <th>Nama</th>
+                        <th>Tipe</th>
                         <th class="text-end">Stok {{ $defaultWarehouseLabel ?? 'Gudang Besar' }}</th>
                         <th class="text-end">Safety {{ $defaultWarehouseLabel ?? 'Gudang Besar' }}</th>
                         <th class="text-end">Stok {{ $displayWarehouseLabel ?? 'Gudang Display' }}</th>
@@ -132,14 +133,18 @@
                 { data: 'id' },
                 { data: 'sku' },
                 { data: 'name' },
-                { data: 'stock_main', className: 'text-end', render: (data) => data ?? 0 },
-                { data: 'safety_main', className: 'text-end', render: (data) => data ?? 0 },
-                { data: 'stock_display', className: 'text-end', render: (data) => data ?? 0 },
-                { data: 'safety_display', className: 'text-end', render: (data) => data ?? 0 },
-                { data: 'stock_damaged', className: 'text-end', render: (data) => data ?? 0 },
-                { data: 'stock_good_total', className: 'text-end', render: (data) => data ?? 0 },
-                { data: 'stock_total', className: 'text-end', render: (data) => data ?? 0 },
+                { data: 'item_type', render: (data) => data === 'bundle' ? '<span class="badge badge-light-primary">Bundle</span>' : '<span class="badge badge-light-success">Single</span>' },
+                { data: 'stock_main', className: 'text-end', render: (data, type, row) => row.item_type === 'bundle' ? `<span class="fw-bold text-primary">${row.virtual_main ?? 0}</span><div class="text-muted fs-8">virtual</div>` : (data ?? 0) },
+                { data: 'safety_main', className: 'text-end', render: (data, type, row) => row.item_type === 'bundle' ? '-' : (data ?? 0) },
+                { data: 'stock_display', className: 'text-end', render: (data, type, row) => row.item_type === 'bundle' ? `<span class="fw-bold text-primary">${row.virtual_display ?? 0}</span><div class="text-muted fs-8">virtual</div>` : (data ?? 0) },
+                { data: 'safety_display', className: 'text-end', render: (data, type, row) => row.item_type === 'bundle' ? '-' : (data ?? 0) },
+                { data: 'stock_damaged', className: 'text-end', render: (data, type, row) => row.item_type === 'bundle' ? '-' : (data ?? 0) },
+                { data: 'stock_good_total', className: 'text-end', render: (data, type, row) => row.item_type === 'bundle' ? `<span class="fw-bold text-primary">${row.virtual_total ?? 0}</span><div class="text-muted fs-8">virtual total</div>` : (data ?? 0) },
+                { data: 'stock_total', className: 'text-end', render: (data, type, row) => row.item_type === 'bundle' ? '-' : (data ?? 0) },
                 { data: 'id', orderable:false, searchable:false, className: 'text-end', render: (data, type, row) => {
+                    if (row.item_type === 'bundle') {
+                        return '<span class="text-muted fs-8">Bundle virtual</span>';
+                    }
                     return `<button type="button" class="btn btn-light-primary btn-sm btn-safety" data-id="${data}" data-sku="${row.sku}" data-name="${row.name}" data-safety-main="${row.safety_main_raw ?? ''}" data-safety-display="${row.safety_display_raw ?? ''}" data-safety-base="${row.safety_base ?? 0}">Set Safety</button>`;
                 }},
             ]

@@ -11,6 +11,7 @@ use App\Models\ReworkRecipe;
 use App\Models\StockMutation;
 use App\Models\Supplier;
 use App\Models\Warehouse;
+use App\Support\BundleService;
 use App\Support\DamagedStockService;
 use App\Support\StockService;
 use App\Support\WarehouseService;
@@ -26,7 +27,10 @@ class DamagedAllocationController extends Controller
 {
     public function index()
     {
-        $items = Item::orderBy('name')->get(['id', 'sku', 'name']);
+        $items = Item::query()
+            ->where('item_type', Item::TYPE_SINGLE)
+            ->orderBy('name')
+            ->get(['id', 'sku', 'name']);
         $suppliers = Supplier::orderBy('name')->get(['id', 'name']);
         $damagedWarehouseId = WarehouseService::damagedWarehouseId();
         $damagedWarehouseLabel = Warehouse::where('id', $damagedWarehouseId)->value('name') ?? 'Gudang Rusak';
@@ -602,6 +606,14 @@ class DamagedAllocationController extends Controller
                 'qty' => (int) $row['qty'],
                 'note' => $row['note'] ?? null,
             ])->values();
+
+        if ($outputItems->isNotEmpty()) {
+            BundleService::assertPhysicalItems(
+                $outputItems->pluck('item_id')->all(),
+                'Bundle tidak bisa digunakan sebagai hasil alokasi barang rusak karena tidak memiliki stok fisik.',
+                'output_items'
+            );
+        }
 
         $type = $validated['type'];
         $recipe = $this->loadRecipe(!empty($validated['recipe_id']) ? (int) $validated['recipe_id'] : null);

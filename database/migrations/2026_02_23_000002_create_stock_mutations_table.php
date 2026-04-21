@@ -10,6 +10,8 @@ return new class extends Migration {
         Schema::create('stock_mutations', function (Blueprint $table) {
             $table->id();
             $table->foreignId('item_id')->constrained('items')->cascadeOnDelete();
+            $table->foreignId('reference_item_id')->nullable()->constrained('items')->nullOnDelete();
+            $table->string('reference_sku', 100)->nullable();
             $table->enum('direction', ['in', 'out']);
             $table->integer('qty');
             $table->string('source_type', 20);

@@ -79,9 +79,11 @@
                         <th>No</th>
                         <th>SKU</th>
                         <th>Nama</th>
+                        <th>Tipe</th>
                         <th>Kategori</th>
                         <th>Alamat</th>
                         <th>Deskripsi</th>
+                        <th>Bundle</th>
                         <th class="text-end">Isi/Koli</th>
                         <th class="text-end">Stok Pengaman</th>
                         <th class="text-end">Aksi</th>
@@ -121,6 +123,15 @@
                         <label class="required fs-6 fw-bold form-label mb-2">Nama</label>
                         <input type="text" class="form-control form-control-solid" name="name" id="item_name" required />
                         <div class="invalid-feedback" id="error_name"></div>
+                    </div>
+                    <div class="fv-row mb-7">
+                        <label class="required fs-6 fw-bold form-label mb-2">Tipe Item</label>
+                        <select name="item_type" id="item_type" class="form-select form-select-solid">
+                            <option value="single">Single / Stok Fisik</option>
+                            <option value="bundle">Bundle / Virtual Stock</option>
+                        </select>
+                        <div class="form-text">Bundle tidak memiliki stok fisik. Stoknya dihitung dari komponen.</div>
+                        <div class="invalid-feedback" id="error_item_type"></div>
                     </div>
                     <div class="fv-row mb-7">
                         <label class="fs-6 fw-bold form-label mb-2">Kategori</label>
@@ -183,6 +194,21 @@
                         <input type="number" min="0" class="form-control form-control-solid" name="safety_stock" id="item_safety_stock" value="0" />
                         <div class="invalid-feedback" id="error_safety_stock"></div>
                     </div>
+                    <div class="card border border-dashed border-primary bg-light-primary" id="bundle_components_card" style="display:none;">
+                        <div class="card-header min-h-50px">
+                            <div class="card-title">
+                                <span class="fw-bold text-primary">Komponen Bundle</span>
+                            </div>
+                            <div class="card-toolbar">
+                                <button type="button" class="btn btn-sm btn-primary" id="btn_add_bundle_component">Tambah Komponen</button>
+                            </div>
+                        </div>
+                        <div class="card-body pt-5">
+                            <div class="text-muted fs-7 mb-4">Virtual stock bundle dihitung dari komponen. Komponen harus item fisik, bukan bundle lain.</div>
+                            <div id="bundle_components_container" class="d-flex flex-column gap-4"></div>
+                            <div class="invalid-feedback d-block" id="error_bundle_components"></div>
+                        </div>
+                    </div>
                     <div class="text-end pt-3">
                         <button type="button" class="btn btn-light me-3" data-bs-dismiss="modal">Batal</button>
                         <button type="submit" class="btn btn-primary">
@@ -216,6 +242,10 @@
             <div class="modal-body scroll-y px-10 py-10">
                 <div class="mb-7">
                     <p class="fw-semibold mb-3">Pastikan file Excel memiliki header dan kolom berikut:</p>
+                    <div class="alert alert-light-warning border border-warning border-dashed mb-5">
+                        Import Excel master item hanya untuk <strong>item single / stok fisik</strong>.<br>
+                        <strong>Bundle tidak didukung</strong> lewat import dan harus dibuat dari form master item agar BOM komponen tetap rapi.
+                    </div>
                     <ul class="ms-5 mb-4">
                         <li><strong>sku</strong> (wajib, unik)</li>
                         <li><strong>name</strong> (wajib)</li>
@@ -233,7 +263,8 @@
                         <li><strong>lane</strong> + <strong>rack</strong> + <strong>column</strong> + <strong>row</strong> (opsional, jika ingin alamat detail; jika salah satu detail diisi maka semuanya wajib)</li>
                         <li><strong>description</strong> (opsional)</li>
                     </ul>
-                    <p class="text-muted small mb-1">Contoh header: <code>sku,name,parent_category,category,stock_gudang_besar,stock_gudang_display,stock,safety_stock_gudang_besar,safety_stock_gudang_display,safety_stock,koli_qty,lane,rack,column,row,description</code></p>
+                    <p class="text-muted small mb-1">Jika Anda menambahkan kolom <code>item_type</code>, nilainya hanya boleh <code>single</code>. Nilai <code>bundle</code> akan ditolak.</p>
+                    <p class="text-muted small mb-1">Contoh header: <code>sku,name,item_type,parent_category,category,stock_gudang_besar,stock_gudang_display,stock,safety_stock_gudang_besar,safety_stock_gudang_display,safety_stock,koli_qty,lane,rack,column,row,description</code></p>
                     <p class="text-muted small mb-1">Gunakan format Excel (.xlsx/.xls) dengan header di baris pertama.</p>
                     <p class="text-muted small mb-1">Jika kolom category dikosongkan, item otomatis dimasukkan ke kategori "Tanpa Kategori".</p>
                     <p class="text-muted small mb-0">Catatan: gunakan <code>lane</code> saja jika baru tahu area umum. Jika ingin alamat detail, lengkapi <code>lane</code>, <code>rack</code>, <code>column</code>, dan <code>row</code>.</p>
@@ -269,6 +300,7 @@
     const importUrl = '{{ route('admin.masterdata.items.import') }}';
     const canUpdate = {{ $canUpdate ? 'true' : 'false' }};
     const canDelete = {{ $canDelete ? 'true' : 'false' }};
+    const componentItemOptionsHtml = `@foreach($componentItems as $componentItem)<option value="{{ $componentItem->id }}">{{ $componentItem->sku }} - {{ $componentItem->name }}</option>@endforeach`;
 
     const ensureOption = (selectEl, id, name) => {
         if (!selectEl) return;
@@ -297,6 +329,7 @@
         const modal = modalEl ? new bootstrap.Modal(modalEl) : null;
         const formSku = document.getElementById('item_sku');
         const formName = document.getElementById('item_name');
+        const formType = document.getElementById('item_type');
         const formCategory = document.getElementById('item_category_id');
         const formLane = document.getElementById('item_lane_id');
         const formRack = document.getElementById('item_rack_code');
@@ -307,6 +340,9 @@
         const formDescription = document.getElementById('item_description');
         const formSafetyStock = document.getElementById('item_safety_stock');
         const formKoliQty = document.getElementById('item_koli_qty');
+        const bundleCard = document.getElementById('bundle_components_card');
+        const bundleContainer = document.getElementById('bundle_components_container');
+        const addBundleComponentBtn = document.getElementById('btn_add_bundle_component');
         const titleEl = document.getElementById('modal_item_title');
         const importBtn = document.getElementById('btn_import_items');
         const importModalEl = document.getElementById('modal_import_items');
@@ -384,6 +420,81 @@
             }
         };
 
+        const createBundleComponentRow = (component = {}) => {
+            if (!bundleContainer) return null;
+            const row = document.createElement('div');
+            row.className = 'row g-3 align-items-end bundle-component-row';
+            row.innerHTML = `
+                <div class="col-md-8">
+                    <label class="fs-7 fw-bold form-label mb-2">Komponen</label>
+                    <select name="bundle_components[][component_item_id]" class="form-select form-select-solid bundle-component-item" data-control="select2" data-placeholder="Pilih komponen">
+                        <option value="">Pilih komponen</option>
+                        ${componentItemOptionsHtml}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="fs-7 fw-bold form-label mb-2">Qty</label>
+                    <input type="number" min="1" name="bundle_components[][required_qty]" class="form-control form-control-solid bundle-component-qty" value="${component.required_qty ?? ''}" />
+                </div>
+                <div class="col-md-1">
+                    <button type="button" class="btn btn-icon btn-light-danger btn-remove-bundle-component">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </div>
+            `;
+            bundleContainer.appendChild(row);
+            const selectEl = row.querySelector('.bundle-component-item');
+            if (selectEl && typeof $ !== 'undefined' && $.fn.select2) {
+                $(selectEl).select2({
+                    placeholder: 'Pilih komponen',
+                    allowClear: true,
+                    width: '100%',
+                });
+            }
+            if (selectEl && component.component_item_id) {
+                selectEl.value = String(component.component_item_id);
+                if (typeof $ !== 'undefined' && $(selectEl).data('select2')) {
+                    $(selectEl).val(String(component.component_item_id)).trigger('change');
+                }
+            }
+            return row;
+        };
+
+        const clearBundleComponents = () => {
+            if (bundleContainer) bundleContainer.innerHTML = '';
+        };
+
+        const ensureBundleComponentRow = () => {
+            if (bundleContainer && !bundleContainer.querySelector('.bundle-component-row')) {
+                createBundleComponentRow();
+            }
+        };
+
+        const toggleBundleMode = () => {
+            const isBundle = (formType?.value || 'single') === 'bundle';
+            if (bundleCard) {
+                bundleCard.style.display = isBundle ? '' : 'none';
+            }
+
+            [formLane, formRack, formColumn, formRow, formAddress, formKoliQty, formSafetyStock].forEach((field) => {
+                if (!field) return;
+                field.disabled = isBundle;
+            });
+
+            if (isBundle) {
+                setLaneValue('');
+                if (formRack) formRack.value = '';
+                if (formColumn) formColumn.value = '';
+                if (formRow) formRow.value = '';
+                if (formAddress) formAddress.value = '';
+                if (formKoliQty) formKoliQty.value = '';
+                if (formSafetyStock) formSafetyStock.value = 0;
+                ensureBundleComponentRow();
+            } else {
+                clearBundleComponents();
+            }
+        };
+
         if (!tableEl.length || !$.fn.DataTable) {
             console.error('DataTables unavailable');
             return;
@@ -431,13 +542,16 @@
                 { data: null, orderable: false, searchable: false, render: (data, type, row, meta) => meta.row + meta.settings._iDisplayStart + 1 },
                 { data: 'sku' },
                 { data: 'name' },
+                { data: 'type_label', render: (data, type, row) => row.item_type === 'bundle' ? '<span class="badge badge-light-primary">Bundle</span>' : '<span class="badge badge-light-success">Single</span>' },
                 { data: 'category' },
                 { data: 'address' },
                 { data: 'description' },
-                { data: 'koli_qty', className:'text-end', render: (data)=> (data === null || data === undefined || data === '') ? '-' : data },
-                { data: 'safety_stock', className:'text-end', render: (data)=> data ?? 0 },
+                { data: 'bundle_summary', render: (data)=> data || '-' },
+                { data: 'koli_qty', className:'text-end', render: (data, type, row)=> row.item_type === 'bundle' ? '-' : ((data === null || data === undefined || data === '') ? '-' : data) },
+                { data: 'safety_stock', className:'text-end', render: (data, type, row)=> row.item_type === 'bundle' ? '-' : (data ?? 0) },
                 { data: 'id', orderable:false, searchable:false, className:'text-end', render: (data, type, row)=>{
-                    const editItem = canUpdate ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-edit" data-id="${data}" data-sku="${row.sku}" data-name="${row.name}" data-category="${row.category_id}" data-address="${row.address ?? ''}" data-lane-id="${row.lane_id ?? ''}" data-rack-code="${row.rack_code ?? ''}" data-column-no="${row.column_no ?? ''}" data-row-no="${row.row_no ?? ''}" data-description="${row.description}" data-koli-qty="${row.koli_qty ?? ''}" data-safety-stock="${row.safety_stock ?? 0}">Edit</a></div>` : '';
+                    const components = encodeURIComponent(JSON.stringify(row.bundle_components || []));
+                    const editItem = canUpdate ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-edit" data-id="${data}" data-sku="${row.sku}" data-name="${row.name}" data-item-type="${row.item_type}" data-category="${row.category_id}" data-address="${row.address ?? ''}" data-lane-id="${row.lane_id ?? ''}" data-rack-code="${row.rack_code ?? ''}" data-column-no="${row.column_no ?? ''}" data-row-no="${row.row_no ?? ''}" data-description="${row.description}" data-koli-qty="${row.koli_qty ?? ''}" data-safety-stock="${row.safety_stock ?? 0}" data-bundle-components="${components}">Edit</a></div>` : '';
                     const delItem = canDelete ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 text-danger btn-delete" data-id="${data}">Hapus</a></div>` : '';
                     const actions = `${editItem}${delItem}`;
                     if (!actions) return '';
@@ -486,7 +600,7 @@
         });
 
         const clearErrors = () => {
-            ['error_sku','error_name','error_category_id','error_lane_id','error_rack_code','error_column_no','error_row_no','error_address','error_description','error_koli_qty','error_safety_stock'].forEach(id => {
+            ['error_sku','error_name','error_item_type','error_category_id','error_lane_id','error_rack_code','error_column_no','error_row_no','error_address','error_description','error_koli_qty','error_safety_stock','error_bundle_components'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.textContent = '';
             });
@@ -522,6 +636,7 @@
             form.reset();
             formId.value = '';
             if (formSku) formSku.value = '';
+            if (formType) formType.value = 'single';
             if (formKoliQty) formKoliQty.value = '';
             if (formSafetyStock) formSafetyStock.value = 0;
             setCategoryValue('0');
@@ -529,7 +644,9 @@
             if (formRack) formRack.value = '';
             if (formColumn) formColumn.value = '';
             if (formRow) formRow.value = '';
+            clearBundleComponents();
             clearErrors();
+            toggleBundleMode();
             if (titleEl) titleEl.textContent = 'Add Item';
         });
 
@@ -640,6 +757,7 @@
             const id = this.getAttribute('data-id');
             const sku = this.getAttribute('data-sku');
             const name = this.getAttribute('data-name');
+            const itemType = this.getAttribute('data-item-type') || 'single';
             const categoryId = this.getAttribute('data-category');
             const address = this.getAttribute('data-address') || '';
             const laneId = this.getAttribute('data-lane-id') || '';
@@ -649,10 +767,12 @@
             const description = this.getAttribute('data-description') || '';
             const koliQty = this.getAttribute('data-koli-qty');
             const safetyStock = this.getAttribute('data-safety-stock');
+            const bundleComponentsRaw = this.getAttribute('data-bundle-components') || '';
             if (!form) return;
             formId.value = id;
             if (formSku) formSku.value = sku || '';
             formName.value = name;
+            if (formType) formType.value = itemType;
             if (formAddress) formAddress.value = address;
             setLaneValue(laneId);
             if (formRack) formRack.value = rackCode;
@@ -662,7 +782,15 @@
             if (formKoliQty) formKoliQty.value = koliQty ?? '';
             if (formSafetyStock) formSafetyStock.value = safetyStock ?? 0;
             setCategoryValue(categoryId || '0');
+            clearBundleComponents();
+            try {
+                const bundleComponents = bundleComponentsRaw ? JSON.parse(decodeURIComponent(bundleComponentsRaw)) : [];
+                bundleComponents.forEach((component) => createBundleComponentRow(component));
+            } catch (err) {
+                console.error('Failed to parse bundle components', err);
+            }
             clearErrors();
+            toggleBundleMode();
             if (titleEl) titleEl.textContent = 'Edit Item';
             modal?.show();
         });
@@ -671,6 +799,19 @@
             field?.addEventListener('input', syncAddress);
             field?.addEventListener('change', syncAddress);
         });
+
+        formType?.addEventListener('change', toggleBundleMode);
+        addBundleComponentBtn?.addEventListener('click', () => createBundleComponentRow());
+        bundleContainer?.addEventListener('click', (event) => {
+            const button = event.target.closest('.btn-remove-bundle-component');
+            if (!button) return;
+            button.closest('.bundle-component-row')?.remove();
+            if ((formType?.value || 'single') === 'bundle') {
+                ensureBundleComponentRow();
+            }
+        });
+
+        toggleBundleMode();
 
         tableEl.on('click', '.btn-delete', async function(e) {
             e.preventDefault();

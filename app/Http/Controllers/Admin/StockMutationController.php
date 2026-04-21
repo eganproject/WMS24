@@ -35,7 +35,7 @@ class StockMutationController extends Controller
     public function data(Request $request)
     {
         $query = StockMutation::query()
-            ->with(['item', 'creator', 'warehouse'])
+            ->with(['item', 'referenceItem', 'creator', 'warehouse'])
             ->orderBy('occurred_at', 'desc');
 
         $search = trim((string) $request->input('q', ''));
@@ -52,6 +52,7 @@ class StockMutationController extends Controller
                         $itemQ->where('sku', 'like', "%{$search}%")
                             ->orWhere('name', 'like', "%{$search}%");
                     })
+                    ->orWhere('reference_sku', 'like', "%{$search}%")
                     ->orWhereHas('warehouse', function ($whQ) use ($search) {
                         $whQ->where('name', 'like', "%{$search}%")
                             ->orWhere('code', 'like', "%{$search}%");
@@ -79,7 +80,7 @@ class StockMutationController extends Controller
         }
 
         $data = $query->get()->map(function ($m) {
-            $itemLabel = trim(($m->item?->sku ?? '').' - '.($m->item?->name ?? ''));
+            $itemLabel = $this->formatMutationItemLabel($m);
             $ts = $m->occurred_at ? Carbon::parse($m->occurred_at)->format('Y-m-d H:i') : '';
             $direction = $m->direction === 'in' ? 'IN' : 'OUT';
             $source = strtoupper($m->source_type ?? '').($m->source_subtype ? ' / '.$m->source_subtype : '');
@@ -127,10 +128,10 @@ class StockMutationController extends Controller
 
     public function show(int $id)
     {
-        $mutation = StockMutation::with(['item', 'creator', 'warehouse'])->findOrFail($id);
+        $mutation = StockMutation::with(['item', 'referenceItem', 'creator', 'warehouse'])->findOrFail($id);
         [$sourceSummary, $sourceItems] = $this->resolveSource($mutation);
 
-        $itemLabel = trim(($mutation->item?->sku ?? '').' - '.($mutation->item?->name ?? ''));
+        $itemLabel = $this->formatMutationItemLabel($mutation);
         $direction = $mutation->direction === 'in' ? 'IN' : 'OUT';
         $source = strtoupper($mutation->source_type ?? '').($mutation->source_subtype ? ' / '.$mutation->source_subtype : '');
 
@@ -367,5 +368,19 @@ class StockMutationController extends Controller
         }
 
         return [$sourceSummary, $sourceItems];
+    }
+
+    private function formatMutationItemLabel(StockMutation $mutation): string
+    {
+        $itemSku = trim((string) ($mutation->item?->sku ?? ''));
+        $itemName = trim((string) ($mutation->item?->name ?? ''));
+        $baseLabel = trim($itemSku.' - '.$itemName, ' -');
+
+        $referenceSku = trim((string) ($mutation->reference_sku ?? ''));
+        if ($referenceSku === '' || strcasecmp($referenceSku, $itemSku) === 0) {
+            return $baseLabel !== '' ? $baseLabel : '-';
+        }
+
+        return trim($baseLabel !== '' ? $baseLabel.' | Ref Bundle: '.$referenceSku : 'Ref Bundle: '.$referenceSku);
     }
 }

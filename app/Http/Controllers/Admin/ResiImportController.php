@@ -12,6 +12,7 @@ use App\Models\QcResiScan;
 use App\Models\Resi;
 use App\Models\ResiDetail;
 use App\Models\ShipmentScanOut;
+use App\Support\BundleService;
 use App\Support\ResiOperationalStatus;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -439,10 +440,11 @@ class ResiImportController extends Controller
 
     private function adjustPickingList(string $date, $items, int $direction): void
     {
+        $expandedRows = BundleService::expandSkuRows($items);
         $grouped = [];
-        foreach ($items as $row) {
-            $sku = trim((string) ($row['sku'] ?? $row->sku ?? ''));
-            $qty = (int) ($row['qty'] ?? $row->qty ?? 0);
+        foreach ($expandedRows as $row) {
+            $sku = trim((string) ($row['sku'] ?? ''));
+            $qty = (int) ($row['qty'] ?? 0);
             if ($sku === '' || $qty <= 0) {
                 continue;
             }

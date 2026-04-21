@@ -90,6 +90,60 @@ class ItemsImportTest extends TestCase
         $this->assertSame('KAB', $item->location?->lane?->code);
     }
 
+    public function test_import_rejects_bundle_item_type_value(): void
+    {
+        $this->createDefaultWarehouse();
+
+        $import = new ItemsImport();
+
+        try {
+            $import->collection(collect([
+                new Collection([
+                    'sku' => 'SKU-BUNDLE-IMPORT-001',
+                    'name' => 'Bundle Import',
+                    'item_type' => 'bundle',
+                ]),
+            ]));
+
+            $this->fail('Import seharusnya gagal untuk item_type bundle.');
+        } catch (ValidationException $exception) {
+            $this->assertSame(
+                'Baris 2 (SKU SKU-BUNDLE-IMPORT-001): import Excel master item hanya mendukung item single/stok fisik. Bundle harus dibuat dari form master item.',
+                $exception->errors()['file'][0] ?? null
+            );
+        }
+    }
+
+    public function test_import_rejects_existing_bundle_sku(): void
+    {
+        $this->createDefaultWarehouse();
+
+        Item::create([
+            'sku' => 'SKU-BUNDLE-EXISTING-001',
+            'name' => 'Existing Bundle',
+            'item_type' => Item::TYPE_BUNDLE,
+            'category_id' => 0,
+        ]);
+
+        $import = new ItemsImport();
+
+        try {
+            $import->collection(collect([
+                new Collection([
+                    'sku' => 'SKU-BUNDLE-EXISTING-001',
+                    'name' => 'Updated Bundle Import',
+                ]),
+            ]));
+
+            $this->fail('Import seharusnya gagal untuk SKU bundle yang sudah ada.');
+        } catch (ValidationException $exception) {
+            $this->assertSame(
+                'Baris 2 (SKU SKU-BUNDLE-EXISTING-001): SKU ini adalah bundle. Bundle tidak boleh dibuat atau diubah lewat import Excel master item.',
+                $exception->errors()['file'][0] ?? null
+            );
+        }
+    }
+
     private function createDefaultWarehouse(): Warehouse
     {
         return Warehouse::firstOrCreate([

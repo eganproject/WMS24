@@ -7,6 +7,7 @@ use App\Exports\ItemStocksExport;
 use App\Models\Item;
 use App\Models\ItemStock;
 use App\Models\Warehouse;
+use App\Support\BundleService;
 use App\Support\WarehouseService;
 use Illuminate\Http\Request;
 use Maatwebsite\Excel\Facades\Excel;
@@ -63,23 +64,30 @@ class ItemStockController extends Controller
         $data = $query->get()->map(function ($i) use ($defaultId, $displayId, $damagedId) {
             $stocks = $i->stocks?->keyBy('warehouse_id') ?? collect();
             $baseSafety = (int) ($i->safety_stock ?? 0);
-            $stockMain = (int) ($stocks->get($defaultId)?->stock ?? 0);
-            $stockDisplay = (int) ($stocks->get($displayId)?->stock ?? 0);
-            $stockDamaged = (int) ($stocks->get($damagedId)?->stock ?? 0);
+            $isBundle = $i->isBundle();
+            $stockMain = $isBundle ? null : (int) ($stocks->get($defaultId)?->stock ?? 0);
+            $stockDisplay = $isBundle ? null : (int) ($stocks->get($displayId)?->stock ?? 0);
+            $stockDamaged = $isBundle ? null : (int) ($stocks->get($damagedId)?->stock ?? 0);
             $safetyMainRaw = $stocks->get($defaultId)?->safety_stock;
             $safetyDisplayRaw = $stocks->get($displayId)?->safety_stock;
             $safetyMain = $safetyMainRaw !== null ? (int) $safetyMainRaw : $baseSafety;
             $safetyDisplay = $safetyDisplayRaw !== null ? (int) $safetyDisplayRaw : $baseSafety;
-            $stockGoodTotal = $stockMain + $stockDisplay;
+            $virtualMain = $isBundle ? BundleService::virtualAvailableQty($i, $defaultId) : null;
+            $virtualDisplay = $isBundle ? BundleService::virtualAvailableQty($i, $displayId) : null;
+            $stockGoodTotal = $isBundle ? null : ($stockMain + $stockDisplay);
             return [
                 'id' => $i->id,
                 'sku' => $i->sku,
                 'name' => $i->name,
+                'item_type' => $i->item_type,
                 'stock_main' => $stockMain,
                 'stock_display' => $stockDisplay,
                 'stock_damaged' => $stockDamaged,
                 'stock_good_total' => $stockGoodTotal,
-                'stock_total' => $stockGoodTotal + $stockDamaged,
+                'stock_total' => $isBundle ? null : ($stockGoodTotal + $stockDamaged),
+                'virtual_main' => $virtualMain,
+                'virtual_display' => $virtualDisplay,
+                'virtual_total' => $isBundle ? (($virtualMain ?? 0) + ($virtualDisplay ?? 0)) : null,
                 'safety_main' => $safetyMain,
                 'safety_display' => $safetyDisplay,
                 'safety_base' => $baseSafety,
@@ -113,6 +121,12 @@ class ItemStockController extends Controller
         ]);
 
         $itemId = (int) $validated['item_id'];
+        $item = Item::query()->findOrFail($itemId);
+        if ($item->isBundle()) {
+            throw ValidationException::withMessages([
+                'item_id' => 'Bundle tidak memiliki safety stock fisik.',
+            ]);
+        }
         $defaultId = WarehouseService::defaultWarehouseId();
         $displayId = WarehouseService::displayWarehouseId();
 

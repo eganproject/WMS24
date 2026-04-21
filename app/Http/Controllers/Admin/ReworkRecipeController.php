@@ -8,6 +8,7 @@ use App\Models\Item;
 use App\Models\ReworkRecipe;
 use App\Models\ReworkRecipeItem;
 use App\Models\Warehouse;
+use App\Support\BundleService;
 use App\Support\WarehouseService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -19,7 +20,10 @@ class ReworkRecipeController extends Controller
 {
     public function index()
     {
-        $items = Item::orderBy('name')->get(['id', 'sku', 'name']);
+        $items = Item::query()
+            ->where('item_type', Item::TYPE_SINGLE)
+            ->orderBy('name')
+            ->get(['id', 'sku', 'name']);
         $damagedWarehouseId = WarehouseService::damagedWarehouseId();
         $targetWarehouses = Warehouse::query()
             ->where('id', '!=', $damagedWarehouseId)
@@ -261,6 +265,12 @@ class ReworkRecipeController extends Controller
             ]);
         }
 
+        BundleService::assertPhysicalItems(
+            $inputItems->pluck('item_id')->all(),
+            'Bundle tidak bisa digunakan sebagai input resep rework karena tidak memiliki stok fisik.',
+            'input_items'
+        );
+
         $outputItems = collect($validated['output_items'] ?? [])
             ->filter(fn ($row) => (int) ($row['item_id'] ?? 0) > 0 && (int) ($row['qty'] ?? 0) > 0)
             ->map(fn ($row) => [
@@ -278,6 +288,12 @@ class ReworkRecipeController extends Controller
                 'output_items' => 'Item output tidak boleh duplikat.',
             ]);
         }
+
+        BundleService::assertPhysicalItems(
+            $outputItems->pluck('item_id')->all(),
+            'Bundle tidak bisa digunakan sebagai output resep rework karena tidak memiliki stok fisik.',
+            'output_items'
+        );
 
         $validated['input_items'] = $inputItems->all();
         $validated['output_items'] = $outputItems->all();

@@ -7,6 +7,7 @@ use App\Models\Item;
 use App\Models\StockTransfer;
 use App\Models\StockTransferItem;
 use App\Models\Warehouse;
+use App\Support\BundleService;
 use App\Support\StockService;
 use App\Support\WarehouseService;
 use Illuminate\Http\Request;
@@ -19,7 +20,10 @@ class StockTransferController extends Controller
 {
     public function index()
     {
-        $items = Item::orderBy('name')->get(['id', 'sku', 'name']);
+        $items = Item::query()
+            ->where('item_type', Item::TYPE_SINGLE)
+            ->orderBy('name')
+            ->get(['id', 'sku', 'name']);
         $warehouses = Warehouse::orderBy('name')->get(['id', 'code', 'name']);
 
         return view('admin.inventory.stock-transfers.index', [
@@ -345,6 +349,11 @@ class StockTransferController extends Controller
                 'items' => 'Item tidak boleh duplikat pada transfer',
             ]);
         }
+
+        BundleService::assertPhysicalItems(
+            $items->pluck('item_id')->all(),
+            'Bundle tidak bisa digunakan pada transfer gudang karena tidak memiliki stok fisik.'
+        );
 
         $normalized = $items->groupBy('item_id')->map(function ($rows, $itemId) {
             $qty = $rows->sum('qty');

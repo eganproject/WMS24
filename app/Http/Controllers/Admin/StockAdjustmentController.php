@@ -7,6 +7,7 @@ use App\Models\Item;
 use App\Models\StockAdjustment;
 use App\Models\StockAdjustmentItem;
 use App\Models\StockMutation;
+use App\Support\BundleService;
 use App\Imports\StockAdjustmentsImport;
 use App\Support\StockService;
 use App\Support\WarehouseService;
@@ -23,7 +24,10 @@ class StockAdjustmentController extends Controller
 {
     public function index()
     {
-        $items = Item::orderBy('name')->get(['id', 'sku', 'name']);
+        $items = Item::query()
+            ->where('item_type', Item::TYPE_SINGLE)
+            ->orderBy('name')
+            ->get(['id', 'sku', 'name']);
         $warehouseId = WarehouseService::defaultWarehouseId();
         $warehouseLabel = Warehouse::where('id', $warehouseId)->value('name') ?? 'Gudang Besar';
         $warehouses = Warehouse::orderBy('name')->get(['id', 'name', 'code']);
@@ -186,6 +190,11 @@ class StockAdjustmentController extends Controller
                     'file' => 'Tidak ada data valid untuk diimport',
                 ]);
             }
+
+            BundleService::assertPhysicalItems(
+                collect($items)->pluck('item_id')->all(),
+                'Bundle tidak bisa digunakan pada penyesuaian stok karena tidak memiliki stok fisik.'
+            );
 
             $warehouseId = $import->warehouse_id ?: WarehouseService::defaultWarehouseId();
             $transactedAt = now();
@@ -439,6 +448,11 @@ class StockAdjustmentController extends Controller
                 'items' => 'Item tidak boleh duplikat pada penyesuaian stok',
             ]);
         }
+
+        BundleService::assertPhysicalItems(
+            $items->pluck('item_id')->all(),
+            'Bundle tidak bisa digunakan pada penyesuaian stok karena tidak memiliki stok fisik.'
+        );
 
         $validated['items'] = $items->all();
         if (!empty($validated['transacted_at'])) {

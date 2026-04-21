@@ -51,6 +51,7 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
         foreach ($rows as $row) {
             $sku = trim((string) ($row['sku'] ?? ''));
             $name = trim((string) ($row['name'] ?? ''));
+            $itemType = trim((string) ($row['item_type'] ?? ''));
             $parentCategoryName = trim((string) ($row['parent_category'] ?? ''));
             $categoryName = trim((string) ($row['category'] ?? ''));
             $description = trim((string) ($row['description'] ?? ''));
@@ -58,6 +59,22 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             if ($sku === '' || $name === '') {
                 $excelRow++;
                 continue;
+            }
+
+            if ($itemType !== '' && strtolower($itemType) !== Item::TYPE_SINGLE) {
+                throw ValidationException::withMessages([
+                    'file' => "Baris {$excelRow} (SKU {$sku}): import Excel master item hanya mendukung item single/stok fisik. Bundle harus dibuat dari form master item.",
+                ]);
+            }
+
+            $existingItem = Item::query()
+                ->where('sku', $sku)
+                ->first(['id', 'sku', 'item_type']);
+
+            if ($existingItem?->isBundle()) {
+                throw ValidationException::withMessages([
+                    'file' => "Baris {$excelRow} (SKU {$sku}): SKU ini adalah bundle. Bundle tidak boleh dibuat atau diubah lewat import Excel master item.",
+                ]);
             }
 
             $address = '';
@@ -109,6 +126,7 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
 
             $payload = [
                 'name' => $name,
+                'item_type' => Item::TYPE_SINGLE,
                 'category_id' => $catId,
                 'description' => $description,
             ];
@@ -136,13 +154,15 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
                 ['sku' => $sku],
                 $payload
             );
-            $warehouseId = WarehouseService::defaultWarehouseId();
-            ItemStock::firstOrCreate(
-                ['item_id' => $item->id, 'warehouse_id' => $warehouseId],
-                ['stock' => 0]
-            );
+            if ($item->isSingle()) {
+                $warehouseId = WarehouseService::defaultWarehouseId();
+                ItemStock::firstOrCreate(
+                    ['item_id' => $item->id, 'warehouse_id' => $warehouseId],
+                    ['stock' => 0]
+                );
+            }
 
-            if (!empty($safetyByWarehouse)) {
+            if ($item->isSingle() && !empty($safetyByWarehouse)) {
                 foreach ($safetyByWarehouse as $whId => $qty) {
                     $stockRow = ItemStock::firstOrCreate(
                         ['item_id' => $item->id, 'warehouse_id' => (int) $whId],
@@ -154,7 +174,7 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             }
             $item->wasRecentlyCreated ? $this->created++ : $this->updated++;
 
-            if (!empty($stockByWarehouse)) {
+            if ($item->isSingle() && !empty($stockByWarehouse)) {
                 foreach ($stockByWarehouse as $warehouseId => $qty) {
                     if ($qty > 0) {
                         $this->initialStocksByWarehouse[$warehouseId][$item->id] = ($this->initialStocksByWarehouse[$warehouseId][$item->id] ?? 0) + $qty;

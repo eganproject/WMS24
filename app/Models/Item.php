@@ -9,9 +9,13 @@ class Item extends Model
 {
     use HasFactory;
 
+    public const TYPE_SINGLE = 'single';
+    public const TYPE_BUNDLE = 'bundle';
+
     protected $fillable = [
         'sku',
         'name',
+        'item_type',
         'category_id',
         'lane_id',
         'location_id',
@@ -60,5 +64,25 @@ class Item extends Model
     public function resolvedAddress(): string
     {
         return $this->location?->code ?? (string) ($this->address ?? '');
+    }
+
+    public function bundleComponents()
+    {
+        return $this->hasMany(ItemBundleComponent::class, 'bundle_item_id');
+    }
+
+    public function bundleParents()
+    {
+        return $this->hasMany(ItemBundleComponent::class, 'component_item_id');
+    }
+
+    public function isBundle(): bool
+    {
+        return (string) $this->item_type === self::TYPE_BUNDLE;
+    }
+
+    public function isSingle(): bool
+    {
+        return !$this->isBundle();
     }
 }

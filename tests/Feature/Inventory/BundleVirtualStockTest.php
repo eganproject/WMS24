@@ -1,0 +1,443 @@
+<?php
+
+namespace Tests\Feature\Inventory;
+
+use App\Models\Item;
+use App\Models\ItemBundleComponent;
+use App\Models\ItemStock;
+use App\Models\OutboundItem;
+use App\Models\OutboundTransaction;
+use App\Models\StockMutation;
+use App\Models\User;
+use App\Models\Warehouse;
+use App\Support\BundleService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+class BundleVirtualStockTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_bundle_virtual_stock_uses_lowest_component_ratio(): void
+    {
+        $displayWarehouse = $this->createDisplayWarehouse();
+
+        $componentA = Item::create([
+            'sku' => 'CMP-A',
+            'name' => 'Komponen A',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+        ]);
+        $componentB = Item::create([
+            'sku' => 'CMP-B',
+            'name' => 'Komponen B',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+        ]);
+        $bundle = Item::create([
+            'sku' => 'BDL-001',
+            'name' => 'Bundle 001',
+            'item_type' => Item::TYPE_BUNDLE,
+            'category_id' => 0,
+        ]);
+
+        ItemBundleComponent::create([
+            'bundle_item_id' => $bundle->id,
+            'component_item_id' => $componentA->id,
+            'required_qty' => 2,
+        ]);
+        ItemBundleComponent::create([
+            'bundle_item_id' => $bundle->id,
+            'component_item_id' => $componentB->id,
+            'required_qty' => 3,
+        ]);
+
+        ItemStock::create([
+            'item_id' => $componentA->id,
+            'warehouse_id' => $displayWarehouse->id,
+            'stock' => 11,
+        ]);
+        ItemStock::create([
+            'item_id' => $componentB->id,
+            'warehouse_id' => $displayWarehouse->id,
+            'stock' => 7,
+        ]);
+
+        $this->assertSame(2, BundleService::virtualAvailableQty($bundle->fresh(), $displayWarehouse->id));
+    }
+
+    public function test_outbound_bundle_depletes_components_atomically_and_keeps_bundle_as_reference(): void
+    {
+        $displayWarehouse = $this->createDisplayWarehouse();
+        $user = User::factory()->create();
+
+        $componentA = Item::create([
+            'sku' => 'CMP-OUT-A',
+            'name' => 'Komponen Out A',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+        ]);
+        $componentB = Item::create([
+            'sku' => 'CMP-OUT-B',
+            'name' => 'Komponen Out B',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+        ]);
+        $bundle = Item::create([
+            'sku' => 'BDL-OUT-01',
+            'name' => 'Bundle Out 01',
+            'item_type' => Item::TYPE_BUNDLE,
+            'category_id' => 0,
+        ]);
+
+        ItemBundleComponent::insert([
+            [
+                'bundle_item_id' => $bundle->id,
+                'component_item_id' => $componentA->id,
+                'required_qty' => 2,
+            ],
+            [
+                'bundle_item_id' => $bundle->id,
+                'component_item_id' => $componentB->id,
+                'required_qty' => 1,
+            ],
+        ]);
+
+        ItemStock::insert([
+            [
+                'item_id' => $componentA->id,
+                'warehouse_id' => $displayWarehouse->id,
+                'stock' => 10,
+            ],
+            [
+                'item_id' => $componentB->id,
+                'warehouse_id' => $displayWarehouse->id,
+                'stock' => 10,
+            ],
+        ]);
+
+        $transaction = OutboundTransaction::create([
+            'code' => 'OUT-BDL-001',
+            'type' => 'manual',
+            'warehouse_id' => $displayWarehouse->id,
+            'transacted_at' => now(),
+            'created_by' => $user->id,
+            'status' => 'pending',
+        ]);
+
+        OutboundItem::create([
+            'outbound_transaction_id' => $transaction->id,
+            'item_id' => $bundle->id,
+            'qty' => 3,
+        ]);
+
+        $this->withoutMiddleware();
+        $this->actingAs($user)
+            ->postJson(route('admin.outbound.manuals.approve', $transaction->id))
+            ->assertOk();
+
+        $this->assertDatabaseHas('item_stocks', [
+            'item_id' => $componentA->id,
+            'warehouse_id' => $displayWarehouse->id,
+            'stock' => 4,
+        ]);
+        $this->assertDatabaseHas('item_stocks', [
+            'item_id' => $componentB->id,
+            'warehouse_id' => $displayWarehouse->id,
+            'stock' => 7,
+        ]);
+
+        $this->assertDatabaseHas('stock_mutations', [
+            'item_id' => $componentA->id,
+            'reference_item_id' => $bundle->id,
+            'reference_sku' => $bundle->sku,
+            'warehouse_id' => $displayWarehouse->id,
+            'direction' => 'out',
+            'qty' => 6,
+            'source_type' => 'outbound',
+            'source_id' => $transaction->id,
+        ]);
+        $this->assertDatabaseHas('stock_mutations', [
+            'item_id' => $componentB->id,
+            'reference_item_id' => $bundle->id,
+            'reference_sku' => $bundle->sku,
+            'warehouse_id' => $displayWarehouse->id,
+            'direction' => 'out',
+            'qty' => 3,
+            'source_type' => 'outbound',
+            'source_id' => $transaction->id,
+        ]);
+        $this->assertDatabaseMissing('stock_mutations', [
+            'item_id' => $bundle->id,
+            'source_type' => 'outbound',
+            'source_id' => $transaction->id,
+        ]);
+    }
+
+    public function test_outbound_bundle_fails_atomically_when_one_component_is_short(): void
+    {
+        $displayWarehouse = $this->createDisplayWarehouse();
+        $user = User::factory()->create();
+
+        $componentA = Item::create([
+            'sku' => 'CMP-FAIL-A',
+            'name' => 'Komponen Fail A',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+        ]);
+        $componentB = Item::create([
+            'sku' => 'CMP-FAIL-B',
+            'name' => 'Komponen Fail B',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+        ]);
+        $bundle = Item::create([
+            'sku' => 'BDL-FAIL-01',
+            'name' => 'Bundle Fail 01',
+            'item_type' => Item::TYPE_BUNDLE,
+            'category_id' => 0,
+        ]);
+
+        ItemBundleComponent::insert([
+            [
+                'bundle_item_id' => $bundle->id,
+                'component_item_id' => $componentA->id,
+                'required_qty' => 2,
+            ],
+            [
+                'bundle_item_id' => $bundle->id,
+                'component_item_id' => $componentB->id,
+                'required_qty' => 1,
+            ],
+        ]);
+
+        ItemStock::insert([
+            [
+                'item_id' => $componentA->id,
+                'warehouse_id' => $displayWarehouse->id,
+                'stock' => 10,
+            ],
+            [
+                'item_id' => $componentB->id,
+                'warehouse_id' => $displayWarehouse->id,
+                'stock' => 2,
+            ],
+        ]);
+
+        $transaction = OutboundTransaction::create([
+            'code' => 'OUT-BDL-FAIL',
+            'type' => 'manual',
+            'warehouse_id' => $displayWarehouse->id,
+            'transacted_at' => now(),
+            'created_by' => $user->id,
+            'status' => 'pending',
+        ]);
+
+        OutboundItem::create([
+            'outbound_transaction_id' => $transaction->id,
+            'item_id' => $bundle->id,
+            'qty' => 3,
+        ]);
+
+        $this->withoutMiddleware();
+        $this->actingAs($user)
+            ->postJson(route('admin.outbound.manuals.approve', $transaction->id))
+            ->assertStatus(422)
+            ->assertJsonPath('errors.qty.0', 'Stok tidak mencukupi untuk SKU CMP-FAIL-B.');
+
+        $this->assertDatabaseHas('item_stocks', [
+            'item_id' => $componentA->id,
+            'warehouse_id' => $displayWarehouse->id,
+            'stock' => 10,
+        ]);
+        $this->assertDatabaseHas('item_stocks', [
+            'item_id' => $componentB->id,
+            'warehouse_id' => $displayWarehouse->id,
+            'stock' => 2,
+        ]);
+        $this->assertSame(0, StockMutation::count());
+    }
+
+    public function test_inbound_store_rejects_bundle_item_for_physical_stock_flow(): void
+    {
+        $user = User::factory()->create();
+        $this->createDefaultWarehouse();
+
+        $bundle = Item::create([
+            'sku' => 'BDL-INB-01',
+            'name' => 'Bundle Inbound',
+            'item_type' => Item::TYPE_BUNDLE,
+            'category_id' => 0,
+        ]);
+
+        $this->withoutMiddleware();
+        $this->actingAs($user)
+            ->postJson(route('admin.inbound.manuals.store'), [
+                'items' => [
+                    [
+                        'item_id' => $bundle->id,
+                        'qty' => 1,
+                    ],
+                ],
+                'transacted_at' => now()->format('Y-m-d H:i'),
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('errors.items.0', 'Bundle tidak bisa digunakan pada inbound karena tidak memiliki stok fisik. SKU: BDL-INB-01');
+    }
+
+    public function test_items_admin_page_renders_bundle_configuration_form(): void
+    {
+        $user = User::factory()->create();
+
+        $this->withoutMiddleware();
+        $this->actingAs($user)
+            ->get(route('admin.masterdata.items.index'))
+            ->assertOk()
+            ->assertSee('Bundle / Virtual Stock')
+            ->assertSee('Komponen Bundle');
+    }
+
+    public function test_damaged_goods_store_rejects_bundle_item(): void
+    {
+        $user = User::factory()->create();
+        $displayWarehouse = $this->createDisplayWarehouse();
+        Warehouse::firstOrCreate(['code' => 'GUDANG_RUSAK'], ['name' => 'Gudang Rusak']);
+
+        $bundle = Item::create([
+            'sku' => 'BDL-DMG-01',
+            'name' => 'Bundle Rusak',
+            'item_type' => Item::TYPE_BUNDLE,
+            'category_id' => 0,
+        ]);
+
+        $this->withoutMiddleware();
+        $this->actingAs($user)
+            ->postJson(route('admin.inventory.damaged-goods.store'), [
+                'source_type' => 'warehouse',
+                'source_warehouse_id' => $displayWarehouse->id,
+                'items' => [
+                    [
+                        'item_id' => $bundle->id,
+                        'qty' => 1,
+                    ],
+                ],
+                'transacted_at' => now()->format('Y-m-d H:i'),
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('errors.items.0', 'Bundle tidak bisa digunakan pada intake barang rusak karena tidak memiliki stok fisik. SKU: BDL-DMG-01');
+    }
+
+    public function test_rework_recipe_store_rejects_bundle_item_in_bom(): void
+    {
+        $user = User::factory()->create();
+        $defaultWarehouse = $this->createDefaultWarehouse();
+
+        $bundle = Item::create([
+            'sku' => 'BDL-RWR-01',
+            'name' => 'Bundle Rework',
+            'item_type' => Item::TYPE_BUNDLE,
+            'category_id' => 0,
+        ]);
+        $single = Item::create([
+            'sku' => 'SGL-RWR-01',
+            'name' => 'Single Rework',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+        ]);
+
+        $this->withoutMiddleware();
+        $this->actingAs($user)
+            ->postJson(route('admin.inventory.rework-recipes.store'), [
+                'name' => 'Recipe Bundle Invalid',
+                'target_warehouse_id' => $defaultWarehouse->id,
+                'input_items' => [
+                    [
+                        'item_id' => $bundle->id,
+                        'qty' => 1,
+                    ],
+                ],
+                'output_items' => [
+                    [
+                        'item_id' => $single->id,
+                        'qty' => 1,
+                    ],
+                ],
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('errors.input_items.0', 'Bundle tidak bisa digunakan sebagai input resep rework karena tidak memiliki stok fisik. SKU: BDL-RWR-01');
+    }
+
+    public function test_stock_mutation_detail_shows_bundle_reference_for_component_depletion(): void
+    {
+        $displayWarehouse = $this->createDisplayWarehouse();
+        $user = User::factory()->create();
+
+        $component = Item::create([
+            'sku' => 'CMP-MUT-01',
+            'name' => 'Komponen Mutasi',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+        ]);
+        $bundle = Item::create([
+            'sku' => 'BDL-MUT-01',
+            'name' => 'Bundle Mutasi',
+            'item_type' => Item::TYPE_BUNDLE,
+            'category_id' => 0,
+        ]);
+
+        ItemBundleComponent::create([
+            'bundle_item_id' => $bundle->id,
+            'component_item_id' => $component->id,
+            'required_qty' => 2,
+        ]);
+
+        ItemStock::create([
+            'item_id' => $component->id,
+            'warehouse_id' => $displayWarehouse->id,
+            'stock' => 10,
+        ]);
+
+        $transaction = OutboundTransaction::create([
+            'code' => 'OUT-MUT-001',
+            'type' => 'manual',
+            'warehouse_id' => $displayWarehouse->id,
+            'transacted_at' => now(),
+            'created_by' => $user->id,
+            'status' => 'pending',
+        ]);
+
+        OutboundItem::create([
+            'outbound_transaction_id' => $transaction->id,
+            'item_id' => $bundle->id,
+            'qty' => 2,
+        ]);
+
+        $this->withoutMiddleware();
+        $this->actingAs($user)
+            ->postJson(route('admin.outbound.manuals.approve', $transaction->id))
+            ->assertOk();
+
+        $mutation = StockMutation::query()->where('reference_item_id', $bundle->id)->firstOrFail();
+
+        $this->actingAs($user)
+            ->getJson(route('admin.inventory.stock-mutations.show', $mutation->id))
+            ->assertOk()
+            ->assertJsonPath('mutation.item', 'CMP-MUT-01 - Komponen Mutasi | Ref Bundle: BDL-MUT-01');
+    }
+
+    private function createDefaultWarehouse(): Warehouse
+    {
+        return Warehouse::firstOrCreate(
+            ['code' => 'GUDANG_BESAR'],
+            ['name' => 'Gudang Besar']
+        );
+    }
+
+    private function createDisplayWarehouse(): Warehouse
+    {
+        return Warehouse::firstOrCreate(
+            ['code' => 'GUDANG_DISPLAY'],
+            ['name' => 'Gudang Display']
+        );
+    }
+}

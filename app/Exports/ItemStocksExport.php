@@ -4,6 +4,7 @@ namespace App\Exports;
 
 use App\Models\Item;
 use App\Models\Warehouse;
+use App\Support\BundleService;
 use App\Support\WarehouseService;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
@@ -47,6 +48,7 @@ class ItemStocksExport implements FromCollection, WithHeadings, WithMapping, Sho
             'ID',
             'SKU',
             'Nama',
+            'Tipe',
             "Stok {$defaultLabel}",
             "Safety {$defaultLabel}",
             "Stok {$displayLabel}",
@@ -63,9 +65,10 @@ class ItemStocksExport implements FromCollection, WithHeadings, WithMapping, Sho
         $displayId = WarehouseService::displayWarehouseId();
         $damagedId = WarehouseService::damagedWarehouseId();
         $stocks = $row->stocks?->keyBy('warehouse_id') ?? collect();
-        $stockMain = (int) ($stocks->get($defaultId)?->stock ?? 0);
-        $stockDisplay = (int) ($stocks->get($displayId)?->stock ?? 0);
-        $stockDamaged = (int) ($stocks->get($damagedId)?->stock ?? 0);
+        $isBundle = $row->isBundle();
+        $stockMain = $isBundle ? BundleService::virtualAvailableQty($row, $defaultId) : (int) ($stocks->get($defaultId)?->stock ?? 0);
+        $stockDisplay = $isBundle ? BundleService::virtualAvailableQty($row, $displayId) : (int) ($stocks->get($displayId)?->stock ?? 0);
+        $stockDamaged = $isBundle ? 0 : (int) ($stocks->get($damagedId)?->stock ?? 0);
         $baseSafety = (int) ($row->safety_stock ?? 0);
         $safetyMainRaw = $stocks->get($defaultId)?->safety_stock;
         $safetyDisplayRaw = $stocks->get($displayId)?->safety_stock;
@@ -76,13 +79,14 @@ class ItemStocksExport implements FromCollection, WithHeadings, WithMapping, Sho
             $row->id,
             $row->sku,
             $row->name,
+            $isBundle ? 'bundle (virtual)' : 'single',
             $stockMain,
             $safetyMain,
             $stockDisplay,
             $safetyDisplay,
             $stockDamaged,
             $stockGoodTotal,
-            $stockGoodTotal + $stockDamaged,
+            $isBundle ? $stockGoodTotal : ($stockGoodTotal + $stockDamaged),
         ];
     }
 }

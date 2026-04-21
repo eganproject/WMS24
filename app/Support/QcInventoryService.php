@@ -28,11 +28,14 @@ class QcInventoryService
             ];
         }
 
-        $item = Item::where('sku', $normalizedSku)->first(['id', 'sku']);
+        $item = Item::query()
+            ->where('sku', $normalizedSku)
+            ->where('item_type', Item::TYPE_SINGLE)
+            ->first(['id', 'sku']);
         if (!$item) {
             return [
                 'available' => 0,
-                'reason' => 'SKU tidak ditemukan',
+                'reason' => 'SKU tidak ditemukan atau bukan item stok fisik',
             ];
         }
 
@@ -74,6 +77,7 @@ class QcInventoryService
     {
         return Item::query()
             ->whereIn('sku', $items->pluck('sku')->filter()->values()->all())
+            ->where('item_type', Item::TYPE_SINGLE)
             ->get(['id', 'sku', 'name'])
             ->keyBy('sku');
     }

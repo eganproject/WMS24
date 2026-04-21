@@ -12,6 +12,7 @@ use App\Models\InboundTransaction;
 use App\Models\Item;
 use App\Models\Supplier;
 use App\Models\Warehouse;
+use App\Support\BundleService;
 use App\Support\InboundScanExpectation;
 use App\Support\InboundScanStatus;
 use App\Support\Permission;
@@ -205,7 +206,10 @@ class InboundController extends Controller
 
     private function index(string $type, string $pageTitle, string $routeBase)
     {
-        $items = Item::orderBy('name')->get(['id', 'sku', 'name', 'koli_qty']);
+        $items = Item::query()
+            ->where('item_type', Item::TYPE_SINGLE)
+            ->orderBy('name')
+            ->get(['id', 'sku', 'name', 'koli_qty']);
         $warehouses = Warehouse::orderBy('name')->get(['id', 'name', 'code']);
         $suppliers = $this->usesSupplier($type)
             ? Supplier::orderBy('name')->get(['id', 'name'])
@@ -699,8 +703,13 @@ class InboundController extends Controller
             ]);
         }
 
+        BundleService::assertPhysicalItems(
+            $items->pluck('item_id')->all(),
+            'Bundle tidak bisa digunakan pada inbound karena tidak memiliki stok fisik.'
+        );
+
         $itemMap = Item::whereIn('id', $items->pluck('item_id')->all())
-            ->get(['id', 'sku', 'name', 'koli_qty'])
+            ->get(['id', 'sku', 'name', 'koli_qty', 'item_type'])
             ->keyBy('id');
 
         $normalized = $items->map(function ($row) use ($itemMap) {
@@ -758,6 +767,11 @@ class InboundController extends Controller
             $createdTransactions = 0;
             $createdItems = 0;
             foreach ($groups as $group) {
+                BundleService::assertPhysicalItems(
+                    collect($group['items'] ?? [])->pluck('item_id')->all(),
+                    'Bundle tidak bisa digunakan pada inbound karena tidak memiliki stok fisik.'
+                );
+
                 $transactedAt = $this->parseImportedDate($group['transacted_at'] ?? null, 'transacted_at');
                 $suratJalanAt = $this->parseImportedDate($group['surat_jalan_at'] ?? null, 'surat_jalan_at', false);
 
@@ -817,6 +831,10 @@ class InboundController extends Controller
         try {
             $import = new InboundFormItemsImport();
             Excel::import($import, $request->file('file'));
+            BundleService::assertPhysicalItems(
+                collect($import->items)->pluck('item_id')->all(),
+                'Bundle tidak bisa digunakan pada inbound karena tidak memiliki stok fisik.'
+            );
 
             return response()->json([
                 'message' => sprintf('Import item %s berhasil.', $this->typeOptions()[$type] ?? 'inbound'),

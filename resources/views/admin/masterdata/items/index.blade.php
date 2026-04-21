@@ -427,14 +427,14 @@
             row.innerHTML = `
                 <div class="col-md-8">
                     <label class="fs-7 fw-bold form-label mb-2">Komponen</label>
-                    <select name="bundle_components[][component_item_id]" class="form-select form-select-solid bundle-component-item" data-control="select2" data-placeholder="Pilih komponen">
+                    <select class="form-select form-select-solid bundle-component-item" data-field="component_item_id" data-control="select2" data-placeholder="Pilih komponen">
                         <option value="">Pilih komponen</option>
                         ${componentItemOptionsHtml}
                     </select>
                 </div>
                 <div class="col-md-3">
                     <label class="fs-7 fw-bold form-label mb-2">Qty</label>
-                    <input type="number" min="1" name="bundle_components[][required_qty]" class="form-control form-control-solid bundle-component-qty" value="${component.required_qty ?? ''}" />
+                    <input type="number" min="1" class="form-control form-control-solid bundle-component-qty" data-field="required_qty" value="${component.required_qty ?? ''}" />
                 </div>
                 <div class="col-md-1">
                     <button type="button" class="btn btn-icon btn-light-danger btn-remove-bundle-component">
@@ -457,7 +457,25 @@
                     $(selectEl).val(String(component.component_item_id)).trigger('change');
                 }
             }
+            syncBundleComponentFieldNames();
             return row;
+        };
+
+        const syncBundleComponentFieldNames = () => {
+            if (!bundleContainer) return;
+
+            Array.from(bundleContainer.querySelectorAll('.bundle-component-row')).forEach((row, index) => {
+                const itemField = row.querySelector('.bundle-component-item');
+                const qtyField = row.querySelector('.bundle-component-qty');
+
+                if (itemField) {
+                    itemField.setAttribute('name', `bundle_components[${index}][component_item_id]`);
+                }
+
+                if (qtyField) {
+                    qtyField.setAttribute('name', `bundle_components[${index}][required_qty]`);
+                }
+            });
         };
 
         const clearBundleComponents = () => {
@@ -490,6 +508,7 @@
                 if (formKoliQty) formKoliQty.value = '';
                 if (formSafetyStock) formSafetyStock.value = 0;
                 ensureBundleComponentRow();
+                syncBundleComponentFieldNames();
             } else {
                 clearBundleComponents();
             }
@@ -709,6 +728,7 @@
         form?.addEventListener('submit', async (e) => {
             e.preventDefault();
             clearErrors();
+            syncBundleComponentFieldNames();
             const id = formId.value;
             const url = id ? updateTpl.replace(':id', id) : storeUrl;
             const method = id ? 'PUT' : 'POST';
@@ -809,6 +829,7 @@
             if ((formType?.value || 'single') === 'bundle') {
                 ensureBundleComponentRow();
             }
+            syncBundleComponentFieldNames();
         });
 
         toggleBundleMode();

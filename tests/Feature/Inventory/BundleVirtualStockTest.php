@@ -66,6 +66,28 @@ class BundleVirtualStockTest extends TestCase
         $this->assertSame(2, BundleService::virtualAvailableQty($bundle->fresh(), $displayWarehouse->id));
     }
 
+    public function test_bundle_component_normalization_can_merge_split_form_rows(): void
+    {
+        $normalized = BundleService::normalizeComponents([
+            ['component_item_id' => 10],
+            ['required_qty' => 2],
+            ['component_item_id' => 10, 'required_qty' => 1],
+            ['component_item_id' => 20],
+            ['required_qty' => 4],
+        ]);
+
+        $this->assertSame([
+            [
+                'component_item_id' => 10,
+                'required_qty' => 3,
+            ],
+            [
+                'component_item_id' => 20,
+                'required_qty' => 4,
+            ],
+        ], $normalized);
+    }
+
     public function test_outbound_bundle_depletes_components_atomically_and_keeps_bundle_as_reference(): void
     {
         $displayWarehouse = $this->createDisplayWarehouse();

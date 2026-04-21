@@ -41,13 +41,48 @@ class BundleService
 
     public static function normalizeComponents(array $rows): array
     {
-        return collect($rows)
-            ->map(function ($row) {
-                return [
-                    'component_item_id' => (int) ($row['component_item_id'] ?? $row['item_id'] ?? 0),
-                    'required_qty' => (int) ($row['required_qty'] ?? $row['qty'] ?? 0),
+        $preparedRows = [];
+        $pending = [
+            'component_item_id' => 0,
+            'required_qty' => 0,
+        ];
+
+        foreach ($rows as $row) {
+            $normalized = [
+                'component_item_id' => (int) ($row['component_item_id'] ?? $row['item_id'] ?? 0),
+                'required_qty' => (int) ($row['required_qty'] ?? $row['qty'] ?? 0),
+            ];
+
+            if ($normalized['component_item_id'] > 0 && $normalized['required_qty'] > 0) {
+                $preparedRows[] = $normalized;
+                continue;
+            }
+
+            if ($normalized['component_item_id'] > 0) {
+                if ($pending['component_item_id'] > 0 && $pending['required_qty'] > 0) {
+                    $preparedRows[] = $pending;
+                    $pending = [
+                        'component_item_id' => 0,
+                        'required_qty' => 0,
+                    ];
+                }
+                $pending['component_item_id'] = $normalized['component_item_id'];
+            }
+
+            if ($normalized['required_qty'] > 0) {
+                $pending['required_qty'] = $normalized['required_qty'];
+            }
+
+            if ($pending['component_item_id'] > 0 && $pending['required_qty'] > 0) {
+                $preparedRows[] = $pending;
+                $pending = [
+                    'component_item_id' => 0,
+                    'required_qty' => 0,
                 ];
-            })
+            }
+        }
+
+        return collect($preparedRows)
             ->filter(fn ($row) => $row['component_item_id'] > 0 && $row['required_qty'] > 0)
             ->groupBy('component_item_id')
             ->map(function ($group, $itemId) {

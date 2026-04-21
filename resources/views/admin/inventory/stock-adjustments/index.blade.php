@@ -87,7 +87,7 @@
 </div>
 
 <div class="modal fade" id="modal_stock_adjustment" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered mw-900px">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable mw-900px">
         <div class="modal-content">
             <div class="modal-header">
                 <h2 class="fw-bolder" id="adjustment_modal_title">Tambah Penyesuaian</h2>
@@ -204,6 +204,7 @@
         const form = document.getElementById('stock_adjustment_form');
         const modalEl = document.getElementById('modal_stock_adjustment');
         const modal = modalEl ? new bootstrap.Modal(modalEl) : null;
+        const modalContentEl = modalEl?.querySelector('.modal-content') || modalEl;
         const itemsContainer = document.getElementById('adjustment_items_container');
         const addItemBtn = document.getElementById('btn_add_adjustment_item');
         const openBtn = document.getElementById('btn_open_adjustment');
@@ -285,7 +286,7 @@
                     placeholder: 'Pilih item',
                     allowClear: true,
                     width: '100%',
-                    dropdownParent: modalEl,
+                    dropdownParent: modalContentEl,
                     minimumResultsForSearch: 0,
                 })
                     .on('select2:opening select2:closing select2:close', function(e){ e.stopPropagation(); });

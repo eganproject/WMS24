@@ -68,7 +68,7 @@
                         <th>Avatar</th>
                         <th>Nama</th>
                         <th>Email</th>
-                        <th>Divisi</th>
+                        <th>Lane</th>
                         <th>Roles</th>
                         <th class="text-end">Aksi</th>
                     </tr>
@@ -101,10 +101,10 @@
                         <li><strong>Email</strong> (wajib)</li>
                         <li><strong>Password</strong> (wajib)</li>
                         <li><strong>Roles</strong> (opsional, pisahkan dengan koma)</li>
-                        <li><strong>Divisi</strong> atau <strong>Divisi ID</strong> (opsional)</li>
+                        <li><strong>Lane</strong>, <strong>Lane Code</strong>, atau <strong>Lane ID</strong> (opsional)</li>
                     </ul>
                     <p class="text-muted small mb-0">
-                        Roles dapat diisi dengan <em>nama</em>, <em>slug</em>, atau <em>ID</em> role.
+                        Roles dapat diisi dengan <em>nama</em>, <em>slug</em>, atau <em>ID</em> role. Kosongkan lane jika user boleh melihat semua picking list.
                     </p>
                 </div>
                 <div class="mb-10">
@@ -179,7 +179,7 @@
                 { data: 'avatar_url', orderable:false, searchable:false, render: (data)=>`<img src="${data}" alt="avatar" class="w-40px h-40px rounded-circle object-cover">` },
                 { data: 'name' },
                 { data: 'email' },
-                { data: 'divisi' },
+                { data: 'lane' },
                 { data: 'roles' },
                 { data: 'id', orderable:false, searchable:false, className:'text-end', render: (data)=>{
                     const editUrl = editTpl.replace(':id', data);

@@ -46,14 +46,15 @@
                         @error('roles')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
                     <div class="mb-10">
-                        <label class="form-label">Divisi</label>
-                        <select name="divisi_id" class="form-select @error('divisi_id') is-invalid @enderror form-select-solid" data-placeholder="Pilih Divisi">
-                            <option value="">- Pilih Divisi -</option>
-                            @foreach($divisis as $d)
-                                <option value="{{ $d->id }}" @selected(old('divisi_id', $user->divisi_id) == $d->id)>{{ $d->name }}</option>
+                        <label class="form-label">Lane</label>
+                        <select name="lane_id" class="form-select @error('lane_id') is-invalid @enderror form-select-solid" data-placeholder="Pilih Lane" data-control="select2">
+                            <option value="">Semua picking list</option>
+                            @foreach($lanes as $lane)
+                                <option value="{{ $lane->id }}" @selected(old('lane_id', $user->lane_id) == $lane->id)>{{ $lane->code }} - {{ $lane->name }}</option>
                             @endforeach
                         </select>
-                        @error('divisi_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        @error('lane_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        <div class="form-text">Kosongkan jika user boleh melihat semua data picking list.</div>
                     </div>
                     <div class="mb-10">
                         <label class="form-label">Avatar</label>

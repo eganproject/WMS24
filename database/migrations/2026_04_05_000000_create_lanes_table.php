@@ -11,7 +11,6 @@ return new class extends Migration {
             $table->id();
             $table->string('code', 50)->unique();
             $table->string('name', 150);
-            $table->foreignId('divisi_id')->nullable()->constrained('divisis')->nullOnDelete();
             $table->boolean('is_active')->default(true);
             $table->unsignedSmallInteger('sort_order')->nullable();
             $table->timestamps();

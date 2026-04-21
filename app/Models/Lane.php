@@ -12,7 +12,6 @@ class Lane extends Model
     protected $fillable = [
         'code',
         'name',
-        'divisi_id',
         'is_active',
         'sort_order',
     ];
@@ -21,11 +20,6 @@ class Lane extends Model
         'is_active' => 'boolean',
         'sort_order' => 'integer',
     ];
-
-    public function divisi()
-    {
-        return $this->belongsTo(Divisi::class, 'divisi_id');
-    }
 
     public function locations()
     {

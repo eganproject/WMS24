@@ -25,16 +25,10 @@
                     <option value="ongoing">Dalam Proses</option>
                     <option value="done">Selesai</option>
                 </select>
-                <select class="form-select form-select-solid w-175px" id="filter_divisi">
-                    <option value="">Semua Divisi</option>
-                    @foreach($divisis as $divisi)
-                        <option value="{{ $divisi->id }}">{{ $divisi->name }}</option>
-                    @endforeach
-                </select>
                 <select class="form-select form-select-solid w-200px" id="filter_lane">
                     <option value="">Semua Lane</option>
                     @foreach($lanes as $lane)
-                        <option value="{{ $lane->id }}" data-divisi-id="{{ $lane->divisi_id }}">{{ $lane->code }} - {{ $lane->name }}</option>
+                        <option value="{{ $lane->id }}">{{ $lane->code }} - {{ $lane->name }}</option>
                     @endforeach
                 </select>
                 <button type="button" class="btn btn-light" id="filter_apply">Filter</button>
@@ -236,7 +230,6 @@
         const searchInput = document.querySelector('[data-kt-filter="search"]');
         const dateEl = document.getElementById('filter_date');
         const statusEl = document.getElementById('filter_status');
-        const divisiEl = document.getElementById('filter_divisi');
         const laneEl = document.getElementById('filter_lane');
         const filterApplyBtn = document.getElementById('filter_apply');
         const filterResetBtn = document.getElementById('filter_reset');
@@ -290,28 +283,6 @@
         }
         updateRecalcState();
 
-        const syncLaneOptions = () => {
-            if (!laneEl) return;
-            const divisiId = (divisiEl?.value || '').trim();
-            let hasSelected = false;
-            Array.from(laneEl.options).forEach((opt) => {
-                if (opt.value === '') {
-                    opt.hidden = false;
-                    return;
-                }
-                const laneDivisi = (opt.getAttribute('data-divisi-id') || '').trim();
-                const visible = divisiId === '' || laneDivisi === divisiId;
-                opt.hidden = !visible;
-                if (visible && opt.value === laneEl.value) {
-                    hasSelected = true;
-                }
-            });
-            if (!hasSelected && laneEl.value) {
-                laneEl.value = '';
-            }
-        };
-        syncLaneOptions();
-
         const resetAddQtyDate = () => {
             if (addQtyDatePicker) {
                 if (todayStr) {
@@ -360,7 +331,6 @@
                     params.q = searchInput?.value || '';
                     if (dateEl?.value) params.date = dateEl.value;
                     if (statusEl?.value) params.status = statusEl.value;
-                    if (divisiEl?.value) params.divisi_id = divisiEl.value;
                     if (laneEl?.value) params.lane_id = laneEl.value;
                 }
             },
@@ -385,7 +355,6 @@
                 data: function(params) {
                     params.q = searchInput?.value || '';
                     if (dateEl?.value) params.date = dateEl.value;
-                    if (divisiEl?.value) params.divisi_id = divisiEl.value;
                     if (laneEl?.value) params.lane_id = laneEl.value;
                 }
             },
@@ -418,10 +387,6 @@
         filterApplyBtn?.addEventListener('click', reloadAll);
         dateEl?.addEventListener('change', updateRecalcState);
         statusEl?.addEventListener('change', reloadAll);
-        divisiEl?.addEventListener('change', () => {
-            syncLaneOptions();
-            reloadAll();
-        });
         laneEl?.addEventListener('change', reloadAll);
         filterResetBtn?.addEventListener('click', () => {
             if (fpDate && todayStr) {
@@ -431,9 +396,7 @@
             }
             if (searchInput) searchInput.value = '';
             if (statusEl) statusEl.value = '';
-            if (divisiEl) divisiEl.value = '';
             if (laneEl) laneEl.value = '';
-            syncLaneOptions();
             updateRecalcState();
             reloadAll();
         });
@@ -444,7 +407,6 @@
             if (q) params.set('q', q);
             if (dateEl?.value) params.set('date', dateEl.value);
             if (statusEl?.value) params.set('status', statusEl.value);
-            if (divisiEl?.value) params.set('divisi_id', divisiEl.value);
             if (laneEl?.value) params.set('lane_id', laneEl.value);
             const url = params.toString() ? `${exportUrl}?${params.toString()}` : exportUrl;
             window.location.href = url;
@@ -456,7 +418,6 @@
             if (q) params.set('q', q);
             if (dateEl?.value) params.set('date', dateEl.value);
             if (statusEl?.value) params.set('status', statusEl.value);
-            if (divisiEl?.value) params.set('divisi_id', divisiEl.value);
             if (laneEl?.value) params.set('lane_id', laneEl.value);
             const url = params.toString() ? `${printUrl}?${params.toString()}` : printUrl;
             window.open(url, '_blank');

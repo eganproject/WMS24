@@ -18,7 +18,6 @@ class MenuSeeder extends Seeder
             ['name' => 'Laporan', 'slug' => 'reports', 'route' => null, 'icon' => 'fa-solid fa-chart-line', 'parent_slug' => null, 'sort_order' => 15],
             ['name' => 'Users', 'slug' => 'users', 'route' => 'admin.masterdata.users.index', 'icon' => 'fa-solid fa-users', 'parent_slug' => 'master-data', 'sort_order' => 20],
             ['name' => 'Roles', 'slug' => 'roles', 'route' => 'admin.masterdata.roles.index', 'icon' => 'fa-solid fa-user-shield', 'parent_slug' => 'master-data', 'sort_order' => 21],
-            ['name' => 'Divisi', 'slug' => 'divisi', 'route' => 'admin.masterdata.divisi.index', 'icon' => 'fa-solid fa-people-group', 'parent_slug' => 'master-data', 'sort_order' => 21.4],
             ['name' => 'Kurir', 'slug' => 'kurir', 'route' => 'admin.masterdata.kurir.index', 'icon' => 'fa-solid fa-truck', 'parent_slug' => 'master-data', 'sort_order' => 21.45],
             ['name' => 'Categories', 'slug' => 'categories', 'route' => 'admin.masterdata.categories.index', 'icon' => 'fa-solid fa-sitemap', 'parent_slug' => 'master-data', 'sort_order' => 21.5],
             ['name' => 'Items', 'slug' => 'items', 'route' => 'admin.masterdata.items.index', 'icon' => 'fa-solid fa-box', 'parent_slug' => 'master-data', 'sort_order' => 21.6],

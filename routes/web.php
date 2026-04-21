@@ -26,7 +26,6 @@ use App\Http\Controllers\Admin\ReplenishmentReportController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\MenuController;
 use App\Http\Controllers\Admin\PermissionController;
-use App\Http\Controllers\Admin\DivisiController;
 use App\Http\Controllers\Admin\LaneController;
 use App\Http\Controllers\Admin\LocationController;
 use App\Http\Controllers\Admin\KurirController;
@@ -109,10 +108,6 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/roles/data', [RoleController::class, 'data'])->name('roles.data');
         // Roles CRUD
         Route::resource('roles', RoleController::class)->except(['show'])->names('roles');
-
-        // Divisi
-        Route::get('/divisi/data', [DivisiController::class, 'data'])->name('divisi.data');
-        Route::resource('divisi', DivisiController::class)->except(['create','show','edit'])->names('divisi');
 
         // Lanes
         Route::get('/lanes/data', [LaneController::class, 'data'])->name('lanes.data');

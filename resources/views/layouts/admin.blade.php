@@ -49,6 +49,15 @@
         .flatpickr-calendar {
             z-index: 2000 !important;
         }
+
+        .modal .select2-container--open,
+        .modal .flatpickr-calendar {
+            z-index: 2065 !important;
+        }
+
+        .modal .select2-dropdown {
+            z-index: 2065 !important;
+        }
     </style>
     @stack('styles')
     @yield('styles')
@@ -105,6 +114,17 @@
                     return null;
                 }
                 return element.closest('.modal');
+            };
+
+            const getModalFloatingParent = (element) => {
+                const modalEl = getClosestModal(element);
+                if (!modalEl) {
+                    return null;
+                }
+
+                return modalEl.querySelector('.modal-content')
+                    || modalEl.querySelector('.modal-dialog')
+                    || modalEl;
             };
 
             const queueModalFloatingRefresh = (modalEl) => {
@@ -173,14 +193,14 @@
                         return options;
                     }
 
-                    const modalEl = getClosestModal(element);
-                    if (!modalEl) {
+                    const floatingParent = getModalFloatingParent(element);
+                    if (!floatingParent) {
                         return options;
                     }
 
                     return {
                         ...options,
-                        dropdownParent: window.jQuery(modalEl),
+                        dropdownParent: window.jQuery(floatingParent),
                     };
                 };
 
@@ -208,6 +228,60 @@
 
                 window.jQuery.fn.select2 = wrappedSelect2;
                 window.__modalSelect2Patched = true;
+            };
+
+            const patchFlatpickrForModals = () => {
+                if (typeof window.flatpickr !== 'function' || window.__modalFlatpickrPatched) {
+                    return;
+                }
+
+                const originalFlatpickr = window.flatpickr;
+
+                const buildConfig = (element, config) => {
+                    if (!element || typeof config !== 'object' || Array.isArray(config)) {
+                        return config;
+                    }
+
+                    const floatingParent = getModalFloatingParent(element);
+                    if (!floatingParent) {
+                        return config;
+                    }
+
+                    return {
+                        ...config,
+                        appendTo: config.appendTo || floatingParent,
+                        positionElement: config.positionElement || element,
+                    };
+                };
+
+                const wrappedFlatpickr = function (selector, config) {
+                    if (selector instanceof Element) {
+                        return originalFlatpickr(selector, buildConfig(selector, config ?? {}));
+                    }
+
+                    if (selector instanceof NodeList || Array.isArray(selector)) {
+                        const elements = Array.from(selector);
+                        return originalFlatpickr(elements, buildConfig(elements[0], config ?? {}));
+                    }
+
+                    if (typeof selector === 'string') {
+                        const elements = document.querySelectorAll(selector);
+                        return originalFlatpickr(selector, buildConfig(elements[0], config ?? {}));
+                    }
+
+                    return originalFlatpickr(selector, config);
+                };
+
+                Object.keys(originalFlatpickr).forEach((key) => {
+                    wrappedFlatpickr[key] = originalFlatpickr[key];
+                });
+                wrappedFlatpickr.l10ns = originalFlatpickr.l10ns;
+                wrappedFlatpickr.localize = originalFlatpickr.localize;
+                wrappedFlatpickr.parseDate = originalFlatpickr.parseDate;
+                wrappedFlatpickr.formatDate = originalFlatpickr.formatDate;
+
+                window.flatpickr = wrappedFlatpickr;
+                window.__modalFlatpickrPatched = true;
             };
 
             const applyModalStaticBackdrop = (modalEl) => {
@@ -243,6 +317,7 @@
             enforceModalBackdrops();
             enforceSweetalertBackdrop();
             patchSelect2ForModals();
+            patchFlatpickrForModals();
 
             if (!window.AppSwal) {
                 window.AppSwal = {
@@ -278,6 +353,7 @@
             document.addEventListener('DOMContentLoaded', () => {
                 enforceModalBackdrops();
                 patchSelect2ForModals();
+                patchFlatpickrForModals();
 
                 document.addEventListener('shown.bs.modal', (event) => {
                     queueModalFloatingRefresh(event.target);

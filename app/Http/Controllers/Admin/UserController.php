@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Divisi;
+use App\Models\Lane;
 use App\Models\Role;
 use App\Models\User;
 use App\Imports\UsersImport;
@@ -25,7 +25,7 @@ class UserController extends Controller
 
     public function data(Request $request)
     {
-        $query = User::with('roles:id,name', 'divisi:id,name')->orderBy('name');
+        $query = User::with('roles:id,name', 'lane:id,code,name')->orderBy('name');
 
         if ($roleId = $request->integer('role_id')) {
             $query->whereHas('roles', fn ($q) => $q->where('roles.id', $roleId));
@@ -35,8 +35,9 @@ class UserController extends Controller
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
                     ->orWhere('email', 'like', "%{$search}%")
-                    ->orWhereHas('divisi', function ($dq) use ($search) {
-                        $dq->where('name', 'like', "%{$search}%");
+                    ->orWhereHas('lane', function ($laneQ) use ($search) {
+                        $laneQ->where('name', 'like', "%{$search}%")
+                            ->orWhere('code', 'like', "%{$search}%");
                     });
             });
         }
@@ -47,7 +48,7 @@ class UserController extends Controller
                 'name' => $u->name,
                 'email' => $u->email,
                 'avatar_url' => $u->avatar_url,
-                'divisi' => $u->divisi?->name ?? '-',
+                'lane' => $u->lane ? "{$u->lane->code} - {$u->lane->name}" : 'Semua picking list',
                 'roles' => $u->roles->pluck('name')->implode(', '),
             ];
         });
@@ -58,8 +59,8 @@ class UserController extends Controller
     public function create()
     {
         $roles = Role::orderBy('name')->get();
-        $divisis = Divisi::orderBy('name')->get(['id', 'name']);
-        return view('admin.masterdata.users.create', compact('roles', 'divisis'));
+        $lanes = Lane::orderBy('code')->get(['id', 'code', 'name']);
+        return view('admin.masterdata.users.create', compact('roles', 'lanes'));
     }
 
     public function store(Request $request)
@@ -71,7 +72,7 @@ class UserController extends Controller
             'roles' => ['nullable','array'],
             'roles.*' => ['integer','exists:roles,id'],
             'avatar' => ['nullable','image','mimes:jpg,jpeg,png','max:2048'],
-            'divisi_id' => ['nullable','integer','exists:divisis,id'],
+            'lane_id' => ['nullable','integer','exists:lanes,id'],
         ]);
         $avatarPath = null;
         $storedAvatar = null;
@@ -89,7 +90,7 @@ class UserController extends Controller
                 'password' => Hash::make($validated['password']),
                 'avatar' => $avatarPath ?: User::defaultAvatar(),
                 'email_verified_at' => now(),
-                'divisi_id' => $validated['divisi_id'] ?? null,
+                'lane_id' => $validated['lane_id'] ?? null,
             ]);
             if (!empty($validated['roles'])) {
                 $user->roles()->sync($validated['roles']);
@@ -110,8 +111,8 @@ class UserController extends Controller
     {
         $roles = Role::orderBy('name')->get();
         $user->load('roles');
-        $divisis = Divisi::orderBy('name')->get(['id', 'name']);
-        return view('admin.masterdata.users.edit', compact('user','roles','divisis'));
+        $lanes = Lane::orderBy('code')->get(['id', 'code', 'name']);
+        return view('admin.masterdata.users.edit', compact('user','roles','lanes'));
     }
 
     public function update(Request $request, User $user)
@@ -123,12 +124,12 @@ class UserController extends Controller
             'roles' => ['nullable','array'],
             'roles.*' => ['integer','exists:roles,id'],
             'avatar' => ['nullable','image','mimes:jpg,jpeg,png','max:2048'],
-            'divisi_id' => ['nullable','integer','exists:divisis,id'],
+            'lane_id' => ['nullable','integer','exists:lanes,id'],
         ]);
         $update = [
             'name' => $validated['name'],
             'email' => $validated['email'],
-            'divisi_id' => $validated['divisi_id'] ?? null,
+            'lane_id' => $validated['lane_id'] ?? null,
         ];
         if (!empty($validated['password'])) {
             $update['password'] = Hash::make($validated['password']);
@@ -210,9 +211,10 @@ class UserController extends Controller
         $roleBySlug = $roles->keyBy(fn ($r) => strtolower((string) $r->slug));
         $roleByName = $roles->keyBy(fn ($r) => strtolower((string) $r->name));
 
-        $divisis = Divisi::query()->get(['id', 'name']);
-        $divisiById = $divisis->keyBy(fn ($d) => (string) $d->id);
-        $divisiByName = $divisis->keyBy(fn ($d) => strtolower((string) $d->name));
+        $lanes = Lane::query()->get(['id', 'code', 'name']);
+        $laneById = $lanes->keyBy(fn ($lane) => (string) $lane->id);
+        $laneByCode = $lanes->keyBy(fn ($lane) => strtolower((string) $lane->code));
+        $laneByName = $lanes->keyBy(fn ($lane) => strtolower((string) $lane->name));
 
         $errors = [];
         $prepared = [];
@@ -225,19 +227,20 @@ class UserController extends Controller
                 continue;
             }
 
-            $divisiId = null;
-            $divisiRaw = trim((string) ($row['divisi_raw'] ?? ''));
-            if ($divisiRaw !== '') {
-                if (is_numeric($divisiRaw)) {
-                    $divisi = $divisiById->get((string) $divisiRaw);
+            $laneId = null;
+            $laneRaw = trim((string) ($row['lane_raw'] ?? ''));
+            if ($laneRaw !== '') {
+                if (is_numeric($laneRaw)) {
+                    $lane = $laneById->get((string) $laneRaw);
                 } else {
-                    $divisi = $divisiByName->get(strtolower($divisiRaw));
+                    $needle = strtolower($laneRaw);
+                    $lane = $laneByCode->get($needle) ?? $laneByName->get($needle);
                 }
-                if (!$divisi) {
-                    $errors[] = "Baris {$rowNo}: Divisi tidak ditemukan ({$divisiRaw})";
+                if (!$lane) {
+                    $errors[] = "Baris {$rowNo}: Lane tidak ditemukan ({$laneRaw})";
                     continue;
                 }
-                $divisiId = $divisi->id;
+                $laneId = $lane->id;
             }
 
             $roleIds = [];
@@ -268,7 +271,7 @@ class UserController extends Controller
                 'email' => $email,
                 'password' => $row['password'],
                 'roles' => array_values(array_unique($roleIds)),
-                'divisi_id' => $divisiId,
+                'lane_id' => $laneId,
             ];
         }
 
@@ -288,7 +291,7 @@ class UserController extends Controller
                     'password' => Hash::make((string) $payload['password']),
                     'avatar' => User::defaultAvatar(),
                     'email_verified_at' => now(),
-                    'divisi_id' => $payload['divisi_id'],
+                    'lane_id' => $payload['lane_id'],
                 ]);
                 if (!empty($payload['roles'])) {
                     $user->roles()->sync($payload['roles']);

@@ -14,10 +14,12 @@ class PickingListMobileController extends Controller
     public function index()
     {
         $authUser = auth()->user();
-        $divisiId = $authUser?->divisi_id;
-        $laneQuery = Lane::orderBy('code');
-        if ($divisiId !== null && (int) $divisiId !== 1) {
-            $laneQuery->where('divisi_id', (int) $divisiId);
+        $laneQuery = Lane::query()
+            ->where('is_active', true)
+            ->orderBy('code');
+
+        if ($authUser?->lane_id) {
+            $laneQuery->whereKey((int) $authUser->lane_id);
         }
 
         return view('picker.picking-list', [
@@ -47,10 +49,10 @@ class PickingListMobileController extends Controller
         $this->applyPackerExceptionFilter($query);
 
         $authUser = $request->user();
-        $divisiId = $authUser?->divisi_id;
-        if ($divisiId !== null && (int) $divisiId !== 1) {
-            $query->whereHas('item.lane', function ($laneQ) use ($divisiId) {
-                $laneQ->where('divisi_id', (int) $divisiId);
+        $userLaneId = $authUser?->lane_id ? (int) $authUser->lane_id : null;
+        if ($userLaneId) {
+            $query->whereHas('item', function ($itemQ) use ($userLaneId) {
+                $itemQ->where('lane_id', $userLaneId);
             });
         }
 
@@ -64,7 +66,7 @@ class PickingListMobileController extends Controller
             });
         }
 
-        $laneId = $request->input('lane_id');
+        $laneId = $userLaneId ?: $request->integer('lane_id');
         if ($laneId) {
             $query->whereHas('item', function ($itemQ) use ($laneId) {
                 $itemQ->where('lane_id', (int) $laneId);

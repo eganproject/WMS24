@@ -60,7 +60,7 @@
 </div>
 
 <div class="modal fade" id="modal_damaged_goods" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered mw-900px">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable mw-900px">
         <div class="modal-content">
             <div class="modal-header">
                 <h2 class="fw-bolder" id="damage_modal_title">Tambah Barang Rusak</h2>
@@ -158,6 +158,7 @@
         const form = document.getElementById('damaged_goods_form');
         const modalEl = document.getElementById('modal_damaged_goods');
         const modal = modalEl ? new bootstrap.Modal(modalEl) : null;
+        const modalContentEl = modalEl?.querySelector('.modal-content') || modalEl;
         const itemsContainer = document.getElementById('damage_items_container');
         const addItemBtn = document.getElementById('btn_add_damage_item');
         const openBtn = document.getElementById('btn_open_damage');
@@ -227,7 +228,7 @@
                     placeholder: 'Pilih item',
                     allowClear: true,
                     width: '100%',
-                    dropdownParent: modalEl,
+                    dropdownParent: modalContentEl,
                     minimumResultsForSearch: 0,
                 })
                     .on('select2:opening select2:closing select2:close', function(e){ e.stopPropagation(); });
@@ -339,7 +340,7 @@
                 placeholder: 'Pilih gudang asal',
                 allowClear: true,
                 width: '100%',
-                dropdownParent: modalEl,
+                dropdownParent: modalContentEl,
                 minimumResultsForSearch: 0,
             });
         }

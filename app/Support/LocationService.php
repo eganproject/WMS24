@@ -44,7 +44,6 @@ class LocationService
         return Lane::create([
             'code' => $normalized,
             'name' => $normalized,
-            'divisi_id' => null,
             'is_active' => true,
         ]);
     }

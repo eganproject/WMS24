@@ -91,7 +91,7 @@
 </div>
 
 <div class="modal fade" id="modal_damaged_allocation" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered mw-1000px">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable mw-1000px">
         <div class="modal-content">
             <div class="modal-header">
                 <h2 class="fw-bolder" id="allocation_modal_title">Tambah Alokasi Barang Rusak</h2>
@@ -247,6 +247,7 @@
         const form = document.getElementById('damaged_allocation_form');
         const modalEl = document.getElementById('modal_damaged_allocation');
         const modal = modalEl ? new bootstrap.Modal(modalEl) : null;
+        const modalContentEl = modalEl?.querySelector('.modal-content') || modalEl;
         const sourceItemsContainer = document.getElementById('allocation_source_items_container');
         const outputItemsContainer = document.getElementById('allocation_output_items_container');
         const addSourceItemBtn = document.getElementById('btn_add_source_item');
@@ -532,7 +533,7 @@
                 placeholder,
                 allowClear: true,
                 width: '100%',
-                dropdownParent: modalEl,
+                dropdownParent: modalContentEl,
                 minimumResultsForSearch: 0,
             }).on('select2:opening select2:closing select2:close', function(e) { e.stopPropagation(); });
         };

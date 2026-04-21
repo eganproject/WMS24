@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Divisi;
 use App\Models\Item;
 use App\Models\Lane;
 use App\Support\LocationService;
@@ -15,22 +14,18 @@ class LaneController extends Controller
 {
     public function index()
     {
-        $divisis = Divisi::orderBy('name')->get(['id', 'name']);
-        return view('admin.masterdata.lanes.index', compact('divisis'));
+        return view('admin.masterdata.lanes.index');
     }
 
     public function data(Request $request)
     {
-        $query = Lane::with('divisi')->orderBy('code');
+        $query = Lane::orderBy('code');
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
             $query->where(function ($q) use ($search) {
                 $q->where('code', 'like', "%{$search}%")
-                    ->orWhere('name', 'like', "%{$search}%")
-                    ->orWhereHas('divisi', function ($divQ) use ($search) {
-                        $divQ->where('name', 'like', "%{$search}%");
-                    });
+                    ->orWhere('name', 'like', "%{$search}%");
             });
         }
 
@@ -48,8 +43,6 @@ class LaneController extends Controller
                 'id' => $lane->id,
                 'code' => $lane->code,
                 'name' => $lane->name,
-                'divisi_id' => $lane->divisi_id,
-                'divisi_name' => $lane->divisi?->name ?? '-',
                 'is_active' => (bool) $lane->is_active,
                 'sort_order' => $lane->sort_order,
             ];
@@ -68,7 +61,6 @@ class LaneController extends Controller
         $validated = $request->validate([
             'code' => ['required', 'string', 'max:50', 'unique:lanes,code'],
             'name' => ['required', 'string', 'max:150'],
-            'divisi_id' => ['nullable', 'integer', 'exists:divisis,id'],
             'is_active' => ['nullable', 'boolean'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
         ]);
@@ -103,7 +95,6 @@ class LaneController extends Controller
         $validated = $request->validate([
             'code' => ['required', 'string', 'max:50', Rule::unique('lanes', 'code')->ignore($lane->id)],
             'name' => ['required', 'string', 'max:150'],
-            'divisi_id' => ['nullable', 'integer', 'exists:divisis,id'],
             'is_active' => ['nullable', 'boolean'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
         ]);

@@ -42,7 +42,6 @@
                         <th>ID</th>
                         <th>Kode</th>
                         <th>Nama</th>
-                        <th>Divisi</th>
                         <th>Status</th>
                         <th>Sort</th>
                         <th class="text-end">Aksi</th>
@@ -82,16 +81,6 @@
                         <label class="required fs-6 fw-bold form-label mb-2">Nama</label>
                         <input type="text" class="form-control form-control-solid" name="name" id="lane_name" required />
                         <div class="invalid-feedback" id="error_name"></div>
-                    </div>
-                    <div class="fv-row mb-7">
-                        <label class="fs-6 fw-bold form-label mb-2">Divisi</label>
-                        <select name="divisi_id" id="lane_divisi_id" class="form-select form-select-solid" data-control="select2" data-placeholder="Pilih divisi">
-                            <option value="">Tanpa divisi</option>
-                            @foreach($divisis as $d)
-                                <option value="{{ $d->id }}">{{ $d->name }}</option>
-                            @endforeach
-                        </select>
-                        <div class="invalid-feedback" id="error_divisi_id"></div>
                     </div>
                     <div class="row g-3 mb-7">
                         <div class="col-md-6">
@@ -143,7 +132,6 @@
         const formId = document.getElementById('lane_id');
         const formCode = document.getElementById('lane_code');
         const formName = document.getElementById('lane_name');
-        const formDivisi = document.getElementById('lane_divisi_id');
         const formActive = document.getElementById('lane_is_active');
         const formSort = document.getElementById('lane_sort_order');
         const titleEl = document.getElementById('modal_lane_title');
@@ -151,10 +139,6 @@
         if (!tableEl.length || !$.fn.DataTable) {
             console.error('DataTables unavailable');
             return;
-        }
-
-        if (typeof $ !== 'undefined' && $.fn.select2) {
-            $(formDivisi).select2({ placeholder: 'Pilih divisi', allowClear: true, width: '100%' });
         }
 
         const refreshMenus = () => {
@@ -179,11 +163,10 @@
                 { data: 'id' },
                 { data: 'code' },
                 { data: 'name' },
-                { data: 'divisi_name' },
                 { data: 'is_active', render: (val) => val ? 'Aktif' : 'Nonaktif' },
                 { data: 'sort_order', render: (val) => val ?? '-' },
                 { data: 'id', orderable:false, searchable:false, className:'text-end', render: (data, type, row)=>{
-                    const editItem = canUpdate ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-edit" data-id="${data}" data-code="${row.code}" data-name="${row.name}" data-divisi-id="${row.divisi_id ?? ''}" data-is-active="${row.is_active ? 1 : 0}" data-sort-order="${row.sort_order ?? ''}">Edit</a></div>` : '';
+                    const editItem = canUpdate ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-edit" data-id="${data}" data-code="${row.code}" data-name="${row.name}" data-is-active="${row.is_active ? 1 : 0}" data-sort-order="${row.sort_order ?? ''}">Edit</a></div>` : '';
                     const delItem = canDelete ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 text-danger btn-delete" data-id="${data}">Hapus</a></div>` : '';
                     const actions = `${editItem}${delItem}`;
                     if (!actions) return '';
@@ -216,15 +199,12 @@
             form.reset();
             formId.value = '';
             if (formActive) formActive.value = '1';
-            if (typeof $ !== 'undefined' && $(formDivisi).data('select2')) {
-                $(formDivisi).val('').trigger('change');
-            }
             clearErrors();
             if (titleEl) titleEl.textContent = 'Add Lane';
         });
 
         const clearErrors = () => {
-            ['error_code','error_name','error_divisi_id','error_is_active','error_sort_order'].forEach(id => {
+            ['error_code','error_name','error_is_active','error_sort_order'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.textContent = '';
             });
@@ -279,7 +259,6 @@
             const id = this.getAttribute('data-id');
             const code = this.getAttribute('data-code');
             const name = this.getAttribute('data-name');
-            const divisiId = this.getAttribute('data-divisi-id');
             const isActive = this.getAttribute('data-is-active');
             const sortOrder = this.getAttribute('data-sort-order');
             if (!form) return;
@@ -288,11 +267,6 @@
             if (formName) formName.value = name || '';
             if (formActive) formActive.value = isActive === '0' ? '0' : '1';
             if (formSort) formSort.value = sortOrder ?? '';
-            if (typeof $ !== 'undefined' && $(formDivisi).data('select2')) {
-                $(formDivisi).val(divisiId || '').trigger('change');
-            } else if (formDivisi) {
-                formDivisi.value = divisiId || '';
-            }
             clearErrors();
             if (titleEl) titleEl.textContent = 'Edit Lane';
             modal?.show();

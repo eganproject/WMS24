@@ -10,8 +10,6 @@ class OperationalUserSeeder extends Seeder
 {
     public function run(): void
     {
-        $defaultDivisiId = DB::table('divisis')->where('id', 1)->value('id');
-
         $users = [
             [
                 'name' => 'Picker Operasional',
@@ -41,7 +39,7 @@ class OperationalUserSeeder extends Seeder
                 [
                     'name' => $user['name'],
                     'password' => Hash::make('123456'),
-                    'divisi_id' => $defaultDivisiId,
+                    'lane_id' => null,
                     'email_verified_at' => now(),
                     'updated_at' => now(),
                     'created_at' => now(),

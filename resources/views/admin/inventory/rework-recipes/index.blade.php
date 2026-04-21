@@ -53,7 +53,7 @@
 </div>
 
 <div class="modal fade" id="modal_rework_recipe" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered mw-1000px">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable mw-1000px">
         <div class="modal-content">
             <div class="modal-header">
                 <h2 class="fw-bolder" id="recipe_modal_title">Tambah Resep Rework</h2>
@@ -158,6 +158,7 @@
         const form = document.getElementById('rework_recipe_form');
         const modalEl = document.getElementById('modal_rework_recipe');
         const modal = modalEl ? new bootstrap.Modal(modalEl) : null;
+        const modalContentEl = modalEl?.querySelector('.modal-content') || modalEl;
         const inputContainer = document.getElementById('recipe_input_items_container');
         const outputContainer = document.getElementById('recipe_output_items_container');
         const addInputBtn = document.getElementById('btn_add_recipe_input');
@@ -202,7 +203,7 @@
                 placeholder: 'Pilih item',
                 allowClear: true,
                 width: '100%',
-                dropdownParent: modalEl,
+                dropdownParent: modalContentEl,
                 minimumResultsForSearch: 0,
             }).on('select2:opening select2:closing select2:close', function(e) { e.stopPropagation(); });
         };

@@ -125,7 +125,7 @@
 </div>
 
 <div class="modal fade" id="modal_stock_flow" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered mw-900px">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable mw-900px">
         <div class="modal-content">
             <div class="modal-header">
                 <h2 class="fw-bolder" id="flow_modal_title">Tambah</h2>
@@ -353,6 +353,7 @@
         const form = document.getElementById('stock_flow_form');
         const modalEl = document.getElementById('modal_stock_flow');
         const modal = modalEl ? new bootstrap.Modal(modalEl) : null;
+        const modalContentEl = modalEl?.querySelector('.modal-content') || modalEl;
         const itemsContainer = document.getElementById('flow_items_container');
         const addItemBtn = document.getElementById('btn_add_flow_item');
         const openCreateBtn = document.getElementById('btn_open_create_flow');
@@ -530,7 +531,7 @@
                     placeholder: 'Pilih item',
                     allowClear: true,
                     width: '100%',
-                    dropdownParent: modalEl,
+                    dropdownParent: modalContentEl,
                     minimumResultsForSearch: 0,
                 })
                     .on('select2:opening select2:closing select2:close', function(e){ e.stopPropagation(); });
@@ -588,7 +589,7 @@
                 placeholder: 'Pilih supplier',
                 allowClear: true,
                 width: '100%',
-                dropdownParent: modalEl,
+                dropdownParent: modalContentEl,
                 minimumResultsForSearch: 0,
             });
         }

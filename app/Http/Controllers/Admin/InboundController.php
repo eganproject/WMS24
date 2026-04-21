@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Exports\InboundManualTemplateExport;
 use App\Http\Controllers\Controller;
+use App\Imports\InboundFormItemsImport;
 use App\Imports\InboundReceiptsImport;
 use App\Imports\InboundReturnsImport;
 use App\Models\InboundItem;
@@ -187,6 +188,21 @@ class InboundController extends Controller
         );
     }
 
+    public function receiptsItemsImport(Request $request)
+    {
+        return $this->importFormItems($request, 'receipt');
+    }
+
+    public function returnsItemsImport(Request $request)
+    {
+        return $this->importFormItems($request, 'return');
+    }
+
+    public function manualsItemsImport(Request $request)
+    {
+        return $this->importFormItems($request, 'manual');
+    }
+
     private function index(string $type, string $pageTitle, string $routeBase)
     {
         $items = Item::orderBy('name')->get(['id', 'sku', 'name', 'koli_qty']);
@@ -262,6 +278,12 @@ class InboundController extends Controller
                 'receipt' => route('admin.inbound.receipts.import'),
                 'return' => route('admin.inbound.returns.import'),
                 'manual' => route('admin.inbound.manuals.import'),
+                default => null,
+            },
+            'itemImportUrl' => match ($type) {
+                'receipt' => route('admin.inbound.receipts.items-import'),
+                'return' => route('admin.inbound.returns.items-import'),
+                'manual' => route('admin.inbound.manuals.items-import'),
                 default => null,
             },
             'importTitle' => match ($type) {
@@ -781,6 +803,42 @@ class InboundController extends Controller
 
             return response()->json([
                 'message' => $failureMessage,
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    private function importFormItems(Request $request, string $type)
+    {
+        $request->validate([
+            'file' => ['required', 'file', 'mimes:xlsx,xls', 'max:5120'],
+        ]);
+
+        try {
+            $import = new InboundFormItemsImport();
+            Excel::import($import, $request->file('file'));
+
+            return response()->json([
+                'message' => sprintf('Import item %s berhasil.', $this->typeOptions()[$type] ?? 'inbound'),
+                'items' => collect($import->items)->map(fn (array $row) => [
+                    'item_id' => (int) $row['item_id'],
+                    'qty' => (int) $row['qty'],
+                    'koli' => (int) ($row['koli'] ?? 0),
+                    'note' => $row['note'] ?? null,
+                    'sku' => $row['sku'],
+                    'name' => $row['name'],
+                ])->values(),
+                'summary' => [
+                    'count' => count($import->items),
+                    'qty' => (int) collect($import->items)->sum('qty'),
+                    'koli' => (int) collect($import->items)->sum('koli'),
+                ],
+            ]);
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            return response()->json([
+                'message' => 'Gagal import item inbound.',
                 'error' => $e->getMessage(),
             ], 500);
         }

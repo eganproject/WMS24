@@ -142,8 +142,13 @@
                 <form class="form" id="stock_flow_form">
                     @csrf
                     <div id="flow_items_container"></div>
-                    <div class="mb-7">
+                    <div class="mb-7 d-flex flex-wrap gap-3">
                         <button type="button" class="btn btn-light" id="btn_add_flow_item">Tambah Item</button>
+                        @if(!empty($itemImportUrl ?? null))
+                            <button type="button" class="btn btn-light-primary" id="btn_open_item_import">
+                                Import Item Excel
+                            </button>
+                        @endif
                     </div>
                     @if(!empty($warehouseOptions ?? []))
                         <div class="fv-row mb-7" id="flow_warehouse_row" style="display:none;">
@@ -272,6 +277,45 @@
         </div>
     </div>
 @endif
+
+@if(!empty($itemImportUrl ?? null))
+    <div class="modal fade" id="modal_import_flow_items" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered mw-650px">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 class="fw-bolder">Import Item ke Form</h2>
+                    <div class="btn btn-icon btn-sm btn-active-icon-primary" data-bs-dismiss="modal">
+                        <span class="svg-icon svg-icon-1">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+                                <rect opacity="0.5" x="6" y="17.3137" width="16" height="2" rx="1" transform="rotate(-45 6 17.3137)" fill="black" />
+                                <rect x="7.41422" y="6" width="16" height="2" rx="1" transform="rotate(45 7.41422 6)" fill="black" />
+                            </svg>
+                        </span>
+                    </div>
+                </div>
+                <div class="modal-body scroll-y mx-5 mx-xl-15 my-7">
+                    <div class="alert alert-light-primary border border-primary border-dashed mb-6">
+                        <div class="fw-bold mb-2">Format file item</div>
+                        <div class="text-muted fs-7">
+                            Header minimal: <strong>sku</strong>, <strong>qty</strong> atau <strong>koli</strong>.<br>
+                            Opsional: <strong>item_note</strong> atau <strong>note</strong>.<br>
+                            Import ini hanya mengisi daftar item di form aktif dan akan mengganti item yang sedang ada setelah Anda konfirmasi.
+                        </div>
+                    </div>
+                    <div class="fv-row mb-6">
+                        <label class="required fs-6 fw-bold form-label mb-2">File Excel Item</label>
+                        <input type="file" class="form-control form-control-solid" id="import_flow_items_file" accept=".xlsx,.xls" />
+                        <div class="invalid-feedback d-block" id="error_import_flow_items_file"></div>
+                    </div>
+                    <div class="text-end">
+                        <button type="button" class="btn btn-light me-3" data-bs-dismiss="modal">Batal</button>
+                        <button type="button" class="btn btn-primary" id="btn_import_flow_items_submit">Import ke Form</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+@endif
 @endsection
 
 @push('scripts')
@@ -284,6 +328,7 @@
     const detailUrlTpl = '{{ $detailUrlTpl }}';
     const approveUrlTpl = '{{ $approveUrlTpl ?? '' }}';
     const importUrl = '{{ $importUrl ?? '' }}';
+    const itemImportUrl = '{{ $itemImportUrl ?? '' }}';
     const routeMap = @json($routeMap ?? []);
     const typeLabelMap = @json($typeOptions ?? []);
     const csrfToken = '{{ csrf_token() }}';
@@ -324,6 +369,12 @@
         const importInput = document.getElementById('import_flow_file');
         const importError = document.getElementById('error_import_flow_file');
         const importSubmit = document.getElementById('btn_import_flow_submit');
+        const itemImportBtn = document.getElementById('btn_open_item_import');
+        const itemImportModalEl = document.getElementById('modal_import_flow_items');
+        const itemImportModal = itemImportModalEl ? new bootstrap.Modal(itemImportModalEl) : null;
+        const itemImportInput = document.getElementById('import_flow_items_file');
+        const itemImportError = document.getElementById('error_import_flow_items_file');
+        const itemImportSubmit = document.getElementById('btn_import_flow_items_submit');
         const warehouseRow = document.getElementById('flow_warehouse_row');
         const warehouseSelect = document.getElementById('flow_warehouse_id');
         const supplierRow = document.getElementById('flow_supplier_row');
@@ -400,6 +451,17 @@
             });
             itemsContainer?.querySelectorAll('[data-error-for]')?.forEach(el => { el.textContent = ''; });
             itemsContainer?.querySelectorAll('.flow-item-select.is-invalid')?.forEach(el => { el.classList.remove('is-invalid'); });
+        };
+
+        const hasMeaningfulItemRows = () => {
+            if (!itemsContainer) return false;
+            return Array.from(itemsContainer.querySelectorAll('.flow-item-row')).some((row) => {
+                const itemId = row.querySelector('.flow-item-select')?.value || '';
+                const qty = row.querySelector('input[data-name="qty"]')?.value || '';
+                const koli = row.querySelector('input[data-name="koli"]')?.value || '';
+                const note = row.querySelector('input[data-name="note"]')?.value || '';
+                return itemId !== '' || qty !== '' || koli !== '' || note.trim() !== '';
+            });
         };
 
         const validateUniqueItems = () => {
@@ -626,6 +688,23 @@
             validateUniqueItems();
         };
 
+        const replaceItemsFromImport = (items) => {
+            itemsContainer.innerHTML = '';
+            (items || []).forEach((item) => {
+                createItemRow({
+                    item_id: item.item_id,
+                    qty: item.qty,
+                    koli: item.koli > 0 ? item.koli : '',
+                    note: item.note || '',
+                });
+            });
+            if (!itemsContainer.querySelector('.flow-item-row')) {
+                createItemRow();
+            }
+            clearErrors();
+            validateUniqueItems();
+        };
+
         addItemBtn?.addEventListener('click', () => createItemRow());
         if (!canCreateDefault && openCreateBtn) {
             openCreateBtn.remove();
@@ -762,6 +841,13 @@
             if (importError) importError.textContent = '';
         });
 
+        itemImportBtn?.addEventListener('click', (event) => {
+            event.preventDefault();
+            if (itemImportInput) itemImportInput.value = '';
+            if (itemImportError) itemImportError.textContent = '';
+            itemImportModal?.show();
+        });
+
         importSubmit?.addEventListener('click', async () => {
             if (!importUrl) return;
             if (importError) importError.textContent = '';
@@ -804,6 +890,91 @@
                 reloadTable();
             } catch (err) {
                 if (typeof Swal !== 'undefined') Swal.fire('Error', 'Gagal import', 'error');
+            }
+        });
+
+        itemImportSubmit?.addEventListener('click', async () => {
+            if (!itemImportUrl) return;
+            if (itemImportError) itemImportError.textContent = '';
+
+            const file = itemImportInput?.files?.[0];
+            if (!file) {
+                if (itemImportError) itemImportError.textContent = 'Pilih file Excel item terlebih dahulu.';
+                return;
+            }
+
+            let confirmed = true;
+            if (hasMeaningfulItemRows() && typeof Swal !== 'undefined') {
+                const confirmation = await Swal.fire({
+                    title: 'Ganti daftar item saat ini?',
+                    text: 'Item hasil import akan menggantikan seluruh daftar item di form ini agar datanya tidak tercampur.',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Ya, ganti item',
+                    cancelButtonText: 'Batal',
+                    buttonsStyling: false,
+                    customClass: {
+                        confirmButton: 'btn btn-primary',
+                        cancelButton: 'btn btn-light',
+                    },
+                });
+                confirmed = confirmation.isConfirmed;
+            }
+
+            if (!confirmed) {
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const res = await fetch(itemImportUrl, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Accept': 'application/json',
+                    },
+                    body: formData,
+                });
+
+                const text = await res.text();
+                let json;
+                try { json = JSON.parse(text); } catch (err) {
+                    if (typeof Swal !== 'undefined') Swal.fire('Error', 'Respons server tidak valid', 'error');
+                    return;
+                }
+
+                if (!res.ok) {
+                    const msg = json?.errors?.file?.[0] || json?.message || 'Gagal import item';
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire('Error', msg, 'error');
+                    } else if (itemImportError) {
+                        itemImportError.textContent = msg;
+                    }
+                    return;
+                }
+
+                replaceItemsFromImport(json.items || []);
+                if (itemImportInput) itemImportInput.value = '';
+                itemImportModal?.hide();
+                window.setTimeout(() => {
+                    modal?.show();
+                }, 180);
+
+                if (typeof Swal !== 'undefined') {
+                    const summary = json?.summary || {};
+                    const parts = [
+                        summary.count ? `${summary.count} item` : null,
+                        summary.qty ? `Qty ${summary.qty}` : null,
+                        summary.koli ? `Koli ${summary.koli}` : null,
+                    ].filter(Boolean).join(' | ');
+
+                    Swal.fire('Berhasil', parts ? `${json.message || 'Import item berhasil'} (${parts})` : (json.message || 'Import item berhasil'), 'success');
+                }
+            } catch (err) {
+                console.error(err);
+                if (typeof Swal !== 'undefined') Swal.fire('Error', 'Gagal import item', 'error');
             }
         });
 

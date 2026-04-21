@@ -247,6 +247,7 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/receipts/data', [InboundController::class, 'receiptsData'])->name('receipts.data');
         Route::post('/receipts', [InboundController::class, 'receiptsStore'])->name('receipts.store');
         Route::post('/receipts/import', [InboundController::class, 'receiptsImport'])->name('receipts.import');
+        Route::post('/receipts/items-import', [InboundController::class, 'receiptsItemsImport'])->name('receipts.items-import');
         Route::get('/receipts/{id}', [InboundController::class, 'receiptsShow'])->name('receipts.show');
         Route::put('/receipts/{id}', [InboundController::class, 'receiptsUpdate'])->name('receipts.update');
         Route::delete('/receipts/{id}', [InboundController::class, 'receiptsDestroy'])->name('receipts.destroy');
@@ -257,6 +258,7 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/returns/data', [InboundController::class, 'returnsData'])->name('returns.data');
         Route::post('/returns', [InboundController::class, 'returnsStore'])->name('returns.store');
         Route::post('/returns/import', [InboundController::class, 'returnsImport'])->name('returns.import');
+        Route::post('/returns/items-import', [InboundController::class, 'returnsItemsImport'])->name('returns.items-import');
         Route::get('/returns/{id}', [InboundController::class, 'returnsShow'])->name('returns.show');
         Route::put('/returns/{id}', [InboundController::class, 'returnsUpdate'])->name('returns.update');
         Route::delete('/returns/{id}', [InboundController::class, 'returnsDestroy'])->name('returns.destroy');
@@ -267,6 +269,7 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/manuals/data', [InboundController::class, 'manualsData'])->name('manuals.data');
         Route::post('/manuals', [InboundController::class, 'manualsStore'])->name('manuals.store');
         Route::post('/manuals/import', [InboundController::class, 'manualsImport'])->name('manuals.import');
+        Route::post('/manuals/items-import', [InboundController::class, 'manualsItemsImport'])->name('manuals.items-import');
         Route::get('/manuals/template', [InboundController::class, 'manualsTemplate'])->name('manuals.template');
         Route::get('/manuals/{id}', [InboundController::class, 'manualsShow'])->name('manuals.show');
         Route::put('/manuals/{id}', [InboundController::class, 'manualsUpdate'])->name('manuals.update');

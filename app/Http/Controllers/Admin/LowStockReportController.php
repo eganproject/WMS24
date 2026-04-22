@@ -16,7 +16,9 @@ class LowStockReportController extends Controller
         $categories = Category::orderBy('name')->get(['id', 'name']);
         $warehouseId = WarehouseService::defaultWarehouseId();
         $warehouseLabel = Warehouse::where('id', $warehouseId)->value('name') ?? 'Gudang Besar';
-        $warehouses = Warehouse::orderBy('name')->get(['id', 'name', 'code']);
+        $warehouses = $this->safetyReportWarehouses()
+            ->orderBy('name')
+            ->get(['id', 'name', 'code']);
 
         return view('admin.reports.low-stock.index', [
             'dataUrl' => route('admin.reports.low-stock.data'),
@@ -31,12 +33,13 @@ class LowStockReportController extends Controller
     public function data(Request $request)
     {
         $warehouseFilter = $request->input('warehouse_id');
-        if ($warehouseFilter === null || $warehouseFilter === '') {
-            $warehouseFilter = WarehouseService::defaultWarehouseId();
-        }
-        $warehouseId = $warehouseFilter !== 'all'
+        $warehouseId = is_numeric($warehouseFilter)
             ? (int) $warehouseFilter
             : WarehouseService::defaultWarehouseId();
+        $allowedWarehouseIds = $this->safetyReportWarehouses()->pluck('id');
+        if (!$allowedWarehouseIds->contains($warehouseId)) {
+            $warehouseId = WarehouseService::defaultWarehouseId();
+        }
         $safetyExpr = 'COALESCE(s.safety_stock, i.safety_stock, 0)';
         $stockExpr = 'COALESCE(s.stock, 0)';
         $baseQuery = DB::table('items as i')
@@ -100,6 +103,7 @@ class LowStockReportController extends Controller
             'i.address',
             DB::raw("{$safetyExpr} as safety_stock"),
             DB::raw("{$stockExpr} as stock"),
+            DB::raw("CASE WHEN s.safety_stock IS NOT NULL THEN 'Per gudang' ELSE 'Default item' END as safety_source"),
             DB::raw("CASE WHEN i.category_id = 0 THEN 'Tanpa Kategori' ELSE COALESCE(c.name, '-') END as category"),
         ])
         ->orderByRaw("({$safetyExpr} - {$stockExpr}) desc")
@@ -122,6 +126,7 @@ class LowStockReportController extends Controller
                 'address' => $row->address ?? '-',
                 'stock' => $stock,
                 'safety_stock' => $safety,
+                'safety_source' => $row->safety_source ?? 'Default item',
                 'gap' => $gap,
                 'status' => $stock <= 0 ? 'Out of Stock' : 'Low Stock',
             ];
@@ -138,5 +143,13 @@ class LowStockReportController extends Controller
             ],
             'data' => $data,
         ]);
+    }
+
+    private function safetyReportWarehouses()
+    {
+        return Warehouse::query()->where(function ($query) {
+            $query->whereNull('type')
+                ->orWhere('type', '!=', 'damaged');
+        });
     }
 }

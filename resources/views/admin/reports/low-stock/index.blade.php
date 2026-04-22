@@ -192,8 +192,18 @@
                 { data: 'sku' },
                 { data: 'name' },
                 { data: 'category' },
-                { data: 'stock', className: 'text-end', render: (data) => data ?? 0 },
-                { data: 'safety_stock', className: 'text-end', render: (data) => data ?? 0 },
+                { data: 'stock', className: 'text-end', render: (data, type, row) => {
+                    const value = Number.isFinite(Number(data)) ? Number(data) : 0;
+                    if (type !== 'display') return value;
+                    const textClass = value <= 0 ? 'text-danger' : 'text-warning';
+                    return `<span class="fw-bold ${textClass}">${value}</span>`;
+                }},
+                { data: 'safety_stock', className: 'text-end', render: (data, type, row) => {
+                    const value = Number.isFinite(Number(data)) ? Number(data) : 0;
+                    if (type !== 'display') return value;
+                    const source = row?.safety_source || 'Default item';
+                    return `<span class="fw-semibold">${value}</span><div class="text-muted fs-8">${source}</div>`;
+                }},
                 { data: 'gap', className: 'text-end', render: (data) => data ?? 0 },
                 { data: 'status', render: (data, type, row) => {
                     const isOut = row.stock <= 0;

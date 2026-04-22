@@ -93,6 +93,8 @@ class ItemStockController extends Controller
                 'safety_base' => $baseSafety,
                 'safety_main_raw' => $safetyMainRaw,
                 'safety_display_raw' => $safetyDisplayRaw,
+                'is_main_below_safety' => !$isBundle && $safetyMain > 0 && $stockMain < $safetyMain,
+                'is_display_below_safety' => !$isBundle && $safetyDisplay > 0 && $stockDisplay < $safetyDisplay,
             ];
         });
 

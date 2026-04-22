@@ -117,6 +117,23 @@
             return;
         }
 
+        const renderWarehouseStock = (value, type, row, virtualKey, lowFlagKey) => {
+            if (row.item_type === 'bundle') {
+                const virtualValue = Number.isFinite(Number(row[virtualKey])) ? Number(row[virtualKey]) : 0;
+                if (type !== 'display') return virtualValue;
+                return `<span class="fw-bold text-primary">${virtualValue}</span><div class="text-muted fs-8">virtual</div>`;
+            }
+
+            const stockValue = Number.isFinite(Number(value)) ? Number(value) : 0;
+            if (type !== 'display') return stockValue;
+
+            if (row[lowFlagKey]) {
+                return `<span class="fw-bold text-danger">${stockValue}</span>`;
+            }
+
+            return stockValue;
+        };
+
         const dt = tableEl.DataTable({
             processing: true,
             serverSide: true,
@@ -134,9 +151,9 @@
                 { data: 'sku' },
                 { data: 'name' },
                 { data: 'item_type', render: (data) => data === 'bundle' ? '<span class="badge badge-light-primary">Bundle</span>' : '<span class="badge badge-light-success">Single</span>' },
-                { data: 'stock_main', className: 'text-end', render: (data, type, row) => row.item_type === 'bundle' ? `<span class="fw-bold text-primary">${row.virtual_main ?? 0}</span><div class="text-muted fs-8">virtual</div>` : (data ?? 0) },
+                { data: 'stock_main', className: 'text-end', render: (data, type, row) => renderWarehouseStock(data, type, row, 'virtual_main', 'is_main_below_safety') },
                 { data: 'safety_main', className: 'text-end', render: (data, type, row) => row.item_type === 'bundle' ? '-' : (data ?? 0) },
-                { data: 'stock_display', className: 'text-end', render: (data, type, row) => row.item_type === 'bundle' ? `<span class="fw-bold text-primary">${row.virtual_display ?? 0}</span><div class="text-muted fs-8">virtual</div>` : (data ?? 0) },
+                { data: 'stock_display', className: 'text-end', render: (data, type, row) => renderWarehouseStock(data, type, row, 'virtual_display', 'is_display_below_safety') },
                 { data: 'safety_display', className: 'text-end', render: (data, type, row) => row.item_type === 'bundle' ? '-' : (data ?? 0) },
                 { data: 'stock_damaged', className: 'text-end', render: (data, type, row) => row.item_type === 'bundle' ? '-' : (data ?? 0) },
                 { data: 'stock_good_total', className: 'text-end', render: (data, type, row) => row.item_type === 'bundle' ? `<span class="fw-bold text-primary">${row.virtual_total ?? 0}</span><div class="text-muted fs-8">virtual total</div>` : (data ?? 0) },

@@ -67,7 +67,7 @@
                     <div class="card-body">
                         <div class="text-muted small">Rekomendasi Transfer ({{ $defaultWarehouseLabel ?? 'Gudang Besar' }})</div>
                         <div class="fs-2 fw-bolder" id="summary_total_suggest">0</div>
-                        <div class="text-muted small">Dihitung dari stok utama yang tersedia.</div>
+                        <div class="text-muted small">Dihitung dari stok utama yang masih di atas safety aktif.</div>
                     </div>
                 </div>
             </div>
@@ -157,10 +157,26 @@
                 { data: 'sku' },
                 { data: 'name' },
                 { data: 'category' },
-                { data: 'display_stock', className: 'text-end', render: (data) => data ?? 0 },
-                { data: 'safety_stock', className: 'text-end', render: (data) => data ?? 0 },
+                { data: 'display_stock', className: 'text-end', render: (data, type) => {
+                    const value = Number.isFinite(Number(data)) ? Number(data) : 0;
+                    if (type !== 'display') return value;
+                    const textClass = value <= 0 ? 'text-danger' : 'text-warning';
+                    return `<span class="fw-bold ${textClass}">${value}</span>`;
+                }},
+                { data: 'safety_stock', className: 'text-end', render: (data, type, row) => {
+                    const value = Number.isFinite(Number(data)) ? Number(data) : 0;
+                    if (type !== 'display') return value;
+                    const source = row?.display_safety_source || 'Default item';
+                    return `<span class="fw-semibold">${value}</span><div class="text-muted fs-8">${source}</div>`;
+                }},
                 { data: 'need_qty', className: 'text-end', render: (data) => data ?? 0 },
-                { data: 'main_stock', className: 'text-end', render: (data) => data ?? 0 },
+                { data: 'main_stock', className: 'text-end', render: (data, type, row) => {
+                    const stock = Number.isFinite(Number(data)) ? Number(data) : 0;
+                    const safety = Number.isFinite(Number(row?.main_safety_stock)) ? Number(row.main_safety_stock) : 0;
+                    const available = Number.isFinite(Number(row?.available_main_qty)) ? Number(row.available_main_qty) : 0;
+                    if (type !== 'display') return stock;
+                    return `<span class="fw-semibold">${stock}</span><div class="text-muted fs-8">safety ${safety} | siap ${available}</div>`;
+                }},
                 { data: 'suggest_qty', className: 'text-end', render: (data) => data ?? 0 },
                 { data: 'address' },
                 { data: null, orderable: false, searchable: false, className: 'text-end', render: (data, type, row) => {

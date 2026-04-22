@@ -35,11 +35,13 @@ class ReplenishmentReportController extends Controller
         $defaultId = WarehouseService::defaultWarehouseId();
         $displayId = WarehouseService::displayWarehouseId();
 
-        $safetyExpr = 'COALESCE(sd.safety_stock, i.safety_stock, 0)';
+        $displaySafetyExpr = 'COALESCE(sd.safety_stock, i.safety_stock, 0)';
+        $mainSafetyExpr = 'COALESCE(sm.safety_stock, i.safety_stock, 0)';
         $displayStockExpr = 'COALESCE(sd.stock, 0)';
         $mainStockExpr = 'COALESCE(sm.stock, 0)';
-        $needExpr = "GREATEST(0, {$safetyExpr} - {$displayStockExpr})";
-        $suggestExpr = "LEAST({$needExpr}, {$mainStockExpr})";
+        $needExpr = "CASE WHEN {$displaySafetyExpr} > {$displayStockExpr} THEN {$displaySafetyExpr} - {$displayStockExpr} ELSE 0 END";
+        $mainAvailableExpr = "CASE WHEN {$mainStockExpr} > {$mainSafetyExpr} THEN {$mainStockExpr} - {$mainSafetyExpr} ELSE 0 END";
+        $suggestExpr = "CASE WHEN {$needExpr} < {$mainAvailableExpr} THEN {$needExpr} ELSE {$mainAvailableExpr} END";
 
         $baseQuery = DB::table('items as i')
             ->leftJoin('item_stocks as sd', function ($join) use ($displayId) {
@@ -51,8 +53,9 @@ class ReplenishmentReportController extends Controller
                     ->where('sm.warehouse_id', '=', $defaultId);
             })
             ->leftJoin('categories as c', 'c.id', '=', 'i.category_id')
-            ->whereRaw("{$safetyExpr} > 0")
-            ->whereRaw("{$displayStockExpr} < {$safetyExpr}");
+            ->where('i.item_type', '!=', 'bundle')
+            ->whereRaw("{$displaySafetyExpr} > 0")
+            ->whereRaw("{$displayStockExpr} < {$displaySafetyExpr}");
 
         $catFilter = $request->input('category_id');
         if ($catFilter !== null && $catFilter !== '') {
@@ -90,11 +93,15 @@ class ReplenishmentReportController extends Controller
             'i.sku',
             'i.name',
             'i.address',
-            DB::raw("{$safetyExpr} as safety_stock"),
+            DB::raw("{$displaySafetyExpr} as safety_stock"),
             DB::raw("{$displayStockExpr} as display_stock"),
             DB::raw("{$mainStockExpr} as main_stock"),
+            DB::raw("{$mainSafetyExpr} as main_safety_stock"),
+            DB::raw("{$mainAvailableExpr} as available_main_qty"),
             DB::raw("{$needExpr} as need_qty"),
             DB::raw("{$suggestExpr} as suggest_qty"),
+            DB::raw("CASE WHEN sd.safety_stock IS NOT NULL THEN 'Per gudang' ELSE 'Default item' END as display_safety_source"),
+            DB::raw("CASE WHEN sm.safety_stock IS NOT NULL THEN 'Per gudang' ELSE 'Default item' END as main_safety_source"),
             DB::raw("CASE WHEN i.category_id = 0 THEN 'Tanpa Kategori' ELSE COALESCE(c.name, '-') END as category"),
         ])
         ->orderByRaw("{$needExpr} desc")
@@ -113,8 +120,12 @@ class ReplenishmentReportController extends Controller
                 'address' => $row->address ?? '-',
                 'display_stock' => (int) ($row->display_stock ?? 0),
                 'safety_stock' => (int) ($row->safety_stock ?? 0),
+                'display_safety_source' => $row->display_safety_source ?? 'Default item',
                 'need_qty' => (int) ($row->need_qty ?? 0),
                 'main_stock' => (int) ($row->main_stock ?? 0),
+                'main_safety_stock' => (int) ($row->main_safety_stock ?? 0),
+                'available_main_qty' => (int) ($row->available_main_qty ?? 0),
+                'main_safety_source' => $row->main_safety_source ?? 'Default item',
                 'suggest_qty' => (int) ($row->suggest_qty ?? 0),
             ];
         });

@@ -15,15 +15,7 @@ class ItemQrCodeService
     {
         $sku = trim((string) $item->sku);
         $qrSize = max(180, min($size, 720));
-        $qrBinary = (new Writer(
-            new GDLibRenderer(
-                $qrSize,
-                2,
-                'png',
-                9,
-                Fill::uniformColor(new Rgb(255, 255, 255), new Rgb(17, 24, 39))
-            )
-        ))->writeString($sku);
+        $qrBinary = $this->rawPngForSku($sku, $qrSize);
 
         $qrImage = imagecreatefromstring($qrBinary);
         if ($qrImage === false) {
@@ -91,6 +83,27 @@ class ItemQrCodeService
         imagedestroy($image);
 
         return $binary;
+    }
+
+    public function rawPngForItem(Item $item, int $size = 360): string
+    {
+        return $this->rawPngForSku((string) $item->sku, $size);
+    }
+
+    public function rawPngForSku(string $sku, int $size = 360): string
+    {
+        $value = trim($sku);
+        $qrSize = max(180, min($size, 720));
+
+        return (new Writer(
+            new GDLibRenderer(
+                $qrSize,
+                2,
+                'png',
+                9,
+                Fill::uniformColor(new Rgb(255, 255, 255), new Rgb(17, 24, 39))
+            )
+        ))->writeString($value);
     }
 
     public function downloadFilename(Item $item): string

@@ -13,9 +13,11 @@ use App\Models\Item;
 use App\Models\Supplier;
 use App\Models\Warehouse;
 use App\Support\BundleService;
+use App\Support\InboundReceiptQrPdfService;
 use App\Support\InboundScanExpectation;
 use App\Support\InboundScanStatus;
 use App\Support\Permission;
+use App\Support\SimpleBarcodeService;
 use App\Support\WarehouseService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -136,6 +138,29 @@ class InboundController extends Controller
         return $this->approve('receipt', $id);
     }
 
+    public function receiptsQrPreview(int $id)
+    {
+        $transaction = $this->qrTransaction('receipt', $id);
+
+        return response()->json($this->receiptQrPayload($transaction));
+    }
+
+    public function receiptsQrPdf(int $id)
+    {
+        $transaction = $this->qrTransaction('receipt', $id);
+        $service = app(InboundReceiptQrPdfService::class);
+
+        return response(
+            $service->pdfForTransaction($transaction),
+            200,
+            [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'attachment; filename="'.$service->downloadFilename($transaction).'"',
+                'Cache-Control' => 'no-store, no-cache, must-revalidate',
+            ]
+        );
+    }
+
     public function returnsApprove(int $id)
     {
         return $this->approve('return', $id);
@@ -230,6 +255,8 @@ class InboundController extends Controller
                 'delete' => route('admin.inbound.receipts.destroy', ':id'),
                 'detail' => route('admin.inbound.receipts.detail', ':id'),
                 'approve' => route('admin.inbound.receipts.approve', ':id'),
+                'qr_preview' => route('admin.inbound.receipts.qr-preview', ':id'),
+                'qr_pdf' => route('admin.inbound.receipts.qr-pdf', ':id'),
             ],
             'return' => [
                 'store' => route('admin.inbound.returns.store'),
@@ -914,5 +941,48 @@ class InboundController extends Controller
     private function generateCode(string $prefix): string
     {
         return $prefix.'-'.now()->format('YmdHis').'-'.Str::upper(Str::random(4));
+    }
+
+    private function qrTransaction(string $type, int $id): InboundTransaction
+    {
+        return InboundTransaction::with(['items.item', 'supplier'])
+            ->where('type', $type)
+            ->findOrFail($id);
+    }
+
+    private function receiptQrPayload(InboundTransaction $transaction): array
+    {
+        $barcodeService = app(SimpleBarcodeService::class);
+        $items = $transaction->items
+            ->filter(fn (InboundItem $row) => $row->item !== null && trim((string) $row->item->sku) !== '')
+            ->values()
+            ->map(function (InboundItem $row) {
+                $item = $row->item;
+
+                return [
+                    'item_id' => $row->item_id,
+                    'sku' => trim((string) ($item?->sku ?? '-')),
+                    'name' => trim((string) ($item?->name ?? '-')),
+                    'qty' => (int) ($row->qty ?? 0),
+                    'koli' => (int) ($row->koli ?? 0),
+                    'qr_url' => route('admin.masterdata.items.qr-code', ['item' => $row->item_id]),
+                ];
+            })
+            ->all();
+
+        return [
+            'id' => $transaction->id,
+            'code' => $transaction->code,
+            'ref_no' => $transaction->ref_no,
+            'supplier' => $transaction->supplier?->name,
+            'transacted_at' => $transaction->transacted_at?->format('Y-m-d H:i'),
+            'transacted_period' => $transaction->transacted_at?->format('m.y'),
+            'items_count' => count($items),
+            'items' => $items,
+            'code_barcode_data_url' => 'data:image/png;base64,'.base64_encode(
+                $barcodeService->pngForValue((string) $transaction->code, 560, 120)
+            ),
+            'pdf_url' => route('admin.inbound.receipts.qr-pdf', $transaction->id),
+        ];
     }
 }

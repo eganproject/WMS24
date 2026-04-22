@@ -154,6 +154,88 @@ class SafetyStockReportsTest extends TestCase
         $this->assertSame(3, $response->json('summary.total_suggest'));
     }
 
+    public function test_replenishment_report_rounds_transfer_suggestion_to_full_koli(): void
+    {
+        $mainWarehouse = $this->firstOrCreateWarehouse('GUDANG_BESAR', 'Gudang Besar', 'main');
+        $displayWarehouse = $this->firstOrCreateWarehouse('GUDANG_DISPLAY', 'Gudang Display', 'display');
+
+        $roundedItem = Item::create([
+            'sku' => 'SKU-REP-KOLI',
+            'name' => 'Replenishment Koli',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+            'safety_stock' => 4,
+            'koli_qty' => 6,
+        ]);
+        ItemStock::create([
+            'item_id' => $roundedItem->id,
+            'warehouse_id' => $mainWarehouse->id,
+            'stock' => 20,
+            'safety_stock' => 5,
+        ]);
+        ItemStock::create([
+            'item_id' => $roundedItem->id,
+            'warehouse_id' => $displayWarehouse->id,
+            'stock' => 2,
+            'safety_stock' => 9,
+        ]);
+
+        $insufficientKoliItem = Item::create([
+            'sku' => 'SKU-REP-KOLI-LOW',
+            'name' => 'Replenishment Koli Low',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+            'safety_stock' => 4,
+            'koli_qty' => 8,
+        ]);
+        ItemStock::create([
+            'item_id' => $insufficientKoliItem->id,
+            'warehouse_id' => $mainWarehouse->id,
+            'stock' => 14,
+            'safety_stock' => 7,
+        ]);
+        ItemStock::create([
+            'item_id' => $insufficientKoliItem->id,
+            'warehouse_id' => $displayWarehouse->id,
+            'stock' => 1,
+            'safety_stock' => 5,
+        ]);
+
+        $response = $this->withoutMiddleware()->getJson(route('admin.reports.replenishment.data', [
+            'draw' => 1,
+            'start' => 0,
+            'length' => 25,
+        ]));
+
+        $response->assertOk();
+
+        $rows = Collection::make($response->json('data'))->keyBy('sku');
+
+        $roundedRow = $rows->get('SKU-REP-KOLI');
+        $this->assertNotNull($roundedRow);
+        $this->assertSame(6, $roundedRow['koli_qty']);
+        $this->assertSame(7, $roundedRow['need_qty']);
+        $this->assertSame(12, $roundedRow['need_rounded_qty']);
+        $this->assertSame(15, $roundedRow['available_main_qty']);
+        $this->assertSame(12, $roundedRow['available_main_rounded_qty']);
+        $this->assertSame(12, $roundedRow['suggest_qty']);
+        $this->assertSame(2, $roundedRow['suggest_koli']);
+
+        $insufficientRow = $rows->get('SKU-REP-KOLI-LOW');
+        $this->assertNotNull($insufficientRow);
+        $this->assertSame(8, $insufficientRow['koli_qty']);
+        $this->assertSame(4, $insufficientRow['need_qty']);
+        $this->assertSame(8, $insufficientRow['need_rounded_qty']);
+        $this->assertSame(7, $insufficientRow['available_main_qty']);
+        $this->assertSame(0, $insufficientRow['available_main_rounded_qty']);
+        $this->assertSame(0, $insufficientRow['suggest_qty']);
+        $this->assertSame(0, $insufficientRow['suggest_koli']);
+
+        $this->assertSame(2, $response->json('summary.total_items'));
+        $this->assertSame(11, $response->json('summary.total_need'));
+        $this->assertSame(12, $response->json('summary.total_suggest'));
+    }
+
     private function firstOrCreateWarehouse(string $code, string $name, string $type): Warehouse
     {
         return Warehouse::firstOrCreate([

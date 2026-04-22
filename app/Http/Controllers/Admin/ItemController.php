@@ -13,6 +13,7 @@ use App\Exports\ItemsTemplateExport;
 use App\Imports\ItemsImport;
 use App\Models\ItemBundleComponent;
 use App\Support\BundleService;
+use App\Support\ItemQrCodeService;
 use App\Support\LocationService;
 use App\Support\StockService;
 use App\Support\InboundScanStatus;
@@ -27,6 +28,7 @@ use Illuminate\Validation\ValidationException;
 class ItemController extends Controller
 {
     protected ?int $defaultCategoryId = null;
+
     public function index()
     {
         $categories = Category::orderBy('name')->get(['id', 'name']);
@@ -403,6 +405,23 @@ class ItemController extends Controller
     {
         $filename = 'items-template-'.now()->format('YmdHis').'.xlsx';
         return Excel::download(new ItemsTemplateExport(), $filename);
+    }
+
+    public function qrCode(Request $request, int $item)
+    {
+        $qrCodeService = app(ItemQrCodeService::class);
+        $item = Item::query()->findOrFail($item);
+        $download = $request->boolean('download');
+
+        return response(
+            $qrCodeService->pngForItem($item),
+            200,
+            [
+                'Content-Type' => 'image/png',
+                'Content-Disposition' => ($download ? 'attachment' : 'inline').'; filename="'.$qrCodeService->downloadFilename($item).'"',
+                'Cache-Control' => 'no-store, no-cache, must-revalidate',
+            ]
+        );
     }
 
     protected function findOrCreateCategory(string $name, int $parentId = 0): ?Category

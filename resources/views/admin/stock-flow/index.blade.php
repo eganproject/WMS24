@@ -452,6 +452,7 @@
             });
             itemsContainer?.querySelectorAll('[data-error-for]')?.forEach(el => { el.textContent = ''; });
             itemsContainer?.querySelectorAll('.flow-item-select.is-invalid')?.forEach(el => { el.classList.remove('is-invalid'); });
+            itemsContainer?.querySelectorAll('input[data-name="qty"].is-invalid')?.forEach(el => { el.classList.remove('is-invalid'); });
         };
 
         const hasMeaningfulItemRows = () => {
@@ -503,13 +504,72 @@
             return Number.isFinite(val) ? val : 0;
         };
 
-        const updateKoliInfo = (row) => {
+        const getPositiveIntValue = (inputEl) => {
+            if (!inputEl) return null;
+            const raw = String(inputEl.value || '').trim();
+            if (raw === '') return null;
+            const val = parseInt(raw, 10);
+            return Number.isFinite(val) && val > 0 ? val : null;
+        };
+
+        const setKoliInfo = (row, message, tone = 'muted') => {
             if (!enableKoli || !row) return;
             const infoEl = row.querySelector('[data-koli-info]');
             if (!infoEl) return;
+            infoEl.textContent = message;
+            infoEl.classList.remove('text-muted', 'text-danger');
+            infoEl.classList.add(tone === 'danger' ? 'text-danger' : 'text-muted');
+        };
+
+        const setQtyValidation = (row, message = '') => {
+            const qtyEl = row?.querySelector('input[data-name="qty"]');
+            const errEl = row?.querySelector('[data-error-for="qty"]');
+            if (!qtyEl || !errEl) return;
+
+            if (message) {
+                qtyEl.classList.add('is-invalid');
+                errEl.textContent = message;
+                return;
+            }
+
+            qtyEl.classList.remove('is-invalid');
+            errEl.textContent = '';
+        };
+
+        const updateKoliInfo = (row) => {
+            if (!enableKoli || !row) return;
             const selectEl = row.querySelector('.flow-item-select');
+            const qtyEl = row.querySelector('input[data-name="qty"]');
+            const qtyVal = getPositiveIntValue(qtyEl);
+            const koliEl = row.querySelector('input[data-name="koli"]');
+            const koliVal = getPositiveIntValue(koliEl);
+            if (!selectEl?.value) {
+                setQtyValidation(row);
+                setKoliInfo(row, 'Isi/Koli: -');
+                return;
+            }
             const koliQty = getSelectedKoliQty(selectEl);
-            infoEl.textContent = koliQty > 0 ? `Isi/Koli: ${koliQty} pcs` : 'Isi/Koli: belum diset';
+            const hasInput = !!qtyVal || !!koliVal;
+
+            if (koliQty <= 0) {
+                setQtyValidation(row, hasInput ? 'Isi/Koli item belum diset di master item.' : '');
+                setKoliInfo(row, 'Isi/Koli: belum diset di master item', hasInput ? 'danger' : 'muted');
+                return;
+            }
+
+            if (qtyVal && qtyVal % koliQty !== 0) {
+                setQtyValidation(row, `Qty harus kelipatan ${koliQty}.`);
+                setKoliInfo(row, `Isi/Koli: ${koliQty} pcs | Qty harus kelipatan ${koliQty}`, 'danger');
+                return;
+            }
+
+            setQtyValidation(row);
+            if (qtyVal && qtyVal % koliQty === 0) {
+                setKoliInfo(row, `Isi/Koli: ${koliQty} pcs | ${qtyVal / koliQty} koli`);
+                return;
+            }
+
+            setKoliInfo(row, `Isi/Koli: ${koliQty} pcs`);
         };
 
         const syncQtyFromKoli = (row) => {
@@ -518,14 +578,107 @@
             const qtyEl = row.querySelector('input[data-name="qty"]');
             const selectEl = row.querySelector('.flow-item-select');
             if (!koliEl || !qtyEl || !selectEl) return;
-            const koliVal = parseInt(koliEl.value || '', 10);
-            if (!koliVal || koliVal <= 0) return;
+            const koliVal = getPositiveIntValue(koliEl);
+            if (!koliVal) {
+                if ((row.dataset.qtyKoliSource || '') === 'koli') {
+                    qtyEl.value = '';
+                }
+                updateKoliInfo(row);
+                return;
+            }
             const koliQty = getSelectedKoliQty(selectEl);
-            if (koliQty <= 0) return;
+            if (koliQty <= 0) {
+                if ((row.dataset.qtyKoliSource || '') === 'koli') {
+                    qtyEl.value = '';
+                }
+                updateKoliInfo(row);
+                return;
+            }
             qtyEl.value = String(koliVal * koliQty);
+            updateKoliInfo(row);
+        };
+
+        const syncKoliFromQty = (row) => {
+            if (!enableKoli || !row) return;
+            const qtyEl = row.querySelector('input[data-name="qty"]');
+            const koliEl = row.querySelector('input[data-name="koli"]');
+            const selectEl = row.querySelector('.flow-item-select');
+            if (!qtyEl || !koliEl || !selectEl) return;
+
+            const qtyVal = getPositiveIntValue(qtyEl);
+            if (!qtyVal) {
+                if ((row.dataset.qtyKoliSource || '') === 'qty') {
+                    koliEl.value = '';
+                }
+                updateKoliInfo(row);
+                return;
+            }
+
+            const koliQty = getSelectedKoliQty(selectEl);
+            if (koliQty <= 0) {
+                updateKoliInfo(row);
+                return;
+            }
+
+            if (qtyVal % koliQty !== 0) {
+                koliEl.value = '';
+                updateKoliInfo(row);
+                return;
+            }
+
+            koliEl.value = String(qtyVal / koliQty);
+            updateKoliInfo(row);
+        };
+
+        const syncQtyKoliRow = (row, preferredSource = '') => {
+            if (!enableKoli || !row) return;
+
+            const qtyEl = row.querySelector('input[data-name="qty"]');
+            const koliEl = row.querySelector('input[data-name="koli"]');
+            if (!qtyEl || !koliEl) return;
+
+            const activeSource = preferredSource || row.dataset.qtyKoliSource || '';
+            const qtyVal = getPositiveIntValue(qtyEl);
+            const koliVal = getPositiveIntValue(koliEl);
+
+            if (activeSource === 'qty' && qtyVal) {
+                syncKoliFromQty(row);
+                return;
+            }
+
+            if (activeSource === 'koli' && koliVal) {
+                syncQtyFromKoli(row);
+                return;
+            }
+
+            if (koliVal) {
+                syncQtyFromKoli(row);
+                return;
+            }
+
+            if (qtyVal) {
+                syncKoliFromQty(row);
+                return;
+            }
+
+            updateKoliInfo(row);
+        };
+
+        const handleItemSelectionChange = (selectEl) => {
+            if (!selectEl?.matches('.flow-item-select')) return;
+            validateUniqueItems();
+            const row = selectEl.closest('.flow-item-row');
+            if (!row) return;
+            window.requestAnimationFrame(() => {
+                syncQtyKoliRow(row, row.dataset.qtyKoliSource || '');
+            });
         };
 
         const initSelect2 = (selectEl) => {
+            if (selectEl && !selectEl.dataset.qtyKoliBound) {
+                selectEl.addEventListener('change', () => handleItemSelectionChange(selectEl));
+                selectEl.dataset.qtyKoliBound = '1';
+            }
             if (selectEl && typeof $ !== 'undefined' && $.fn.select2) {
                 $(selectEl).select2({
                     placeholder: 'Pilih item',
@@ -651,10 +804,12 @@
             if (koliEl) koliEl.value = data.koli ?? '';
             const noteEl = row.querySelector('input[data-name="note"]');
             if (noteEl) noteEl.value = data.note ?? '';
+            row.dataset.qtyKoliSource = getPositiveIntValue(koliEl)
+                ? 'koli'
+                : (getPositiveIntValue(qtyEl) ? 'qty' : '');
 
             initSelect2(selectEl);
-            updateKoliInfo(row);
-            syncQtyFromKoli(row);
+            syncQtyKoliRow(row);
             renumberRows();
             validateUniqueItems();
         };
@@ -713,20 +868,18 @@
             openCreateBtn?.addEventListener('click', resetForm);
         }
 
-        itemsContainer?.addEventListener('change', (e) => {
-            if (e.target.matches('.flow-item-select')) {
-                validateUniqueItems();
-                const row = e.target.closest('.flow-item-row');
-                updateKoliInfo(row);
-                syncQtyFromKoli(row);
-            }
-        });
-
         itemsContainer?.addEventListener('input', (e) => {
             if (!enableKoli) return;
             if (e.target.matches('input[data-name="koli"]')) {
                 const row = e.target.closest('.flow-item-row');
+                if (row) row.dataset.qtyKoliSource = 'koli';
                 syncQtyFromKoli(row);
+                return;
+            }
+            if (e.target.matches('input[data-name="qty"]')) {
+                const row = e.target.closest('.flow-item-row');
+                if (row) row.dataset.qtyKoliSource = 'qty';
+                syncKoliFromQty(row);
             }
         });
 

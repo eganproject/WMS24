@@ -67,7 +67,7 @@
                     <div class="card-body">
                         <div class="text-muted small">Rekomendasi Transfer ({{ $defaultWarehouseLabel ?? 'Gudang Besar' }})</div>
                         <div class="fs-2 fw-bolder" id="summary_total_suggest">0</div>
-                        <div class="text-muted small">Dihitung dari stok utama yang masih di atas safety aktif.</div>
+                        <div class="text-muted small">Dihitung dari stok utama yang masih di atas safety aktif dan dibulatkan per koli.</div>
                     </div>
                 </div>
             </div>
@@ -174,10 +174,21 @@
                     const stock = Number.isFinite(Number(data)) ? Number(data) : 0;
                     const safety = Number.isFinite(Number(row?.main_safety_stock)) ? Number(row.main_safety_stock) : 0;
                     const available = Number.isFinite(Number(row?.available_main_qty)) ? Number(row.available_main_qty) : 0;
+                    const roundedAvailable = Number.isFinite(Number(row?.available_main_rounded_qty)) ? Number(row.available_main_rounded_qty) : available;
                     if (type !== 'display') return stock;
-                    return `<span class="fw-semibold">${stock}</span><div class="text-muted fs-8">safety ${safety} | siap ${available}</div>`;
+                    return `<span class="fw-semibold">${stock}</span><div class="text-muted fs-8">safety ${safety} | siap ${available} | per koli ${roundedAvailable}</div>`;
                 }},
-                { data: 'suggest_qty', className: 'text-end', render: (data) => data ?? 0 },
+                { data: 'suggest_qty', className: 'text-end', render: (data, type, row) => {
+                    const suggest = Number.isFinite(Number(data)) ? Number(data) : 0;
+                    const koliQty = Number.isFinite(Number(row?.koli_qty)) ? Number(row.koli_qty) : 0;
+                    const suggestKoli = Number.isFinite(Number(row?.suggest_koli)) ? Number(row.suggest_koli) : 0;
+                    if (type !== 'display') return suggest;
+                    if (suggest <= 0) return '<span class="text-muted">0</span>';
+                    if (koliQty > 0 && suggestKoli > 0) {
+                        return `<span class="fw-bold text-primary">${suggest}</span><div class="text-muted fs-8">${suggestKoli} koli x ${koliQty}</div>`;
+                    }
+                    return `<span class="fw-bold text-primary">${suggest}</span>`;
+                }},
                 { data: 'address' },
                 { data: null, orderable: false, searchable: false, className: 'text-end', render: (data, type, row) => {
                     const suggest = Number(row?.suggest_qty || 0);

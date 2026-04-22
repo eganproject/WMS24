@@ -39,9 +39,27 @@ class ReplenishmentReportController extends Controller
         $mainSafetyExpr = 'COALESCE(sm.safety_stock, i.safety_stock, 0)';
         $displayStockExpr = 'COALESCE(sd.stock, 0)';
         $mainStockExpr = 'COALESCE(sm.stock, 0)';
+        $koliQtyExpr = 'COALESCE(i.koli_qty, 0)';
         $needExpr = "CASE WHEN {$displaySafetyExpr} > {$displayStockExpr} THEN {$displaySafetyExpr} - {$displayStockExpr} ELSE 0 END";
         $mainAvailableExpr = "CASE WHEN {$mainStockExpr} > {$mainSafetyExpr} THEN {$mainStockExpr} - {$mainSafetyExpr} ELSE 0 END";
-        $suggestExpr = "CASE WHEN {$needExpr} < {$mainAvailableExpr} THEN {$needExpr} ELSE {$mainAvailableExpr} END";
+        $needModExpr = "({$needExpr} % NULLIF({$koliQtyExpr}, 0))";
+        $mainAvailableModExpr = "({$mainAvailableExpr} % NULLIF({$koliQtyExpr}, 0))";
+        $needRoundedExpr = "CASE
+            WHEN {$koliQtyExpr} <= 0 OR {$needExpr} <= 0 THEN {$needExpr}
+            WHEN {$needModExpr} = 0 THEN {$needExpr}
+            ELSE {$needExpr} + ({$koliQtyExpr} - {$needModExpr})
+        END";
+        $mainAvailableRoundedExpr = "CASE
+            WHEN {$koliQtyExpr} <= 0 OR {$mainAvailableExpr} <= 0 THEN {$mainAvailableExpr}
+            WHEN {$mainAvailableModExpr} = 0 THEN {$mainAvailableExpr}
+            ELSE {$mainAvailableExpr} - {$mainAvailableModExpr}
+        END";
+        $suggestExpr = "CASE
+            WHEN {$needExpr} <= 0 OR {$mainAvailableExpr} <= 0 THEN 0
+            WHEN {$koliQtyExpr} <= 0 THEN CASE WHEN {$needExpr} < {$mainAvailableExpr} THEN {$needExpr} ELSE {$mainAvailableExpr} END
+            WHEN {$needRoundedExpr} < {$mainAvailableRoundedExpr} THEN {$needRoundedExpr}
+            ELSE {$mainAvailableRoundedExpr}
+        END";
 
         $baseQuery = DB::table('items as i')
             ->leftJoin('item_stocks as sd', function ($join) use ($displayId) {
@@ -93,12 +111,15 @@ class ReplenishmentReportController extends Controller
             'i.sku',
             'i.name',
             'i.address',
+            DB::raw("{$koliQtyExpr} as koli_qty"),
             DB::raw("{$displaySafetyExpr} as safety_stock"),
             DB::raw("{$displayStockExpr} as display_stock"),
             DB::raw("{$mainStockExpr} as main_stock"),
             DB::raw("{$mainSafetyExpr} as main_safety_stock"),
             DB::raw("{$mainAvailableExpr} as available_main_qty"),
+            DB::raw("{$mainAvailableRoundedExpr} as available_main_rounded_qty"),
             DB::raw("{$needExpr} as need_qty"),
+            DB::raw("{$needRoundedExpr} as need_rounded_qty"),
             DB::raw("{$suggestExpr} as suggest_qty"),
             DB::raw("CASE WHEN sd.safety_stock IS NOT NULL THEN 'Per gudang' ELSE 'Default item' END as display_safety_source"),
             DB::raw("CASE WHEN sm.safety_stock IS NOT NULL THEN 'Per gudang' ELSE 'Default item' END as main_safety_source"),
@@ -118,15 +139,21 @@ class ReplenishmentReportController extends Controller
                 'name' => $row->name ?? '-',
                 'category' => $row->category ?? '-',
                 'address' => $row->address ?? '-',
+                'koli_qty' => (int) ($row->koli_qty ?? 0),
                 'display_stock' => (int) ($row->display_stock ?? 0),
                 'safety_stock' => (int) ($row->safety_stock ?? 0),
                 'display_safety_source' => $row->display_safety_source ?? 'Default item',
                 'need_qty' => (int) ($row->need_qty ?? 0),
+                'need_rounded_qty' => (int) ($row->need_rounded_qty ?? 0),
                 'main_stock' => (int) ($row->main_stock ?? 0),
                 'main_safety_stock' => (int) ($row->main_safety_stock ?? 0),
                 'available_main_qty' => (int) ($row->available_main_qty ?? 0),
+                'available_main_rounded_qty' => (int) ($row->available_main_rounded_qty ?? 0),
                 'main_safety_source' => $row->main_safety_source ?? 'Default item',
                 'suggest_qty' => (int) ($row->suggest_qty ?? 0),
+                'suggest_koli' => (int) ($row->koli_qty ?? 0) > 0
+                    ? (int) floor(((int) ($row->suggest_qty ?? 0)) / ((int) $row->koli_qty))
+                    : 0,
             ];
         });
 

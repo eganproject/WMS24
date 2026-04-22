@@ -288,6 +288,36 @@
     </div>
 </div>
 <!--end::Import Modal-->
+
+<div class="modal fade" id="modal_item_qr" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered mw-550px">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h2 class="fw-bolder mb-1">QR Code Item</h2>
+                    <div class="text-muted fs-7" id="item_qr_label">-</div>
+                </div>
+                <div class="btn btn-icon btn-sm btn-active-icon-primary" data-bs-dismiss="modal">
+                    <span class="svg-icon svg-icon-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+                            <rect opacity="0.5" x="6" y="17.3137" width="16" height="2" rx="1" transform="rotate(-45 6 17.3137)" fill="black" />
+                            <rect x="7.41422" y="6" width="16" height="2" rx="1" transform="rotate(45 7.41422 6)" fill="black" />
+                        </svg>
+                    </span>
+                </div>
+            </div>
+            <div class="modal-body px-10 py-10">
+                <div class="border border-gray-300 border-dashed rounded-3 bg-light d-flex align-items-center justify-content-center p-6 mb-6 min-h-420px">
+                    <img src="" alt="QR Code Item" id="item_qr_image" class="mw-100 mh-400px" />
+                </div>
+                <div class="text-muted fs-7 mb-6">QR code dibuat langsung dari SKU dalam format PNG, lengkap dengan label SKU di bagian bawah.</div>
+                <div class="text-end">
+                    <a href="#" class="btn btn-light-primary" id="item_qr_download" download>Download QR</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 @endsection
 
 @push('scripts')
@@ -298,6 +328,7 @@
     const updateTpl = '{{ route('admin.masterdata.items.update', ':id') }}';
     const deleteTpl = '{{ route('admin.masterdata.items.destroy', ':id') }}';
     const importUrl = '{{ route('admin.masterdata.items.import') }}';
+    const qrCodeTpl = '{{ route('admin.masterdata.items.qr-code', ':id') }}';
     const canUpdate = {{ $canUpdate ? 'true' : 'false' }};
     const canDelete = {{ $canDelete ? 'true' : 'false' }};
     const componentItemOptionsHtml = `@foreach($componentItems as $componentItem)<option value="{{ $componentItem->id }}">{{ $componentItem->sku }} - {{ $componentItem->name }}</option>@endforeach`;
@@ -350,6 +381,11 @@
         const importInput = document.getElementById('import_items_file');
         const importError = document.getElementById('error_import_file');
         const importSubmit = document.getElementById('btn_import_items_submit');
+        const qrModalEl = document.getElementById('modal_item_qr');
+        const qrModal = qrModalEl ? new bootstrap.Modal(qrModalEl) : null;
+        const qrLabelEl = document.getElementById('item_qr_label');
+        const qrImageEl = document.getElementById('item_qr_image');
+        const qrDownloadEl = document.getElementById('item_qr_download');
         const notifyError = (message, title = 'Error') => {
             if (window.AppSwal?.error) {
                 return window.AppSwal.error(message, title);
@@ -543,6 +579,21 @@
             }
         };
 
+        const qrUrl = (itemId, download = false) => {
+            const baseUrl = qrCodeTpl.replace(':id', String(itemId));
+            return download ? `${baseUrl}?download=1` : baseUrl;
+        };
+
+        const qrFilename = (sku) => {
+            const normalized = String(sku || '')
+                .trim()
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-+|-+$/g, '');
+
+            return `qr-${normalized || 'item'}.png`;
+        };
+
         const dt = tableEl.DataTable({
             processing: true,
             serverSide: true,
@@ -570,9 +621,10 @@
                 { data: 'safety_stock', className:'text-end', render: (data, type, row)=> row.item_type === 'bundle' ? '-' : (data ?? 0) },
                 { data: 'id', orderable:false, searchable:false, className:'text-end', render: (data, type, row)=>{
                     const components = encodeURIComponent(JSON.stringify(row.bundle_components || []));
+                    const qrItem = `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-qr" data-id="${data}" data-sku="${row.sku}" data-name="${row.name}">QR Code</a></div>`;
                     const editItem = canUpdate ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-edit" data-id="${data}" data-sku="${row.sku}" data-name="${row.name}" data-item-type="${row.item_type}" data-category="${row.category_id}" data-address="${row.address ?? ''}" data-area-id="${row.area_id ?? ''}" data-rack-code="${row.rack_code ?? ''}" data-column-no="${row.column_no ?? ''}" data-row-no="${row.row_no ?? ''}" data-description="${row.description}" data-koli-qty="${row.koli_qty ?? ''}" data-safety-stock="${row.safety_stock ?? 0}" data-bundle-components="${components}">Edit</a></div>` : '';
                     const delItem = canDelete ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 text-danger btn-delete" data-id="${data}">Hapus</a></div>` : '';
-                    const actions = `${editItem}${delItem}`;
+                    const actions = `${qrItem}${editItem}${delItem}`;
                     if (!actions) return '';
                     return `
                         <div class="text-end">
@@ -815,6 +867,26 @@
             modal?.show();
         });
 
+        tableEl.on('click', '.btn-qr', function(e) {
+            e.preventDefault();
+            const id = this.getAttribute('data-id');
+            const sku = this.getAttribute('data-sku') || '-';
+            const name = this.getAttribute('data-name') || '';
+            if (!id || !qrImageEl || !qrDownloadEl) return;
+
+            const previewUrl = qrUrl(id);
+            const downloadUrl = qrUrl(id, true);
+
+            if (qrLabelEl) {
+                qrLabelEl.textContent = `${sku}${name ? ' - ' + name : ''}`;
+            }
+
+            qrImageEl.src = `${previewUrl}${previewUrl.includes('?') ? '&' : '?'}v=${Date.now()}`;
+            qrDownloadEl.href = downloadUrl;
+            qrDownloadEl.setAttribute('download', qrFilename(sku));
+            qrModal?.show();
+        });
+
         [formArea, formRack, formColumn, formRow].forEach((field) => {
             field?.addEventListener('input', syncAddress);
             field?.addEventListener('change', syncAddress);
@@ -896,4 +968,3 @@
 @endpush
 
 @include('layouts.partials.form-submit-confirmation')
-

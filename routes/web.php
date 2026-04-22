@@ -13,6 +13,7 @@ use App\Http\Controllers\Admin\DamagedGoodsController;
 use App\Http\Controllers\Admin\DamagedAllocationController;
 use App\Http\Controllers\Admin\ReworkRecipeController;
 use App\Http\Controllers\Admin\ResiImportController;
+use App\Http\Controllers\Admin\CustomerReturnController;
 use App\Http\Controllers\Admin\PickingListController;
 use App\Http\Controllers\Admin\QcHistoryController;
 use App\Http\Controllers\Admin\QcScanWorkbenchController;
@@ -227,6 +228,18 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::post('/resi-import/import', [ResiImportController::class, 'import'])->name('resi-import.import');
         Route::post('/resi-import/cancel', [ResiImportController::class, 'cancel'])->name('resi-import.cancel');
         Route::post('/resi-import/uncancel', [ResiImportController::class, 'uncancel'])->name('resi-import.uncancel');
+
+        // Customer Returns
+        Route::get('/customer-returns', [CustomerReturnController::class, 'index'])->name('customer-returns.index');
+        Route::get('/customer-returns/create', [CustomerReturnController::class, 'create'])->name('customer-returns.create');
+        Route::get('/customer-returns/data', [CustomerReturnController::class, 'data'])->name('customer-returns.data');
+        Route::get('/customer-returns/lookup', [CustomerReturnController::class, 'lookup'])->name('customer-returns.lookup');
+        Route::post('/customer-returns', [CustomerReturnController::class, 'store'])->name('customer-returns.store');
+        Route::post('/customer-returns/finalize', [CustomerReturnController::class, 'finalize'])->name('customer-returns.finalize');
+        Route::get('/customer-returns/{id}/edit', [CustomerReturnController::class, 'edit'])->name('customer-returns.edit');
+        Route::get('/customer-returns/{id}', [CustomerReturnController::class, 'show'])->name('customer-returns.show');
+        Route::put('/customer-returns/{id}', [CustomerReturnController::class, 'update'])->name('customer-returns.update');
+        Route::delete('/customer-returns/{id}', [CustomerReturnController::class, 'destroy'])->name('customer-returns.destroy');
 
         // Picking List
         Route::get('/picking-list', [PickingListController::class, 'index'])->name('picking-list.index');

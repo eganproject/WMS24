@@ -449,6 +449,7 @@ class DamagedGoodsController extends Controller
         return [
             'warehouse' => 'Stok Gudang',
             'inbound_return' => 'Retur Inbound',
+            'customer_return' => 'Retur Customer',
             'manual' => 'Manual',
             'display' => 'Display (Legacy)',
         ];
@@ -463,12 +464,17 @@ class DamagedGoodsController extends Controller
 
         return match ($damage->source_type) {
             'display' => WarehouseService::displayWarehouseId(),
+            'customer_return' => 0,
             default => WarehouseService::defaultWarehouseId(),
         };
     }
 
     private function sourceWarehouseLabel(DamagedGood $damage): string
     {
+        if ((string) $damage->source_type === 'customer_return') {
+            return 'Retur Customer';
+        }
+
         $warehouseId = $this->resolveSourceWarehouseId($damage);
 
         return Warehouse::where('id', $warehouseId)->value('name') ?? '-';

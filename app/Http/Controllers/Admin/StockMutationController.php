@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\DamagedGood;
 use App\Models\DamagedAllocation;
+use App\Models\CustomerReturn;
 use App\Models\InboundTransaction;
 use App\Models\OutboundTransaction;
 use App\Models\StockMutation;
@@ -323,6 +324,36 @@ class StockMutationController extends Controller
                         }))
                         ->values()
                         ->all();
+                }
+                break;
+            case 'customer_return':
+                $customerReturn = CustomerReturn::with(['items.item'])->find($mutation->source_id);
+                if ($customerReturn) {
+                    $refParts = [$customerReturn->resi_no];
+                    if (!empty($customerReturn->order_ref)) {
+                        $refParts[] = $customerReturn->order_ref;
+                    }
+
+                    $sourceSummary = [
+                        'label' => 'Retur Customer',
+                        'code' => $customerReturn->code,
+                        'ref' => implode(' | ', array_filter($refParts)) ?: '-',
+                        'date' => $customerReturn->received_at?->format('Y-m-d H:i'),
+                        'note' => $customerReturn->note ?? '-',
+                    ];
+                    $sourceItems = $customerReturn->items->map(function ($row) {
+                        return [
+                            'label' => trim(($row->item?->sku ?? '').' - '.($row->item?->name ?? '')),
+                            'qty' => (int) $row->good_qty,
+                            'note' => $row->note ?? '-',
+                            'meta' => sprintf(
+                                'Diterima %d | Bagus %d | Rusak %d',
+                                (int) $row->received_qty,
+                                (int) $row->good_qty,
+                                (int) $row->damaged_qty
+                            ),
+                        ];
+                    })->filter(fn ($row) => (int) ($row['qty'] ?? 0) > 0)->values()->all();
                 }
                 break;
             case 'transfer':

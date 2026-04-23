@@ -40,6 +40,17 @@ class PickingListMobileTest extends TestCase
             ->assertJsonPath('items.0.remaining_qty', 5);
     }
 
+    public function test_picker_mobile_page_no_longer_renders_pick_button(): void
+    {
+        $user = $this->createUserWithRole('picker');
+
+        $this->actingAs($user)
+            ->get(route('picker.picking-list.index'))
+            ->assertOk()
+            ->assertDontSee('data-action="pick"', false)
+            ->assertSee('Menampilkan sisa qty picking list terbaru untuk monitoring picker.');
+    }
+
     public function test_picker_mobile_list_filters_items_by_user_area_assignment(): void
     {
         $areaA = Area::create([

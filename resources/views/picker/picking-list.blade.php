@@ -89,27 +89,6 @@
         font-size: 12px;
         color: var(--muted);
     }
-    .row-actions {
-        display: grid;
-        justify-items: end;
-        gap: 8px;
-    }
-    .pick-btn {
-        width: auto;
-        min-width: 76px;
-        padding: 8px 12px;
-        border-radius: 999px;
-        border: none;
-        background: var(--brand);
-        color: #fff;
-        font-size: 12px;
-        font-weight: 700;
-    }
-    .pick-btn:disabled {
-        opacity: 0.55;
-        background: #cbd5e1;
-        color: #475569;
-    }
     .page-status {
         margin-top: 10px;
         font-size: 12px;
@@ -158,7 +137,7 @@
             <div style="font-weight:700;">Daftar Picking List</div>
             <div class="muted" id="total_items">0 item</div>
         </div>
-        <div class="page-status" id="page_status">Pilih item untuk dipick langsung dari halaman ini.</div>
+        <div class="page-status" id="page_status">Menampilkan sisa qty picking list terbaru untuk monitoring picker.</div>
         <div class="muted" id="list_empty">Belum ada data.</div>
         <div class="items-list" id="list_items"></div>
         <div class="pagination-bar">
@@ -189,7 +168,6 @@
     };
 
     const state = {
-        pickBusy: false,
     };
 
     const setPageStatus = (text, tone = 'default') => {
@@ -233,19 +211,11 @@
     };
 
     const selectedDate = () => el.date?.value || todayStr;
-    const canPickToday = () => selectedDate() === todayStr;
 
     const renderList = (items, meta) => {
         const total = meta?.total ?? items.length;
-        const allowPick = canPickToday();
         el.total.textContent = `${total} item`;
-        if (!state.pickBusy) {
-            if (!allowPick) {
-                setPageStatus('Tombol Pick hanya aktif untuk picking list hari ini.', 'default');
-            } else {
-                setPageStatus('Pilih item untuk dipick langsung dari halaman ini.', 'default');
-            }
-        }
+        setPageStatus('Menampilkan sisa qty picking list terbaru untuk monitoring picker.', 'default');
         if (!items.length) {
             el.empty.style.display = 'block';
             el.list.innerHTML = '';
@@ -256,13 +226,6 @@
             const qty = row.qty ?? 0;
             const remaining = row.remaining_qty ?? 0;
             const address = row.address && row.address.trim() ? row.address : 'Belum diisi';
-            const itemId = row.item_id ?? '';
-            const canPickRow = allowPick && Number(remaining) > 0 && !!itemId && !state.pickBusy;
-            const pickLabel = !allowPick
-                ? 'Hari ini saja'
-                : Number(remaining) > 0
-                    ? 'Pick'
-                    : 'Habis';
             return `
                 <div class="list-row">
                     <div>
@@ -273,19 +236,7 @@
                         </div>
                         <small>Total: ${qty} | Sisa: ${remaining}</small>
                     </div>
-                    <div class="row-actions">
-                        <div class="qty-badge">${remaining}</div>
-                        <button
-                            type="button"
-                            class="pick-btn"
-                            data-action="pick"
-                            data-item-id="${itemId}"
-                            data-sku="${row.sku || ''}"
-                            data-name="${row.name || ''}"
-                            data-remaining="${remaining}"
-                            ${canPickRow ? '' : 'disabled'}
-                        >${pickLabel}</button>
-                    </div>
+                    <div class="qty-badge">${remaining}</div>
                 </div>
             `;
         }).join('');
@@ -318,115 +269,6 @@
         if (el.btnNext) el.btnNext.disabled = (data.page || 1) >= totalPages;
     };
 
-    const promptPickQty = async (row) => {
-        const maxQty = Number(row.remaining || 0);
-        if (maxQty <= 0) {
-            setPageStatus(`SKU ${row.sku || '-'} sudah tidak memiliki sisa picking.`, 'error');
-            return null;
-        }
-
-        if (typeof Swal !== 'undefined') {
-            const result = await Swal.fire({
-                title: `Pick ${row.sku || '-'}`,
-                text: row.name ? `${row.name} • Maksimal ${maxQty}` : `Maksimal ${maxQty}`,
-                input: 'number',
-                inputValue: 1,
-                inputAttributes: {
-                    min: '1',
-                    max: String(maxQty),
-                    step: '1',
-                },
-                showCancelButton: true,
-                confirmButtonText: 'Simpan Pick',
-                cancelButtonText: 'Batal',
-                inputValidator: (value) => {
-                    const qty = Number(value);
-                    if (!Number.isInteger(qty) || qty < 1) {
-                        return 'Qty minimal 1.';
-                    }
-                    if (qty > maxQty) {
-                        return `Qty maksimal ${maxQty}.`;
-                    }
-                    return null;
-                },
-            });
-
-            if (!result.isConfirmed) {
-                return null;
-            }
-
-            return Number(result.value || 0);
-        }
-
-        const raw = window.prompt(`Masukkan qty pick untuk ${row.sku || '-'} (maks ${maxQty})`, '1');
-        if (raw === null) {
-            return null;
-        }
-
-        const qty = Number(raw);
-        if (!Number.isInteger(qty) || qty < 1 || qty > maxQty) {
-            setPageStatus(`Qty untuk ${row.sku || '-'} harus antara 1 sampai ${maxQty}.`, 'error');
-            return null;
-        }
-
-        return qty;
-    };
-
-    const pickItem = async (row) => {
-        if (state.pickBusy) return;
-        if (!canPickToday()) {
-            setPageStatus('Pick langsung hanya bisa dipakai untuk picking list hari ini.', 'error');
-            return;
-        }
-
-        const qty = await promptPickQty(row);
-        if (!qty) {
-            return;
-        }
-
-        state.pickBusy = true;
-        setPageStatus(`Menyimpan pick ${row.sku || '-'}...`, 'pending');
-
-        let errorMessage = '';
-        let successMessage = '';
-
-        try {
-            await loadData();
-
-            const payload = new FormData();
-            payload.append('item_id', row.itemId);
-            payload.append('qty', qty);
-
-            await fetchJson(routes.itemsStore, {
-                method: 'POST',
-                body: payload,
-            });
-
-            successMessage = `SKU ${row.sku || '-'} berhasil ditambahkan ke daftar barang dibawa.`;
-        } catch (err) {
-            errorMessage = err.message || 'Gagal menyimpan pick.';
-            if (typeof Swal !== 'undefined') {
-                Swal.fire('Error', errorMessage, 'error');
-            }
-        } finally {
-            state.pickBusy = false;
-            try {
-                await loadData();
-            } catch (reloadErr) {
-                if (!errorMessage) {
-                    errorMessage = reloadErr.message || 'Gagal memuat ulang daftar picking list.';
-                }
-            }
-        }
-
-        if (errorMessage) {
-            setPageStatus(errorMessage, 'error');
-            return;
-        }
-
-        setPageStatus(successMessage, 'default');
-    };
-
     el.date?.addEventListener('change', () => {
         currentPage = 1;
         loadData();
@@ -454,22 +296,6 @@
             currentPage += 1;
             loadData();
         }
-    });
-    el.list?.addEventListener('click', async (e) => {
-        const btn = e.target.closest('[data-action="pick"]');
-        if (!btn) return;
-        const itemId = btn.getAttribute('data-item-id');
-        const remaining = Number(btn.getAttribute('data-remaining') || 0);
-        if (!itemId) {
-            setPageStatus('Item master tidak ditemukan, tidak bisa dipick langsung.', 'error');
-            return;
-        }
-        await pickItem({
-            itemId,
-            sku: btn.getAttribute('data-sku') || '',
-            name: btn.getAttribute('data-name') || '',
-            remaining,
-        });
     });
 
     if (el.date && !el.date.value && todayStr) {

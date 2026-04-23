@@ -9,6 +9,7 @@ use App\Models\Resi;
 use App\Models\ResiDetail;
 use App\Models\ShipmentScanOut;
 use App\Support\BundleService;
+use App\Support\PickingListBalanceService;
 use App\Support\QcScanExceptionRegistry;
 use App\Support\QcInventoryService;
 use App\Support\QcTransitStatus;
@@ -420,6 +421,14 @@ class QcScanController extends Controller
             $qc->completed_at = $completedAt;
             $qc->completed_by = auth()->id();
             $qc->save();
+
+            $uploadDate = $qc->resi?->tanggal_upload?->format('Y-m-d');
+            if ($uploadDate) {
+                PickingListBalanceService::syncForDateSkus(
+                    $uploadDate,
+                    $items->pluck('sku')->all()
+                );
+            }
 
             DB::commit();
         } catch (ValidationException $e) {

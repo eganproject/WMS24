@@ -5,6 +5,7 @@ namespace Tests\Feature\Outbound;
 use App\Models\Item;
 use App\Models\ItemStock;
 use App\Models\Kurir;
+use App\Models\PickingList;
 use App\Models\QcResiScan;
 use App\Models\Resi;
 use App\Models\ResiDetail;
@@ -276,6 +277,70 @@ class QcOutboundFlowTest extends TestCase
             'warehouse_id' => $displayWarehouse->id,
             'stock' => 1,
         ]);
+    }
+
+    public function test_qc_complete_reduces_picking_list_remaining_qty_for_resi_upload_date(): void
+    {
+        [$displayWarehouse] = $this->createWarehouseFixtures();
+        $qcUser = $this->createUserWithRole('qc');
+        $uploader = User::factory()->create();
+        $kurir = Kurir::create(['name' => 'SiCepat']);
+        $item = Item::create([
+            'sku' => 'SKU-PICK-QC-001',
+            'name' => 'Item Picking QC',
+            'category_id' => 0,
+        ]);
+
+        ItemStock::create([
+            'item_id' => $item->id,
+            'warehouse_id' => $displayWarehouse->id,
+            'stock' => 6,
+        ]);
+
+        PickingList::create([
+            'list_date' => now()->toDateString(),
+            'sku' => $item->sku,
+            'qty' => 5,
+            'remaining_qty' => 5,
+        ]);
+
+        $resi = $this->createResi($uploader->id, $kurir->id, 'ORD-PICK-001', 'RESI-PICK-001');
+        ResiDetail::create([
+            'resi_id' => $resi->id,
+            'sku' => $item->sku,
+            'qty' => 2,
+        ]);
+
+        $this->actingAs($qcUser)
+            ->postJson(route('picker.qc.scan'), [
+                'type' => 'no_resi',
+                'code' => $resi->no_resi,
+            ])
+            ->assertOk();
+
+        $qc = QcResiScan::where('resi_id', $resi->id)->firstOrFail();
+
+        $this->actingAs($qcUser)
+            ->postJson(route('picker.qc.scan-sku'), [
+                'qc_id' => $qc->id,
+                'code' => $item->sku,
+                'qty' => 2,
+            ])
+            ->assertOk();
+
+        $this->actingAs($qcUser)
+            ->postJson(route('picker.qc.complete'), [
+                'qc_id' => $qc->id,
+            ])
+            ->assertOk()
+            ->assertJsonPath('qc.status', 'passed');
+
+        $remainingQty = PickingList::query()
+            ->whereDate('list_date', now()->toDateString())
+            ->where('sku', $item->sku)
+            ->value('remaining_qty');
+
+        $this->assertSame(3, (int) $remainingQty);
     }
 
     public function test_operational_mobile_routes_are_enforced_per_role(): void

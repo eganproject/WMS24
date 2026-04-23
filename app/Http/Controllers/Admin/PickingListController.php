@@ -41,11 +41,12 @@ class PickingListController extends Controller
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
-            $baseQuery->where(function ($q) use ($search) {
-                $q->where('sku', 'like', "%{$search}%")
-                    ->orWhereHas('item', function ($itemQ) use ($search) {
-                        $itemQ->where('name', 'like', "%{$search}%");
-                    });
+            $exact = $this->isExactSearch($request);
+            $baseQuery->where(function ($q) use ($search, $exact) {
+                $this->applyTextSearch($q, 'sku', $search, $exact);
+                $q->orWhereHas('item', function ($itemQ) use ($search, $exact) {
+                    $this->applyTextSearch($itemQ, 'name', $search, $exact);
+                });
             });
         }
 
@@ -101,11 +102,12 @@ class PickingListController extends Controller
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
-            $baseQuery->where(function ($q) use ($search) {
-                $q->where('sku', 'like', "%{$search}%")
-                    ->orWhereHas('item', function ($itemQ) use ($search) {
-                        $itemQ->where('name', 'like', "%{$search}%");
-                    });
+            $exact = $this->isExactSearch($request);
+            $baseQuery->where(function ($q) use ($search, $exact) {
+                $this->applyTextSearch($q, 'sku', $search, $exact);
+                $q->orWhereHas('item', function ($itemQ) use ($search, $exact) {
+                    $this->applyTextSearch($itemQ, 'name', $search, $exact);
+                });
             });
         }
 
@@ -378,11 +380,12 @@ class PickingListController extends Controller
 
         if ($filters['q'] !== '') {
             $search = $filters['q'];
-            $query->where(function ($q) use ($search) {
-                $q->where('sku', 'like', "%{$search}%")
-                    ->orWhereHas('item', function ($itemQ) use ($search) {
-                        $itemQ->where('name', 'like', "%{$search}%");
-                    });
+            $exact = $this->isExactSearch($request);
+            $query->where(function ($q) use ($search, $exact) {
+                $this->applyTextSearch($q, 'sku', $search, $exact);
+                $q->orWhereHas('item', function ($itemQ) use ($search, $exact) {
+                    $this->applyTextSearch($itemQ, 'name', $search, $exact);
+                });
             });
         }
 

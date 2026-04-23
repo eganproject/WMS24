@@ -40,9 +40,10 @@ class ScanOutReportController extends Controller
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
-            $query->where(function ($q) use ($search) {
-                $q->where('u.name', 'like', "%{$search}%")
-                    ->orWhere('so.scan_date', 'like', "%{$search}%");
+            $exact = $this->isExactSearch($request);
+            $query->where(function ($q) use ($search, $exact) {
+                $this->applyTextSearch($q, 'u.name', $search, $exact);
+                $this->applyTextSearch($q, 'so.scan_date', $search, $exact, 'or');
             });
         }
 

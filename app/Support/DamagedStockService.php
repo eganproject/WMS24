@@ -67,7 +67,7 @@ class DamagedStockService
             ->all();
     }
 
-    public static function availableSourceLines(?string $search = null, ?int $excludeAllocationId = null): Collection
+    public static function availableSourceLines(?string $search = null, ?int $excludeAllocationId = null, bool $exact = false): Collection
     {
         $allocatedSub = self::approvedAllocationTotalsSubquery($excludeAllocationId);
         $query = DamagedGoodItem::query()
@@ -101,7 +101,17 @@ class DamagedStockService
 
         $search = trim((string) $search);
         if ($search !== '') {
-            $query->where(function ($q) use ($search) {
+            $query->where(function ($q) use ($search, $exact) {
+                if ($exact) {
+                    $lowered = mb_strtolower($search);
+                    $q->whereRaw('LOWER(damaged_goods.code) = ?', [$lowered])
+                        ->orWhereRaw('LOWER(items.sku) = ?', [$lowered])
+                        ->orWhereRaw('LOWER(items.name) = ?', [$lowered])
+                        ->orWhereRaw('LOWER(source_warehouses.name) = ?', [$lowered]);
+
+                    return;
+                }
+
                 $q->where('damaged_goods.code', 'like', "%{$search}%")
                     ->orWhere('items.sku', 'like', "%{$search}%")
                     ->orWhere('items.name', 'like', "%{$search}%")

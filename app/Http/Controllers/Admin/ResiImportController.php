@@ -35,7 +35,7 @@ class ResiImportController extends Controller
         $flowStatus = $this->normalizeFlowStatusFilter($request->input('flow_status'));
 
         $baseQuery = Resi::query()->whereDate('tanggal_upload', $filterDate);
-        $this->applySearch($baseQuery, $search);
+        $this->applySearch($baseQuery, $search, $this->isExactSearch($request));
         $this->applyStatusFilter($baseQuery, $status);
         $this->applyFlowStatusFilter($baseQuery, $flowStatus);
 
@@ -68,7 +68,7 @@ class ResiImportController extends Controller
         $flowStatus = $this->normalizeFlowStatusFilter($request->input('flow_status'));
 
         $filterQuery = Resi::query()->whereDate('tanggal_upload', $filterDate);
-        $this->applySearch($filterQuery, $search);
+        $this->applySearch($filterQuery, $search, $this->isExactSearch($request));
         $this->applyStatusFilter($filterQuery, $status);
         $this->applyFlowStatusFilter($filterQuery, $flowStatus);
 
@@ -100,7 +100,7 @@ class ResiImportController extends Controller
             ->whereDate('tanggal_upload', $filterDate)
             ->orderByDesc('id');
 
-        $this->applySearch($query, $search);
+        $this->applySearch($query, $search, $this->isExactSearch($request));
         $this->applyStatusFilter($query, $status);
         $this->applyFlowStatusFilter($query, $flowStatus);
 
@@ -550,20 +550,19 @@ class ResiImportController extends Controller
         }
     }
 
-    private function applySearch($query, string $search): void
+    private function applySearch($query, string $search, bool $exact = false): void
     {
         if ($search === '') {
             return;
         }
-        $query->where(function ($sub) use ($search) {
-            $sub->where('no_resi', 'like', "%{$search}%")
-                ->orWhere('id_pesanan', 'like', "%{$search}%")
-                ->orWhereHas('kurir', function ($kurirQ) use ($search) {
-                    $kurirQ->where('name', 'like', "%{$search}%");
-                })
-                ->orWhereHas('details', function ($detailQ) use ($search) {
-                    $detailQ->where('sku', 'like', "%{$search}%");
-                });
+        $query->where(function ($sub) use ($search, $exact) {
+            $this->applyTextSearch($sub, 'no_resi', $search, $exact);
+            $this->applyTextSearch($sub, 'id_pesanan', $search, $exact, 'or');
+            $sub->orWhereHas('kurir', function ($kurirQ) use ($search, $exact) {
+                $this->applyTextSearch($kurirQ, 'name', $search, $exact);
+            })->orWhereHas('details', function ($detailQ) use ($search, $exact) {
+                $this->applyTextSearch($detailQ, 'sku', $search, $exact);
+            });
         });
     }
 

@@ -55,7 +55,7 @@ class DamagedAllocationController extends Controller
     public function sourceItems(Request $request)
     {
         $search = trim((string) $request->input('q', ''));
-        $items = DamagedStockService::availableSourceLines($search);
+        $items = DamagedStockService::availableSourceLines($search, null, $this->isExactSearch($request));
 
         return response()->json([
             'data' => $items->all(),
@@ -77,29 +77,26 @@ class DamagedAllocationController extends Controller
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
-            $query->where(function ($q) use ($search) {
-                $q->where('damaged_allocations.code', 'like', "%{$search}%")
-                    ->orWhere('damaged_allocations.source_ref', 'like', "%{$search}%")
-                    ->orWhere('damaged_allocations.note', 'like', "%{$search}%")
-                    ->orWhereHas('supplier', function ($supplierQ) use ($search) {
-                        $supplierQ->where('name', 'like', "%{$search}%");
-                    })
-                    ->orWhereHas('targetWarehouse', function ($warehouseQ) use ($search) {
-                        $warehouseQ->where('name', 'like', "%{$search}%")
-                            ->orWhere('code', 'like', "%{$search}%");
-                    })
-                    ->orWhereHas('recipe', function ($recipeQ) use ($search) {
-                        $recipeQ->where('name', 'like', "%{$search}%")
-                            ->orWhere('code', 'like', "%{$search}%");
-                    })
-                    ->orWhereHas('sourceItems.item', function ($itemQ) use ($search) {
-                        $itemQ->where('sku', 'like', "%{$search}%")
-                            ->orWhere('name', 'like', "%{$search}%");
-                    })
-                    ->orWhereHas('outputItems.item', function ($itemQ) use ($search) {
-                        $itemQ->where('sku', 'like', "%{$search}%")
-                            ->orWhere('name', 'like', "%{$search}%");
-                    });
+            $exact = $this->isExactSearch($request);
+            $query->where(function ($q) use ($search, $exact) {
+                $this->applyTextSearch($q, 'damaged_allocations.code', $search, $exact);
+                $this->applyTextSearch($q, 'damaged_allocations.source_ref', $search, $exact, 'or');
+                $this->applyTextSearch($q, 'damaged_allocations.note', $search, $exact, 'or');
+                $q->orWhereHas('supplier', function ($supplierQ) use ($search, $exact) {
+                    $this->applyTextSearch($supplierQ, 'name', $search, $exact);
+                })->orWhereHas('targetWarehouse', function ($warehouseQ) use ($search, $exact) {
+                    $this->applyTextSearch($warehouseQ, 'name', $search, $exact);
+                    $this->applyTextSearch($warehouseQ, 'code', $search, $exact, 'or');
+                })->orWhereHas('recipe', function ($recipeQ) use ($search, $exact) {
+                    $this->applyTextSearch($recipeQ, 'name', $search, $exact);
+                    $this->applyTextSearch($recipeQ, 'code', $search, $exact, 'or');
+                })->orWhereHas('sourceItems.item', function ($itemQ) use ($search, $exact) {
+                    $this->applyTextSearch($itemQ, 'sku', $search, $exact);
+                    $this->applyTextSearch($itemQ, 'name', $search, $exact, 'or');
+                })->orWhereHas('outputItems.item', function ($itemQ) use ($search, $exact) {
+                    $this->applyTextSearch($itemQ, 'sku', $search, $exact);
+                    $this->applyTextSearch($itemQ, 'name', $search, $exact, 'or');
+                });
             });
         }
 

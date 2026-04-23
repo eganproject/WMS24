@@ -52,34 +52,30 @@ class QcHistoryController extends Controller
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
-            $query->where(function ($q) use ($search) {
-                $q->where('scan_code', 'like', "%{$search}%")
-                    ->orWhere('scan_type', 'like', "%{$search}%")
-                    ->orWhere('status', 'like', "%{$search}%")
-                    ->orWhere('reset_reason', 'like', "%{$search}%")
-                    ->orWhereHas('resi', function ($resiQ) use ($search) {
-                        $resiQ->where('id_pesanan', 'like', "%{$search}%")
-                            ->orWhere('no_resi', 'like', "%{$search}%");
-                    })
-                    ->orWhereHas('items', function ($itemQ) use ($search) {
-                        $itemQ->where('sku', 'like', "%{$search}%");
-                    })
-                    ->orWhereHas('scanner', function ($userQ) use ($search) {
-                        $userQ->where('name', 'like', "%{$search}%")
-                            ->orWhere('email', 'like', "%{$search}%");
-                    })
-                    ->orWhereHas('completer', function ($userQ) use ($search) {
-                        $userQ->where('name', 'like', "%{$search}%")
-                            ->orWhere('email', 'like', "%{$search}%");
-                    })
-                    ->orWhereHas('lastScanner', function ($userQ) use ($search) {
-                        $userQ->where('name', 'like', "%{$search}%")
-                            ->orWhere('email', 'like', "%{$search}%");
-                    })
-                    ->orWhereHas('resetter', function ($userQ) use ($search) {
-                        $userQ->where('name', 'like', "%{$search}%")
-                            ->orWhere('email', 'like', "%{$search}%");
-                    });
+            $exact = $this->isExactSearch($request);
+            $query->where(function ($q) use ($search, $exact) {
+                $this->applyTextSearch($q, 'scan_code', $search, $exact);
+                $this->applyTextSearch($q, 'scan_type', $search, $exact, 'or');
+                $this->applyTextSearch($q, 'status', $search, $exact, 'or');
+                $this->applyTextSearch($q, 'reset_reason', $search, $exact, 'or');
+                $q->orWhereHas('resi', function ($resiQ) use ($search, $exact) {
+                    $this->applyTextSearch($resiQ, 'id_pesanan', $search, $exact);
+                    $this->applyTextSearch($resiQ, 'no_resi', $search, $exact, 'or');
+                })->orWhereHas('items', function ($itemQ) use ($search, $exact) {
+                    $this->applyTextSearch($itemQ, 'sku', $search, $exact);
+                })->orWhereHas('scanner', function ($userQ) use ($search, $exact) {
+                    $this->applyTextSearch($userQ, 'name', $search, $exact);
+                    $this->applyTextSearch($userQ, 'email', $search, $exact, 'or');
+                })->orWhereHas('completer', function ($userQ) use ($search, $exact) {
+                    $this->applyTextSearch($userQ, 'name', $search, $exact);
+                    $this->applyTextSearch($userQ, 'email', $search, $exact, 'or');
+                })->orWhereHas('lastScanner', function ($userQ) use ($search, $exact) {
+                    $this->applyTextSearch($userQ, 'name', $search, $exact);
+                    $this->applyTextSearch($userQ, 'email', $search, $exact, 'or');
+                })->orWhereHas('resetter', function ($userQ) use ($search, $exact) {
+                    $this->applyTextSearch($userQ, 'name', $search, $exact);
+                    $this->applyTextSearch($userQ, 'email', $search, $exact, 'or');
+                });
             });
         }
 

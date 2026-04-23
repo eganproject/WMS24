@@ -55,15 +55,16 @@ class CustomerReturnController extends Controller
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
-            $query->where(function ($q) use ($search) {
-                $q->where('customer_returns.code', 'like', "%{$search}%")
-                    ->orWhere('customer_returns.resi_no', 'like', "%{$search}%")
-                    ->orWhere('customer_returns.order_ref', 'like', "%{$search}%")
-                    ->orWhere('customer_returns.note', 'like', "%{$search}%")
-                    ->orWhereHas('items.item', function ($itemQ) use ($search) {
-                        $itemQ->where('sku', 'like', "%{$search}%")
-                            ->orWhere('name', 'like', "%{$search}%");
-                    });
+            $exact = $this->isExactSearch($request);
+            $query->where(function ($q) use ($search, $exact) {
+                $this->applyTextSearch($q, 'customer_returns.code', $search, $exact);
+                $this->applyTextSearch($q, 'customer_returns.resi_no', $search, $exact, 'or');
+                $this->applyTextSearch($q, 'customer_returns.order_ref', $search, $exact, 'or');
+                $this->applyTextSearch($q, 'customer_returns.note', $search, $exact, 'or');
+                $q->orWhereHas('items.item', function ($itemQ) use ($search, $exact) {
+                    $this->applyTextSearch($itemQ, 'sku', $search, $exact);
+                    $this->applyTextSearch($itemQ, 'name', $search, $exact, 'or');
+                });
             });
         }
 

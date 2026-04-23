@@ -21,9 +21,10 @@ class QcScanExceptionController extends Controller
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
-            $query->where(function ($q) use ($search) {
-                $q->where('sku', 'like', "%{$search}%")
-                    ->orWhere('note', 'like', "%{$search}%");
+            $exact = $this->isExactSearch($request);
+            $query->where(function ($q) use ($search, $exact) {
+                $this->applyTextSearch($q, 'sku', $search, $exact);
+                $this->applyTextSearch($q, 'note', $search, $exact, 'or');
             });
         }
 

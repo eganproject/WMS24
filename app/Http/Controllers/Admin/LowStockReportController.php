@@ -72,11 +72,12 @@ class LowStockReportController extends Controller
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
-            $baseQuery->where(function ($q) use ($search) {
-                $q->where('i.sku', 'like', "%{$search}%")
-                    ->orWhere('i.name', 'like', "%{$search}%")
-                    ->orWhere('i.address', 'like', "%{$search}%")
-                    ->orWhere('i.description', 'like', "%{$search}%");
+            $exact = $this->isExactSearch($request);
+            $baseQuery->where(function ($q) use ($search, $exact) {
+                $this->applyTextSearch($q, 'i.sku', $search, $exact);
+                $this->applyTextSearch($q, 'i.name', $search, $exact, 'or');
+                $this->applyTextSearch($q, 'i.address', $search, $exact, 'or');
+                $this->applyTextSearch($q, 'i.description', $search, $exact, 'or');
             });
         }
 

@@ -366,17 +366,17 @@ class InboundController extends Controller
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
-            $query->where(function ($q) use ($search) {
-                $q->where('inbound_transactions.code', 'like', "%{$search}%")
-                    ->orWhere('inbound_transactions.ref_no', 'like', "%{$search}%")
-                    ->orWhere('inbound_transactions.surat_jalan_no', 'like', "%{$search}%")
-                    ->orWhereHas('supplier', function ($supplierQ) use ($search) {
-                        $supplierQ->where('name', 'like', "%{$search}%");
-                    })
-                    ->orWhereHas('items.item', function ($itemQ) use ($search) {
-                        $itemQ->where('sku', 'like', "%{$search}%")
-                            ->orWhere('name', 'like', "%{$search}%");
-                    });
+            $exact = $this->isExactSearch($request);
+            $query->where(function ($q) use ($search, $exact) {
+                $this->applyTextSearch($q, 'inbound_transactions.code', $search, $exact);
+                $this->applyTextSearch($q, 'inbound_transactions.ref_no', $search, $exact, 'or');
+                $this->applyTextSearch($q, 'inbound_transactions.surat_jalan_no', $search, $exact, 'or');
+                $q->orWhereHas('supplier', function ($supplierQ) use ($search, $exact) {
+                    $this->applyTextSearch($supplierQ, 'name', $search, $exact);
+                })->orWhereHas('items.item', function ($itemQ) use ($search, $exact) {
+                    $this->applyTextSearch($itemQ, 'sku', $search, $exact);
+                    $this->applyTextSearch($itemQ, 'name', $search, $exact, 'or');
+                });
             });
         }
 

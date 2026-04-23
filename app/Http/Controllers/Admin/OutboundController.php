@@ -410,16 +410,16 @@ class OutboundController extends Controller
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
-            $query->where(function ($q) use ($search) {
-                $q->where('outbound_transactions.code', 'like', "%{$search}%")
-                    ->orWhere('outbound_transactions.ref_no', 'like', "%{$search}%")
-                    ->orWhereHas('supplier', function ($supplierQ) use ($search) {
-                        $supplierQ->where('name', 'like', "%{$search}%");
-                    })
-                    ->orWhereHas('items.item', function ($itemQ) use ($search) {
-                        $itemQ->where('sku', 'like', "%{$search}%")
-                            ->orWhere('name', 'like', "%{$search}%");
-                    });
+            $exact = $this->isExactSearch($request);
+            $query->where(function ($q) use ($search, $exact) {
+                $this->applyTextSearch($q, 'outbound_transactions.code', $search, $exact);
+                $this->applyTextSearch($q, 'outbound_transactions.ref_no', $search, $exact, 'or');
+                $q->orWhereHas('supplier', function ($supplierQ) use ($search, $exact) {
+                    $this->applyTextSearch($supplierQ, 'name', $search, $exact);
+                })->orWhereHas('items.item', function ($itemQ) use ($search, $exact) {
+                    $this->applyTextSearch($itemQ, 'sku', $search, $exact);
+                    $this->applyTextSearch($itemQ, 'name', $search, $exact, 'or');
+                });
             });
         }
 

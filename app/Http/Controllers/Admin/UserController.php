@@ -32,12 +32,13 @@ class UserController extends Controller
         }
 
         if ($search = trim((string) $request->input('q', ''))) {
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%")
-                    ->orWhereHas('area', function ($areaQ) use ($search) {
-                        $areaQ->where('name', 'like', "%{$search}%")
-                            ->orWhere('code', 'like', "%{$search}%");
+            $exact = $this->isExactSearch($request);
+            $query->where(function ($q) use ($search, $exact) {
+                $this->applyTextSearch($q, 'name', $search, $exact);
+                $this->applyTextSearch($q, 'email', $search, $exact, 'or');
+                $q->orWhereHas('area', function ($areaQ) use ($search, $exact) {
+                    $this->applyTextSearch($areaQ, 'name', $search, $exact);
+                    $this->applyTextSearch($areaQ, 'code', $search, $exact, 'or');
                     });
             });
         }

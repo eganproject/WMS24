@@ -48,21 +48,20 @@ class StockTransferController extends Controller
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
-            $query->where(function ($q) use ($search) {
-                $q->where('code', 'like', "%{$search}%")
-                    ->orWhere('note', 'like', "%{$search}%")
-                    ->orWhereHas('fromWarehouse', function ($wq) use ($search) {
-                        $wq->where('name', 'like', "%{$search}%")
-                            ->orWhere('code', 'like', "%{$search}%");
-                    })
-                    ->orWhereHas('toWarehouse', function ($wq) use ($search) {
-                        $wq->where('name', 'like', "%{$search}%")
-                            ->orWhere('code', 'like', "%{$search}%");
-                    })
-                    ->orWhereHas('items.item', function ($itemQ) use ($search) {
-                        $itemQ->where('sku', 'like', "%{$search}%")
-                            ->orWhere('name', 'like', "%{$search}%");
-                    });
+            $exact = $this->isExactSearch($request);
+            $query->where(function ($q) use ($search, $exact) {
+                $this->applyTextSearch($q, 'code', $search, $exact);
+                $this->applyTextSearch($q, 'note', $search, $exact, 'or');
+                $q->orWhereHas('fromWarehouse', function ($wq) use ($search, $exact) {
+                    $this->applyTextSearch($wq, 'name', $search, $exact);
+                    $this->applyTextSearch($wq, 'code', $search, $exact, 'or');
+                })->orWhereHas('toWarehouse', function ($wq) use ($search, $exact) {
+                    $this->applyTextSearch($wq, 'name', $search, $exact);
+                    $this->applyTextSearch($wq, 'code', $search, $exact, 'or');
+                })->orWhereHas('items.item', function ($itemQ) use ($search, $exact) {
+                    $this->applyTextSearch($itemQ, 'sku', $search, $exact);
+                    $this->applyTextSearch($itemQ, 'name', $search, $exact, 'or');
+                });
             });
         }
 

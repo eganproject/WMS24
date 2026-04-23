@@ -63,11 +63,12 @@ class StockOpnameController extends Controller
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
-            $baseQuery->where(function ($q) use ($search) {
-                $q->where('stock_opnames.code', 'like', "%{$search}%")
-                    ->orWhere('stock_opnames.note', 'like', "%{$search}%")
-                    ->orWhere('items.sku', 'like', "%{$search}%")
-                    ->orWhere('items.name', 'like', "%{$search}%");
+            $exact = $this->isExactSearch($request);
+            $baseQuery->where(function ($q) use ($search, $exact) {
+                $this->applyTextSearch($q, 'stock_opnames.code', $search, $exact);
+                $this->applyTextSearch($q, 'stock_opnames.note', $search, $exact, 'or');
+                $this->applyTextSearch($q, 'items.sku', $search, $exact, 'or');
+                $this->applyTextSearch($q, 'items.name', $search, $exact, 'or');
             });
         }
 

@@ -52,17 +52,17 @@ class StockAdjustmentController extends Controller
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
-            $query->where(function ($q) use ($search) {
-                $q->where('stock_adjustments.code', 'like', "%{$search}%")
-                    ->orWhere('stock_adjustments.note', 'like', "%{$search}%")
-                    ->orWhereHas('items.item', function ($itemQ) use ($search) {
-                        $itemQ->where('sku', 'like', "%{$search}%")
-                            ->orWhere('name', 'like', "%{$search}%");
-                    })
-                    ->orWhereHas('warehouse', function ($whQ) use ($search) {
-                        $whQ->where('name', 'like', "%{$search}%")
-                            ->orWhere('code', 'like', "%{$search}%");
-                    });
+            $exact = $this->isExactSearch($request);
+            $query->where(function ($q) use ($search, $exact) {
+                $this->applyTextSearch($q, 'stock_adjustments.code', $search, $exact);
+                $this->applyTextSearch($q, 'stock_adjustments.note', $search, $exact, 'or');
+                $q->orWhereHas('items.item', function ($itemQ) use ($search, $exact) {
+                    $this->applyTextSearch($itemQ, 'sku', $search, $exact);
+                    $this->applyTextSearch($itemQ, 'name', $search, $exact, 'or');
+                })->orWhereHas('warehouse', function ($whQ) use ($search, $exact) {
+                    $this->applyTextSearch($whQ, 'name', $search, $exact);
+                    $this->applyTextSearch($whQ, 'code', $search, $exact, 'or');
+                });
             });
         }
 

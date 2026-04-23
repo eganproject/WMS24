@@ -29,16 +29,17 @@ class ActivityLogController extends Controller
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
-            $query->where(function ($q) use ($search) {
-                $q->where('action', 'like', "%{$search}%")
-                    ->orWhere('route_name', 'like', "%{$search}%")
-                    ->orWhere('url', 'like', "%{$search}%")
-                    ->orWhere('method', 'like', "%{$search}%")
-                    ->orWhere('ip_address', 'like', "%{$search}%")
-                    ->orWhereHas('user', function ($userQ) use ($search) {
-                        $userQ->where('name', 'like', "%{$search}%")
-                            ->orWhere('email', 'like', "%{$search}%");
-                    });
+            $exact = $this->isExactSearch($request);
+            $query->where(function ($q) use ($search, $exact) {
+                $this->applyTextSearch($q, 'action', $search, $exact);
+                $this->applyTextSearch($q, 'route_name', $search, $exact, 'or');
+                $this->applyTextSearch($q, 'url', $search, $exact, 'or');
+                $this->applyTextSearch($q, 'method', $search, $exact, 'or');
+                $this->applyTextSearch($q, 'ip_address', $search, $exact, 'or');
+                $q->orWhereHas('user', function ($userQ) use ($search, $exact) {
+                    $this->applyTextSearch($userQ, 'name', $search, $exact);
+                    $this->applyTextSearch($userQ, 'email', $search, $exact, 'or');
+                });
             });
         }
 

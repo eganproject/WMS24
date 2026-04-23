@@ -25,12 +25,13 @@ class LocationController extends Controller
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
-            $query->where(function ($q) use ($search) {
-                $q->where('code', 'like', "%{$search}%")
-                    ->orWhere('rack_code', 'like', "%{$search}%")
-                    ->orWhereHas('area', function ($areaQ) use ($search) {
-                        $areaQ->where('code', 'like', "%{$search}%")
-                            ->orWhere('name', 'like', "%{$search}%");
+            $exact = $this->isExactSearch($request);
+            $query->where(function ($q) use ($search, $exact) {
+                $this->applyTextSearch($q, 'code', $search, $exact);
+                $this->applyTextSearch($q, 'rack_code', $search, $exact, 'or');
+                $q->orWhereHas('area', function ($areaQ) use ($search, $exact) {
+                    $this->applyTextSearch($areaQ, 'code', $search, $exact);
+                    $this->applyTextSearch($areaQ, 'name', $search, $exact, 'or');
                     });
             });
         }

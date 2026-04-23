@@ -49,6 +49,7 @@ class MenuSeeder extends Seeder
             ['name' => 'SKU Exception QC', 'slug' => 'outbound-qc-scan-exceptions', 'route' => 'admin.outbound.qc-scan-exceptions.index', 'icon' => 'fa-solid fa-ban', 'parent_slug' => 'outbound', 'sort_order' => 13.8],
             ['name' => 'Laporan Scan Out', 'slug' => 'outbound-scan-out-report', 'route' => 'admin.reports.scan-out-reports.index', 'icon' => 'fa-solid fa-truck-ramp-box', 'parent_slug' => 'reports', 'sort_order' => 1.2],
             ['name' => 'Laporan Stok Pengaman', 'slug' => 'report-low-stock', 'route' => 'admin.reports.low-stock.index', 'icon' => 'fa-solid fa-triangle-exclamation', 'parent_slug' => 'reports', 'sort_order' => 1.25],
+            ['name' => 'Laporan Retur', 'slug' => 'report-returns', 'route' => 'admin.reports.returns.index', 'icon' => 'fa-solid fa-arrow-rotate-left', 'parent_slug' => 'reports', 'sort_order' => 1.26],
             ['name' => 'Replenishment Display', 'slug' => 'report-replenishment', 'route' => 'admin.reports.replenishment.index', 'icon' => 'fa-solid fa-arrows-rotate', 'parent_slug' => 'reports', 'sort_order' => 1.27],
             ['name' => 'Aktivitas User', 'slug' => 'activity-logs', 'route' => 'admin.reports.activity-logs.index', 'icon' => 'fa-solid fa-clipboard-check', 'parent_slug' => 'reports', 'sort_order' => 2],
             ['name' => 'Laporan Stock Opname', 'slug' => 'report-stock-opname', 'route' => 'admin.reports.stock-opname.index', 'icon' => 'fa-solid fa-clipboard-list', 'parent_slug' => 'reports', 'sort_order' => 3],

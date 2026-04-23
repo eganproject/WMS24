@@ -21,6 +21,7 @@ use App\Http\Controllers\Admin\QcScanExceptionController;
 use App\Http\Controllers\Admin\ScanOutHistoryController;
 use App\Http\Controllers\Admin\ScanOutReportController;
 use App\Http\Controllers\Admin\LowStockReportController;
+use App\Http\Controllers\Admin\ReturnReportController;
 use App\Http\Controllers\Admin\ActivityLogController;
 use App\Http\Controllers\Admin\StockOpnameReportController;
 use App\Http\Controllers\Admin\ReplenishmentReportController;
@@ -345,6 +346,8 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/scan-out-reports/data', [ScanOutReportController::class, 'data'])->name('scan-out-reports.data');
         Route::get('/low-stock', [LowStockReportController::class, 'index'])->name('low-stock.index');
         Route::get('/low-stock/data', [LowStockReportController::class, 'data'])->name('low-stock.data');
+        Route::get('/returns', [ReturnReportController::class, 'index'])->name('returns.index');
+        Route::get('/returns/data', [ReturnReportController::class, 'data'])->name('returns.data');
         Route::get('/replenishment', [ReplenishmentReportController::class, 'index'])->name('replenishment.index');
         Route::get('/replenishment/data', [ReplenishmentReportController::class, 'data'])->name('replenishment.data');
         Route::get('/stock-opname', [StockOpnameReportController::class, 'index'])->name('stock-opname.index');

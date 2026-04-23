@@ -96,14 +96,27 @@
 <script>
     document.addEventListener('DOMContentLoaded', () => {
         const searchInput = document.querySelector('[data-kt-filter="search"]');
-        if (searchInput) {
-            searchInput.addEventListener('keyup', (e) => {
-                const term = e.target.value.toLowerCase();
-                document.querySelectorAll('#permissions_table tbody tr').forEach(row => {
-                    const text = row.textContent.toLowerCase();
-                    row.style.display = text.includes(term) ? '' : 'none';
+        const applySearch = () => {
+            const term = (searchInput?.value || '').trim().toLowerCase();
+            const mode = typeof window.resolveTableSearchMode === 'function'
+                ? window.resolveTableSearchMode(searchInput)
+                : 'contains';
+            document.querySelectorAll('#permissions_table tbody tr').forEach((row) => {
+                const text = row.textContent.toLowerCase().trim();
+                const exactCellMatch = Array.from(row.cells || []).some((cell) => {
+                    return cell.textContent.toLowerCase().trim() === term;
                 });
+                const matches = mode === 'exact'
+                    ? exactCellMatch || text === term
+                    : text.includes(term);
+                row.style.display = matches || term === '' ? '' : 'none';
             });
+        };
+
+        if (searchInput) {
+            searchInput.addEventListener('keyup', applySearch);
+            const searchModeControl = searchInput.closest('.d-flex')?.querySelector('[data-search-mode-control]');
+            searchModeControl?.addEventListener('change', applySearch);
         }
         if (window.KTMenu) {
             KTMenu.createInstances();

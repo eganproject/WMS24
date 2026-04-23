@@ -52,17 +52,17 @@ class DamagedGoodsController extends Controller
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
-            $query->where(function ($q) use ($search) {
-                $q->where('damaged_goods.code', 'like', "%{$search}%")
-                    ->orWhere('damaged_goods.source_ref', 'like', "%{$search}%")
-                    ->orWhereHas('sourceWarehouse', function ($warehouseQ) use ($search) {
-                        $warehouseQ->where('name', 'like', "%{$search}%")
-                            ->orWhere('code', 'like', "%{$search}%");
-                    })
-                    ->orWhereHas('items.item', function ($itemQ) use ($search) {
-                        $itemQ->where('sku', 'like', "%{$search}%")
-                            ->orWhere('name', 'like', "%{$search}%");
-                    });
+            $exact = $this->isExactSearch($request);
+            $query->where(function ($q) use ($search, $exact) {
+                $this->applyTextSearch($q, 'damaged_goods.code', $search, $exact);
+                $this->applyTextSearch($q, 'damaged_goods.source_ref', $search, $exact, 'or');
+                $q->orWhereHas('sourceWarehouse', function ($warehouseQ) use ($search, $exact) {
+                    $this->applyTextSearch($warehouseQ, 'name', $search, $exact);
+                    $this->applyTextSearch($warehouseQ, 'code', $search, $exact, 'or');
+                })->orWhereHas('items.item', function ($itemQ) use ($search, $exact) {
+                    $this->applyTextSearch($itemQ, 'sku', $search, $exact);
+                    $this->applyTextSearch($itemQ, 'name', $search, $exact, 'or');
+                });
             });
         }
 

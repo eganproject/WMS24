@@ -23,11 +23,12 @@ class StoreController extends Controller
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('city', 'like', "%{$search}%")
-                    ->orWhere('phone', 'like', "%{$search}%")
-                    ->orWhere('address', 'like', "%{$search}%");
+            $exact = $this->isExactSearch($request);
+            $query->where(function ($q) use ($search, $exact) {
+                $this->applyTextSearch($q, 'name', $search, $exact);
+                $this->applyTextSearch($q, 'city', $search, $exact, 'or');
+                $this->applyTextSearch($q, 'phone', $search, $exact, 'or');
+                $this->applyTextSearch($q, 'address', $search, $exact, 'or');
             });
         }
 

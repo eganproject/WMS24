@@ -44,11 +44,12 @@ class ItemStockController extends Controller
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
-            $query->where(function ($q) use ($search) {
-                $q->where('sku', 'like', "%{$search}%")
-                    ->orWhere('name', 'like', "%{$search}%")
-                    ->orWhere('address', 'like', "%{$search}%")
-                    ->orWhere('description', 'like', "%{$search}%");
+            $exact = $this->isExactSearch($request);
+            $query->where(function ($q) use ($search, $exact) {
+                $this->applyTextSearch($q, 'sku', $search, $exact);
+                $this->applyTextSearch($q, 'name', $search, $exact, 'or');
+                $this->applyTextSearch($q, 'address', $search, $exact, 'or');
+                $this->applyTextSearch($q, 'description', $search, $exact, 'or');
             });
         }
 

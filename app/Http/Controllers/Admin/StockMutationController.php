@@ -41,23 +41,23 @@ class StockMutationController extends Controller
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
-            $query->where(function ($q) use ($search) {
-                $q->where('source_code', 'like', "%{$search}%")
-                    ->orWhere('source_type', 'like', "%{$search}%")
-                    ->orWhere('source_subtype', 'like', "%{$search}%")
-                    ->orWhereHas('creator', function ($userQ) use ($search) {
-                        $userQ->where('name', 'like', "%{$search}%")
-                            ->orWhere('email', 'like', "%{$search}%");
-                    })
-                    ->orWhereHas('item', function ($itemQ) use ($search) {
-                        $itemQ->where('sku', 'like', "%{$search}%")
-                            ->orWhere('name', 'like', "%{$search}%");
-                    })
-                    ->orWhere('reference_sku', 'like', "%{$search}%")
-                    ->orWhereHas('warehouse', function ($whQ) use ($search) {
-                        $whQ->where('name', 'like', "%{$search}%")
-                            ->orWhere('code', 'like', "%{$search}%");
-                    });
+            $exact = $this->isExactSearch($request);
+            $query->where(function ($q) use ($search, $exact) {
+                $this->applyTextSearch($q, 'source_code', $search, $exact);
+                $this->applyTextSearch($q, 'source_type', $search, $exact, 'or');
+                $this->applyTextSearch($q, 'source_subtype', $search, $exact, 'or');
+                $q->orWhereHas('creator', function ($userQ) use ($search, $exact) {
+                    $this->applyTextSearch($userQ, 'name', $search, $exact);
+                    $this->applyTextSearch($userQ, 'email', $search, $exact, 'or');
+                })->orWhereHas('item', function ($itemQ) use ($search, $exact) {
+                    $this->applyTextSearch($itemQ, 'sku', $search, $exact);
+                    $this->applyTextSearch($itemQ, 'name', $search, $exact, 'or');
+                });
+                $this->applyTextSearch($q, 'reference_sku', $search, $exact, 'or');
+                $q->orWhereHas('warehouse', function ($whQ) use ($search, $exact) {
+                    $this->applyTextSearch($whQ, 'name', $search, $exact);
+                    $this->applyTextSearch($whQ, 'code', $search, $exact, 'or');
+                });
             });
         }
 

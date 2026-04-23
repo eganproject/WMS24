@@ -59,22 +59,21 @@ class ReworkRecipeController extends Controller
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
-            $query->where(function ($q) use ($search) {
-                $q->where('rework_recipes.code', 'like', "%{$search}%")
-                    ->orWhere('rework_recipes.name', 'like', "%{$search}%")
-                    ->orWhere('rework_recipes.note', 'like', "%{$search}%")
-                    ->orWhereHas('inputItems.item', function ($itemQ) use ($search) {
-                        $itemQ->where('sku', 'like', "%{$search}%")
-                            ->orWhere('name', 'like', "%{$search}%");
-                    })
-                    ->orWhereHas('outputItems.item', function ($itemQ) use ($search) {
-                        $itemQ->where('sku', 'like', "%{$search}%")
-                            ->orWhere('name', 'like', "%{$search}%");
-                    })
-                    ->orWhereHas('targetWarehouse', function ($warehouseQ) use ($search) {
-                        $warehouseQ->where('name', 'like', "%{$search}%")
-                            ->orWhere('code', 'like', "%{$search}%");
-                    });
+            $exact = $this->isExactSearch($request);
+            $query->where(function ($q) use ($search, $exact) {
+                $this->applyTextSearch($q, 'rework_recipes.code', $search, $exact);
+                $this->applyTextSearch($q, 'rework_recipes.name', $search, $exact, 'or');
+                $this->applyTextSearch($q, 'rework_recipes.note', $search, $exact, 'or');
+                $q->orWhereHas('inputItems.item', function ($itemQ) use ($search, $exact) {
+                    $this->applyTextSearch($itemQ, 'sku', $search, $exact);
+                    $this->applyTextSearch($itemQ, 'name', $search, $exact, 'or');
+                })->orWhereHas('outputItems.item', function ($itemQ) use ($search, $exact) {
+                    $this->applyTextSearch($itemQ, 'sku', $search, $exact);
+                    $this->applyTextSearch($itemQ, 'name', $search, $exact, 'or');
+                })->orWhereHas('targetWarehouse', function ($warehouseQ) use ($search, $exact) {
+                    $this->applyTextSearch($warehouseQ, 'name', $search, $exact);
+                    $this->applyTextSearch($warehouseQ, 'code', $search, $exact, 'or');
+                });
             });
         }
 

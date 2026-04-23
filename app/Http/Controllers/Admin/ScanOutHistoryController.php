@@ -28,17 +28,17 @@ class ScanOutHistoryController extends Controller
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
-            $query->where(function ($q) use ($search) {
-                $q->where('scan_code', 'like', "%{$search}%")
-                    ->orWhere('scan_type', 'like', "%{$search}%")
-                    ->orWhereHas('resi', function ($resiQ) use ($search) {
-                        $resiQ->where('id_pesanan', 'like', "%{$search}%")
-                            ->orWhere('no_resi', 'like', "%{$search}%");
-                    })
-                    ->orWhereHas('scanner', function ($userQ) use ($search) {
-                        $userQ->where('name', 'like', "%{$search}%")
-                            ->orWhere('email', 'like', "%{$search}%");
-                    });
+            $exact = $this->isExactSearch($request);
+            $query->where(function ($q) use ($search, $exact) {
+                $this->applyTextSearch($q, 'scan_code', $search, $exact);
+                $this->applyTextSearch($q, 'scan_type', $search, $exact, 'or');
+                $q->orWhereHas('resi', function ($resiQ) use ($search, $exact) {
+                    $this->applyTextSearch($resiQ, 'id_pesanan', $search, $exact);
+                    $this->applyTextSearch($resiQ, 'no_resi', $search, $exact, 'or');
+                })->orWhereHas('scanner', function ($userQ) use ($search, $exact) {
+                    $this->applyTextSearch($userQ, 'name', $search, $exact);
+                    $this->applyTextSearch($userQ, 'email', $search, $exact, 'or');
+                });
             });
         }
 

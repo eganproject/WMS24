@@ -58,6 +58,132 @@
         .modal .select2-dropdown {
             z-index: 2065 !important;
         }
+
+        .table-search-toolbar {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 0.85rem;
+            flex-wrap: wrap;
+        }
+
+        .table-search-toolbar .table-search-input {
+            flex: 1 1 300px;
+            min-width: min(100%, 250px);
+            width: auto !important;
+        }
+
+        .table-search-mode-wrap {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.7rem;
+            padding: 0.45rem 0.7rem 0.45rem 0.85rem;
+            border: 1px solid #e4e6ef;
+            border-radius: 0.9rem;
+            background: linear-gradient(180deg, #ffffff 0%, #f7f9fc 100%);
+            box-shadow: 0 10px 25px rgba(15, 23, 42, 0.06);
+        }
+
+        .table-search-mode-label {
+            margin: 0;
+            font-size: 0.65rem;
+            line-height: 1;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: #7e8299;
+            white-space: nowrap;
+        }
+
+        .table-search-mode-select {
+            min-width: 150px;
+            border: 0;
+            background: transparent;
+            box-shadow: none !important;
+            padding: 0.35rem 2rem 0.35rem 0.15rem;
+            color: #181c32;
+            font-weight: 600;
+        }
+
+        .table-search-mode-select:focus {
+            border: 0;
+            box-shadow: none !important;
+        }
+
+        .table-search-card-header {
+            row-gap: 1rem;
+        }
+
+        .table-search-card-header .card-title {
+            flex: 1 1 340px;
+            min-width: 0;
+        }
+
+        .table-search-card-header .card-toolbar {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+
+        @media (max-width: 767.98px) {
+            .table-search-card-header {
+                align-items: stretch !important;
+            }
+
+            .table-search-card-header .card-title,
+            .table-search-card-header .card-toolbar {
+                width: 100%;
+                margin: 0;
+            }
+
+            .table-search-card-header .card-toolbar {
+                justify-content: flex-start;
+            }
+
+            .table-search-card-header .card-toolbar > .d-flex {
+                width: 100%;
+                flex-wrap: wrap !important;
+                gap: 0.75rem !important;
+            }
+
+            .table-search-card-header .card-toolbar [class*="min-w-"] {
+                min-width: 0 !important;
+                width: 100%;
+            }
+
+            .table-search-card-header .card-toolbar .form-control,
+            .table-search-card-header .card-toolbar .form-select {
+                width: 100% !important;
+            }
+
+            .table-search-toolbar {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 0.75rem;
+            }
+
+            .table-search-toolbar .table-search-input {
+                width: 100% !important;
+                min-width: 0;
+                flex-basis: auto;
+            }
+
+            .table-search-mode-wrap {
+                width: 100%;
+                justify-content: space-between;
+                padding-inline: 0.8rem;
+            }
+
+            .table-search-mode-select {
+                min-width: 0;
+                width: 100%;
+            }
+        }
+
+        @media (max-width: 575.98px) {
+            .table-search-card-header .btn {
+                width: 100%;
+            }
+        }
     </style>
     @stack('styles')
     @yield('styles')
@@ -106,6 +232,99 @@
     <script src="{{ asset('metronic/js/scripts.bundle.js') }}"></script>
     <script src="{{ asset('metronic/plugins/custom/datatables/datatables.bundle.js') }}"></script>
     <script>
+        (function () {
+            const searchInputSelectors = [
+                'input[data-kt-filter="search"]',
+                'input#report_search',
+                'input#filter_search',
+            ].join(', ');
+
+            const findSearchModeControl = (root = document) => {
+                if (!root || typeof root.querySelector !== 'function') {
+                    return null;
+                }
+
+                return root.querySelector('[data-search-mode-control]');
+            };
+
+            const reloadAllDataTables = () => {
+                if (typeof window.jQuery === 'undefined' || !window.jQuery.fn?.dataTable) {
+                    return;
+                }
+
+                window.jQuery.fn.dataTable.tables({ api: true }).every(function () {
+                    if (this.ajax && typeof this.ajax.reload === 'function') {
+                        this.ajax.reload();
+                    }
+                });
+            };
+
+            const attachSearchModeControls = () => {
+                document.querySelectorAll(searchInputSelectors).forEach((input) => {
+                    if (!input || input.dataset.searchModeReady === '1') {
+                        return;
+                    }
+
+                    const host = input.closest('.d-flex.align-items-center') || input.parentElement;
+                    if (!host || findSearchModeControl(host)) {
+                        input.dataset.searchModeReady = '1';
+                        return;
+                    }
+
+                    const cardHeader = host.closest('.card-header');
+                    const cardTitle = host.closest('.card-title');
+                    if (cardHeader) {
+                        cardHeader.classList.add('table-search-card-header');
+                    }
+                    if (cardTitle) {
+                        cardTitle.classList.add('w-100');
+                    }
+
+                    host.classList.add('table-search-toolbar');
+                    input.classList.add('table-search-input');
+
+                    const modeWrap = document.createElement('div');
+                    modeWrap.className = 'table-search-mode-wrap';
+                    const modeLabel = document.createElement('span');
+                    modeLabel.className = 'table-search-mode-label';
+                    modeLabel.textContent = 'Mode Cari';
+
+                    const select = document.createElement('select');
+                    select.className = 'form-select form-select-solid table-search-mode-select';
+                    select.setAttribute('aria-label', 'Mode pencarian tabel');
+                    select.setAttribute('data-search-mode-control', '1');
+                    select.innerHTML = `
+                        <option value="contains" selected>Kemiripan</option>
+                        <option value="exact">Presisi</option>
+                    `;
+                    select.addEventListener('change', reloadAllDataTables);
+                    modeWrap.append(modeLabel, select);
+                    host.appendChild(modeWrap);
+
+                    input.dataset.searchModeReady = '1';
+                });
+            };
+
+            window.resolveTableSearchMode = function (element = null) {
+                const scope = element?.closest?.('.content, .card, .modal-content, body') || document;
+                const scopedControl = findSearchModeControl(scope);
+                if (scopedControl) {
+                    return scopedControl.value || 'contains';
+                }
+
+                return document.querySelector('[data-search-mode-control]')?.value || 'contains';
+            };
+
+            document.addEventListener('DOMContentLoaded', attachSearchModeControls);
+            document.addEventListener('shown.bs.modal', attachSearchModeControls);
+
+            if (typeof window.jQuery !== 'undefined') {
+                window.jQuery(document).on('preXhr.dt', function (e, settings, data) {
+                    data.search_mode = window.resolveTableSearchMode(settings?.nTable || null);
+                });
+            }
+        })();
+
         (function () {
             const modalRefreshRaf = new WeakMap();
 

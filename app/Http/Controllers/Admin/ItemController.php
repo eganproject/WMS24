@@ -47,23 +47,23 @@ class ItemController extends Controller
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
-            $query->where(function ($q) use ($search) {
-                $q->where('sku', 'like', "%{$search}%")
-                    ->orWhere('name', 'like', "%{$search}%")
-                    ->orWhere('address', 'like', "%{$search}%")
-                    ->orWhere('description', 'like', "%{$search}%")
-                    ->orWhereHas('area', function ($areaQ) use ($search) {
-                        $areaQ->where('code', 'like', "%{$search}%")
-                            ->orWhere('name', 'like', "%{$search}%");
-                    })
-                    ->orWhereHas('location', function ($locQ) use ($search) {
-                        $locQ->where('code', 'like', "%{$search}%")
-                            ->orWhere('rack_code', 'like', "%{$search}%")
-                            ->orWhereHas('area', function ($areaQ) use ($search) {
-                                $areaQ->where('code', 'like', "%{$search}%")
-                                    ->orWhere('name', 'like', "%{$search}%");
-                            });
+            $exact = $this->isExactSearch($request);
+            $query->where(function ($q) use ($search, $exact) {
+                $this->applyTextSearch($q, 'sku', $search, $exact);
+                $this->applyTextSearch($q, 'name', $search, $exact, 'or');
+                $this->applyTextSearch($q, 'address', $search, $exact, 'or');
+                $this->applyTextSearch($q, 'description', $search, $exact, 'or');
+                $q->orWhereHas('area', function ($areaQ) use ($search, $exact) {
+                    $this->applyTextSearch($areaQ, 'code', $search, $exact);
+                    $this->applyTextSearch($areaQ, 'name', $search, $exact, 'or');
+                })->orWhereHas('location', function ($locQ) use ($search, $exact) {
+                    $this->applyTextSearch($locQ, 'code', $search, $exact);
+                    $this->applyTextSearch($locQ, 'rack_code', $search, $exact, 'or');
+                    $locQ->orWhereHas('area', function ($areaQ) use ($search, $exact) {
+                        $this->applyTextSearch($areaQ, 'code', $search, $exact);
+                        $this->applyTextSearch($areaQ, 'name', $search, $exact, 'or');
                     });
+                });
             });
         }
 

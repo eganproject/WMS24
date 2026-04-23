@@ -28,10 +28,11 @@ class MenuController extends Controller
         }
 
         if ($search = trim((string) $request->input('q', ''))) {
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('slug', 'like', "%{$search}%")
-                    ->orWhere('route', 'like', "%{$search}%");
+            $exact = $this->isExactSearch($request);
+            $query->where(function ($q) use ($search, $exact) {
+                $this->applyTextSearch($q, 'name', $search, $exact);
+                $this->applyTextSearch($q, 'slug', $search, $exact, 'or');
+                $this->applyTextSearch($q, 'route', $search, $exact, 'or');
             });
         }
 

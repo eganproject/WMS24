@@ -21,7 +21,7 @@ class CategoryController extends Controller
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
-            $query->where('name', 'like', "%{$search}%");
+            $this->applyTextSearch($query, 'name', $search, $this->isExactSearch($request));
         }
 
         $parentFilter = $request->input('parent_id');

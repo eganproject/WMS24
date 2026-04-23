@@ -43,7 +43,11 @@ class StockOpnameReportController extends Controller
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
-            $baseQuery->whereRaw('DATE(so.transacted_at) like ?', ["%{$search}%"]);
+            if ($this->isExactSearch($request)) {
+                $baseQuery->whereRaw('DATE(so.transacted_at) = ?', [$search]);
+            } else {
+                $baseQuery->whereRaw('DATE(so.transacted_at) like ?', ["%{$search}%"]);
+            }
         }
 
         $this->applyDateFilter($baseQuery, $request);
@@ -140,9 +144,10 @@ class StockOpnameReportController extends Controller
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
-            $baseQuery->where(function ($q) use ($search) {
-                $q->where('i.sku', 'like', "%{$search}%")
-                    ->orWhere('i.name', 'like', "%{$search}%");
+            $exact = $this->isExactSearch($request);
+            $baseQuery->where(function ($q) use ($search, $exact) {
+                $this->applyTextSearch($q, 'i.sku', $search, $exact);
+                $this->applyTextSearch($q, 'i.name', $search, $exact, 'or');
             });
         }
 

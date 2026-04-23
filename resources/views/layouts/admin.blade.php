@@ -62,36 +62,63 @@
         .table-search-toolbar {
             width: 100%;
             display: flex;
-            align-items: center;
-            gap: 0.85rem;
+            align-items: stretch;
+            gap: 0.95rem;
             flex-wrap: wrap;
+            padding: 0.55rem;
+            border: 1px solid #e6ebf2;
+            border-radius: 1rem;
+            background: linear-gradient(180deg, #f7f9fc 0%, #f1f4f8 100%);
+            box-shadow: 0 8px 22px rgba(15, 23, 42, 0.04);
         }
 
         .table-search-toolbar .table-search-input {
             flex: 1 1 300px;
             min-width: min(100%, 250px);
             width: auto !important;
+            min-height: 48px;
+            border-radius: 0.9rem !important;
+            border: 1px solid #d3dbe7 !important;
+            background: #f3f6fa !important;
+            color: #181c32;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+        }
+
+        .table-search-toolbar .table-search-input:focus {
+            border-color: #009ef7 !important;
+            background: #f7f9fc !important;
+            box-shadow: 0 0 0 0.25rem rgba(0, 158, 247, 0.12) !important;
+        }
+
+        .table-search-toolbar .position-absolute.ms-6 {
+            opacity: 0.6;
         }
 
         .table-search-mode-wrap {
             display: inline-flex;
             align-items: center;
             gap: 0.7rem;
-            padding: 0.45rem 0.7rem 0.45rem 0.85rem;
-            border: 1px solid #e4e6ef;
+            min-height: 48px;
+            padding: 0.45rem 0.8rem 0.45rem 0.9rem;
+            border: 1px solid #d3dbe7;
             border-radius: 0.9rem;
-            background: linear-gradient(180deg, #ffffff 0%, #f7f9fc 100%);
-            box-shadow: 0 10px 25px rgba(15, 23, 42, 0.06);
+            background: #f3f6fa;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
         }
 
         .table-search-mode-label {
             margin: 0;
-            font-size: 0.65rem;
+            display: inline-flex;
+            align-items: center;
+            padding: 0.38rem 0.6rem;
+            border-radius: 999px;
+            background: #e7eef7;
+            font-size: 0.68rem;
             line-height: 1;
             font-weight: 700;
-            letter-spacing: 0.12em;
+            letter-spacing: 0.08em;
             text-transform: uppercase;
-            color: #7e8299;
+            color: #3f4254;
             white-space: nowrap;
         }
 
@@ -159,6 +186,7 @@
                 flex-direction: column;
                 align-items: stretch;
                 gap: 0.75rem;
+                padding: 0.7rem;
             }
 
             .table-search-toolbar .table-search-input {

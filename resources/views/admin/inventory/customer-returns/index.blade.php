@@ -13,6 +13,10 @@
 
 @push('styles')
 <style>
+    .customer-return-index-card {
+        background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
+    }
+
     .customer-return-index-toolbar {
         display: flex;
         flex-wrap: wrap;
@@ -33,7 +37,174 @@
         min-width: 180px;
     }
 
+    .customer-return-index-search {
+        min-width: 280px;
+    }
+
+    .customer-return-index-table-wrap .dataTables_wrapper {
+        overflow: visible;
+    }
+
+    #customer_returns_table {
+        width: 100% !important;
+        border-collapse: separate;
+        border-spacing: 0 0.85rem;
+    }
+
+    #customer_returns_table thead th {
+        border: 0 !important;
+        padding-top: 0;
+        padding-bottom: 0.35rem;
+        white-space: nowrap;
+    }
+
+    #customer_returns_table tbody td {
+        background: #fff;
+        border-top: 1px solid #eef2f7;
+        border-bottom: 1px solid #eef2f7;
+        vertical-align: top;
+        padding-top: 1rem;
+        padding-bottom: 1rem;
+        white-space: normal;
+    }
+
+    #customer_returns_table tbody td:first-child {
+        border-left: 1px solid #eef2f7;
+        border-top-left-radius: 1rem;
+        border-bottom-left-radius: 1rem;
+    }
+
+    #customer_returns_table tbody td:last-child {
+        border-right: 1px solid #eef2f7;
+        border-top-right-radius: 1rem;
+        border-bottom-right-radius: 1rem;
+    }
+
+    .customer-return-row-select {
+        display: flex;
+        justify-content: center;
+        padding-top: 0.2rem;
+    }
+
+    .customer-return-doc-title {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        align-items: center;
+        margin-bottom: 0.35rem;
+    }
+
+    .customer-return-doc-meta,
+    .customer-return-doc-submeta,
+    .customer-return-meta-line {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem 0.6rem;
+        align-items: center;
+    }
+
+    .customer-return-doc-submeta,
+    .customer-return-meta-line + .customer-return-meta-line {
+        margin-top: 0.35rem;
+    }
+
+    .customer-return-meta-label {
+        color: #7e8299;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        font-weight: 700;
+    }
+
+    .customer-return-item-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.45rem;
+    }
+
+    .customer-return-item-chip {
+        display: inline-flex;
+        align-items: center;
+        width: 100%;
+        padding: 0.55rem 0.75rem;
+        border-radius: 0.9rem;
+        background: #f8f9fc;
+        color: #3f4254;
+        font-size: 0.825rem;
+        line-height: 1.35;
+    }
+
+    .customer-return-note-box {
+        margin-top: 0.75rem;
+        padding: 0.7rem 0.8rem;
+        border-radius: 0.9rem;
+        background: #fff8dd;
+        color: #5e6278;
+        font-size: 0.825rem;
+        line-height: 1.45;
+    }
+
+    .customer-return-qty-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.55rem;
+        min-width: 250px;
+    }
+
+    .customer-return-qty-pill {
+        border-radius: 0.95rem;
+        padding: 0.75rem 0.7rem;
+        text-align: center;
+        border: 1px solid transparent;
+    }
+
+    .customer-return-qty-pill.is-total {
+        background: #f8f9fc;
+        border-color: #eef2f7;
+    }
+
+    .customer-return-qty-pill.is-good {
+        background: #e8fff3;
+        border-color: #d4f5e3;
+    }
+
+    .customer-return-qty-pill.is-damaged {
+        background: #fff5f8;
+        border-color: #ffd5e2;
+    }
+
+    .customer-return-qty-label {
+        display: block;
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #7e8299;
+        font-weight: 700;
+        margin-bottom: 0.25rem;
+    }
+
+    .customer-return-qty-value {
+        display: block;
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: #181c32;
+        line-height: 1;
+    }
+
+    .customer-return-action-cell .btn {
+        white-space: nowrap;
+    }
+
+    .customer-return-table-empty {
+        color: #a1a5b7;
+        font-size: 0.85rem;
+    }
+
     @media (max-width: 767.98px) {
+        .customer-return-index-toolbar {
+            display: grid;
+        }
+
         .customer-return-index-controls {
             width: 100%;
         }
@@ -43,12 +214,67 @@
         .customer-return-index-search {
             width: 100% !important;
         }
+
+        .customer-return-index-search {
+            min-width: 100%;
+        }
+
+        #customer_returns_table thead {
+            display: none;
+        }
+
+        #customer_returns_table,
+        #customer_returns_table tbody,
+        #customer_returns_table tr,
+        #customer_returns_table td {
+            display: block;
+            width: 100% !important;
+        }
+
+        #customer_returns_table {
+            border-spacing: 0 1rem;
+        }
+
+        #customer_returns_table tbody td {
+            border-left: 1px solid #eef2f7;
+            border-right: 1px solid #eef2f7;
+            border-radius: 0;
+            padding: 0.75rem 1rem;
+        }
+
+        #customer_returns_table tbody td:first-child {
+            border-top-left-radius: 1rem;
+            border-top-right-radius: 1rem;
+            padding-bottom: 0.25rem;
+        }
+
+        #customer_returns_table tbody td:last-child {
+            border-bottom-left-radius: 1rem;
+            border-bottom-right-radius: 1rem;
+            padding-top: 0.35rem;
+        }
+
+        #customer_returns_table tbody td.text-end {
+            text-align: left !important;
+        }
+
+        .customer-return-row-select {
+            justify-content: flex-end;
+        }
+
+        .customer-return-qty-grid {
+            min-width: 0;
+        }
+
+        .customer-return-action-cell {
+            padding-top: 0.5rem !important;
+        }
     }
 </style>
 @endpush
 
 @section('content')
-<div class="card">
+<div class="card customer-return-index-card">
     <div class="card-header border-0 pt-6">
         <div class="card-title">
             <div class="d-flex align-items-center position-relative my-1">
@@ -58,7 +284,7 @@
                         <path d="M11 19C6.55556 19 3 15.4444 3 11C3 6.55556 6.55556 3 11 3C15.4444 3 19 6.55556 19 11C19 15.4444 15.4444 19 11 19ZM11 5C7.53333 5 5 7.53333 5 11C5 14.4667 7.53333 17 11 17C14.4667 17 17 14.4667 17 11C17 7.53333 14.4667 5 11 5Z" fill="black" />
                     </svg>
                 </span>
-                <input type="text" class="form-control form-control-solid w-250px ps-14 customer-return-index-search" placeholder="Search" data-kt-filter="search" />
+                <input type="text" class="form-control form-control-solid w-250px ps-14 customer-return-index-search" placeholder="Cari kode, resi, order ref, SKU, atau catatan" data-kt-filter="search" />
             </div>
         </div>
         <div class="card-toolbar customer-return-index-toolbar">
@@ -91,11 +317,11 @@
             </span>
             <div class="d-flex flex-column">
                 <h4 class="mb-1 text-gray-800">Flow Retur Customer</h4>
-                <span class="text-gray-700">Scan resi dan inspeksi sekarang dilakukan di halaman penuh agar lebih stabil di mobile maupun desktop. Finalisasi stok tetap dilakukan dari list ini.</span>
+                <span class="text-gray-700">List ini menampilkan retur yang sudah diinspeksi. Barang bagus akan masuk ke stok display dan barang rusak akan masuk ke stok barang rusak saat finalisasi.</span>
             </div>
         </div>
 
-        <div class="table-responsive">
+        <div class="table-responsive customer-return-index-table-wrap">
             <table class="table align-middle table-row-dashed fs-6 gy-5" id="customer_returns_table">
                 <thead>
                     <tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0">
@@ -104,17 +330,10 @@
                                 <input class="form-check-input" type="checkbox" id="check_all_customer_returns" />
                             </div>
                         </th>
-                        <th>ID</th>
-                        <th>Kode</th>
-                        <th>Resi</th>
-                        <th>Status</th>
-                        <th>Tanggal Terima</th>
-                        <th>Order Ref</th>
-                        <th>Item</th>
-                        <th class="text-end">Diterima</th>
-                        <th class="text-end">Bagus</th>
-                        <th class="text-end">Rusak</th>
-                        <th>Catatan</th>
+                        <th>Dokumen & Status</th>
+                        <th>Waktu & PIC</th>
+                        <th>Ringkasan Item</th>
+                        <th>Qty</th>
                         <th class="text-end">Aksi</th>
                     </tr>
                 </thead>
@@ -144,6 +363,13 @@
         const finalizeSelectedBtn = document.getElementById('btn_finalize_selected');
         let dt = null;
 
+        const escapeHtml = (value) => String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+
         const debounce = (fn, wait = 300) => {
             let timeoutId = null;
             return (...args) => {
@@ -161,8 +387,152 @@
         };
 
         const matchBadgeHtml = (matched) => matched
-            ? '<span class="badge badge-light-primary ms-2">Resi Match</span>'
-            : '<span class="badge badge-light-warning ms-2">Manual</span>';
+            ? '<span class="badge badge-light-primary">Resi Ditemukan</span>'
+            : '<span class="badge badge-light-warning">Input Manual</span>';
+
+        const refreshMenus = () => {
+            if (typeof KTMenu !== 'undefined' && KTMenu.createInstances) {
+                KTMenu.createInstances();
+            }
+        };
+
+        const documentCellHtml = (row) => {
+            const orderRef = row.order_ref && row.order_ref !== '-' ? row.order_ref : 'Tanpa order ref';
+            const damagedGood = row.damaged_good_code
+                ? `<div class="customer-return-doc-submeta"><span class="badge badge-light-danger">Barang Rusak ${escapeHtml(row.damaged_good_code)}</span></div>`
+                : '';
+
+            return `
+                <div class="customer-return-doc-cell">
+                    <div class="customer-return-doc-title">
+                        <span class="fw-bolder text-gray-900">${escapeHtml(row.code || '-')}</span>
+                        ${statusBadgeHtml(row.status)}
+                        ${matchBadgeHtml(row.matched)}
+                    </div>
+                    <div class="customer-return-doc-meta">
+                        <span class="customer-return-meta-label">Resi</span>
+                        <span class="fw-semibold text-gray-800">${escapeHtml(row.resi_no || '-')}</span>
+                    </div>
+                    <div class="customer-return-doc-submeta">
+                        <span class="customer-return-meta-label">Order Ref</span>
+                        <span class="text-gray-700">${escapeHtml(orderRef)}</span>
+                    </div>
+                    ${damagedGood}
+                </div>
+            `;
+        };
+
+        const activityCellHtml = (row) => {
+            const finalizedLine = row.finalized_at
+                ? `
+                    <div class="customer-return-meta-line">
+                        <span class="customer-return-meta-label">Finalisasi</span>
+                        <span class="text-gray-800 fw-semibold">${escapeHtml(row.finalized_at)}</span>
+                    </div>
+                  `
+                : '';
+
+            const picFinal = row.finalized_by && row.finalized_by !== '-'
+                ? `
+                    <div class="customer-return-meta-line">
+                        <span class="customer-return-meta-label">PIC Final</span>
+                        <span class="text-gray-700">${escapeHtml(row.finalized_by)}</span>
+                    </div>
+                  `
+                : '';
+
+            return `
+                <div class="customer-return-meta-cell">
+                    <div class="customer-return-meta-line">
+                        <span class="customer-return-meta-label">Diterima</span>
+                        <span class="text-gray-800 fw-semibold">${escapeHtml(row.received_at || '-')}</span>
+                    </div>
+                    <div class="customer-return-meta-line">
+                        <span class="customer-return-meta-label">Dicatat</span>
+                        <span class="text-gray-700">${escapeHtml(row.submit_by || '-')}</span>
+                    </div>
+                    <div class="customer-return-meta-line">
+                        <span class="customer-return-meta-label">Inspector</span>
+                        <span class="text-gray-700">${escapeHtml(row.inspected_by || '-')}</span>
+                    </div>
+                    ${finalizedLine}
+                    ${picFinal}
+                </div>
+            `;
+        };
+
+        const itemCellHtml = (row) => {
+            const items = String(row.item_summary || '')
+                .split(', ')
+                .map((part) => part.trim())
+                .filter((part) => part && part !== '-');
+
+            const visibleItems = items.slice(0, 3).map((part) => `<div class="customer-return-item-chip">${escapeHtml(part)}</div>`).join('');
+            const moreItems = items.length > 3
+                ? `<div class="text-muted fs-8 mt-2">+${items.length - 3} item lain</div>`
+                : '';
+            const emptyState = !items.length ? '<div class="customer-return-table-empty">Belum ada ringkasan item.</div>' : '';
+            const noteBox = row.note
+                ? `<div class="customer-return-note-box"><span class="fw-bold text-gray-800">Catatan:</span> ${escapeHtml(row.note)}</div>`
+                : '';
+
+            return `
+                <div class="customer-return-items-cell">
+                    <div class="customer-return-item-list">
+                        ${visibleItems || emptyState}
+                    </div>
+                    ${moreItems}
+                    ${noteBox}
+                </div>
+            `;
+        };
+
+        const qtyCellHtml = (row) => `
+            <div class="customer-return-qty-grid">
+                <div class="customer-return-qty-pill is-total">
+                    <span class="customer-return-qty-label">Diterima</span>
+                    <span class="customer-return-qty-value">${Number(row.total_received || 0)}</span>
+                </div>
+                <div class="customer-return-qty-pill is-good">
+                    <span class="customer-return-qty-label">Bagus</span>
+                    <span class="customer-return-qty-value">${Number(row.total_good || 0)}</span>
+                </div>
+                <div class="customer-return-qty-pill is-damaged">
+                    <span class="customer-return-qty-label">Rusak</span>
+                    <span class="customer-return-qty-value">${Number(row.total_damaged || 0)}</span>
+                </div>
+            </div>
+        `;
+
+        const actionMenuHtml = (row) => {
+            const actions = [];
+            actions.push(`<div class="menu-item px-3"><a href="${customerReturnShowUrlTpl.replace(':id', row.id)}" class="menu-link px-3">Detail</a></div>`);
+
+            if (row.can_finalize && canUpdateCustomerReturn) {
+                actions.push(`<div class="menu-item px-3"><a href="${customerReturnEditUrlTpl.replace(':id', row.id)}" class="menu-link px-3">Edit</a></div>`);
+                actions.push(`<div class="menu-item px-3"><a href="#" class="menu-link px-3 text-primary btn_finalize_customer_return" data-id="${row.id}">Finalisasi</a></div>`);
+            }
+
+            if (row.can_finalize && canDeleteCustomerReturn) {
+                actions.push(`<div class="menu-item px-3"><a href="#" class="menu-link px-3 text-danger btn_delete_customer_return" data-id="${row.id}">Hapus</a></div>`);
+            }
+
+            return `
+                <div class="customer-return-action-cell text-end">
+                    <a href="#" class="btn btn-sm btn-light btn-active-light-primary" data-kt-menu-trigger="click" data-kt-menu-placement="bottom-end">
+                        Aksi
+                        <span class="svg-icon svg-icon-5 m-0">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+                                <path d="M11.4343 12.7344L7.25 8.55005C6.83579 8.13583 6.16421 8.13584 5.75 8.55005C5.33579 8.96426 5.33579 9.63583 5.75 10.05L11.2929 15.5929C11.6834 15.9835 12.3166 15.9835 12.7071 15.5929L18.25 10.05C18.6642 9.63584 18.6642 8.96426 18.25 8.55005C17.8358 8.13584 17.1642 8.13584 16.75 8.55005L12.5657 12.7344C12.2533 13.0468 11.7467 13.0468 11.4343 12.7344Z" fill="black"></path>
+                            </svg>
+                        </span>
+                    </a>
+                    <div class="menu menu-sub menu-sub-dropdown menu-column menu-rounded menu-gray-600 menu-state-bg-light-primary fw-bold fs-7 w-175px py-3" data-kt-menu="true">
+                        ${actions.join('')}
+                    </div>
+                </div>
+            `;
+        };
 
         const showToast = (type, message) => {
             if (typeof Swal !== 'undefined' && Swal.fire) {
@@ -237,9 +607,7 @@
                 processing: true,
                 serverSide: true,
                 dom: 'rtip',
-                scrollX: true,
                 autoWidth: false,
-                order: [[5, 'desc']],
                 ajax: {
                     url: customerReturnDataUrl,
                     dataSrc: 'data',
@@ -260,63 +628,78 @@
                             }
 
                             return `
-                                <div class="form-check form-check-sm form-check-custom form-check-solid">
+                                <div class="form-check form-check-sm form-check-custom form-check-solid customer-return-row-select">
                                     <input class="form-check-input customer-return-checkbox" type="checkbox" value="${row.id}" />
                                 </div>
                             `;
                         },
                     },
-                    { data: 'id', visible: false },
-                    { data: 'code', name: 'code' },
                     {
                         data: null,
-                        name: 'resi_no',
+                        name: 'code',
                         render: function (data, type, row) {
-                            const orderRef = row.order_ref && row.order_ref !== '-' ? `<div class="text-muted fs-7">${row.order_ref}</div>` : '';
-                            return `
-                                <div class="fw-bold">${row.resi_no || '-'}</div>
-                                ${orderRef}
-                                ${matchBadgeHtml(row.matched)}
-                            `;
+                            if (type !== 'display') {
+                                return `${row.code || ''} ${row.resi_no || ''} ${row.order_ref || ''} ${row.status || ''}`;
+                            }
+
+                            return documentCellHtml(row);
                         },
                     },
                     {
-                        data: 'status',
-                        name: 'status',
-                        render: function (data) {
-                            return statusBadgeHtml(data);
+                        data: null,
+                        name: 'received_at',
+                        render: function (data, type, row) {
+                            if (type !== 'display') {
+                                return `${row.received_at || ''} ${row.submit_by || ''} ${row.inspected_by || ''} ${row.finalized_at || ''} ${row.finalized_by || ''}`;
+                            }
+
+                            return activityCellHtml(row);
                         },
                     },
-                    { data: 'received_at', name: 'received_at' },
-                    { data: 'order_ref', name: 'order_ref' },
-                    { data: 'item_summary', name: 'item_summary', orderable: false },
-                    { data: 'total_received', className: 'text-end', name: 'total_received', orderable: false },
-                    { data: 'total_good', className: 'text-end', name: 'total_good', orderable: false },
-                    { data: 'total_damaged', className: 'text-end', name: 'total_damaged', orderable: false },
-                    { data: 'note', name: 'note', orderable: false },
+                    {
+                        data: null,
+                        name: 'item_summary',
+                        orderable: false,
+                        render: function (data, type, row) {
+                            if (type !== 'display') {
+                                return `${row.item_summary || ''} ${row.note || ''}`;
+                            }
+
+                            return itemCellHtml(row);
+                        },
+                    },
+                    {
+                        data: null,
+                        orderable: false,
+                        searchable: false,
+                        render: function (data, type, row) {
+                            if (type !== 'display') {
+                                return `${row.total_received || 0} ${row.total_good || 0} ${row.total_damaged || 0}`;
+                            }
+
+                            return qtyCellHtml(row);
+                        },
+                    },
                     {
                         data: null,
                         orderable: false,
                         searchable: false,
                         className: 'text-end',
                         render: function (data, type, row) {
-                            const buttons = [];
-                            buttons.push(`<a href="${customerReturnShowUrlTpl.replace(':id', row.id)}" class="btn btn-sm btn-light">Detail</a>`);
-
-                            if (row.can_finalize && canUpdateCustomerReturn) {
-                                buttons.push(`<a href="${customerReturnEditUrlTpl.replace(':id', row.id)}" class="btn btn-sm btn-light-primary">Edit</a>`);
-                                buttons.push(`<button type="button" class="btn btn-sm btn-primary btn_finalize_customer_return" data-id="${row.id}">Finalisasi</button>`);
+                            if (type !== 'display') {
+                                return row.id;
                             }
 
-                            if (row.can_finalize && canDeleteCustomerReturn) {
-                                buttons.push(`<button type="button" class="btn btn-sm btn-light-danger btn_delete_customer_return" data-id="${row.id}">Hapus</button>`);
-                            }
-
-                            return `<div class="d-flex justify-content-end flex-wrap gap-2">${buttons.join('')}</div>`;
+                            return actionMenuHtml(row);
                         },
                     },
                 ],
+                drawCallback: function () {
+                    refreshMenus();
+                },
             });
+
+            refreshMenus();
         }
 
         searchInput?.addEventListener('input', debounce(() => dt?.ajax.reload(), 300));

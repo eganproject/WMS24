@@ -10,6 +10,18 @@
     $canDelete = Perm::can(auth()->user(), 'admin.inventory.damaged-allocations.index', 'delete');
 @endphp
 
+@push('styles')
+<style>
+    #modal_damaged_allocation .invalid-feedback.d-block:empty {
+        display: none !important;
+    }
+
+    #modal_damaged_allocation .select2-container .select2-selection.is-invalid {
+        border-color: var(--bs-danger, #f1416c) !important;
+    }
+</style>
+@endpush
+
 @section('content')
 <div class="card mb-6">
     <div class="card-header border-0 pt-6">
@@ -116,7 +128,7 @@
                                 <option value="disposal">Disposal</option>
                                 <option value="rework">Rework SKU</option>
                             </select>
-                            <div class="invalid-feedback" id="error_type"></div>
+                            <div class="invalid-feedback d-block" id="error_type"></div>
                         </div>
                         <div class="col-md-4" id="supplier_field_wrap" style="display:none;">
                             <label class="required fs-6 fw-bold form-label mb-2">Supplier</label>
@@ -126,7 +138,7 @@
                                     <option value="{{ $supplier->id }}">{{ $supplier->name }}</option>
                                 @endforeach
                             </select>
-                            <div class="invalid-feedback" id="error_supplier_id"></div>
+                            <div class="invalid-feedback d-block" id="error_supplier_id"></div>
                         </div>
                         <div class="col-md-4" id="recipe_field_wrap" style="display:none;">
                             <label class="fs-6 fw-bold form-label mb-2">Resep Rework</label>
@@ -134,7 +146,7 @@
                                 <option value="">Pilih resep rework</option>
                             </select>
                             <div class="form-text text-muted">Kosongkan bila ingin memakai mode manual legacy.</div>
-                            <div class="invalid-feedback" id="error_recipe_id"></div>
+                            <div class="invalid-feedback d-block" id="error_recipe_id"></div>
                         </div>
                         <div class="col-md-4" id="target_warehouse_wrap" style="display:none;">
                             <label class="required fs-6 fw-bold form-label mb-2">Gudang Hasil</label>
@@ -144,7 +156,7 @@
                                     <option value="{{ $warehouse->id }}">{{ $warehouse->name }}</option>
                                 @endforeach
                             </select>
-                            <div class="invalid-feedback" id="error_target_warehouse_id"></div>
+                            <div class="invalid-feedback d-block" id="error_target_warehouse_id"></div>
                         </div>
                     </div>
 
@@ -152,18 +164,18 @@
                         <div class="col-md-5">
                             <label class="fs-6 fw-bold form-label mb-2">Ref Alokasi</label>
                             <input type="text" class="form-control form-control-solid" name="source_ref" id="allocation_source_ref" placeholder="Contoh: BA retur, berita acara disposal, atau nomor pekerjaan rework" />
-                            <div class="invalid-feedback" id="error_source_ref"></div>
+                            <div class="invalid-feedback d-block" id="error_source_ref"></div>
                         </div>
                         <div class="col-md-3" id="recipe_multiplier_wrap" style="display:none;">
                             <label class="required fs-6 fw-bold form-label mb-2">Batch Recipe</label>
                             <input type="number" min="1" class="form-control form-control-solid" name="recipe_multiplier" id="allocation_recipe_multiplier" value="1" />
                             <div class="form-text text-muted">Multiplier untuk BOM recipe.</div>
-                            <div class="invalid-feedback" id="error_recipe_multiplier"></div>
+                            <div class="invalid-feedback d-block" id="error_recipe_multiplier"></div>
                         </div>
                         <div class="col-md-4">
                             <label class="required fs-6 fw-bold form-label mb-2">Tanggal</label>
                             <input type="text" class="form-control form-control-solid" name="transacted_at" id="allocation_transacted_at" placeholder="YYYY-MM-DD HH:mm" required />
-                            <div class="invalid-feedback" id="error_transacted_at"></div>
+                            <div class="invalid-feedback d-block" id="error_transacted_at"></div>
                         </div>
                     </div>
 
@@ -206,7 +218,7 @@
                     <div class="fv-row mt-8">
                         <label class="fs-6 fw-bold form-label mb-2">Catatan</label>
                         <textarea class="form-control form-control-solid" name="note" id="allocation_note" rows="3"></textarea>
-                        <div class="invalid-feedback" id="error_note"></div>
+                        <div class="invalid-feedback d-block" id="error_note"></div>
                     </div>
 
                     <div class="text-end pt-10">
@@ -300,8 +312,43 @@
             });
             sourceItemsContainer?.querySelectorAll('[data-error-for]').forEach(el => { el.textContent = ''; });
             outputItemsContainer?.querySelectorAll('[data-error-for]').forEach(el => { el.textContent = ''; });
-            sourceItemsContainer?.querySelectorAll('.allocation-source-select.is-invalid').forEach(el => el.classList.remove('is-invalid'));
-            outputItemsContainer?.querySelectorAll('.allocation-output-select.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+            form?.querySelectorAll('.is-invalid').forEach((el) => {
+                el.classList.remove('is-invalid');
+            });
+            modalEl?.querySelectorAll('.select2-selection.is-invalid').forEach((el) => {
+                el.classList.remove('is-invalid');
+            });
+        };
+
+        const setFieldInvalid = (fieldEl) => {
+            if (!fieldEl) return;
+            fieldEl.classList.add('is-invalid');
+            if (typeof $ !== 'undefined' && $.fn.select2 && $(fieldEl).data('select2')) {
+                $(fieldEl).next('.select2-container').find('.select2-selection').addClass('is-invalid');
+            }
+        };
+
+        const clearFieldInvalid = (fieldEl) => {
+            if (!fieldEl) return;
+            fieldEl.classList.remove('is-invalid');
+            if (typeof $ !== 'undefined' && $.fn.select2 && $(fieldEl).data('select2')) {
+                $(fieldEl).next('.select2-container').find('.select2-selection').removeClass('is-invalid');
+            }
+        };
+
+        const getTopLevelField = (key) => {
+            const fieldMap = {
+                type: typeEl,
+                supplier_id: supplierEl,
+                recipe_id: recipeEl,
+                recipe_multiplier: recipeMultiplierEl,
+                target_warehouse_id: targetWarehouseEl,
+                source_ref: document.getElementById('allocation_source_ref'),
+                transacted_at: transactedAtEl,
+                note: document.getElementById('allocation_note'),
+            };
+
+            return fieldMap[key] || null;
         };
 
         const ensureRecipeOption = (recipe) => {
@@ -477,10 +524,10 @@
                 const val = selectEl?.value;
                 if (selectEl && val && counts[val] > 1) {
                     hasDuplicate = true;
-                    selectEl.classList.add('is-invalid');
+                    setFieldInvalid(selectEl);
                     if (errEl) errEl.textContent = 'Sumber item rusak tidak boleh duplikat';
                 } else {
-                    selectEl?.classList.remove('is-invalid');
+                    clearFieldInvalid(selectEl);
                     if (errEl && errEl.textContent === 'Sumber item rusak tidak boleh duplikat') errEl.textContent = '';
                 }
             });
@@ -503,10 +550,10 @@
                 const val = selectEl?.value;
                 if (selectEl && val && counts[val] > 1) {
                     hasDuplicate = true;
-                    selectEl.classList.add('is-invalid');
+                    setFieldInvalid(selectEl);
                     if (errEl) errEl.textContent = 'Item output tidak boleh duplikat';
                 } else {
-                    selectEl?.classList.remove('is-invalid');
+                    clearFieldInvalid(selectEl);
                     if (errEl && errEl.textContent === 'Item output tidak boleh duplikat') errEl.textContent = '';
                 }
             });
@@ -546,12 +593,12 @@
                     <label class="required fs-6 fw-bold form-label mb-2">Sumber Item Rusak</label>
                     <select class="form-select form-select-solid allocation-source-select" data-name="damaged_good_item_id" required></select>
                     <div class="form-text text-muted" data-role="source-info">Pilih sumber item rusak.</div>
-                    <div class="invalid-feedback" data-error-for="damaged_good_item_id"></div>
+                    <div class="invalid-feedback d-block" data-error-for="damaged_good_item_id"></div>
                 </div>
                 <div class="col-md-2">
                     <label class="required fs-6 fw-bold form-label mb-2">Qty</label>
                     <input type="number" min="1" class="form-control form-control-solid" data-name="qty" required />
-                    <div class="invalid-feedback" data-error-for="qty"></div>
+                    <div class="invalid-feedback d-block" data-error-for="qty"></div>
                 </div>
                 <div class="col-md-3">
                     <label class="fs-6 fw-bold form-label mb-2">Catatan Item</label>
@@ -600,12 +647,12 @@
                         <option value=""></option>
                         ${itemOptionsHtml}
                     </select>
-                    <div class="invalid-feedback" data-error-for="item_id"></div>
+                    <div class="invalid-feedback d-block" data-error-for="item_id"></div>
                 </div>
                 <div class="col-md-2">
                     <label class="required fs-6 fw-bold form-label mb-2">Qty</label>
                     <input type="number" min="1" class="form-control form-control-solid" data-name="qty" required />
-                    <div class="invalid-feedback" data-error-for="qty"></div>
+                    <div class="invalid-feedback d-block" data-error-for="qty"></div>
                 </div>
                 <div class="col-md-3">
                     <label class="fs-6 fw-bold form-label mb-2">Catatan Output</label>
@@ -724,6 +771,9 @@
 
         sourceItemsContainer?.addEventListener('change', (e) => {
             if (e.target.matches('.allocation-source-select')) {
+                clearFieldInvalid(e.target);
+                const errEl = e.target.closest('.allocation-source-row')?.querySelector('[data-error-for="damaged_good_item_id"]');
+                if (errEl) errEl.textContent = '';
                 updateSourceInfo(e.target.closest('.allocation-source-row'));
                 validateUniqueSources();
                 renderRecipeSummary();
@@ -732,14 +782,48 @@
 
         sourceItemsContainer?.addEventListener('input', (e) => {
             if (e.target.matches('input[data-name="qty"]')) {
+                clearFieldInvalid(e.target);
+                const errEl = e.target.closest('.allocation-source-row')?.querySelector('[data-error-for="qty"]');
+                if (errEl) errEl.textContent = '';
                 renderRecipeSummary();
             }
         });
 
         outputItemsContainer?.addEventListener('change', (e) => {
             if (e.target.matches('.allocation-output-select')) {
+                clearFieldInvalid(e.target);
+                const errEl = e.target.closest('.allocation-output-row')?.querySelector('[data-error-for="item_id"]');
+                if (errEl) errEl.textContent = '';
                 validateUniqueOutputs();
             }
+        });
+
+        outputItemsContainer?.addEventListener('input', (e) => {
+            if (e.target.matches('input[data-name="qty"]')) {
+                clearFieldInvalid(e.target);
+                const errEl = e.target.closest('.allocation-output-row')?.querySelector('[data-error-for="qty"]');
+                if (errEl) errEl.textContent = '';
+            }
+        });
+
+        form?.addEventListener('input', (e) => {
+            const target = e.target;
+            if (!(target instanceof HTMLElement)) return;
+            const fieldName = target.getAttribute('name');
+            if (!fieldName || fieldName.includes('[')) return;
+            clearFieldInvalid(target);
+            const errEl = document.getElementById(`error_${fieldName}`);
+            if (errEl) errEl.textContent = '';
+        });
+
+        form?.addEventListener('change', (e) => {
+            const target = e.target;
+            if (!(target instanceof HTMLElement)) return;
+            const fieldName = target.getAttribute('name');
+            if (!fieldName || fieldName.includes('[')) return;
+            clearFieldInvalid(target);
+            const errEl = document.getElementById(`error_${fieldName}`);
+            if (errEl) errEl.textContent = '';
         });
 
         sourceItemsContainer?.addEventListener('click', (e) => {
@@ -1029,7 +1113,9 @@
                                 const idx = parseInt(parts[1], 10);
                                 const field = parts[2];
                                 const row = sourceItemsContainer.querySelectorAll('.allocation-source-row')[idx];
+                                const fieldEl = row ? row.querySelector(`[data-name="${field}"]`) : null;
                                 const errEl = row ? row.querySelector(`[data-error-for="${field}"]`) : null;
+                                if (fieldEl) setFieldInvalid(fieldEl);
                                 if (errEl) errEl.textContent = msgs.join(', ');
                                 else unhandled.push(msgs.join(', '));
                             } else if (key.startsWith('output_items.')) {
@@ -1037,11 +1123,15 @@
                                 const idx = parseInt(parts[1], 10);
                                 const field = parts[2];
                                 const row = outputItemsContainer.querySelectorAll('.allocation-output-row')[idx];
+                                const fieldEl = row ? row.querySelector(`[data-name="${field}"]`) : null;
                                 const errEl = row ? row.querySelector(`[data-error-for="${field}"]`) : null;
+                                if (fieldEl) setFieldInvalid(fieldEl);
                                 if (errEl) errEl.textContent = msgs.join(', ');
                                 else unhandled.push(msgs.join(', '));
                             } else {
+                                const fieldEl = getTopLevelField(key);
                                 const errEl = document.getElementById(`error_${key}`);
+                                if (fieldEl) setFieldInvalid(fieldEl);
                                 if (errEl) errEl.textContent = msgs.join(', ');
                                 else unhandled.push(msgs.join(', '));
                             }

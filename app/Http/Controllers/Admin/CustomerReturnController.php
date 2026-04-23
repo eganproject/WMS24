@@ -223,18 +223,17 @@ class CustomerReturnController extends Controller
 
     public function show(int $id)
     {
-        $customerReturn = CustomerReturn::with(['items.item', 'damagedGood'])
+        $customerReturn = CustomerReturn::with(['items.item', 'damagedGood', 'creator', 'inspector', 'finalizer', 'resi'])
             ->findOrFail($id);
 
-        return view('admin.inventory.customer-returns.form', $this->formViewData(
-            customerReturn: $customerReturn,
-            readOnly: true,
-            pageTitle: 'Detail Retur Customer',
-            pageHeading: 'Detail Retur Customer',
-            submitLabel: null,
-            formAction: '#',
-            backUrl: route('admin.inventory.customer-returns.index')
-        ));
+        return view('admin.inventory.customer-returns.show', [
+            'customerReturn' => $customerReturn,
+            'pageTitle' => 'Detail Retur Customer',
+            'pageHeading' => 'Detail Retur Customer',
+            'backUrl' => route('admin.inventory.customer-returns.index'),
+            'displayWarehouseLabel' => $this->displayWarehouseLabel(),
+            'damagedWarehouseLabel' => $this->damagedWarehouseLabel(),
+        ]);
     }
 
     public function edit(int $id)

@@ -5,6 +5,7 @@ namespace App\Imports;
 use App\Models\Item;
 use App\Models\Supplier;
 use App\Models\Warehouse;
+use App\Support\OutboundKoliExpectation;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 use Maatwebsite\Excel\Concerns\SkipsEmptyRows;
@@ -32,13 +33,14 @@ class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
         $headers = array_keys($first?->toArray() ?? []);
         if (!in_array('sku', $headers, true)) {
             throw ValidationException::withMessages([
-                'file' => 'Header wajib: sku, qty (opsional: ref_no, note, item_note, transacted_at, warehouse/gudang)',
+                'file' => 'Header wajib: sku, qty/koli (opsional: ref_no, note, item_note, transacted_at, warehouse/gudang)',
             ]);
         }
         $qtyKey = $this->detectQtyKey($headers);
-        if ($qtyKey === null) {
+        $koliKey = $this->detectKoliKey($headers);
+        if ($qtyKey === null && $koliKey === null) {
             throw ValidationException::withMessages([
-                'file' => 'Header qty wajib (gunakan: qty/quantity/jumlah/stok/stock)',
+                'file' => 'Header qty/koli wajib (gunakan: qty/quantity/jumlah/stok/stock atau koli/kolian/isi_koli)',
             ]);
         }
         if ($this->requireSupplier && $this->detectSupplierKey($headers) === null) {
@@ -55,7 +57,7 @@ class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
             ->unique()
             ->values();
 
-        $items = Item::whereIn('sku', $skus)->get(['id', 'sku']);
+        $items = Item::whereIn('sku', $skus)->get(['id', 'sku', 'koli_qty'])->keyBy('sku');
         $skuMap = $items->pluck('id', 'sku')->all();
 
         $missing = [];
@@ -71,8 +73,27 @@ class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
                 $missing[$sku] = true;
                 continue;
             }
-            $qty = $this->parseQty($row, $qtyKey);
-            if ($qty <= 0) {
+            $item = $items->get($sku);
+            $qty = $qtyKey ? $this->parseQty($row, $qtyKey) : 0;
+            $koli = $koliKey ? $this->parseQty($row, $koliKey) : 0;
+
+            if (!$item) {
+                $missing[$sku] = true;
+                continue;
+            }
+
+            $resolved = [
+                'qty' => $qty,
+            ];
+
+            if ($this->requireSupplier || $koli > 0) {
+                try {
+                    $resolved = OutboundKoliExpectation::resolve($item, $qty, $koli > 0 ? $koli : null);
+                } catch (ValidationException $e) {
+                    $errors[] = "Baris {$rowIndex}: ".(collect($e->errors())->flatten()->first() ?? $e->getMessage());
+                    continue;
+                }
+            } elseif ($qty <= 0) {
                 $errors[] = "Baris {$rowIndex}: qty tidak valid untuk SKU {$sku}";
                 continue;
             }
@@ -119,11 +140,11 @@ class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
             if (!isset($this->groups[$groupKey]['items'][$itemId])) {
                 $this->groups[$groupKey]['items'][$itemId] = [
                     'item_id' => $itemId,
-                    'qty' => $qty,
+                    'qty' => $resolved['qty'],
                     'note' => $itemNote !== '' ? $itemNote : null,
                 ];
             } else {
-                $this->groups[$groupKey]['items'][$itemId]['qty'] += $qty;
+                $this->groups[$groupKey]['items'][$itemId]['qty'] += $resolved['qty'];
                 if ($itemNote !== '' && empty($this->groups[$groupKey]['items'][$itemId]['note'])) {
                     $this->groups[$groupKey]['items'][$itemId]['note'] = $itemNote;
                 }
@@ -166,6 +187,17 @@ class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
                 return $key;
             }
         }
+        return null;
+    }
+
+    private function detectKoliKey(array $headers): ?string
+    {
+        foreach (['koli', 'kolian', 'isi_koli', 'koli_qty', 'qty_koli'] as $key) {
+            if (in_array($key, $headers, true)) {
+                return $key;
+            }
+        }
+
         return null;
     }
 

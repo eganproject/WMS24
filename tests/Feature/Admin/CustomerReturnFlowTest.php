@@ -275,6 +275,45 @@ class CustomerReturnFlowTest extends TestCase
         ]);
     }
 
+    public function test_show_route_renders_document_style_detail_page(): void
+    {
+        $this->createWarehouseFixtures();
+
+        $item = Item::create([
+            'sku' => 'SKU-RET-DOC',
+            'name' => 'Item Retur Dokumen',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+        ]);
+
+        $customerReturn = CustomerReturn::create([
+            'code' => 'CRT-TEST-DOC',
+            'resi_no' => 'RESI-DOC-001',
+            'order_ref' => 'ORD-DOC-001',
+            'received_at' => now(),
+            'inspected_at' => now(),
+            'status' => CustomerReturn::STATUS_INSPECTED,
+            'note' => 'Catatan dokumen retur',
+        ]);
+
+        $customerReturn->items()->create([
+            'item_id' => $item->id,
+            'expected_qty' => 2,
+            'received_qty' => 1,
+            'good_qty' => 1,
+            'damaged_qty' => 0,
+            'note' => 'Satu unit diterima',
+        ]);
+
+        $response = $this->withoutMiddleware()->get(route('admin.inventory.customer-returns.show', $customerReturn->id));
+
+        $response->assertOk()
+            ->assertSee('CRT-TEST-DOC')
+            ->assertSee('Dokumen retur customer untuk inspeksi dan finalisasi stok.')
+            ->assertSee('SKU-RET-DOC')
+            ->assertSee('Catatan dokumen retur');
+    }
+
     private function createWarehouseFixtures(): array
     {
         $mainWarehouse = Warehouse::firstOrCreate(

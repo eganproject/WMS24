@@ -233,7 +233,7 @@
                 <div class="modal-body scroll-y mx-5 mx-xl-15 my-7">
                     <div class="mb-6">
                         <div class="text-muted fs-7">
-                            @if(!empty($enableKoli ?? false))
+                            @if(!empty($allowKoliImport ?? ($enableKoli ?? false)))
                                 Header minimal: <strong>sku</strong>, <strong>qty</strong> atau <strong>koli</strong>
                             @else
                                 Header minimal: <strong>sku</strong>, <strong>qty</strong>
@@ -590,6 +590,7 @@
             itemsContainer?.querySelectorAll('[data-error-for]')?.forEach(el => { el.textContent = ''; });
             itemsContainer?.querySelectorAll('.flow-item-select.is-invalid')?.forEach(el => { el.classList.remove('is-invalid'); });
             itemsContainer?.querySelectorAll('input[data-name="qty"].is-invalid')?.forEach(el => { el.classList.remove('is-invalid'); });
+            itemsContainer?.querySelectorAll('input[data-name="koli"].is-invalid')?.forEach(el => { el.classList.remove('is-invalid'); });
         };
 
         const hasMeaningfulItemRows = () => {
@@ -801,21 +802,34 @@
             updateKoliInfo(row);
         };
 
+        const resolveQtyKoliSource = (row) => {
+            if (!enableKoli || !row) return '';
+            const explicitSource = row.dataset.qtyKoliSource || '';
+            if (explicitSource === 'qty' || explicitSource === 'koli') {
+                return explicitSource;
+            }
+
+            const qtyVal = getPositiveIntValue(row.querySelector('input[data-name="qty"]'));
+            const koliVal = getPositiveIntValue(row.querySelector('input[data-name="koli"]'));
+
+            if (koliVal) return 'koli';
+            if (qtyVal) return 'qty';
+            return '';
+        };
+
         const handleItemSelectionChange = (selectEl) => {
             if (!selectEl?.matches('.flow-item-select')) return;
             validateUniqueItems();
             const row = selectEl.closest('.flow-item-row');
             if (!row) return;
-            window.requestAnimationFrame(() => {
-                syncQtyKoliRow(row, row.dataset.qtyKoliSource || '');
-            });
+            const source = resolveQtyKoliSource(row);
+            row.dataset.qtyKoliSource = source;
+            window.setTimeout(() => {
+                syncQtyKoliRow(row, source);
+            }, 0);
         };
 
         const initSelect2 = (selectEl) => {
-            if (selectEl && !selectEl.dataset.qtyKoliBound) {
-                selectEl.addEventListener('change', () => handleItemSelectionChange(selectEl));
-                selectEl.dataset.qtyKoliBound = '1';
-            }
             if (selectEl && typeof $ !== 'undefined' && $.fn.select2) {
                 $(selectEl).select2({
                     placeholder: 'Pilih item',
@@ -824,7 +838,15 @@
                     dropdownParent: modalContentEl,
                     minimumResultsForSearch: 0,
                 })
+                    .on('change.qtyKoli select2:select.qtyKoli select2:clear.qtyKoli', () => handleItemSelectionChange(selectEl))
                     .on('select2:opening select2:closing select2:close', function(e){ e.stopPropagation(); });
+                selectEl.dataset.qtyKoliBound = '1';
+                return;
+            }
+
+            if (selectEl && !selectEl.dataset.qtyKoliBound) {
+                selectEl.addEventListener('change', () => handleItemSelectionChange(selectEl));
+                selectEl.dataset.qtyKoliBound = '1';
             }
         };
 
@@ -903,6 +925,7 @@
                 <div class="col-md-2">
                     <label class="fs-6 fw-bold form-label mb-2">Koli</label>
                     <input type="number" min="1" class="form-control form-control-solid" data-name="koli" />
+                    <div class="invalid-feedback" data-error-for="koli"></div>
                     <div class="form-text small text-muted" data-koli-info>Isi/Koli: -</div>
                 </div>
             ` : '';
@@ -1495,8 +1518,14 @@
                                 const field = parts[2];
                                 const row = itemsContainer.querySelectorAll('.flow-item-row')[idx];
                                 const errEl = row ? row.querySelector(`[data-error-for="${field}"]`) : null;
+                                const fieldEl = row
+                                    ? (field === 'item_id'
+                                        ? row.querySelector('.flow-item-select')
+                                        : row.querySelector(`[data-name="${field}"]`))
+                                    : null;
                                 if (errEl) errEl.textContent = msgs.join(', ');
                                 else unhandled.push(msgs.join(', '));
+                                if (fieldEl) fieldEl.classList.add('is-invalid');
                             } else {
                                 const errEl = document.getElementById(`error_${key}`);
                                 if (errEl) errEl.textContent = msgs.join(', ');

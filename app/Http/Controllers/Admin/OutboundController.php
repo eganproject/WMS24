@@ -11,6 +11,7 @@ use App\Models\Warehouse;
 use App\Models\StockMutation;
 use App\Imports\OutboundReturnsImport;
 use App\Support\BundleService;
+use App\Support\OutboundKoliExpectation;
 use App\Support\StockService;
 use App\Support\Permission;
 use App\Support\WarehouseService;
@@ -350,6 +351,8 @@ class OutboundController extends Controller
             'defaultWarehouseId' => WarehouseService::defaultWarehouseId(),
             'displayWarehouseId' => WarehouseService::displayWarehouseId(),
             'enableWarehouseSelect' => $type === 'manual',
+            'enableKoli' => $type === 'return',
+            'allowKoliImport' => $type === 'return',
             'suppliers' => $suppliers,
             'supplierFlowTypes' => $this->usesSupplier($type) ? [$type] : [],
             'showSupplierColumn' => $this->usesSupplier($type),
@@ -479,7 +482,7 @@ class OutboundController extends Controller
 
     private function show(string $type, int $id)
     {
-        $tx = OutboundTransaction::with(['items', 'supplier'])
+        $tx = OutboundTransaction::with(['items.item:id,koli_qty', 'supplier'])
             ->where('type', $type)
             ->findOrFail($id);
 
@@ -493,10 +496,18 @@ class OutboundController extends Controller
             'status' => $tx->status ?? 'pending',
             'warehouse_id' => $tx->warehouse_id,
             'transacted_at' => $tx->transacted_at?->format('Y-m-d\TH:i'),
-            'items' => $tx->items->map(function ($item) {
+            'items' => $tx->items->map(function ($item) use ($type) {
+                $qty = (int) $item->qty;
+                $qtyPerKoli = (int) ($item->item?->koli_qty ?? 0);
+                $koli = null;
+                if ($type === 'return' && $qty > 0 && $qtyPerKoli > 0 && $qty % $qtyPerKoli === 0) {
+                    $koli = (int) ($qty / $qtyPerKoli);
+                }
+
                 return [
                     'item_id' => $item->item_id,
-                    'qty' => $item->qty,
+                    'qty' => $qty,
+                    'koli' => $koli,
                     'note' => $item->note ?? '',
                 ];
             })->values(),
@@ -738,6 +749,7 @@ class OutboundController extends Controller
             'items' => ['required', 'array', 'min:1'],
             'items.*.item_id' => ['required', 'integer', 'exists:items,id'],
             'items.*.qty' => ['required', 'integer', 'min:1'],
+            'items.*.koli' => ['nullable', 'integer', 'min:1'],
             'items.*.note' => ['nullable', 'string'],
             'ref_no' => ['nullable', 'string', 'max:100'],
             'supplier_id' => $usesSupplier
@@ -754,12 +766,40 @@ class OutboundController extends Controller
             ]);
         }
 
-        $items = collect($validated['items'] ?? [])
+        $rawItems = collect($validated['items'] ?? [])->values();
+        $itemMap = Item::query()
+            ->whereIn('id', $rawItems->pluck('item_id')->filter()->map(fn ($id) => (int) $id)->all())
+            ->get(['id', 'sku', 'item_type', 'koli_qty'])
+            ->keyBy('id');
+
+        $items = $rawItems
             ->filter(fn ($row) => (int) ($row['qty'] ?? 0) > 0 && (int) ($row['item_id'] ?? 0) > 0)
-            ->map(function ($row) {
+            ->map(function ($row, $index) use ($itemMap, $type) {
+                $itemId = (int) ($row['item_id'] ?? 0);
+                $item = $itemMap->get($itemId);
+
+                if (!$item) {
+                    throw ValidationException::withMessages([
+                        "items.{$index}.item_id" => 'Item outbound tidak ditemukan.',
+                    ]);
+                }
+
+                $qty = (int) ($row['qty'] ?? 0);
+                if ($type === 'return') {
+                    try {
+                        $qty = OutboundKoliExpectation::resolve($item, $qty, $row['koli'] ?? null)['qty'];
+                    } catch (ValidationException $e) {
+                        $message = collect($e->errors())->flatten()->first() ?? $e->getMessage();
+                        throw ValidationException::withMessages([
+                            "items.{$index}.qty" => $message,
+                            "items.{$index}.koli" => $message,
+                        ]);
+                    }
+                }
+
                 return [
-                    'item_id' => (int) $row['item_id'],
-                    'qty' => (int) $row['qty'],
+                    'item_id' => $itemId,
+                    'qty' => $qty,
                     'note' => $row['note'] ?? null,
                 ];
             })->values();

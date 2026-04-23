@@ -506,7 +506,7 @@ class CustomerReturnController extends Controller
 
         $damagedGood = DamagedGood::create([
             'code' => $this->generateCode('DMG'),
-            'source_type' => 'customer_return',
+            'source_type' => DamagedGood::SOURCE_CUSTOMER_RETURN,
             'source_warehouse_id' => null,
             'source_ref' => $sourceRef,
             'note' => $customerReturn->note,
@@ -522,6 +522,7 @@ class CustomerReturnController extends Controller
                 'damaged_good_id' => $damagedGood->id,
                 'item_id' => $row->item_id,
                 'qty' => (int) $row->damaged_qty,
+                'reason_code' => DamagedGoodItem::REASON_CUSTOMER_RETURN,
                 'note' => $row->note,
             ]);
 

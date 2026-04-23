@@ -2,13 +2,19 @@
 
 namespace App\Support;
 
+use App\Models\DamagedGood;
 use App\Models\DamagedAllocationItem;
 use App\Models\DamagedGoodItem;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 
 class DamagedStockService
 {
+    public const AGE_BUCKET_0_7 = '0_7';
+    public const AGE_BUCKET_8_30 = '8_30';
+    public const AGE_BUCKET_31_60 = '31_60';
+    public const AGE_BUCKET_61_PLUS = '61_plus';
+
     public static function approvedAllocationTotalsSubquery(?int $excludeAllocationId = null)
     {
         $query = DamagedAllocationItem::query()
@@ -69,8 +75,111 @@ class DamagedStockService
 
     public static function availableSourceLines(?string $search = null, ?int $excludeAllocationId = null, bool $exact = false): Collection
     {
+        return self::remainingSourceLines($search, $excludeAllocationId, $exact)
+            ->map(function (array $row) {
+                $row['label'] = sprintf(
+                    '%s - %s | Intake %s | Sisa %d',
+                    $row['item_sku'],
+                    $row['item_name'],
+                    $row['damage_code'],
+                    $row['remaining_qty']
+                );
+
+                return $row;
+            })
+            ->values();
+    }
+
+    public static function remainingSourceLines(
+        ?string $search = null,
+        ?int $excludeAllocationId = null,
+        bool $exact = false,
+        ?string $reasonCode = null
+    ): Collection {
+        $query = self::remainingSourceLinesQuery($excludeAllocationId);
+
+        $search = trim((string) $search);
+        if ($search !== '') {
+            $query->where(function ($q) use ($search, $exact) {
+                if ($exact) {
+                    $lowered = mb_strtolower($search);
+                    $q->whereRaw('LOWER(damaged_goods.code) = ?', [$lowered])
+                        ->orWhereRaw('LOWER(items.sku) = ?', [$lowered])
+                        ->orWhereRaw('LOWER(items.name) = ?', [$lowered])
+                        ->orWhereRaw('LOWER(source_warehouses.name) = ?', [$lowered])
+                        ->orWhereRaw('LOWER(damaged_good_items.reason_code) = ?', [$lowered]);
+
+                    return;
+                }
+
+                $q->where('damaged_goods.code', 'like', "%{$search}%")
+                    ->orWhere('items.sku', 'like', "%{$search}%")
+                    ->orWhere('items.name', 'like', "%{$search}%")
+                    ->orWhere('source_warehouses.name', 'like', "%{$search}%")
+                    ->orWhere('damaged_good_items.reason_code', 'like', "%{$search}%");
+            });
+        }
+
+        $reasonCode = trim((string) $reasonCode);
+        if ($reasonCode !== '') {
+            $query->where('damaged_good_items.reason_code', $reasonCode);
+        }
+
+        $today = now()->startOfDay();
+
+        return $query->get()->map(function ($row) use ($today) {
+            $reasonCode = (string) ($row->reason_code ?: DamagedGoodItem::REASON_OTHER);
+            $transactedAt = $row->damage_transacted_at ? Carbon::parse($row->damage_transacted_at) : null;
+            $ageDays = $transactedAt ? $transactedAt->copy()->startOfDay()->diffInDays($today) : 0;
+
+            return [
+                'id' => (int) $row->id,
+                'damaged_good_id' => (int) $row->damaged_good_id,
+                'item_id' => (int) $row->item_id,
+                'received_qty' => (int) $row->received_qty,
+                'allocated_qty' => (int) $row->allocated_qty,
+                'remaining_qty' => (int) $row->remaining_qty,
+                'reason_code' => $reasonCode,
+                'reason_label' => DamagedGoodItem::reasonLabel($reasonCode),
+                'damage_code' => (string) $row->damage_code,
+                'damage_transacted_at' => $transactedAt,
+                'damage_source_type' => (string) $row->damage_source_type,
+                'damage_source_label' => DamagedGood::sourceLabelFor((string) $row->damage_source_type),
+                'item_sku' => (string) $row->item_sku,
+                'item_name' => (string) $row->item_name,
+                'source_warehouse_name' => (string) ($row->source_warehouse_name ?? '-'),
+                'age_days' => $ageDays,
+                'age_bucket' => self::ageBucket($ageDays),
+                'age_bucket_label' => self::ageBucketLabels()[self::ageBucket($ageDays)],
+            ];
+        })->values();
+    }
+
+    public static function ageBucket(int $ageDays): string
+    {
+        return match (true) {
+            $ageDays <= 7 => self::AGE_BUCKET_0_7,
+            $ageDays <= 30 => self::AGE_BUCKET_8_30,
+            $ageDays <= 60 => self::AGE_BUCKET_31_60,
+            default => self::AGE_BUCKET_61_PLUS,
+        };
+    }
+
+    public static function ageBucketLabels(): array
+    {
+        return [
+            self::AGE_BUCKET_0_7 => '0-7 hari',
+            self::AGE_BUCKET_8_30 => '8-30 hari',
+            self::AGE_BUCKET_31_60 => '31-60 hari',
+            self::AGE_BUCKET_61_PLUS => '>60 hari',
+        ];
+    }
+
+    private static function remainingSourceLinesQuery(?int $excludeAllocationId = null)
+    {
         $allocatedSub = self::approvedAllocationTotalsSubquery($excludeAllocationId);
-        $query = DamagedGoodItem::query()
+
+        return DamagedGoodItem::query()
             ->join('damaged_goods', 'damaged_goods.id', '=', 'damaged_good_items.damaged_good_id')
             ->join('items', 'items.id', '=', 'damaged_good_items.item_id')
             ->leftJoin('warehouses as source_warehouses', 'source_warehouses.id', '=', 'damaged_goods.source_warehouse_id')
@@ -82,6 +191,7 @@ class DamagedStockService
                 damaged_good_items.id,
                 damaged_good_items.damaged_good_id,
                 damaged_good_items.item_id,
+                damaged_good_items.reason_code,
                 damaged_good_items.qty as received_qty,
                 COALESCE(allocated.allocated_qty, 0) as allocated_qty,
                 CASE
@@ -98,49 +208,5 @@ class DamagedStockService
             ->whereRaw('(damaged_good_items.qty - COALESCE(allocated.allocated_qty, 0)) > 0')
             ->orderBy('damaged_goods.transacted_at')
             ->orderBy('damaged_good_items.id');
-
-        $search = trim((string) $search);
-        if ($search !== '') {
-            $query->where(function ($q) use ($search, $exact) {
-                if ($exact) {
-                    $lowered = mb_strtolower($search);
-                    $q->whereRaw('LOWER(damaged_goods.code) = ?', [$lowered])
-                        ->orWhereRaw('LOWER(items.sku) = ?', [$lowered])
-                        ->orWhereRaw('LOWER(items.name) = ?', [$lowered])
-                        ->orWhereRaw('LOWER(source_warehouses.name) = ?', [$lowered]);
-
-                    return;
-                }
-
-                $q->where('damaged_goods.code', 'like', "%{$search}%")
-                    ->orWhere('items.sku', 'like', "%{$search}%")
-                    ->orWhere('items.name', 'like', "%{$search}%")
-                    ->orWhere('source_warehouses.name', 'like', "%{$search}%");
-            });
-        }
-
-        return $query->get()->map(function ($row) {
-            return [
-                'id' => (int) $row->id,
-                'damaged_good_id' => (int) $row->damaged_good_id,
-                'item_id' => (int) $row->item_id,
-                'received_qty' => (int) $row->received_qty,
-                'allocated_qty' => (int) $row->allocated_qty,
-                'remaining_qty' => (int) $row->remaining_qty,
-                'damage_code' => (string) $row->damage_code,
-                'damage_transacted_at' => $row->damage_transacted_at,
-                'damage_source_type' => (string) $row->damage_source_type,
-                'item_sku' => (string) $row->item_sku,
-                'item_name' => (string) $row->item_name,
-                'source_warehouse_name' => (string) ($row->source_warehouse_name ?? '-'),
-                'label' => sprintf(
-                    '%s - %s | Intake %s | Sisa %d',
-                    $row->item_sku,
-                    $row->item_name,
-                    $row->damage_code,
-                    (int) $row->remaining_qty
-                ),
-            ];
-        })->values();
     }
 }

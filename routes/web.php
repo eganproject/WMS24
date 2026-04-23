@@ -197,6 +197,8 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         // Damaged Goods
         Route::get('/damaged-goods', [DamagedGoodsController::class, 'index'])->name('damaged-goods.index');
         Route::get('/damaged-goods/data', [DamagedGoodsController::class, 'data'])->name('damaged-goods.data');
+        Route::get('/damaged-goods/summary-by-sku', [DamagedGoodsController::class, 'summaryBySku'])->name('damaged-goods.summary-by-sku');
+        Route::get('/damaged-goods/aging-summary', [DamagedGoodsController::class, 'agingSummary'])->name('damaged-goods.aging-summary');
         Route::post('/damaged-goods', [DamagedGoodsController::class, 'store'])->name('damaged-goods.store');
         Route::get('/damaged-goods/{id}', [DamagedGoodsController::class, 'show'])->name('damaged-goods.show');
         Route::put('/damaged-goods/{id}', [DamagedGoodsController::class, 'update'])->name('damaged-goods.update');

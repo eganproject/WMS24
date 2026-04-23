@@ -9,6 +9,12 @@ class DamagedGood extends Model
 {
     use HasFactory;
 
+    public const SOURCE_WAREHOUSE = 'warehouse';
+    public const SOURCE_INBOUND_RETURN = 'inbound_return';
+    public const SOURCE_CUSTOMER_RETURN = 'customer_return';
+    public const SOURCE_MANUAL = 'manual';
+    public const SOURCE_LEGACY_DISPLAY = 'display';
+
     protected $fillable = [
         'code',
         'source_type',
@@ -57,5 +63,39 @@ class DamagedGood extends Model
             'id',
             'id'
         );
+    }
+
+    public static function sourceLabels(): array
+    {
+        return [
+            self::SOURCE_WAREHOUSE => 'Stok Gudang',
+            self::SOURCE_INBOUND_RETURN => 'Retur Inbound',
+            self::SOURCE_CUSTOMER_RETURN => 'Retur Customer',
+            self::SOURCE_MANUAL => 'Manual',
+            self::SOURCE_LEGACY_DISPLAY => 'Display (Legacy)',
+        ];
+    }
+
+    public static function creatableSourceLabels(): array
+    {
+        return [
+            self::SOURCE_WAREHOUSE => self::sourceLabels()[self::SOURCE_WAREHOUSE],
+            self::SOURCE_INBOUND_RETURN => self::sourceLabels()[self::SOURCE_INBOUND_RETURN],
+            self::SOURCE_MANUAL => self::sourceLabels()[self::SOURCE_MANUAL],
+        ];
+    }
+
+    public static function creatableSourceTypes(): array
+    {
+        return array_keys(self::creatableSourceLabels());
+    }
+
+    public static function sourceLabelFor(?string $sourceType): string
+    {
+        if (!$sourceType) {
+            return '-';
+        }
+
+        return self::sourceLabels()[$sourceType] ?? $sourceType;
     }
 }

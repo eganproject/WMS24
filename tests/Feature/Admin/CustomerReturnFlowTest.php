@@ -3,6 +3,8 @@
 namespace Tests\Feature\Admin;
 
 use App\Models\CustomerReturn;
+use App\Models\DamagedGood;
+use App\Models\DamagedGoodItem;
 use App\Models\Item;
 use App\Models\Resi;
 use App\Models\ResiDetail;
@@ -256,13 +258,14 @@ class CustomerReturnFlowTest extends TestCase
         ]);
         $this->assertDatabaseHas('damaged_goods', [
             'id' => $customerReturn->damaged_good_id,
-            'source_type' => 'customer_return',
+            'source_type' => DamagedGood::SOURCE_CUSTOMER_RETURN,
             'status' => 'approved',
         ]);
         $this->assertDatabaseHas('damaged_good_items', [
             'damaged_good_id' => $customerReturn->damaged_good_id,
             'item_id' => $item->id,
             'qty' => 1,
+            'reason_code' => DamagedGoodItem::REASON_CUSTOMER_RETURN,
         ]);
         $this->assertDatabaseHas('stock_mutations', [
             'item_id' => $item->id,

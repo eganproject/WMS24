@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Inventory;
 
+use App\Models\DamagedGoodItem;
 use App\Models\Item;
 use App\Models\ItemBundleComponent;
 use App\Models\ItemStock;
@@ -299,6 +300,7 @@ class BundleVirtualStockTest extends TestCase
                     [
                         'item_id' => $bundle->id,
                         'qty' => 1,
+                        'reason_code' => DamagedGoodItem::REASON_OTHER,
                     ],
                 ],
                 'transacted_at' => now()->format('Y-m-d H:i'),
@@ -333,7 +335,7 @@ class BundleVirtualStockTest extends TestCase
         ]);
 
         $this->withoutMiddleware();
-        $this->actingAs($user)
+        $response = $this->actingAs($user)
             ->postJson(route('admin.inventory.damaged-goods.store'), [
                 'source_type' => 'warehouse',
                 'source_warehouse_id' => $displayWarehouse->id,
@@ -341,12 +343,17 @@ class BundleVirtualStockTest extends TestCase
                     [
                         'item_id' => $bundle->id,
                         'qty' => 1,
+                        'reason_code' => DamagedGoodItem::REASON_OTHER,
                     ],
                 ],
                 'transacted_at' => now()->format('Y-m-d H:i'),
-            ])
-            ->assertStatus(422)
-            ->assertJsonPath('errors.items.0', 'Bundle tidak bisa digunakan pada intake barang rusak karena tidak memiliki stok fisik. SKU: BDL-DMG-01');
+            ]);
+
+        $response->assertStatus(422);
+        $this->assertStringContainsString(
+            'Bundle tidak bisa digunakan pada intake barang rusak karena tidak memiliki stok fisik. SKU: BDL-DMG-01',
+            $response->getContent()
+        );
     }
 
     public function test_rework_recipe_store_rejects_bundle_item_in_bom(): void

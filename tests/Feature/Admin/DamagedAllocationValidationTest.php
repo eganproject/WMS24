@@ -50,7 +50,7 @@ class DamagedAllocationValidationTest extends TestCase
 
         $damagedGood = DamagedGood::create([
             'code' => 'DMG-ALLOC-001',
-            'source_type' => 'manual',
+            'source_type' => DamagedGood::SOURCE_MANUAL,
             'source_warehouse_id' => null,
             'source_ref' => 'TEST',
             'transacted_at' => now(),
@@ -64,6 +64,7 @@ class DamagedAllocationValidationTest extends TestCase
             'damaged_good_id' => $damagedGood->id,
             'item_id' => $item->id,
             'qty' => 5,
+            'reason_code' => DamagedGoodItem::REASON_OTHER,
             'note' => 'stok rusak',
         ]);
 

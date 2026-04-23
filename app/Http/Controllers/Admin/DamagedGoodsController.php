@@ -14,6 +14,7 @@ use App\Support\StockService;
 use App\Support\WarehouseService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -37,9 +38,13 @@ class DamagedGoodsController extends Controller
         return view('admin.inventory.damaged-goods.index', [
             'items' => $items,
             'sourceWarehouses' => $sourceWarehouses,
+            'sourceTypeOptions' => DamagedGood::creatableSourceLabels(),
+            'reasonOptions' => DamagedGoodItem::reasonLabels(),
             'damagedWarehouseLabel' => $damagedWarehouseLabel,
             'defaultSourceWarehouseId' => WarehouseService::displayWarehouseId(),
             'dataUrl' => route('admin.inventory.damaged-goods.data'),
+            'summaryUrl' => route('admin.inventory.damaged-goods.summary-by-sku'),
+            'agingUrl' => route('admin.inventory.damaged-goods.aging-summary'),
             'storeUrl' => route('admin.inventory.damaged-goods.store'),
         ]);
     }
@@ -59,10 +64,19 @@ class DamagedGoodsController extends Controller
                 $q->orWhereHas('sourceWarehouse', function ($warehouseQ) use ($search, $exact) {
                     $this->applyTextSearch($warehouseQ, 'name', $search, $exact);
                     $this->applyTextSearch($warehouseQ, 'code', $search, $exact, 'or');
+                })->orWhereHas('items', function ($itemQ) use ($search, $exact) {
+                    $this->applyTextSearch($itemQ, 'reason_code', $search, $exact);
                 })->orWhereHas('items.item', function ($itemQ) use ($search, $exact) {
                     $this->applyTextSearch($itemQ, 'sku', $search, $exact);
                     $this->applyTextSearch($itemQ, 'name', $search, $exact, 'or');
                 });
+            });
+        }
+
+        $reasonCode = trim((string) $request->input('reason_code', ''));
+        if ($reasonCode !== '') {
+            $query->whereHas('items', function ($itemQ) use ($reasonCode) {
+                $itemQ->where('reason_code', $reasonCode);
             });
         }
 
@@ -101,6 +115,7 @@ class DamagedGoodsController extends Controller
             $remainingQty = (int) $items->sum(function ($item) use ($remainingMap) {
                 return (int) ($remainingMap[(int) $item->id]['remaining_qty'] ?? (int) $item->qty);
             });
+            $reasonSummary = $this->formatReasonSummary($items);
             return [
                 'id' => $row->id,
                 'code' => $row->code,
@@ -113,6 +128,7 @@ class DamagedGoodsController extends Controller
                 'qty' => $totalQty,
                 'allocated_qty' => $allocatedQty,
                 'remaining_qty' => $remainingQty,
+                'reason_summary' => $reasonSummary,
                 'note' => $note,
                 'status' => $row->status ?? 'pending',
             ];
@@ -123,6 +139,88 @@ class DamagedGoodsController extends Controller
             'recordsTotal' => $recordsTotal,
             'recordsFiltered' => $recordsFiltered,
             'data' => $data,
+        ]);
+    }
+
+    public function summaryBySku(Request $request)
+    {
+        $reasonCode = trim((string) $request->input('reason_code', ''));
+        $search = trim((string) $request->input('q', ''));
+        $exact = $this->isExactSearch($request);
+
+        $baseRows = $this->aggregateSummaryBySku(
+            DamagedStockService::remainingSourceLines(
+                search: null,
+                exact: false,
+                reasonCode: $reasonCode !== '' ? $reasonCode : null
+            )
+        );
+
+        $filteredRows = $this->aggregateSummaryBySku(
+            DamagedStockService::remainingSourceLines(
+                search: $search !== '' ? $search : null,
+                exact: $exact,
+                reasonCode: $reasonCode !== '' ? $reasonCode : null
+            )
+        );
+
+        $recordsTotal = $baseRows->count();
+        $recordsFiltered = $filteredRows->count();
+
+        $start = max(0, (int) $request->input('start', 0));
+        $length = (int) $request->input('length', 10);
+        if ($length > 0) {
+            $filteredRows = $filteredRows->slice($start, $length)->values();
+        }
+
+        return response()->json([
+            'draw' => (int) $request->input('draw'),
+            'recordsTotal' => $recordsTotal,
+            'recordsFiltered' => $recordsFiltered,
+            'data' => $filteredRows->values(),
+        ]);
+    }
+
+    public function agingSummary(Request $request)
+    {
+        $reasonCode = trim((string) $request->input('reason_code', ''));
+        $search = trim((string) $request->input('q', ''));
+
+        $lines = DamagedStockService::remainingSourceLines(
+            search: $search !== '' ? $search : null,
+            exact: $this->isExactSearch($request),
+            reasonCode: $reasonCode !== '' ? $reasonCode : null
+        );
+
+        $buckets = collect(DamagedStockService::ageBucketLabels())
+            ->mapWithKeys(function ($label, $code) {
+                return [
+                    $code => [
+                        'code' => $code,
+                        'label' => $label,
+                        'qty' => 0,
+                        'lines' => 0,
+                    ],
+                ];
+            });
+
+        foreach ($lines as $line) {
+            $bucketCode = $line['age_bucket'];
+            $bucket = $buckets[$bucketCode] ?? null;
+            if (!$bucket) {
+                continue;
+            }
+
+            $bucket['qty'] += (int) $line['remaining_qty'];
+            $bucket['lines'] += 1;
+            $buckets[$bucketCode] = $bucket;
+        }
+
+        return response()->json([
+            'total_remaining_qty' => (int) $lines->sum('remaining_qty'),
+            'total_lines' => (int) $lines->count(),
+            'total_skus' => (int) $lines->pluck('item_id')->unique()->count(),
+            'buckets' => $buckets->values(),
         ]);
     }
 
@@ -151,6 +249,7 @@ class DamagedGoodsController extends Controller
                     'damaged_good_id' => $damage->id,
                     'item_id' => $row['item_id'],
                     'qty' => $row['qty'],
+                    'reason_code' => $row['reason_code'],
                     'note' => $row['note'] ?? null,
                 ]);
             }
@@ -196,6 +295,8 @@ class DamagedGoodsController extends Controller
                 return [
                     'item_id' => $row->item_id,
                     'qty' => (int) $row->qty,
+                    'reason_code' => $row->reason_code ?: DamagedGoodItem::REASON_OTHER,
+                    'reason_label' => DamagedGoodItem::reasonLabel($row->reason_code),
                     'note' => $row->note,
                     'allocated_qty' => (int) ($state['allocated_qty'] ?? 0),
                     'remaining_qty' => (int) ($state['remaining_qty'] ?? (int) $row->qty),
@@ -235,6 +336,7 @@ class DamagedGoodsController extends Controller
                     'damaged_good_id' => $damage->id,
                     'item_id' => $row['item_id'],
                     'qty' => $row['qty'],
+                    'reason_code' => $row['reason_code'],
                     'note' => $row['note'] ?? null,
                 ]);
             }
@@ -383,12 +485,13 @@ class DamagedGoodsController extends Controller
     {
         $damagedWarehouseId = WarehouseService::damagedWarehouseId();
         $validated = $request->validate([
-            'source_type' => ['required', 'string', Rule::in(['warehouse', 'inbound_return', 'manual'])],
+            'source_type' => ['required', 'string', Rule::in(DamagedGood::creatableSourceTypes())],
             'source_warehouse_id' => ['required', 'integer', 'exists:warehouses,id'],
             'source_ref' => ['nullable', 'string', 'max:100'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.item_id' => ['required', 'integer', 'exists:items,id'],
             'items.*.qty' => ['required', 'integer', 'min:1'],
+            'items.*.reason_code' => ['required', 'string', Rule::in(array_keys(DamagedGoodItem::reasonLabels()))],
             'items.*.note' => ['nullable', 'string'],
             'note' => ['nullable', 'string'],
             'transacted_at' => ['required', 'date'],
@@ -400,6 +503,7 @@ class DamagedGoodsController extends Controller
                 return [
                     'item_id' => (int) $row['item_id'],
                     'qty' => (int) $row['qty'],
+                    'reason_code' => (string) ($row['reason_code'] ?? DamagedGoodItem::REASON_OTHER),
                     'note' => $row['note'] ?? null,
                 ];
             })->values();
@@ -446,13 +550,7 @@ class DamagedGoodsController extends Controller
 
     private function sourceLabels(): array
     {
-        return [
-            'warehouse' => 'Stok Gudang',
-            'inbound_return' => 'Retur Inbound',
-            'customer_return' => 'Retur Customer',
-            'manual' => 'Manual',
-            'display' => 'Display (Legacy)',
-        ];
+        return DamagedGood::sourceLabels();
     }
 
     private function resolveSourceWarehouseId(DamagedGood $damage): int
@@ -463,20 +561,75 @@ class DamagedGoodsController extends Controller
         }
 
         return match ($damage->source_type) {
-            'display' => WarehouseService::displayWarehouseId(),
-            'customer_return' => 0,
+            DamagedGood::SOURCE_LEGACY_DISPLAY => WarehouseService::displayWarehouseId(),
+            DamagedGood::SOURCE_CUSTOMER_RETURN => 0,
             default => WarehouseService::defaultWarehouseId(),
         };
     }
 
     private function sourceWarehouseLabel(DamagedGood $damage): string
     {
-        if ((string) $damage->source_type === 'customer_return') {
+        if ((string) $damage->source_type === DamagedGood::SOURCE_CUSTOMER_RETURN) {
             return 'Retur Customer';
         }
 
         $warehouseId = $this->resolveSourceWarehouseId($damage);
 
         return Warehouse::where('id', $warehouseId)->value('name') ?? '-';
+    }
+
+    private function aggregateSummaryBySku(Collection $lines): Collection
+    {
+        return $lines
+            ->groupBy('item_id')
+            ->map(function (Collection $rows) {
+                $first = $rows->first();
+                $oldestLine = $rows->sortBy('damage_transacted_at')->first();
+                $oldestAt = $oldestLine['damage_transacted_at'] ?? null;
+                $oldestAt = $oldestAt instanceof Carbon ? $oldestAt : ($oldestAt ? Carbon::parse($oldestAt) : null);
+                $ageDays = $oldestLine['age_days'] ?? 0;
+
+                return [
+                    'item_id' => (int) $first['item_id'],
+                    'sku' => (string) $first['item_sku'],
+                    'item_name' => (string) $first['item_name'],
+                    'doc_count' => (int) $rows->pluck('damaged_good_id')->unique()->count(),
+                    'intake_qty' => (int) $rows->sum('received_qty'),
+                    'allocated_qty' => (int) $rows->sum('allocated_qty'),
+                    'remaining_qty' => (int) $rows->sum('remaining_qty'),
+                    'reason_summary' => $this->formatReasonSummary($rows),
+                    'oldest_transacted_at' => $oldestAt?->format('Y-m-d H:i') ?? '-',
+                    'age_days' => (int) $ageDays,
+                    'age_bucket' => DamagedStockService::ageBucketLabels()[$oldestLine['age_bucket'] ?? DamagedStockService::AGE_BUCKET_0_7] ?? '-',
+                ];
+            })
+            ->sortByDesc('remaining_qty')
+            ->values();
+    }
+
+    private function formatReasonSummary(iterable $rows): string
+    {
+        $labels = collect($rows)
+            ->map(function ($row) {
+                if ($row instanceof DamagedGoodItem) {
+                    return DamagedGoodItem::reasonLabel($row->reason_code);
+                }
+
+                return DamagedGoodItem::reasonLabel($row['reason_code'] ?? null);
+            })
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($labels->isEmpty()) {
+            return '-';
+        }
+
+        $summary = $labels->take(2)->implode(', ');
+        if ($labels->count() > 2) {
+            $summary .= ' +'.($labels->count() - 2).' lainnya';
+        }
+
+        return $summary;
     }
 }

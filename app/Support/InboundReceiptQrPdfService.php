@@ -102,17 +102,17 @@ class InboundReceiptQrPdfService
         $qrPanelX = $sheetX + 54;
         $qrPanelY = $sheetY + 56;
         $qrPanelWidth = $sheetWidth - 108;
-        $qrPanelHeight = 880;
+        $qrPanelHeight = 760;
         imagefilledrectangle($image, $qrPanelX, $qrPanelY, $qrPanelX + $qrPanelWidth, $qrPanelY + $qrPanelHeight, $panel);
         imagerectangle($image, $qrPanelX, $qrPanelY, $qrPanelX + $qrPanelWidth, $qrPanelY + $qrPanelHeight, $line);
 
-        $qrBinary = $this->itemQrCodeService->rawPngForItem($item, 560);
+        $qrBinary = $this->itemQrCodeService->rawPngForItem($item, 520);
         $qrImage = imagecreatefromstring($qrBinary);
         if ($qrImage !== false) {
             $sourceWidth = imagesx($qrImage);
             $sourceHeight = imagesy($qrImage);
-            $targetMaxWidth = $qrPanelWidth - 100;
-            $targetMaxHeight = $qrPanelHeight - 100;
+            $targetMaxWidth = $qrPanelWidth - 150;
+            $targetMaxHeight = $qrPanelHeight - 150;
             $scale = min(
                 $targetMaxWidth / max(1, $sourceWidth),
                 $targetMaxHeight / max(1, $sourceHeight)
@@ -137,8 +137,8 @@ class InboundReceiptQrPdfService
             imagedestroy($qrImage);
         }
 
-        $skuPanelTop = $qrPanelY + $qrPanelHeight + 34;
-        $skuPanelHeight = 244;
+        $skuPanelTop = $qrPanelY + $qrPanelHeight + 24;
+        $skuPanelHeight = 340;
         imagefilledrectangle(
             $image,
             $sheetX + 48,
@@ -160,15 +160,15 @@ class InboundReceiptQrPdfService
             $image,
             'SKU',
             (int) floor(self::PAGE_WIDTH / 2),
-            $skuPanelTop + 48,
-            24,
+            $skuPanelTop + 56,
+            28,
             $soft,
             true,
             $boldFont
         );
 
-        $skuBlockTop = $skuPanelTop + 138;
-        $skuFontSize = $this->fitFontSize($sku, $boldFont, 124, $sheetWidth - 110, 56);
+        $skuBlockTop = $skuPanelTop + 210;
+        $skuFontSize = $this->fitFontSize($sku, $boldFont, 168, $sheetWidth - 70, 72);
         $this->drawCenteredText(
             $image,
             $sku,
@@ -181,12 +181,12 @@ class InboundReceiptQrPdfService
         );
 
         $nameText = Str::limit($name !== '' ? $name : '-', 52);
-        $nameFontSize = $this->fitFontSize($nameText, $regularFont, 28, $sheetWidth - 170, 18);
+        $nameFontSize = $this->fitFontSize($nameText, $regularFont, 24, $sheetWidth - 160, 16);
         $this->drawCenteredText(
             $image,
             $nameText,
             (int) floor(self::PAGE_WIDTH / 2),
-            $skuPanelTop + $skuPanelHeight - 34,
+            $skuPanelTop + $skuPanelHeight - 28,
             $nameFontSize,
             $muted,
             false,
@@ -194,8 +194,8 @@ class InboundReceiptQrPdfService
         );
 
         $dividerY = max(
-            $skuPanelTop + $skuPanelHeight + 34,
-            $sheetY + $sheetHeight - 430
+            $skuPanelTop + $skuPanelHeight + 20,
+            $sheetY + $sheetHeight - 360
         );
         imageline($image, $sheetX + 48, $dividerY, $sheetX + $sheetWidth - 48, $dividerY, $line);
 
@@ -203,17 +203,17 @@ class InboundReceiptQrPdfService
             $image,
             $transaction->transacted_at?->format('m.y') ?? '-',
             (int) floor(self::PAGE_WIDTH / 2),
-            $dividerY + 62,
-            44,
+            $dividerY + 54,
+            38,
             $text,
             true,
             $boldFont
         );
 
-        $barcodePanelWidth = 760;
-        $barcodePanelHeight = 170;
+        $barcodePanelWidth = 720;
+        $barcodePanelHeight = 146;
         $barcodePanelX = (int) floor((self::PAGE_WIDTH - $barcodePanelWidth) / 2);
-        $barcodePanelY = $dividerY + 94;
+        $barcodePanelY = $dividerY + 78;
         imagefilledrectangle(
             $image,
             $barcodePanelX,
@@ -231,13 +231,13 @@ class InboundReceiptQrPdfService
             $line
         );
 
-        $barcodeBinary = $this->barcodeService->pngForValue((string) $transaction->code, 700, 116);
+        $barcodeBinary = $this->barcodeService->pngForValue((string) $transaction->code, 660, 92);
         $barcodeImage = imagecreatefromstring($barcodeBinary);
         if ($barcodeImage !== false) {
             $sourceWidth = imagesx($barcodeImage);
             $sourceHeight = imagesy($barcodeImage);
-            $targetWidth = 700;
-            $targetHeight = 116;
+            $targetWidth = 660;
+            $targetHeight = 92;
             $targetX = $barcodePanelX + (int) floor(($barcodePanelWidth - $targetWidth) / 2);
             $targetY = $barcodePanelY + (int) floor(($barcodePanelHeight - $targetHeight) / 2);
 

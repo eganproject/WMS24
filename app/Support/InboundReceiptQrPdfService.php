@@ -137,8 +137,8 @@ class InboundReceiptQrPdfService
             imagedestroy($qrImage);
         }
 
-        $skuPanelTop = $qrPanelY + $qrPanelHeight + 46;
-        $skuPanelHeight = 192;
+        $skuPanelTop = $qrPanelY + $qrPanelHeight + 34;
+        $skuPanelHeight = 244;
         imagefilledrectangle(
             $image,
             $sheetX + 48,
@@ -156,8 +156,19 @@ class InboundReceiptQrPdfService
             $line
         );
 
-        $skuBlockTop = $skuPanelTop + 88;
-        $skuFontSize = $this->fitFontSize($sku, $boldFont, 92, $sheetWidth - 150, 42);
+        $this->drawCenteredText(
+            $image,
+            'SKU',
+            (int) floor(self::PAGE_WIDTH / 2),
+            $skuPanelTop + 48,
+            24,
+            $soft,
+            true,
+            $boldFont
+        );
+
+        $skuBlockTop = $skuPanelTop + 138;
+        $skuFontSize = $this->fitFontSize($sku, $boldFont, 124, $sheetWidth - 110, 56);
         $this->drawCenteredText(
             $image,
             $sku,
@@ -170,12 +181,12 @@ class InboundReceiptQrPdfService
         );
 
         $nameText = Str::limit($name !== '' ? $name : '-', 52);
-        $nameFontSize = $this->fitFontSize($nameText, $regularFont, 34, $sheetWidth - 170, 20);
+        $nameFontSize = $this->fitFontSize($nameText, $regularFont, 28, $sheetWidth - 170, 18);
         $this->drawCenteredText(
             $image,
             $nameText,
             (int) floor(self::PAGE_WIDTH / 2),
-            $skuBlockTop + 68,
+            $skuPanelTop + $skuPanelHeight - 34,
             $nameFontSize,
             $muted,
             false,

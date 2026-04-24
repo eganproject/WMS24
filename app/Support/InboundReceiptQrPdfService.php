@@ -19,7 +19,6 @@ class InboundReceiptQrPdfService
 
     public function __construct(
         private readonly ItemQrCodeService $itemQrCodeService,
-        private readonly SimpleBarcodeService $barcodeService,
         private readonly SimpleImagePdfBuilder $pdfBuilder,
     ) {
     }
@@ -203,10 +202,10 @@ class InboundReceiptQrPdfService
             $boldFont
         );
 
-        $barcodePanelWidth = 760;
-        $barcodePanelHeight = 144;
+        $barcodePanelWidth = 280;
+        $barcodePanelHeight = 280;
         $barcodePanelX = (int) floor((self::PAGE_WIDTH - $barcodePanelWidth) / 2);
-        $barcodePanelY = $sheetY + $sheetHeight - 200;
+        $barcodePanelY = $sheetY + $sheetHeight - 336;
         imagefilledrectangle(
             $image,
             $barcodePanelX,
@@ -224,19 +223,19 @@ class InboundReceiptQrPdfService
             $line
         );
 
-        $barcodeBinary = $this->barcodeService->pngForValue((string) $transaction->code, 520, 70);
-        $barcodeImage = imagecreatefromstring($barcodeBinary);
-        if ($barcodeImage !== false) {
-            $sourceWidth = imagesx($barcodeImage);
-            $sourceHeight = imagesy($barcodeImage);
-            $targetWidth = 520;
-            $targetHeight = 70;
+        $inboundQrBinary = $this->itemQrCodeService->rawPngForSku((string) $transaction->code, 220);
+        $inboundQrImage = imagecreatefromstring($inboundQrBinary);
+        if ($inboundQrImage !== false) {
+            $sourceWidth = imagesx($inboundQrImage);
+            $sourceHeight = imagesy($inboundQrImage);
+            $targetWidth = 220;
+            $targetHeight = 220;
             $targetX = $barcodePanelX + (int) floor(($barcodePanelWidth - $targetWidth) / 2);
             $targetY = $barcodePanelY + (int) floor(($barcodePanelHeight - $targetHeight) / 2);
 
             imagecopyresampled(
                 $image,
-                $barcodeImage,
+                $inboundQrImage,
                 $targetX,
                 $targetY,
                 0,
@@ -246,7 +245,7 @@ class InboundReceiptQrPdfService
                 $sourceWidth,
                 $sourceHeight
             );
-            imagedestroy($barcodeImage);
+            imagedestroy($inboundQrImage);
         }
 
         ob_start();

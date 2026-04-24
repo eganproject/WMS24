@@ -14,6 +14,8 @@ class InboundReceiptQrPdfService
     private const PAGE_WIDTH_PT = 283.46;
     private const PAGE_HEIGHT_PT = 425.20;
     private const OUTER_MARGIN = 40;
+    private const SKU_LINE_GAP = 16;
+    private const NAME_LINE_GAP = 10;
 
     public function __construct(
         private readonly ItemQrCodeService $itemQrCodeService,
@@ -99,10 +101,21 @@ class InboundReceiptQrPdfService
         imagefilledrectangle($image, $sheetX, $sheetY, $sheetX + $sheetWidth, $sheetY + $sheetHeight, $card);
         imagerectangle($image, $sheetX, $sheetY, $sheetX + $sheetWidth, $sheetY + $sheetHeight, $line);
 
+        $this->drawCenteredText(
+            $image,
+            'QR SKU PENERIMAAN',
+            (int) floor(self::PAGE_WIDTH / 2),
+            $sheetY + 38,
+            24,
+            $soft,
+            true,
+            $boldFont
+        );
+
         $qrPanelX = $sheetX + 54;
-        $qrPanelY = $sheetY + 56;
+        $qrPanelY = $sheetY + 72;
         $qrPanelWidth = $sheetWidth - 108;
-        $qrPanelHeight = 760;
+        $qrPanelHeight = 680;
         imagefilledrectangle($image, $qrPanelX, $qrPanelY, $qrPanelX + $qrPanelWidth, $qrPanelY + $qrPanelHeight, $panel);
         imagerectangle($image, $qrPanelX, $qrPanelY, $qrPanelX + $qrPanelWidth, $qrPanelY + $qrPanelHeight, $line);
 
@@ -111,8 +124,8 @@ class InboundReceiptQrPdfService
         if ($qrImage !== false) {
             $sourceWidth = imagesx($qrImage);
             $sourceHeight = imagesy($qrImage);
-            $targetMaxWidth = $qrPanelWidth - 150;
-            $targetMaxHeight = $qrPanelHeight - 150;
+            $targetMaxWidth = $qrPanelWidth - 180;
+            $targetMaxHeight = $qrPanelHeight - 170;
             $scale = min(
                 $targetMaxWidth / max(1, $sourceWidth),
                 $targetMaxHeight / max(1, $sourceHeight)
@@ -137,8 +150,19 @@ class InboundReceiptQrPdfService
             imagedestroy($qrImage);
         }
 
-        $skuPanelTop = $qrPanelY + $qrPanelHeight + 24;
-        $skuPanelHeight = 340;
+        $this->drawCenteredText(
+            $image,
+            'SCAN UNTUK SKU',
+            (int) floor(self::PAGE_WIDTH / 2),
+            $qrPanelY + $qrPanelHeight - 28,
+            20,
+            $muted,
+            true,
+            $boldFont
+        );
+
+        $skuPanelTop = $qrPanelY + $qrPanelHeight + 26;
+        $skuPanelHeight = 430;
         imagefilledrectangle(
             $image,
             $sheetX + 48,
@@ -160,60 +184,96 @@ class InboundReceiptQrPdfService
             $image,
             'SKU',
             (int) floor(self::PAGE_WIDTH / 2),
-            $skuPanelTop + 56,
+            $skuPanelTop + 54,
             28,
             $soft,
             true,
             $boldFont
         );
 
-        $skuBlockTop = $skuPanelTop + 210;
-        $skuFontSize = $this->fitFontSize($sku, $boldFont, 168, $sheetWidth - 70, 72);
-        $this->drawCenteredText(
+        $skuLines = $this->splitTextForLines($sku, 2);
+        $skuFontSize = $this->fitWrappedFontSize(
+            $skuLines,
+            $boldFont,
+            158,
+            $sheetWidth - 110,
+            60
+        );
+        $skuLineHeight = $skuFontSize + self::SKU_LINE_GAP;
+        $skuBlockTop = $skuPanelTop + 150;
+        $this->drawCenteredLines(
             $image,
-            $sku,
+            $skuLines,
             (int) floor(self::PAGE_WIDTH / 2),
             $skuBlockTop,
             $skuFontSize,
             $accent,
             true,
-            $boldFont
+            $boldFont,
+            $skuLineHeight
         );
 
-        $nameText = Str::limit($name !== '' ? $name : '-', 52);
-        $nameFontSize = $this->fitFontSize($nameText, $regularFont, 24, $sheetWidth - 160, 16);
-        $this->drawCenteredText(
+        $nameText = $name !== '' ? $name : '-';
+        $nameLines = $this->wrapTextByWidth(
+            Str::limit($nameText, 82),
+            $regularFont,
+            34,
+            $sheetWidth - 180,
+            2
+        );
+        $nameFontSize = $this->fitWrappedFontSize(
+            $nameLines,
+            $regularFont,
+            32,
+            $sheetWidth - 180,
+            18
+        );
+        $nameLineHeight = $nameFontSize + self::NAME_LINE_GAP;
+        $nameTop = $skuPanelTop + $skuPanelHeight - 92;
+        $this->drawCenteredLines(
             $image,
-            $nameText,
+            $nameLines,
             (int) floor(self::PAGE_WIDTH / 2),
-            $skuPanelTop + $skuPanelHeight - 28,
+            $nameTop,
             $nameFontSize,
             $muted,
             false,
-            $regularFont
+            $regularFont,
+            $nameLineHeight
         );
 
         $dividerY = max(
-            $skuPanelTop + $skuPanelHeight + 20,
-            $sheetY + $sheetHeight - 360
+            $skuPanelTop + $skuPanelHeight + 18,
+            $sheetY + $sheetHeight - 330
         );
         imageline($image, $sheetX + 48, $dividerY, $sheetX + $sheetWidth - 48, $dividerY, $line);
 
         $this->drawCenteredText(
             $image,
+            'KODE INBOUND',
+            (int) floor(self::PAGE_WIDTH / 2),
+            $dividerY + 40,
+            20,
+            $soft,
+            true,
+            $boldFont
+        );
+
+        $this->drawCenteredText(
+            $image,
             $transaction->transacted_at?->format('m.y') ?? '-',
             (int) floor(self::PAGE_WIDTH / 2),
-            $dividerY + 54,
-            38,
+            $dividerY + 86,
+            34,
             $text,
             true,
             $boldFont
         );
 
-        $barcodePanelWidth = 720;
-        $barcodePanelHeight = 146;
+        $barcodePanelWidth = 780;
+        $barcodePanelHeight = 154;
         $barcodePanelX = (int) floor((self::PAGE_WIDTH - $barcodePanelWidth) / 2);
-        $barcodePanelY = $dividerY + 78;
+        $barcodePanelY = $dividerY + 114;
         imagefilledrectangle(
             $image,
             $barcodePanelX,
@@ -231,13 +291,13 @@ class InboundReceiptQrPdfService
             $line
         );
 
-        $barcodeBinary = $this->barcodeService->pngForValue((string) $transaction->code, 660, 92);
+        $barcodeBinary = $this->barcodeService->pngForValue((string) $transaction->code, 700, 90);
         $barcodeImage = imagecreatefromstring($barcodeBinary);
         if ($barcodeImage !== false) {
             $sourceWidth = imagesx($barcodeImage);
             $sourceHeight = imagesy($barcodeImage);
-            $targetWidth = 660;
-            $targetHeight = 92;
+            $targetWidth = 700;
+            $targetHeight = 90;
             $targetX = $barcodePanelX + (int) floor(($barcodePanelWidth - $targetWidth) / 2);
             $targetY = $barcodePanelY + (int) floor(($barcodePanelHeight - $targetHeight) / 2);
 
@@ -255,6 +315,25 @@ class InboundReceiptQrPdfService
             );
             imagedestroy($barcodeImage);
         }
+
+        $inboundCodeLines = $this->wrapTextByWidth(
+            (string) $transaction->code,
+            $boldFont,
+            28,
+            $sheetWidth - 150,
+            2
+        );
+        $this->drawCenteredLines(
+            $image,
+            $inboundCodeLines,
+            (int) floor(self::PAGE_WIDTH / 2),
+            $barcodePanelY + $barcodePanelHeight + 48,
+            28,
+            $accent,
+            true,
+            $boldFont,
+            34
+        );
 
         ob_start();
         imagejpeg($image, null, 96);
@@ -317,6 +396,15 @@ class InboundReceiptQrPdfService
         imagestring($image, $fontIndex, max(0, (int) round($centerX - ($width / 2))), max(0, $y - 18), $text, $color);
     }
 
+    private function drawCenteredLines($image, array $lines, int $centerX, int $topY, int $size, int $color, bool $bold, ?string $font, int $lineHeight): void
+    {
+        $currentY = $topY;
+        foreach ($lines as $line) {
+            $this->drawCenteredText($image, $line, $centerX, $currentY, $size, $color, $bold, $font);
+            $currentY += $lineHeight;
+        }
+    }
+
     private function fitFontSize(string $text, ?string $font, int $startSize, int $maxWidth, int $minSize): int
     {
         if ($font === null || !function_exists('imagettfbbox')) {
@@ -336,5 +424,99 @@ class InboundReceiptQrPdfService
         }
 
         return $minSize;
+    }
+
+    private function fitWrappedFontSize(array $lines, ?string $font, int $startSize, int $maxWidth, int $minSize): int
+    {
+        if ($font === null || !function_exists('imagettfbbox')) {
+            return $startSize;
+        }
+
+        for ($size = $startSize; $size >= $minSize; $size--) {
+            $fits = true;
+            foreach ($lines as $line) {
+                $box = imagettfbbox($size, 0, $font, $line);
+                if ($box === false) {
+                    return $startSize;
+                }
+
+                $width = abs($box[2] - $box[0]);
+                if ($width > $maxWidth) {
+                    $fits = false;
+                    break;
+                }
+            }
+
+            if ($fits) {
+                return $size;
+            }
+        }
+
+        return $minSize;
+    }
+
+    private function splitTextForLines(string $text, int $maxLines): array
+    {
+        $text = trim($text);
+        if ($text === '') {
+            return ['-'];
+        }
+
+        if (strlen($text) <= 16 || $maxLines <= 1) {
+            return [$text];
+        }
+
+        $length = strlen($text);
+        $chunkSize = (int) ceil($length / $maxLines);
+        $parts = str_split($text, max(1, $chunkSize));
+
+        return array_slice($parts, 0, $maxLines);
+    }
+
+    private function wrapTextByWidth(string $text, ?string $font, int $fontSize, int $maxWidth, int $maxLines): array
+    {
+        $text = trim($text);
+        if ($text === '') {
+            return ['-'];
+        }
+
+        $words = preg_split('/\s+/', $text) ?: [];
+        if ($font === null || !function_exists('imagettfbbox') || count($words) <= 1) {
+            return [Str::limit($text, 48)];
+        }
+
+        $lines = [];
+        $current = '';
+        $index = 0;
+        $wordCount = count($words);
+
+        while ($index < $wordCount) {
+            $word = $words[$index];
+            $candidate = $current === '' ? $word : $current.' '.$word;
+            $box = imagettfbbox($fontSize, 0, $font, $candidate);
+            $width = $box !== false ? abs($box[2] - $box[0]) : 0;
+
+            if ($current !== '' && $width > $maxWidth) {
+                $lines[] = $current;
+                $current = $word;
+                if (count($lines) === $maxLines - 1) {
+                    $index++;
+                    break;
+                }
+            } else {
+                $current = $candidate;
+                $index++;
+            }
+        }
+
+        if ($current !== '') {
+            $remainingText = trim($current.' '.implode(' ', array_slice($words, $index)));
+            if (count($lines) === $maxLines - 1) {
+                $current = Str::limit($remainingText, 42);
+            }
+            $lines[] = $current;
+        }
+
+        return array_slice($lines, 0, $maxLines);
     }
 }

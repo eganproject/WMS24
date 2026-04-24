@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Admin\ItemStockController;
 use App\Http\Controllers\Admin\InboundController;
+use App\Http\Controllers\Admin\InboundScanWorkbenchController;
 use App\Http\Controllers\Admin\OutboundController;
 use App\Http\Controllers\Admin\StockMutationController;
 use App\Http\Controllers\Admin\StockOpnameController;
@@ -256,6 +257,13 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
     });
 
     Route::prefix('inbound')->as('inbound.')->group(function () {
+        Route::get('/scan', [InboundScanWorkbenchController::class, 'index'])->name('scan.index');
+        Route::get('/scan/transactions', [InboundScanWorkbenchController::class, 'transactions'])->name('scan.transactions');
+        Route::post('/scan/open', [InboundScanWorkbenchController::class, 'open'])->name('scan.open');
+        Route::post('/scan/scan-sku', [InboundScanWorkbenchController::class, 'scanSku'])->name('scan.scan-sku');
+        Route::post('/scan/complete', [InboundScanWorkbenchController::class, 'complete'])->name('scan.complete');
+        Route::post('/scan/reset', [InboundScanWorkbenchController::class, 'reset'])->name('scan.reset');
+
         Route::get('/receipts', [InboundController::class, 'receipts'])->name('receipts.index');
         Route::get('/receipts/data', [InboundController::class, 'receiptsData'])->name('receipts.data');
         Route::post('/receipts', [InboundController::class, 'receiptsStore'])->name('receipts.store');

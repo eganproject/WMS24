@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\TelegramWebhookController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Admin\ItemStockController;
@@ -40,6 +41,7 @@ use App\Http\Controllers\Picker\ScanOutController;
 use App\Http\Controllers\Picker\QcScanController;
 use App\Http\Controllers\Picker\PickingListMobileController;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 
 Route::get('/', function () {
     return redirect()->route('login');
@@ -49,6 +51,10 @@ Route::get('/', function () {
 Route::get('/healthz', function () {
     return response('OK', 200);
 });
+
+Route::post('/telegram/webhook', TelegramWebhookController::class)
+    ->withoutMiddleware([ValidateCsrfToken::class])
+    ->name('telegram.webhook');
 
 Route::get('/dashboard', [DashboardController::class, 'index'])
     ->middleware(['auth', 'verified'])

@@ -7,6 +7,7 @@ use App\Models\DamagedAllocation;
 use App\Models\DamagedAllocationItem;
 use App\Models\DamagedGoodItem;
 use App\Models\Item;
+use App\Models\ItemStock;
 use App\Models\ReworkRecipe;
 use App\Models\StockMutation;
 use App\Models\Supplier;
@@ -425,6 +426,8 @@ class DamagedAllocationController extends Controller
                 }
             }
 
+            $this->assertDamagedWarehouseStockAvailable($sourceItems, $damagedWarehouseId);
+
             $hasMutations = StockMutation::where('source_type', 'damaged_allocation')
                 ->where('source_id', $allocation->id)
                 ->exists();
@@ -487,6 +490,52 @@ class DamagedAllocationController extends Controller
         return response()->json([
             'message' => 'Alokasi barang rusak berhasil disetujui',
         ]);
+    }
+
+    private function assertDamagedWarehouseStockAvailable(Collection $sourceItems, int $damagedWarehouseId): void
+    {
+        $requirements = $sourceItems
+            ->groupBy('item_id')
+            ->map(fn (Collection $rows) => (int) $rows->sum('qty'))
+            ->filter(fn (int $qty) => $qty > 0);
+
+        if ($requirements->isEmpty()) {
+            return;
+        }
+
+        $stocks = ItemStock::query()
+            ->where('warehouse_id', $damagedWarehouseId)
+            ->whereIn('item_id', $requirements->keys()->all())
+            ->lockForUpdate()
+            ->get()
+            ->keyBy('item_id');
+
+        $itemLabels = $sourceItems
+            ->mapWithKeys(function ($row) {
+                $sku = trim((string) ($row->item?->sku ?? ''));
+                $name = trim((string) ($row->item?->name ?? ''));
+
+                return [
+                    (int) $row->item_id => trim($sku.($name !== '' ? ' - '.$name : '')),
+                ];
+            });
+
+        foreach ($requirements as $itemId => $requiredQty) {
+            $availableQty = (int) ($stocks->get((int) $itemId)?->stock ?? 0);
+            if ($availableQty >= $requiredQty) {
+                continue;
+            }
+
+            $label = $itemLabels->get((int) $itemId) ?: 'item';
+            throw ValidationException::withMessages([
+                'source_items' => sprintf(
+                    'Stok fisik Gudang Rusak untuk %s tidak mencukupi. Dibutuhkan %d, tersedia %d. Cek mutasi stok atau jalankan migrasi backfill stok rusak.',
+                    $label,
+                    $requiredQty,
+                    $availableQty
+                ),
+            ]);
+        }
     }
 
     private function persistItems(DamagedAllocation $allocation, array $validated): void

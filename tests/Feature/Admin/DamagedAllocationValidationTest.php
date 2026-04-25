@@ -157,6 +157,42 @@ class DamagedAllocationValidationTest extends TestCase
         ]);
     }
 
+    public function test_approve_return_supplier_uses_subtype_that_fits_stock_mutation_schema(): void
+    {
+        [, , $damagedWarehouse] = $this->createWarehouseFixtures();
+        $user = User::factory()->create();
+        $supplier = Supplier::create(['name' => 'Supplier Approve Test']);
+        $item = Item::create([
+            'sku' => 'SKU-DMG-ALLOC-SUPPLIER-OK',
+            'name' => 'Item Rusak Supplier OK',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+        ]);
+        $damagedItem = $this->createApprovedDamagedItem($user, $item, 5);
+        ItemStock::create([
+            'item_id' => $item->id,
+            'warehouse_id' => $damagedWarehouse->id,
+            'stock' => 5,
+        ]);
+        $allocation = $this->createPendingReturnSupplierAllocation($user, $supplier->id, $damagedItem, 1);
+
+        $response = $this->actingAs($user)
+            ->withoutMiddleware()
+            ->postJson(route('admin.inventory.damaged-allocations.approve', $allocation->id));
+
+        $response->assertOk()
+            ->assertJsonPath('message', 'Alokasi barang rusak berhasil disetujui');
+        $this->assertDatabaseHas('stock_mutations', [
+            'item_id' => $item->id,
+            'warehouse_id' => $damagedWarehouse->id,
+            'direction' => 'out',
+            'qty' => 1,
+            'source_type' => 'damaged_allocation',
+            'source_subtype' => 'supplier_source',
+            'source_id' => $allocation->id,
+        ]);
+    }
+
     private function createApprovedDamagedItem(User $user, Item $item, int $qty): DamagedGoodItem
     {
         $damagedGood = DamagedGood::create([
@@ -185,6 +221,32 @@ class DamagedAllocationValidationTest extends TestCase
         $allocation = DamagedAllocation::create([
             'code' => 'DGA-ALLOC-'.strtoupper(substr(md5($damagedItem->id.$qty), 0, 8)),
             'type' => 'disposal',
+            'transacted_at' => now(),
+            'status' => 'pending',
+            'created_by' => $user->id,
+        ]);
+
+        DamagedAllocationItem::create([
+            'damaged_allocation_id' => $allocation->id,
+            'line_type' => 'source',
+            'damaged_good_item_id' => $damagedItem->id,
+            'item_id' => $damagedItem->item_id,
+            'qty' => $qty,
+        ]);
+
+        return $allocation;
+    }
+
+    private function createPendingReturnSupplierAllocation(
+        User $user,
+        int $supplierId,
+        DamagedGoodItem $damagedItem,
+        int $qty
+    ): DamagedAllocation {
+        $allocation = DamagedAllocation::create([
+            'code' => 'DGA-SUP-'.strtoupper(substr(md5($damagedItem->id.$supplierId.$qty), 0, 8)),
+            'type' => 'return_supplier',
+            'supplier_id' => $supplierId,
             'transacted_at' => now(),
             'status' => 'pending',
             'created_by' => $user->id,

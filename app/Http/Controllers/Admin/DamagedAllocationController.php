@@ -441,7 +441,7 @@ class DamagedAllocationController extends Controller
                         'direction' => 'out',
                         'qty' => (int) $row->qty,
                         'source_type' => 'damaged_allocation',
-                        'source_subtype' => $allocation->type.'_source',
+                        'source_subtype' => $this->sourceMutationSubtype((string) $allocation->type),
                         'source_id' => $allocation->id,
                         'source_code' => $allocation->code,
                         'note' => $row->note,
@@ -490,6 +490,16 @@ class DamagedAllocationController extends Controller
         return response()->json([
             'message' => 'Alokasi barang rusak berhasil disetujui',
         ]);
+    }
+
+    private function sourceMutationSubtype(string $allocationType): string
+    {
+        return match ($allocationType) {
+            'return_supplier' => 'supplier_source',
+            'disposal' => 'disposal_source',
+            'rework' => 'rework_source',
+            default => 'source',
+        };
     }
 
     private function assertDamagedWarehouseStockAvailable(Collection $sourceItems, int $damagedWarehouseId): void

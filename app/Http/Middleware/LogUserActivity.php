@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\ActivityLog;
+use App\Support\ActivityLogDescription;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -30,16 +31,17 @@ class LogUserActivity
         $route = $request->route();
         $routeName = $route?->getName();
         $method = strtoupper($request->method());
+        $payload = $this->sanitizePayload($request);
 
         ActivityLog::create([
             'user_id' => $user->id,
-            'action' => trim($method.' '.($routeName ?: $request->path())),
+            'action' => ActivityLogDescription::describe($request, $response, $payload),
             'route_name' => $routeName,
             'method' => $method,
             'url' => $request->fullUrl(),
             'ip_address' => $request->ip(),
             'user_agent' => $request->userAgent(),
-            'payload' => $this->sanitizePayload($request),
+            'payload' => ActivityLogDescription::payload($request, $response, $payload),
         ]);
 
         return $response;

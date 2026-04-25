@@ -3,7 +3,12 @@
 namespace App\Support;
 
 use App\Models\Item;
+use App\Models\Kurir;
+use App\Models\QcResiScan;
+use App\Models\Resi;
+use App\Models\ShipmentScanOut;
 use App\Models\Warehouse;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 
@@ -37,9 +42,14 @@ class TelegramBotService
             return $this->stockReply(trim((string) $matches[2]));
         }
 
+        if (preg_match('/^\/?(resi|summary_resi|resi_hari_ini)(?:@\w+)?(?:\s+(.+))?$/iu', $text, $matches)) {
+            return $this->todayResiReply(trim((string) ($matches[2] ?? '')));
+        }
+
         return implode("\n", [
             'Command belum dikenali.',
             'Gunakan: /stok SKU',
+            'Ringkasan resi hari ini: /resi',
             'Contoh: /stok ADA1',
         ]);
     }
@@ -109,6 +119,126 @@ class TelegramBotService
         $lines[] = 'Total: '.$total.' pcs';
 
         return implode("\n", $lines);
+    }
+
+    private function todayResiReply(string $dateText = ''): string
+    {
+        $date = $this->parseDateOrToday($dateText);
+
+        $activeResiQuery = Resi::query()
+            ->whereDate('tanggal_upload', $date)
+            ->where(function ($query) {
+                $query->whereNull('status')
+                    ->orWhere('status', '!=', 'canceled');
+            });
+
+        $activeResiIds = (clone $activeResiQuery)->pluck('id');
+        $activeTotal = $activeResiIds->count();
+        $canceledTotal = Resi::query()
+            ->whereDate('tanggal_upload', $date)
+            ->where('status', 'canceled')
+            ->count();
+        $scanOutToday = ShipmentScanOut::query()
+            ->whereDate('scan_date', $date)
+            ->count();
+        $activeScanOutDone = $activeTotal > 0
+            ? ShipmentScanOut::query()
+                ->whereIn('resi_id', $activeResiIds)
+                ->distinct('resi_id')
+                ->count('resi_id')
+            : 0;
+        $qcPassed = $activeTotal > 0
+            ? QcResiScan::query()
+                ->whereIn('resi_id', $activeResiIds)
+                ->where('status', 'passed')
+                ->count()
+            : 0;
+        $qcInProgress = $activeTotal > 0
+            ? QcResiScan::query()
+                ->whereIn('resi_id', $activeResiIds)
+                ->where('status', '!=', 'passed')
+                ->count()
+            : 0;
+        $pendingQc = max(0, $activeTotal - $qcPassed - $qcInProgress);
+        $readyScanOut = max(0, $qcPassed - $activeScanOutDone);
+        $remainingScanOut = max(0, $activeTotal - $activeScanOutDone);
+
+        $lines = [
+            'Ringkasan Resi Hari Ini',
+            Carbon::parse($date)->format('Y-m-d'),
+            '',
+            'Resi aktif upload hari ini: '.$activeTotal,
+            'Cancel: '.$canceledTotal,
+            'Scan out hari ini: '.$scanOutToday,
+            'Belum scan out dari upload hari ini: '.$remainingScanOut,
+            '',
+            'Status proses:',
+            '- Menunggu QC: '.$pendingQc,
+            '- QC berjalan: '.$qcInProgress,
+            '- Siap scan out: '.$readyScanOut,
+            '- Scan out selesai: '.$activeScanOutDone,
+        ];
+
+        $kurirLines = $this->todayResiByCourierLines($date);
+        if (!empty($kurirLines)) {
+            $lines[] = '';
+            $lines[] = 'Per kurir:';
+            array_push($lines, ...$kurirLines);
+        }
+
+        return implode("\n", $lines);
+    }
+
+    private function todayResiByCourierLines(string $date): array
+    {
+        $resiCounts = Resi::query()
+            ->selectRaw('kurir_id, COUNT(*) as total')
+            ->whereDate('tanggal_upload', $date)
+            ->where(function ($query) {
+                $query->whereNull('status')
+                    ->orWhere('status', '!=', 'canceled');
+            })
+            ->groupBy('kurir_id')
+            ->pluck('total', 'kurir_id');
+
+        if ($resiCounts->isEmpty()) {
+            return [];
+        }
+
+        $scanCounts = ShipmentScanOut::query()
+            ->selectRaw('kurir_id, COUNT(*) as total')
+            ->whereDate('scan_date', $date)
+            ->groupBy('kurir_id')
+            ->pluck('total', 'kurir_id');
+
+        $kurirNames = Kurir::query()
+            ->whereIn('id', $resiCounts->keys()->merge($scanCounts->keys())->filter()->unique()->all())
+            ->pluck('name', 'id');
+
+        return $resiCounts
+            ->map(function ($total, $kurirId) use ($scanCounts, $kurirNames) {
+                $scanned = (int) ($scanCounts[$kurirId] ?? 0);
+                $remaining = max(0, (int) $total - $scanned);
+                $name = $kurirNames[$kurirId] ?? 'Tanpa Kurir';
+
+                return "- {$name}: {$total} resi, scan out {$scanned}, sisa {$remaining}";
+            })
+            ->values()
+            ->all();
+    }
+
+    private function parseDateOrToday(string $dateText): string
+    {
+        $dateText = trim($dateText);
+        if ($dateText === '' || in_array(mb_strtolower($dateText), ['hari_ini', 'hari ini', 'today'], true)) {
+            return now()->toDateString();
+        }
+
+        try {
+            return Carbon::parse($dateText)->toDateString();
+        } catch (\Throwable) {
+            return now()->toDateString();
+        }
     }
 
     private function bundleStockReply(Item $item): string

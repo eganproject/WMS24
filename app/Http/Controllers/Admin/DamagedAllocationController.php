@@ -101,6 +101,16 @@ class DamagedAllocationController extends Controller
             });
         }
 
+        $typeFilter = trim((string) $request->input('type', ''));
+        if (in_array($typeFilter, ['return_supplier', 'disposal', 'rework'], true)) {
+            $query->where('type', $typeFilter);
+        }
+
+        $statusFilter = trim((string) $request->input('status', ''));
+        if (in_array($statusFilter, ['pending', 'approved'], true)) {
+            $query->where('status', $statusFilter);
+        }
+
         $this->applyDateFilter($query, $request);
 
         $recordsTotal = DamagedAllocation::count();
@@ -144,6 +154,7 @@ class DamagedAllocationController extends Controller
                 'id' => $row->id,
                 'code' => $row->code,
                 'type' => $typeLabels[$row->type] ?? $row->type,
+                'type_raw' => $row->type ?? '',
                 'status' => $row->status ?? 'pending',
                 'transacted_at' => $row->transacted_at?->format('Y-m-d H:i') ?? '',
                 'submit_by' => $row->creator?->name ?? '-',

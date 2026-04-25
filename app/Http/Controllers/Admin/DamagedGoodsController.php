@@ -80,6 +80,24 @@ class DamagedGoodsController extends Controller
             });
         }
 
+        $statusFilter = trim((string) $request->input('status', ''));
+        if (in_array($statusFilter, ['pending', 'approved'], true)) {
+            $query->where('status', $statusFilter);
+        }
+
+        $dateFrom = $request->input('date_from');
+        $dateTo = $request->input('date_to');
+        try {
+            if ($dateFrom) {
+                $query->where('transacted_at', '>=', Carbon::parse($dateFrom)->startOfDay());
+            }
+            if ($dateTo) {
+                $query->where('transacted_at', '<=', Carbon::parse($dateTo)->endOfDay());
+            }
+        } catch (\Throwable) {
+            // ignore invalid date filters
+        }
+
         $recordsTotal = DamagedGood::count();
         $recordsFiltered = (clone $query)->count();
 
@@ -116,9 +134,17 @@ class DamagedGoodsController extends Controller
                 return (int) ($remainingMap[(int) $item->id]['remaining_qty'] ?? (int) $item->qty);
             });
             $reasonSummary = $this->formatReasonSummary($items);
+            $ageDays = $row->transacted_at ? (int) Carbon::parse($row->transacted_at)->diffInDays(now()) : 0;
+            $ageBucket = match (true) {
+                $ageDays <= 7  => '0_7',
+                $ageDays <= 30 => '8_30',
+                $ageDays <= 60 => '31_60',
+                default        => '61_plus',
+            };
             return [
                 'id' => $row->id,
                 'code' => $row->code,
+                'source_type_raw' => $row->source_type ?? '',
                 'source' => $sourceLabels[$row->source_type] ?? $row->source_type,
                 'source_warehouse' => $row->sourceWarehouse?->name ?? $this->sourceWarehouseLabel($row),
                 'source_ref' => $row->source_ref ?? '',
@@ -131,6 +157,8 @@ class DamagedGoodsController extends Controller
                 'reason_summary' => $reasonSummary,
                 'note' => $note,
                 'status' => $row->status ?? 'pending',
+                'age_days' => $ageDays,
+                'age_bucket' => $ageBucket,
             ];
         });
 

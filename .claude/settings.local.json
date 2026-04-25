@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(php artisan *)",
+      "Bash(php -l app/Http/Controllers/Admin/DamagedGoodsController.php)",
+      "Bash(php -l app/Http/Controllers/Admin/DamagedAllocationController.php)",
+      "Bash(php -l app/Http/Controllers/Admin/ActivityLogController.php)"
+    ]
+  }
+}

@@ -48,13 +48,12 @@
             <table class="table align-middle table-row-dashed fs-6 gy-5" id="activity_logs_table">
                 <thead>
                     <tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0">
-                        <th>ID</th>
-                        <th>Waktu</th>
-                        <th>User</th>
-                        <th>Aktivitas</th>
-                        <th>Method</th>
-                        <th>IP</th>
-                        <th>URL</th>
+                        <th class="w-50px">ID</th>
+                        <th class="min-w-120px">Waktu</th>
+                        <th class="min-w-130px">User</th>
+                        <th class="min-w-300px">Deskripsi Aktivitas</th>
+                        <th class="min-w-80px">Method</th>
+                        <th class="min-w-100px">IP</th>
                         <th class="text-end">Aksi</th>
                     </tr>
                 </thead>
@@ -79,60 +78,97 @@
                 </div>
             </div>
             <div class="modal-body scroll-y mx-5 mx-xl-15 my-7">
+                {{-- Baris 1: ID, Waktu, User --}}
                 <div class="row mb-6">
-                    <div class="col-md-4">
-                        <div class="fw-bold text-gray-600">ID</div>
-                        <div id="activity_id">-</div>
+                    <div class="col-md-2">
+                        <div class="fw-bold text-gray-600 mb-1">ID</div>
+                        <div id="activity_id" class="fw-semibold">-</div>
                     </div>
                     <div class="col-md-4">
-                        <div class="fw-bold text-gray-600">Waktu</div>
-                        <div id="activity_time">-</div>
+                        <div class="fw-bold text-gray-600 mb-1">Waktu</div>
+                        <div id="activity_time" class="fw-semibold">-</div>
                     </div>
-                    <div class="col-md-4">
-                        <div class="fw-bold text-gray-600">User</div>
-                        <div id="activity_user">-</div>
+                    <div class="col-md-6">
+                        <div class="fw-bold text-gray-600 mb-1">User</div>
+                        <div id="activity_user" class="fw-semibold">-</div>
+                        <div id="activity_email" class="text-muted fs-7">-</div>
                     </div>
                 </div>
+
+                {{-- Baris 2: Status + Deskripsi Aktivitas --}}
                 <div class="row mb-6">
-                    <div class="col-md-4">
-                        <div class="fw-bold text-gray-600">Email</div>
-                        <div id="activity_email">-</div>
+                    <div class="col-md-12">
+                        <div class="fw-bold text-gray-600 mb-2">Deskripsi Aktivitas</div>
+                        <div class="d-flex align-items-start gap-3 p-4 bg-light rounded">
+                            <div id="activity_hasil_badge"></div>
+                            <div class="flex-grow-1">
+                                <div id="activity_action" class="fw-semibold text-gray-800 mb-1">-</div>
+                                <div id="activity_modul_badge"></div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="col-md-4">
-                        <div class="fw-bold text-gray-600">Method</div>
+                </div>
+
+                {{-- Baris 3: Method, IP, Route --}}
+                <div class="row mb-6">
+                    <div class="col-md-3">
+                        <div class="fw-bold text-gray-600 mb-1">Method</div>
                         <div id="activity_method">-</div>
                     </div>
-                    <div class="col-md-4">
-                        <div class="fw-bold text-gray-600">IP</div>
-                        <div id="activity_ip">-</div>
-                    </div>
-                </div>
-                <div class="row mb-6">
-                    <div class="col-md-6">
-                        <div class="fw-bold text-gray-600">Route</div>
-                        <div id="activity_route">-</div>
+                    <div class="col-md-3">
+                        <div class="fw-bold text-gray-600 mb-1">IP</div>
+                        <div id="activity_ip" class="fw-semibold">-</div>
                     </div>
                     <div class="col-md-6">
-                        <div class="fw-bold text-gray-600">URL</div>
-                        <div id="activity_url">-</div>
+                        <div class="fw-bold text-gray-600 mb-1">Route</div>
+                        <div id="activity_route" class="text-gray-700 fs-7">-</div>
                     </div>
                 </div>
+
+                {{-- Baris 4: URL --}}
                 <div class="row mb-6">
                     <div class="col-md-12">
-                        <div class="fw-bold text-gray-600">Aktivitas</div>
-                        <div id="activity_action">-</div>
+                        <div class="fw-bold text-gray-600 mb-1">URL</div>
+                        <div id="activity_url" class="text-gray-700 fs-7 text-break">-</div>
                     </div>
                 </div>
+
+                {{-- Data Utama --}}
+                <div class="row mb-6" id="section_data_utama">
+                    <div class="col-md-12">
+                        <div class="fw-bold text-gray-600 mb-2">Data Aktivitas</div>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered table-row-gray-200 gs-3 gy-2 gx-3">
+                                <thead>
+                                    <tr class="fw-bold text-gray-600 bg-light fs-7">
+                                        <th class="w-200px">Field</th>
+                                        <th>Nilai</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="activity_data_utama_rows">
+                                    <tr><td colspan="2" class="text-center text-muted">Tidak ada data</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- User Agent --}}
                 <div class="row mb-6">
                     <div class="col-md-12">
-                        <div class="fw-bold text-gray-600">User Agent</div>
-                        <div id="activity_agent" class="text-gray-700">-</div>
+                        <div class="fw-bold text-gray-600 mb-1">User Agent</div>
+                        <div id="activity_agent" class="text-gray-600 fs-7">-</div>
                     </div>
                 </div>
+
+                {{-- Raw Payload --}}
                 <div class="row">
                     <div class="col-md-12">
-                        <div class="fw-bold text-gray-600">Payload</div>
-                        <pre class="bg-light p-4 rounded" id="activity_payload" style="white-space: pre-wrap;">-</pre>
+                        <div class="fw-bold text-gray-600 mb-1">
+                            Data Dikirim
+                            <span class="text-muted fs-8 fw-normal ms-1">(raw request payload)</span>
+                        </div>
+                        <pre class="bg-light p-4 rounded fs-8" id="activity_payload" style="white-space: pre-wrap; max-height: 300px; overflow-y: auto;">-</pre>
                     </div>
                 </div>
             </div>
@@ -145,6 +181,25 @@
 <script>
     const dataUrl = '{{ $dataUrl }}';
     const detailUrlTpl = '{{ $detailUrl }}';
+
+    function escHtml(str) {
+        return String(str ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function methodBadge(method) {
+        const colorMap = { POST: 'success', PUT: 'warning', PATCH: 'warning', DELETE: 'danger' };
+        const color = colorMap[method] || 'secondary';
+        return `<span class="badge badge-light-${color} fs-8">${escHtml(method) || '-'}</span>`;
+    }
+
+    function hasilBadge(hasil) {
+        const isGagal = hasil === 'Gagal';
+        return `<span class="badge badge-light-${isGagal ? 'danger' : 'success'} fs-7">${escHtml(hasil)}</span>`;
+    }
 
     document.addEventListener('DOMContentLoaded', () => {
         const tableEl = $('#activity_logs_table');
@@ -176,12 +231,8 @@
         }
 
         if (typeof flatpickr !== 'undefined') {
-            if (dateFromEl) {
-                fpFrom = flatpickr(dateFromEl, { dateFormat: 'Y-m-d', allowInput: true });
-            }
-            if (dateToEl) {
-                fpTo = flatpickr(dateToEl, { dateFormat: 'Y-m-d', allowInput: true });
-            }
+            if (dateFromEl) fpFrom = flatpickr(dateFromEl, { dateFormat: 'Y-m-d', allowInput: true });
+            if (dateToEl)   fpTo   = flatpickr(dateToEl,   { dateFormat: 'Y-m-d', allowInput: true });
         }
 
         const dt = tableEl.DataTable({
@@ -193,24 +244,49 @@
                 url: dataUrl,
                 dataSrc: 'data',
                 data: function(params) {
-                    params.q = searchInput?.value || '';
-                    params.user_id = userSelect?.value || '';
-                    params.method = methodSelect?.value || '';
+                    params.q        = searchInput?.value || '';
+                    params.user_id  = userSelect?.value || '';
+                    params.method   = methodSelect?.value || '';
                     if (dateFromEl?.value) params.date_from = dateFromEl.value;
-                    if (dateToEl?.value) params.date_to = dateToEl.value;
+                    if (dateToEl?.value)   params.date_to   = dateToEl.value;
                 }
             },
             columns: [
-                { data: 'id' },
-                { data: 'created_at' },
-                { data: 'user' },
-                { data: 'action' },
-                { data: 'method' },
-                { data: 'ip' },
-                { data: 'url' },
-                { data: 'id', orderable:false, searchable:false, className:'text-end', render: (data) => {
-                    return `<button type="button" class="btn btn-sm btn-light btn-detail" data-id="${data}">Detail</button>`;
-                }},
+                { data: 'id', className: 'text-muted fs-7' },
+                { data: 'created_at', className: 'fs-7' },
+                {
+                    data: 'user',
+                    render: (data, type, row) => {
+                        const email = escHtml(row.user_email || '');
+                        return `<div class="fw-semibold">${escHtml(data)}</div>`
+                             + (email ? `<div class="text-muted fs-8">${email}</div>` : '');
+                    }
+                },
+                {
+                    data: 'action',
+                    render: (data, type, row) => {
+                        const badge = hasilBadge(row.hasil || 'Berhasil');
+                        const modul = row.modul && row.modul !== '-'
+                            ? `<span class="badge badge-light-primary fs-8 mt-1">${escHtml(row.modul)}</span>`
+                            : '';
+                        return `<div class="d-flex align-items-start gap-2">
+                                    <div class="mt-1">${badge}</div>
+                                    <div>
+                                        <div class="fw-semibold text-gray-800 lh-sm">${escHtml(data)}</div>
+                                        ${modul}
+                                    </div>
+                                </div>`;
+                    }
+                },
+                {
+                    data: 'method',
+                    render: (data) => methodBadge(data)
+                },
+                { data: 'ip', className: 'fs-7 text-muted' },
+                {
+                    data: 'id', orderable: false, searchable: false, className: 'text-end',
+                    render: (data) => `<button type="button" class="btn btn-sm btn-light btn-detail" data-id="${data}">Detail</button>`
+                },
             ]
         });
 
@@ -220,18 +296,16 @@
         resetBtn?.addEventListener('click', () => {
             if (userSelect) userSelect.value = '';
             if (methodSelect) methodSelect.value = '';
-            if (typeof $ !== 'undefined' && $(userSelect).data('select2')) {
-                $(userSelect).val('').trigger('change.select2');
-            }
-            if (typeof $ !== 'undefined' && $(methodSelect).data('select2')) {
-                $(methodSelect).val('').trigger('change.select2');
+            if (typeof $ !== 'undefined') {
+                if ($(userSelect).data('select2'))   $(userSelect).val('').trigger('change.select2');
+                if ($(methodSelect).data('select2')) $(methodSelect).val('').trigger('change.select2');
             }
             reloadTable();
         });
         dateApplyBtn?.addEventListener('click', reloadTable);
         dateResetBtn?.addEventListener('click', () => {
             if (fpFrom) fpFrom.clear(); else if (dateFromEl) dateFromEl.value = '';
-            if (fpTo) fpTo.clear(); else if (dateToEl) dateToEl.value = '';
+            if (fpTo)   fpTo.clear();   else if (dateToEl)   dateToEl.value   = '';
             reloadTable();
         });
 
@@ -241,28 +315,48 @@
             const url = detailUrlTpl.replace(':id', id);
             try {
                 const response = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-                if (!response.ok) {
-                    throw new Error('Gagal memuat detail aktivitas');
-                }
+                if (!response.ok) throw new Error('Gagal memuat detail aktivitas');
                 const data = await response.json();
-                document.getElementById('activity_id').textContent = data.id ?? '-';
-                document.getElementById('activity_time').textContent = data.created_at ?? '-';
-                document.getElementById('activity_user').textContent = data.user ?? '-';
-                document.getElementById('activity_email').textContent = data.email ?? '-';
-                document.getElementById('activity_method').textContent = data.method ?? '-';
-                document.getElementById('activity_ip').textContent = data.ip ?? '-';
-                document.getElementById('activity_route').textContent = data.route_name ?? '-';
-                document.getElementById('activity_url').textContent = data.url ?? '-';
+
+                document.getElementById('activity_id').textContent    = data.id ?? '-';
+                document.getElementById('activity_time').textContent   = data.created_at ?? '-';
+                document.getElementById('activity_user').textContent   = data.user ?? '-';
+                document.getElementById('activity_email').textContent  = data.email ?? '-';
+                document.getElementById('activity_route').textContent  = data.route_name ?? '-';
+                document.getElementById('activity_url').textContent    = data.url ?? '-';
+                document.getElementById('activity_agent').textContent  = data.user_agent ?? '-';
+
                 document.getElementById('activity_action').textContent = data.action ?? '-';
-                document.getElementById('activity_agent').textContent = data.user_agent ?? '-';
-                const payload = data.payload ? JSON.stringify(data.payload, null, 2) : '-';
+                document.getElementById('activity_hasil_badge').innerHTML = hasilBadge(data.hasil || 'Berhasil');
+                document.getElementById('activity_method').innerHTML   = methodBadge(data.method);
+                document.getElementById('activity_ip').textContent     = data.ip ?? '-';
+
+                const modulLabel = data.modul && data.modul !== '-' ? data.modul : null;
+                document.getElementById('activity_modul_badge').innerHTML = modulLabel
+                    ? `<span class="badge badge-light-primary fs-8">${escHtml(modulLabel)}</span>`
+                    : '';
+
+                // Render data utama sebagai tabel key-value
+                const tbody = document.getElementById('activity_data_utama_rows');
+                const dataUtama = data.data_utama || {};
+                const entries = Object.entries(dataUtama);
+                if (entries.length > 0) {
+                    tbody.innerHTML = entries.map(([key, val]) =>
+                        `<tr>
+                            <td class="fw-semibold text-gray-700 fs-7">${escHtml(key)}</td>
+                            <td class="text-gray-800 fs-7">${escHtml(String(val ?? '-'))}</td>
+                        </tr>`
+                    ).join('');
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="2" class="text-center text-muted fs-7">Tidak ada data aktivitas</td></tr>';
+                }
+
+                // Raw payload
+                const payload = data.data_dikirim != null ? JSON.stringify(data.data_dikirim, null, 2) : '-';
                 document.getElementById('activity_payload').textContent = payload;
 
                 const modalEl = document.getElementById('modal_activity_detail');
-                if (modalEl) {
-                    const modal = new bootstrap.Modal(modalEl);
-                    modal.show();
-                }
+                if (modalEl) new bootstrap.Modal(modalEl).show();
             } catch (error) {
                 console.error(error);
             }

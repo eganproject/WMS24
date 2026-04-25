@@ -64,11 +64,15 @@ class ActivityLogController extends Controller
 
         $data = $query->get()->map(function (ActivityLog $log) {
             $createdAt = $log->created_at ? Carbon::parse($log->created_at)->format('Y-m-d H:i:s') : '-';
+            $ringkasan = is_array($log->payload) ? ($log->payload['ringkasan'] ?? []) : [];
             return [
                 'id' => $log->id,
                 'created_at' => $createdAt,
                 'user' => $log->user?->name ?? '-',
+                'user_email' => $log->user?->email ?? '-',
                 'action' => $log->action,
+                'modul' => $ringkasan['modul'] ?? '-',
+                'hasil' => $ringkasan['hasil'] ?? 'Berhasil',
                 'method' => $log->method ?? '-',
                 'ip' => $log->ip_address ?? '-',
                 'url' => $log->url ?? '-',
@@ -86,6 +90,8 @@ class ActivityLogController extends Controller
     public function show(int $id)
     {
         $log = ActivityLog::with('user')->findOrFail($id);
+        $payload = is_array($log->payload) ? $log->payload : [];
+        $ringkasan = $payload['ringkasan'] ?? [];
 
         return response()->json([
             'id' => $log->id,
@@ -98,7 +104,10 @@ class ActivityLogController extends Controller
             'url' => $log->url ?? '-',
             'ip' => $log->ip_address ?? '-',
             'user_agent' => $log->user_agent ?? '-',
-            'payload' => $log->payload ?? [],
+            'modul' => $ringkasan['modul'] ?? '-',
+            'hasil' => $ringkasan['hasil'] ?? 'Berhasil',
+            'data_utama' => $ringkasan['data_utama'] ?? [],
+            'data_dikirim' => $payload['data_dikirim'] ?? $payload,
         ]);
     }
 

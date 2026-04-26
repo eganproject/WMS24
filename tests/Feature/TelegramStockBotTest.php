@@ -2,14 +2,23 @@
 
 namespace Tests\Feature;
 
+use App\Models\CustomerReturn;
+use App\Models\CustomerReturnItem;
+use App\Models\DamagedGood;
+use App\Models\DamagedGoodItem;
 use App\Models\Item;
 use App\Models\ItemStock;
 use App\Models\Kurir;
+use App\Models\PickingList;
+use App\Models\PickingListException;
 use App\Models\QcResiScan;
 use App\Models\Resi;
+use App\Models\ResiDetail;
 use App\Models\ShipmentScanOut;
+use App\Models\StockMutation;
 use App\Models\User;
 use App\Models\Warehouse;
+use App\Support\TelegramBotService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
@@ -164,6 +173,128 @@ class TelegramStockBotTest extends TestCase
 
         Carbon::setTestNow();
         $this->assertTrue($thirdResi->exists);
+    }
+
+    public function test_new_telegram_operational_commands_reply_with_wms_data(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-04-26 09:00:00'));
+
+        [$mainWarehouse] = $this->createWarehouseFixtures();
+        $user = User::factory()->create();
+        $kurir = Kurir::create(['name' => 'JNT']);
+        $item = Item::create([
+            'sku' => 'SKU-LOW',
+            'name' => 'Barang Low Stock',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+            'address' => 'A-01-02',
+            'safety_stock' => 10,
+        ]);
+        ItemStock::create([
+            'item_id' => $item->id,
+            'warehouse_id' => $mainWarehouse->id,
+            'stock' => 3,
+            'safety_stock' => 10,
+        ]);
+        StockMutation::create([
+            'item_id' => $item->id,
+            'reference_item_id' => $item->id,
+            'reference_sku' => $item->sku,
+            'warehouse_id' => $mainWarehouse->id,
+            'direction' => 'out',
+            'qty' => 2,
+            'source_type' => 'manual',
+            'source_id' => 1,
+            'source_code' => 'ADJ-1',
+            'occurred_at' => now(),
+            'created_by' => $user->id,
+        ]);
+
+        $resi = $this->createResi($user, $kurir, 'ORD-NEW', 'RSNEW', '2026-04-26');
+        ResiDetail::create(['resi_id' => $resi->id, 'sku' => $item->sku, 'qty' => 2]);
+        QcResiScan::create([
+            'resi_id' => $resi->id,
+            'scan_type' => 'resi',
+            'scan_code' => $resi->no_resi,
+            'status' => 'passed',
+            'started_at' => now(),
+            'completed_at' => now(),
+            'scanned_by' => $user->id,
+            'completed_by' => $user->id,
+        ]);
+        ShipmentScanOut::create([
+            'resi_id' => $resi->id,
+            'kurir_id' => $kurir->id,
+            'scan_type' => 'resi',
+            'scan_code' => $resi->no_resi,
+            'scan_date' => '2026-04-26',
+            'scanned_at' => now(),
+            'scanned_by' => $user->id,
+        ]);
+        PickingList::create(['list_date' => '2026-04-26', 'sku' => $item->sku, 'qty' => 5, 'remaining_qty' => 2]);
+        PickingListException::create(['list_date' => '2026-04-26', 'sku' => $item->sku, 'qty' => 1]);
+        $return = CustomerReturn::create([
+            'code' => 'RET-1',
+            'resi_id' => $resi->id,
+            'resi_no' => $resi->no_resi,
+            'order_ref' => $resi->id_pesanan,
+            'received_at' => now(),
+            'status' => CustomerReturn::STATUS_COMPLETED,
+            'finalized_at' => now(),
+            'created_by' => $user->id,
+        ]);
+        CustomerReturnItem::create([
+            'customer_return_id' => $return->id,
+            'item_id' => $item->id,
+            'expected_qty' => 2,
+            'received_qty' => 2,
+            'good_qty' => 1,
+            'damaged_qty' => 1,
+        ]);
+        $damaged = DamagedGood::create([
+            'code' => 'DMG-1',
+            'source_type' => DamagedGood::SOURCE_CUSTOMER_RETURN,
+            'source_warehouse_id' => $mainWarehouse->id,
+            'source_ref' => 'RET-1',
+            'transacted_at' => now(),
+            'status' => 'approved',
+            'created_by' => $user->id,
+        ]);
+        DamagedGoodItem::create([
+            'damaged_good_id' => $damaged->id,
+            'item_id' => $item->id,
+            'qty' => 1,
+            'reason_code' => DamagedGoodItem::REASON_CUSTOMER_RETURN,
+        ]);
+
+        $bot = app(TelegramBotService::class);
+
+        $this->assertStringContainsString('Status operasional: Scan Out Selesai', $bot->replyForText('/cekresi RSNEW'));
+        $this->assertStringContainsString('SKU-LOW | Gudang Besar: 3/10 pcs', $bot->replyForText('/lowstock'));
+        $this->assertStringContainsString('Lokasi: A-01-02', $bot->replyForText('/lokasi SKU-LOW'));
+        $this->assertStringContainsString('ADJ-1', $bot->replyForText('/mutasi SKU-LOW'));
+        $this->assertStringContainsString('QC passed: 1', $bot->replyForText('/today'));
+        $this->assertStringContainsString('Passed: 1', $bot->replyForText('/qc'));
+        $this->assertStringContainsString('Total scan out: 1', $bot->replyForText('/scanout'));
+        $this->assertStringContainsString('Sisa qty: 2', $bot->replyForText('/picking'));
+        $this->assertStringContainsString('Completed: 1', $bot->replyForText('/return'));
+        $this->assertStringContainsString('Total qty rusak: 1', $bot->replyForText('/damaged'));
+
+        Carbon::setTestNow();
+    }
+
+    public function test_telegram_info_command_replies_with_usage_guide(): void
+    {
+        $bot = app(TelegramBotService::class);
+
+        $reply = $bot->replyForText('/info');
+
+        $this->assertStringContainsString('Panduan Telegram Bot WMS', $reply);
+        $this->assertStringContainsString('/stok SKU - cek stok SKU per gudang', $reply);
+        $this->assertStringContainsString('/cekresi NO_RESI - detail status resi', $reply);
+        $this->assertStringContainsString('/today - dashboard operasional hari ini', $reply);
+        $this->assertStringContainsString('/damaged - ringkasan barang rusak hari ini', $reply);
+        $this->assertStringContainsString('Ketik /info', $bot->replyForText('/tidak_ada'));
     }
 
     private function createResi(

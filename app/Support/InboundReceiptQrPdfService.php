@@ -104,9 +104,8 @@ class InboundReceiptQrPdfService
         // SKU is always single line (max 10 chars); fit to almost full card width
         $skuMaxW     = $cw - 60;
         $skuFontSize = $this->fitFontSize($sku, $boldFont, 500, $skuMaxW, 200);
-        // Header height: space for "S K U" label (100px) + SKU text + padding
         $skuCapH     = (int) round($skuFontSize * 0.72);
-        $headerH     = 100 + $skuCapH + 80;
+        $headerH     = $skuCapH + 120;
 
         imagefilledrectangle($image, $cx, $cy, $cx + $cw, $cy + $headerH, $headerBg);
         // Green left accent
@@ -114,11 +113,8 @@ class InboundReceiptQrPdfService
         // Bottom border for header
         imageline($image, $cx, $cy + $headerH, $cx + $cw, $cy + $headerH, $borderColor);
 
-        // "S K U" spaced label
-        $this->drawCenteredText($image, 'S  K  U', $centerX, $cy + 70, 36, $textMuted, false, $regularFont);
-
-        // SKU value: single line, large bold dark, vertically centred below the label
-        $skuBaseline = $cy + 100 + $skuCapH + (int) round(($headerH - 100 - $skuCapH - 80) / 2) + 20;
+        // SKU value: single line, large bold dark, vertically centred in header
+        $skuBaseline = $cy + (int) round(($headerH + $skuCapH) / 2);
         $this->drawCenteredText($image, $sku, $centerX, $skuBaseline, $skuFontSize, $textDark, true, $boldFont);
 
         // ── QR CODE PANEL ─────────────────────────────────────────────

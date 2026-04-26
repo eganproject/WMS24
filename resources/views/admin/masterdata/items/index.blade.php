@@ -474,7 +474,7 @@
                 </div>
                 <div class="col-md-1">
                     <button type="button" class="btn btn-icon btn-light-danger btn-remove-bundle-component">
-                        <i class="fa-solid fa-trash"></i>
+                        <i class="fas fa-trash"></i>
                     </button>
                 </div>
             `;

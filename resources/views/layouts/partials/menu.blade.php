@@ -18,6 +18,40 @@
     $drawerDirection = $drawerDirection ?? 'start';
     $drawerToggle = $drawerToggle ?? '#kt_header_menu_toggle';
     $swapperParent = $swapperParent ?? "{default: '#kt_body', lg: '#kt_header_nav'}";
+
+    $normalizeIcon = static function (?string $icon): string {
+        $icon = trim((string) $icon);
+        if ($icon === '') {
+            return '';
+        }
+
+        $replacements = [
+            'fa-solid' => 'fas',
+            'fa-regular' => 'far',
+            'fa-brands' => 'fab',
+            'fa-gauge-high' => 'fa-tachometer-alt',
+            'fa-location-dot' => 'fa-map-marker-alt',
+            'fa-boxes-stacked' => 'fa-boxes',
+            'fa-right-left' => 'fa-exchange-alt',
+            'fa-arrow-right-arrow-left' => 'fa-exchange-alt',
+            'fa-sliders' => 'fa-sliders-h',
+            'fa-triangle-exclamation' => 'fa-exclamation-triangle',
+            'fa-flask-vial' => 'fa-flask',
+            'fa-list-check' => 'fa-tasks',
+            'fa-rotate-left' => 'fa-undo',
+            'fa-pen-to-square' => 'fa-edit',
+            'fa-magnifying-glass' => 'fa-search',
+            'fa-truck-ramp-box' => 'fa-truck-loading',
+            'fa-arrow-rotate-left' => 'fa-undo',
+            'fa-arrows-rotate' => 'fa-sync-alt',
+            'fa-people-carry-box' => 'fa-people-carry',
+        ];
+
+        return collect(preg_split('/\s+/', $icon))
+            ->filter()
+            ->map(fn ($class) => $replacements[$class] ?? $class)
+            ->implode(' ');
+    };
 @endphp
 
 <div class="{{ $wrapperClass }}" data-kt-drawer="true" data-kt-drawer-name="header-menu" data-kt-drawer-activate="{default: true, lg: false}" data-kt-drawer-overlay="true" data-kt-drawer-width="{default:'200px', '300px': '250px'}" data-kt-drawer-direction="{{ $drawerDirection }}" data-kt-drawer-toggle="{{ $drawerToggle }}" data-kt-swapper="true" data-kt-swapper-mode="prepend" data-kt-swapper-parent="{{ $swapperParent }}">
@@ -58,7 +92,7 @@
                                 <a class="menu-link {{ request()->routeIs($top->route) ? 'active' : '' }}" href="{{ route($top->route) }}">
                                     @if($top->icon)
                                         <span class="menu-icon">
-                                            <i class="{{ $top->icon }} fs-2 fa-fw"></i>
+                                            <i class="{{ $normalizeIcon($top->icon) }} fs-2 fa-fw"></i>
                                         </span>
                                     @endif
                                     <span class="menu-title">{{ $top->name }}</span>
@@ -77,7 +111,7 @@
                                 <a class="menu-link {{ $childActive ? 'active' : '' }}" href="{{ $child->route ? route($child->route) : '#' }}">
                                     @if($child->icon)
                                         <span class="menu-icon">
-                                            <i class="{{ $child->icon }} fs-2 fa-fw"></i>
+                                            <i class="{{ $normalizeIcon($child->icon) }} fs-2 fa-fw"></i>
                                         </span>
                                     @endif
                                     <span class="menu-title">{{ $child->name }}</span>

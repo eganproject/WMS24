@@ -18,7 +18,7 @@ return new class extends Migration {
                 [
                     'name' => 'Laporan Retur',
                     'route' => 'admin.reports.returns.index',
-                    'icon' => 'fa-solid fa-arrow-rotate-left',
+                    'icon' => 'fas fa-undo',
                     'parent_id' => $reportsMenuId,
                     'sort_order' => 1.26,
                     'is_active' => true,

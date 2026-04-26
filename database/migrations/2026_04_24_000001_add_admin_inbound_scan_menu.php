@@ -18,7 +18,7 @@ return new class extends Migration {
             [
                 'name' => 'Scan Inbound',
                 'route' => 'admin.inbound.scan.index',
-                'icon' => 'fa-solid fa-barcode',
+                'icon' => 'fas fa-barcode',
                 'parent_id' => $parentId,
                 'sort_order' => 10.5,
                 'is_active' => true,

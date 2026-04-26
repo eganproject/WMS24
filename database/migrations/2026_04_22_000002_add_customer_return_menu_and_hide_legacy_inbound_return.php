@@ -18,7 +18,7 @@ return new class extends Migration {
                 [
                     'name' => 'Retur Customer',
                     'route' => 'admin.inventory.customer-returns.index',
-                    'icon' => 'fa-solid fa-box-open',
+                    'icon' => 'fas fa-box-open',
                     'parent_id' => $inventoryMenuId,
                     'sort_order' => 14,
                     'is_active' => true,

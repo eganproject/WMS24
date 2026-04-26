@@ -18,7 +18,7 @@ return new class extends Migration {
             [
                 'name' => 'Resep Rework',
                 'route' => 'admin.inventory.rework-recipes.index',
-                'icon' => 'fa-solid fa-flask-vial',
+                'icon' => 'fas fa-flask',
                 'parent_id' => $inventoryMenuId,
                 'sort_order' => 13,
                 'is_active' => true,

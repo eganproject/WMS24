@@ -591,11 +591,11 @@
             </div>
             <div class="scan-hero-actions">
                 <a href="{{ $routes['receipts'] }}" class="scan-hero-link">
-                    <i class="fa-solid fa-dolly"></i>
+                    <i class="fas fa-dolly"></i>
                     <span>Daftar Penerimaan</span>
                 </a>
                 <a href="{{ $routes['manuals'] }}" class="scan-hero-link">
-                    <i class="fa-solid fa-pen-to-square"></i>
+                    <i class="fas fa-edit"></i>
                     <span>Inbound Manual</span>
                 </a>
             </div>

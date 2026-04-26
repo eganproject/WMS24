@@ -18,7 +18,7 @@ return new class extends Migration {
             [
                 'name' => 'Alokasi Barang Rusak',
                 'route' => 'admin.inventory.damaged-allocations.index',
-                'icon' => 'fa-solid fa-recycle',
+                'icon' => 'fas fa-recycle',
                 'parent_id' => $inventoryMenuId,
                 'sort_order' => 13,
                 'is_active' => true,

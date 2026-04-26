@@ -18,7 +18,7 @@ return new class extends Migration {
             [
                 'name' => 'QC Scan Desktop',
                 'route' => 'admin.outbound.qc-scan.index',
-                'icon' => 'fa-solid fa-barcode',
+                'icon' => 'fas fa-barcode',
                 'parent_id' => $parentId,
                 'sort_order' => 13,
                 'is_active' => true,

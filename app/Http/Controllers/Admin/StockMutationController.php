@@ -63,9 +63,17 @@ class StockMutationController extends Controller
 
         $this->applyDateFilter($query, $request);
 
+        $itemFilter = $request->input('item_id');
+        if ($itemFilter !== null && $itemFilter !== '') {
+            $query->where(function ($q) use ($itemFilter) {
+                $q->where('item_id', (int) $itemFilter)
+                  ->orWhere('reference_item_id', (int) $itemFilter);
+            });
+        }
+
         $warehouseFilter = $request->input('warehouse_id');
         if ($warehouseFilter === null || $warehouseFilter === '') {
-            $warehouseFilter = WarehouseService::defaultWarehouseId();
+            $warehouseFilter = $itemFilter ? 'all' : WarehouseService::defaultWarehouseId();
         }
         if ($warehouseFilter !== 'all') {
             $query->where('warehouse_id', (int) $warehouseFilter);

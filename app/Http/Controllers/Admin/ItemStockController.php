@@ -24,12 +24,17 @@ class ItemStockController extends Controller
         $defaultLabel = Warehouse::where('id', $defaultId)->value('name') ?? 'Gudang Besar';
         $displayLabel = Warehouse::where('id', $displayId)->value('name') ?? 'Gudang Display';
         $damagedLabel = Warehouse::where('id', $damagedId)->value('name') ?? 'Gudang Rusak';
+        $warehouses = Warehouse::orderBy('name')->get(['id', 'name']);
 
         return view('admin.inventory.item-stocks.index', [
             'defaultWarehouseLabel' => $defaultLabel,
             'displayWarehouseLabel' => $displayLabel,
             'damagedWarehouseLabel' => $damagedLabel,
-            'updateSafetyUrl' => route('admin.inventory.item-stocks.update-safety'),
+            'defaultWarehouseId'   => $defaultId,
+            'displayWarehouseId'   => $displayId,
+            'damagedWarehouseId'   => $damagedId,
+            'warehouses'           => $warehouses,
+            'updateSafetyUrl'      => route('admin.inventory.item-stocks.update-safety'),
         ]);
     }
 

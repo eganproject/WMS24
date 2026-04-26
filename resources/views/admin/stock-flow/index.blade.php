@@ -317,38 +317,6 @@
     </div>
 @endif
 
-<div class="modal fade" id="modal_receipt_qr_preview" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable mw-1000px">
-        <div class="modal-content">
-            <div class="modal-header">
-                <div>
-                    <h2 class="fw-bolder mb-1" id="receipt_qr_modal_title">Preview QR Penerimaan</h2>
-                    <div class="text-muted fs-7" id="receipt_qr_modal_meta">Memuat data penerimaan...</div>
-                </div>
-                <div class="d-flex align-items-center gap-3">
-                    <a href="#" class="btn btn-primary btn-sm d-none" id="btn_receipt_qr_pdf" target="_blank" rel="noopener">
-                        Download PDF
-                    </a>
-                    <div class="btn btn-icon btn-sm btn-active-icon-primary" data-bs-dismiss="modal">
-                        <span class="svg-icon svg-icon-1">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
-                                <rect opacity="0.5" x="6" y="17.3137" width="16" height="2" rx="1" transform="rotate(-45 6 17.3137)" fill="black" />
-                                <rect x="7.41422" y="6" width="16" height="2" rx="1" transform="rotate(45 7.41422 6)" fill="black" />
-                            </svg>
-                        </span>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-body scroll-y mx-5 mx-xl-10 my-7">
-                <div id="receipt_qr_preview_body">
-                    <div class="d-flex justify-content-center align-items-center py-15">
-                        <div class="spinner-border text-primary" role="status" aria-hidden="true"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
 @endsection
 
 @push('scripts')
@@ -409,12 +377,6 @@
         const itemImportInput = document.getElementById('import_flow_items_file');
         const itemImportError = document.getElementById('error_import_flow_items_file');
         const itemImportSubmit = document.getElementById('btn_import_flow_items_submit');
-        const receiptQrModalEl = document.getElementById('modal_receipt_qr_preview');
-        const receiptQrModal = receiptQrModalEl ? new bootstrap.Modal(receiptQrModalEl) : null;
-        const receiptQrModalTitle = document.getElementById('receipt_qr_modal_title');
-        const receiptQrModalMeta = document.getElementById('receipt_qr_modal_meta');
-        const receiptQrPreviewBody = document.getElementById('receipt_qr_preview_body');
-        const receiptQrPdfBtn = document.getElementById('btn_receipt_qr_pdf');
         const warehouseRow = document.getElementById('flow_warehouse_row');
         const warehouseSelect = document.getElementById('flow_warehouse_id');
         const supplierRow = document.getElementById('flow_supplier_row');
@@ -489,103 +451,6 @@
                 : '';
 
             return `<div><span class="badge ${klass}">Koli ${scannedKoli}/${expectedKoli}</span>${qtyLine}</div>`;
-        };
-
-        const setReceiptQrLoading = (message = 'Memuat QR penerimaan...') => {
-            if (receiptQrModalTitle) receiptQrModalTitle.textContent = 'Preview QR Penerimaan';
-            if (receiptQrModalMeta) receiptQrModalMeta.textContent = message;
-            if (receiptQrPdfBtn) {
-                receiptQrPdfBtn.classList.add('d-none');
-                receiptQrPdfBtn.removeAttribute('href');
-            }
-            if (receiptQrPreviewBody) {
-                receiptQrPreviewBody.innerHTML = `
-                    <div class="d-flex flex-column justify-content-center align-items-center py-15">
-                        <div class="spinner-border text-primary mb-4" role="status" aria-hidden="true"></div>
-                        <div class="text-muted">${escapeHtml(message)}</div>
-                    </div>
-                `;
-            }
-        };
-
-        const renderReceiptQrPreview = (payload) => {
-            if (receiptQrModalTitle) {
-                receiptQrModalTitle.textContent = 'Preview Label Penerimaan';
-            }
-
-            if (receiptQrModalMeta) {
-                const parts = [
-                    payload?.transacted_period || null,
-                    payload?.items_count ? `${payload.items_count} SKU` : null,
-                ].filter(Boolean);
-                receiptQrModalMeta.textContent = parts.join(' | ');
-            }
-
-            if (receiptQrPdfBtn) {
-                if (payload?.pdf_url) {
-                    receiptQrPdfBtn.href = payload.pdf_url;
-                    receiptQrPdfBtn.classList.remove('d-none');
-                } else {
-                    receiptQrPdfBtn.classList.add('d-none');
-                    receiptQrPdfBtn.removeAttribute('href');
-                }
-            }
-
-            const items = Array.isArray(payload?.items) ? payload.items : [];
-            if (!receiptQrPreviewBody) return;
-
-            if (items.length === 0) {
-                receiptQrPreviewBody.innerHTML = `
-                    <div class="alert alert-warning mb-0">
-                        Tidak ada SKU pada penerimaan ini yang bisa dibuatkan QR.
-                    </div>
-                `;
-                return;
-            }
-
-            receiptQrPreviewBody.innerHTML = `
-                <div class="row g-5">
-                    ${items.map((item) => {
-                        const qrUrl = String(item?.qr_url || '');
-                        const qrPreviewUrl = qrUrl
-                            ? `${qrUrl}${qrUrl.includes('?') ? '&' : '?'}v=${Date.now()}`
-                            : '';
-
-                        return `
-                            <div class="col-md-6 col-xl-4">
-                                <div class="card border border-gray-300 shadow-sm h-100 overflow-hidden">
-                                    <div class="card-body p-4 d-flex flex-column" style="min-height: 680px;">
-                                        <div class="text-center mb-4 flex-grow-1 d-flex align-items-center justify-content-center rounded bg-light border border-gray-200 p-3">
-                                            <img
-                                                src="${escapeHtml(qrPreviewUrl)}"
-                                                alt="QR ${escapeHtml(item?.sku || '-')}"
-                                                class="img-fluid"
-                                                style="max-height: 395px;"
-                                            >
-                                        </div>
-                                        <div class="border-top border-gray-200 pt-4 text-center">
-                                            <div class="text-muted fw-bold text-uppercase mb-2" style="font-size: 0.72rem; letter-spacing: 0.18em;">SKU</div>
-                                            <div class="fw-bolder text-gray-900 mx-auto mb-3" style="font-size: clamp(2.3rem, 3.8vw, 3.35rem); letter-spacing: 0.02em; line-height: 0.98; max-width: 100%; overflow-wrap: anywhere;">
-                                                ${escapeHtml(item?.sku || '-')}
-                                            </div>
-                                            <div class="text-gray-700 fs-6 fw-semibold mb-4" style="min-height: 2.5rem;">${escapeHtml(item?.name || '-')}</div>
-                                            <div class="fw-bolder text-gray-900 mb-3" style="font-size: 1.75rem; letter-spacing: 0.1em; line-height: 1;">${escapeHtml(payload?.transacted_period || '-')}</div>
-                                            <div class="rounded border border-gray-200 bg-light px-3 py-3 mx-auto" style="max-width: 280px;">
-                                                <img
-                                                    src="${escapeHtml(payload?.code_barcode_data_url || '')}"
-                                                    alt="Barcode inbound"
-                                                    class="img-fluid"
-                                                    style="width: 240px; height: 64px; object-fit: contain;"
-                                                >
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        `;
-                    }).join('')}
-                </div>
-            `;
         };
 
         const clearErrors = () => {
@@ -1108,9 +973,9 @@
                         ? lockedStatuses.includes(row?.status)
                         : row?.status === 'approved';
                     const detailItem = `<div class="menu-item px-3"><a href="${resolveRoute(rowType, 'detail').replace(':id', data)}" class="menu-link px-3">Detail</a></div>`;
-                    const qrPreviewRoute = resolveRoute(rowType, 'qr_preview');
-                    const qrPreviewItem = (rowType === 'receipt' && qrPreviewRoute)
-                        ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-receipt-qr-preview" data-id="${data}" data-type="${rowType}">Unduh QR Code</a></div>`
+                    const qrPdfRoute = resolveRoute(rowType, 'qr_pdf');
+                    const qrPdfItem = (rowType === 'receipt' && qrPdfRoute)
+                        ? `<div class="menu-item px-3"><a href="${qrPdfRoute.replace(':id', data)}" class="menu-link px-3">Unduh QR Code</a></div>`
                         : '';
                     const approveItem = (showApproveAction && !isLocked && perms.update)
                         ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 text-success btn-approve" data-id="${data}" data-type="${rowType}">Approve</a></div>`
@@ -1121,7 +986,7 @@
                     const delItem = (!isLocked && perms.delete)
                         ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 text-danger btn-delete" data-id="${data}" data-type="${rowType}">Hapus</a></div>`
                         : '';
-                    const actions = `${detailItem}${qrPreviewItem}${approveItem}${editItem}${delItem}`;
+                    const actions = `${detailItem}${qrPdfItem}${approveItem}${editItem}${delItem}`;
                     if (!actions) return '';
                     return `
                         <div class="text-end">
@@ -1354,40 +1219,6 @@
             } catch (err) {
                 console.error(err);
                 if (typeof Swal !== 'undefined') Swal.fire('Error', 'Gagal memuat data', 'error');
-            }
-        });
-
-        tableEl.on('click', '.btn-receipt-qr-preview', async function(e) {
-            e.preventDefault();
-            const id = this.getAttribute('data-id');
-            const rowType = this.getAttribute('data-type') || defaultTypeFilter;
-            const previewUrlTpl = resolveRoute(rowType, 'qr_preview');
-            if (!id || !previewUrlTpl || !receiptQrModal) return;
-
-            setReceiptQrLoading('Memuat QR penerimaan...');
-            receiptQrModal.show();
-
-            try {
-                const res = await fetch(previewUrlTpl.replace(':id', id), {
-                    headers: {
-                        'Accept': 'application/json',
-                    },
-                });
-                const json = await res.json();
-                if (!res.ok) {
-                    throw new Error(json?.message || 'Gagal memuat preview QR.');
-                }
-                renderReceiptQrPreview(json);
-            } catch (err) {
-                console.error(err);
-                if (receiptQrModalMeta) receiptQrModalMeta.textContent = 'Gagal memuat QR penerimaan';
-                if (receiptQrPreviewBody) {
-                    receiptQrPreviewBody.innerHTML = `
-                        <div class="alert alert-danger mb-0">
-                            ${(err && err.message) ? escapeHtml(err.message) : 'Gagal memuat preview QR penerimaan.'}
-                        </div>
-                    `;
-                }
             }
         });
 

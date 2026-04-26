@@ -6,7 +6,8 @@
       "Bash(php -l app/Http/Controllers/Admin/DamagedAllocationController.php)",
       "Bash(php -l app/Http/Controllers/Admin/ActivityLogController.php)",
       "Bash(cp \"C:/Windows/Fonts/arialbd.ttf\" \"c:/laragon/www/wms24/resources/fonts/bold.ttf\")",
-      "Bash(cp \"C:/Windows/Fonts/arial.ttf\" \"c:/laragon/www/wms24/resources/fonts/regular.ttf\")"
+      "Bash(cp \"C:/Windows/Fonts/arial.ttf\" \"c:/laragon/www/wms24/resources/fonts/regular.ttf\")",
+      "Bash(php -r ' *)"
     ]
   }
 }

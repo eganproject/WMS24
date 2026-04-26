@@ -70,14 +70,12 @@ class InboundReceiptQrPdfService
 
         $bgColor      = imagecolorallocate($image, 240, 244, 248);
         $cardColor    = imagecolorallocate($image, 255, 255, 255);
-        $headerBg     = imagecolorallocate($image, 30, 41, 59);
+        $headerBg     = imagecolorallocate($image, 243, 250, 246);
         $green        = imagecolorallocate($image, 34, 197, 94);
         $panelColor   = imagecolorallocate($image, 248, 250, 252);
         $borderColor  = imagecolorallocate($image, 203, 213, 225);
         $textDark     = imagecolorallocate($image, 15, 23, 42);
         $textMuted    = imagecolorallocate($image, 100, 116, 139);
-        $textWhite    = imagecolorallocate($image, 255, 255, 255);
-        $textWhiteDim = imagecolorallocate($image, 148, 163, 184);
 
         $boldFont    = $this->resolveFontPath(true);
         $regularFont = $this->resolveFontPath(false);
@@ -111,22 +109,24 @@ class InboundReceiptQrPdfService
         imagefilledrectangle($image, $cx, $cy, $cx + $cw, $cy + $headerH, $headerBg);
         // Green left accent
         imagefilledrectangle($image, $cx, $cy, $cx + 14, $cy + $headerH, $green);
+        // Bottom border for header
+        imageline($image, $cx, $cy + $headerH, $cx + $cw, $cy + $headerH, $borderColor);
 
         // "S K U" spaced label
-        $this->drawCenteredText($image, 'S  K  U', $centerX, $cy + 92, 26, $textWhiteDim, false, $regularFont);
+        $this->drawCenteredText($image, 'S  K  U', $centerX, $cy + 92, 36, $textMuted, false, $regularFont);
 
-        // SKU value: large bold white, vertically centred in remaining header space
+        // SKU value: large bold dark, vertically centred in remaining header space
         $skuMaxW     = $cw - 180;
-        $skuFontSize = $this->fitWrappedFontSize($skuLines, $boldFont, 280, $skuMaxW, 170);
+        $skuFontSize = $this->fitWrappedFontSize($skuLines, $boldFont, 320, $skuMaxW, 200);
         $skuLineH    = $skuFontSize + self::SKU_LINE_GAP;
         // capHeight ≈ 70 % of font size; baseline = capTop + capHeight
         $capH        = (int) round($skuFontSize * 0.70);
         $blockVisH   = $capH + ($skuLineCount > 1 ? ($skuLineH) : 0);
-        $usableTop   = $cy + 110;
+        $usableTop   = $cy + 120;
         $usableBot   = $cy + $headerH - 20;
         $blockTop    = $usableTop + (int) floor(($usableBot - $usableTop - $blockVisH) / 2);
         $skuBaseline = $blockTop + $capH;
-        $this->drawCenteredLines($image, $skuLines, $centerX, $skuBaseline, $skuFontSize, $textWhite, true, $boldFont, $skuLineH);
+        $this->drawCenteredLines($image, $skuLines, $centerX, $skuBaseline, $skuFontSize, $textDark, true, $boldFont, $skuLineH);
 
         // ── QR CODE PANEL ─────────────────────────────────────────────
         // Fill remaining vertical space, leaving room for name (150) + sep/gap (26) + footer (140) + gap (28+28) + bottom padding (40)
@@ -171,6 +171,13 @@ class InboundReceiptQrPdfService
         imagerectangle($image, $rcqX, $rcqY, $rcqX + $rcqSize, $rcqY + $rcqSize, $borderColor);
         $inboundQrBinary = $this->itemQrCodeService->rawPngForSku((string) $transaction->code, 130);
         $this->pastePngCentered($image, $inboundQrBinary, $rcqX, $rcqY, $rcqSize, $rcqSize, 10);
+
+        // Month.year label centered between QTY box and receipt QR
+        $midX       = (int) round(($qtyX + $qtyW + $rcqX) / 2);
+        $midY       = $footerY + (int) round($qtyH * 0.62);
+        $dateSource = $transaction->transacted_at ?? $transaction->created_at ?? now();
+        $monthYear  = $dateSource->format('m.y');
+        $this->drawCenteredText($image, $monthYear, $midX, $midY, 42, $textDark, true, $boldFont);
 
         ob_start();
         imagejpeg($image, null, 96);

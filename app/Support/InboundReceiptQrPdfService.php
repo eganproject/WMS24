@@ -77,9 +77,6 @@ class InboundReceiptQrPdfService
         $text = imagecolorallocate($image, 15, 23, 42);
         $muted = imagecolorallocate($image, 71, 85, 105);
         $accent = imagecolorallocate($image, 30, 41, 59);
-        $header = imagecolorallocate($image, 17, 24, 39);
-        $headerMuted = imagecolorallocate($image, 203, 213, 225);
-        $white = imagecolorallocate($image, 255, 255, 255);
         $green = imagecolorallocate($image, 34, 197, 94);
 
         imagefilledrectangle($image, 0, 0, self::PAGE_WIDTH, self::PAGE_HEIGHT, $bg);
@@ -94,9 +91,6 @@ class InboundReceiptQrPdfService
 
         $sku = trim((string) $item->sku);
         $name = trim((string) $item->name);
-        $transactionCode = trim((string) $transaction->code);
-        $period = $transaction->transacted_at?->format('m.y') ?? '-';
-        $date = $transaction->transacted_at?->format('d M Y') ?? '-';
         $qty = number_format((float) ($row->qty ?? 0), 0, ',', '.');
 
         $sheetX = self::OUTER_MARGIN;
@@ -107,21 +101,10 @@ class InboundReceiptQrPdfService
         imagefilledrectangle($image, $sheetX, $sheetY, $sheetX + $sheetWidth, $sheetY + $sheetHeight, $card);
         imagerectangle($image, $sheetX, $sheetY, $sheetX + $sheetWidth, $sheetY + $sheetHeight, $line);
 
-        $headerX = $sheetX;
-        $headerY = $sheetY;
-        $headerHeight = 142;
-        imagefilledrectangle($image, $headerX, $headerY, $headerX + $sheetWidth, $headerY + $headerHeight, $header);
-        imagefilledrectangle($image, $headerX, $headerY + $headerHeight - 8, $headerX + $sheetWidth, $headerY + $headerHeight, $green);
-
-        $this->drawText($image, 'QR LABEL PENERIMAAN', $sheetX + 44, $sheetY + 60, 34, $white, true, $boldFont);
-        $this->drawText($image, $transactionCode !== '' ? $transactionCode : '-', $sheetX + 44, $sheetY + 108, 22, $headerMuted, false, $regularFont);
-        $this->drawText($image, 'PERIODE', $sheetX + $sheetWidth - 250, $sheetY + 50, 16, $headerMuted, true, $boldFont);
-        $this->drawText($image, $period, $sheetX + $sheetWidth - 250, $sheetY + 110, 52, $white, true, $boldFont);
-
         $qrPanelX = $sheetX + 74;
-        $qrPanelY = $sheetY + $headerHeight + 54;
+        $qrPanelY = $sheetY + 74;
         $qrPanelWidth = $sheetWidth - 148;
-        $qrPanelHeight = 724;
+        $qrPanelHeight = 760;
         imagefilledrectangle($image, $qrPanelX, $qrPanelY, $qrPanelX + $qrPanelWidth, $qrPanelY + $qrPanelHeight, $panel);
         imagerectangle($image, $qrPanelX, $qrPanelY, $qrPanelX + $qrPanelWidth, $qrPanelY + $qrPanelHeight, $line);
 
@@ -158,19 +141,19 @@ class InboundReceiptQrPdfService
 
         $skuLines = $this->splitTextForLines($sku, 2);
         $skuPanelX = $sheetX + 74;
-        $skuPanelY = $qrPanelY + $qrPanelHeight + 44;
+        $skuPanelY = $qrPanelY + $qrPanelHeight + 56;
         $skuPanelWidth = $sheetWidth - 148;
-        $skuPanelHeight = 376;
+        $skuPanelHeight = 520;
         imagefilledrectangle($image, $skuPanelX, $skuPanelY, $skuPanelX + $skuPanelWidth, $skuPanelY + $skuPanelHeight, $card);
         imagerectangle($image, $skuPanelX, $skuPanelY, $skuPanelX + $skuPanelWidth, $skuPanelY + $skuPanelHeight, $line);
-        imagefilledrectangle($image, $skuPanelX, $skuPanelY, $skuPanelX + 18, $skuPanelY + $skuPanelHeight, $green);
+        imagefilledrectangle($image, $skuPanelX, $skuPanelY, $skuPanelX + 22, $skuPanelY + $skuPanelHeight, $green);
 
         $this->drawCenteredText(
             $image,
             'SKU',
             (int) floor(self::PAGE_WIDTH / 2),
-            $skuPanelY + 64,
-            26,
+            $skuPanelY + 74,
+            30,
             $muted,
             true,
             $boldFont
@@ -179,13 +162,13 @@ class InboundReceiptQrPdfService
         $skuFontSize = $this->fitWrappedFontSize(
             $skuLines,
             $boldFont,
-            132,
+            188,
             $skuPanelWidth - 120,
-            70
+            96
         );
         $skuLineHeight = $skuFontSize + self::SKU_LINE_GAP;
         $skuBlockHeight = $skuLineHeight * count($skuLines);
-        $skuBlockTop = $skuPanelY + 112 + (int) max(0, floor(($skuPanelHeight - 134 - $skuBlockHeight) / 2));
+        $skuBlockTop = $skuPanelY + 126 + (int) max(0, floor(($skuPanelHeight - 148 - $skuBlockHeight) / 2));
         $this->drawCenteredLines(
             $image,
             $skuLines,
@@ -202,16 +185,16 @@ class InboundReceiptQrPdfService
         $nameLines = $this->wrapTextByWidth(
             Str::limit($nameText, 96),
             $regularFont,
-            30,
+            34,
             $sheetWidth - 260,
             2
         );
         $nameFontSize = $this->fitWrappedFontSize(
             $nameLines,
             $regularFont,
-            30,
+            34,
             $sheetWidth - 260,
-            20
+            22
         );
         $nameLineHeight = $nameFontSize + self::NAME_LINE_GAP;
         $nameTop = $skuPanelY + $skuPanelHeight + 62;
@@ -227,60 +210,23 @@ class InboundReceiptQrPdfService
             $nameLineHeight
         );
 
-        $footerY = $sheetY + $sheetHeight - 220;
-        imageline($image, $sheetX + 74, $footerY - 42, $sheetX + $sheetWidth - 74, $footerY - 42, $line);
-        $this->drawText($image, 'QTY', $sheetX + 74, $footerY, 16, $muted, true, $boldFont);
-        $this->drawText($image, $qty, $sheetX + 74, $footerY + 52, 42, $text, true, $boldFont);
-        $this->drawText($image, 'TANGGAL', $sheetX + 268, $footerY, 16, $muted, true, $boldFont);
-        $this->drawText($image, $date, $sheetX + 268, $footerY + 48, 28, $text, true, $boldFont);
-        $this->drawText($image, 'KODE PENERIMAAN', $sheetX + 560, $footerY, 16, $muted, true, $boldFont);
-        $this->drawText($image, $transactionCode !== '' ? Str::limit($transactionCode, 24, '') : '-', $sheetX + 560, $footerY + 48, 28, $text, true, $boldFont);
-
-        $barcodePanelWidth = 172;
-        $barcodePanelHeight = 172;
-        $barcodePanelX = $sheetX + $sheetWidth - 74 - $barcodePanelWidth;
-        $barcodePanelY = $footerY - 18;
-        imagefilledrectangle(
+        $qtyPanelWidth = 220;
+        $qtyPanelHeight = 110;
+        $qtyPanelX = (int) floor((self::PAGE_WIDTH - $qtyPanelWidth) / 2);
+        $qtyPanelY = $sheetY + $sheetHeight - 172;
+        imagefilledrectangle($image, $qtyPanelX, $qtyPanelY, $qtyPanelX + $qtyPanelWidth, $qtyPanelY + $qtyPanelHeight, $panel);
+        imagerectangle($image, $qtyPanelX, $qtyPanelY, $qtyPanelX + $qtyPanelWidth, $qtyPanelY + $qtyPanelHeight, $line);
+        $this->drawCenteredText(
             $image,
-            $barcodePanelX,
-            $barcodePanelY,
-            $barcodePanelX + $barcodePanelWidth,
-            $barcodePanelY + $barcodePanelHeight,
-            $panel
+            'QTY',
+            (int) floor(self::PAGE_WIDTH / 2),
+            $qtyPanelY + 36,
+            14,
+            $muted,
+            true,
+            $boldFont
         );
-        imagerectangle(
-            $image,
-            $barcodePanelX,
-            $barcodePanelY,
-            $barcodePanelX + $barcodePanelWidth,
-            $barcodePanelY + $barcodePanelHeight,
-            $line
-        );
-
-        $inboundQrBinary = $this->itemQrCodeService->rawPngForSku((string) $transaction->code, 148);
-        $inboundQrImage = imagecreatefromstring($inboundQrBinary);
-        if ($inboundQrImage !== false) {
-            $sourceWidth = imagesx($inboundQrImage);
-            $sourceHeight = imagesy($inboundQrImage);
-            $targetWidth = 148;
-            $targetHeight = 148;
-            $targetX = $barcodePanelX + (int) floor(($barcodePanelWidth - $targetWidth) / 2);
-            $targetY = $barcodePanelY + (int) floor(($barcodePanelHeight - $targetHeight) / 2);
-
-            imagecopyresampled(
-                $image,
-                $inboundQrImage,
-                $targetX,
-                $targetY,
-                0,
-                0,
-                $targetWidth,
-                $targetHeight,
-                $sourceWidth,
-                $sourceHeight
-            );
-            imagedestroy($inboundQrImage);
-        }
+        $this->drawCenteredText($image, $qty, (int) floor(self::PAGE_WIDTH / 2), $qtyPanelY + 88, 38, $text, true, $boldFont);
 
         ob_start();
         imagejpeg($image, null, 96);

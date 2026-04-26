@@ -14,7 +14,7 @@ class InboundReceiptQrPdfService
     private const PAGE_WIDTH_PT = 283.46;
     private const PAGE_HEIGHT_PT = 425.20;
     private const OUTER_MARGIN = 40;
-    private const SKU_LINE_GAP = 16;
+    private const SKU_LINE_GAP = 22;
     private const NAME_LINE_GAP = 10;
 
     public function __construct(
@@ -101,59 +101,31 @@ class InboundReceiptQrPdfService
         imagefilledrectangle($image, $sheetX, $sheetY, $sheetX + $sheetWidth, $sheetY + $sheetHeight, $card);
         imagerectangle($image, $sheetX, $sheetY, $sheetX + $sheetWidth, $sheetY + $sheetHeight, $line);
 
-        $qrPanelX = $sheetX + 74;
-        $qrPanelY = $sheetY + 74;
-        $qrPanelWidth = $sheetWidth - 148;
-        $qrPanelHeight = 760;
+        $qrPanelX = $sheetX + 86;
+        $qrPanelY = $sheetY + 70;
+        $qrPanelWidth = $sheetWidth - 172;
+        $qrPanelHeight = 650;
         imagefilledrectangle($image, $qrPanelX, $qrPanelY, $qrPanelX + $qrPanelWidth, $qrPanelY + $qrPanelHeight, $panel);
         imagerectangle($image, $qrPanelX, $qrPanelY, $qrPanelX + $qrPanelWidth, $qrPanelY + $qrPanelHeight, $line);
 
         $qrBinary = $this->itemQrCodeService->rawPngForItem($item, 720);
-        $qrImage = imagecreatefromstring($qrBinary);
-        if ($qrImage !== false) {
-            $sourceWidth = imagesx($qrImage);
-            $sourceHeight = imagesy($qrImage);
-            $targetMaxWidth = $qrPanelWidth - 86;
-            $targetMaxHeight = $qrPanelHeight - 86;
-            $scale = min(
-                $targetMaxWidth / max(1, $sourceWidth),
-                $targetMaxHeight / max(1, $sourceHeight)
-            );
-            $targetWidth = (int) max(1, floor($sourceWidth * $scale));
-            $targetHeight = (int) max(1, floor($sourceHeight * $scale));
-            $targetX = $qrPanelX + (int) floor(($qrPanelWidth - $targetWidth) / 2);
-            $targetY = $qrPanelY + (int) floor(($qrPanelHeight - $targetHeight) / 2);
-
-            imagecopyresampled(
-                $image,
-                $qrImage,
-                $targetX,
-                $targetY,
-                0,
-                0,
-                $targetWidth,
-                $targetHeight,
-                $sourceWidth,
-                $sourceHeight
-            );
-            imagedestroy($qrImage);
-        }
+        $this->pastePngCentered($image, $qrBinary, $qrPanelX, $qrPanelY, $qrPanelWidth, $qrPanelHeight, 52);
 
         $skuLines = $this->splitTextForLines($sku, 2);
-        $skuPanelX = $sheetX + 74;
-        $skuPanelY = $qrPanelY + $qrPanelHeight + 56;
-        $skuPanelWidth = $sheetWidth - 148;
-        $skuPanelHeight = 520;
+        $skuPanelX = $sheetX + 64;
+        $skuPanelY = $qrPanelY + $qrPanelHeight + 48;
+        $skuPanelWidth = $sheetWidth - 128;
+        $skuPanelHeight = 650;
         imagefilledrectangle($image, $skuPanelX, $skuPanelY, $skuPanelX + $skuPanelWidth, $skuPanelY + $skuPanelHeight, $card);
         imagerectangle($image, $skuPanelX, $skuPanelY, $skuPanelX + $skuPanelWidth, $skuPanelY + $skuPanelHeight, $line);
-        imagefilledrectangle($image, $skuPanelX, $skuPanelY, $skuPanelX + 22, $skuPanelY + $skuPanelHeight, $green);
+        imagefilledrectangle($image, $skuPanelX, $skuPanelY, $skuPanelX + 28, $skuPanelY + $skuPanelHeight, $green);
 
         $this->drawCenteredText(
             $image,
             'SKU',
             (int) floor(self::PAGE_WIDTH / 2),
-            $skuPanelY + 74,
-            30,
+            $skuPanelY + 80,
+            34,
             $muted,
             true,
             $boldFont
@@ -162,13 +134,13 @@ class InboundReceiptQrPdfService
         $skuFontSize = $this->fitWrappedFontSize(
             $skuLines,
             $boldFont,
-            188,
-            $skuPanelWidth - 120,
-            96
+            420,
+            $skuPanelWidth - 150,
+            150
         );
         $skuLineHeight = $skuFontSize + self::SKU_LINE_GAP;
         $skuBlockHeight = $skuLineHeight * count($skuLines);
-        $skuBlockTop = $skuPanelY + 126 + (int) max(0, floor(($skuPanelHeight - 148 - $skuBlockHeight) / 2));
+        $skuBlockTop = $skuPanelY + 136 + (int) max(0, floor(($skuPanelHeight - 154 - $skuBlockHeight) / 2));
         $this->drawCenteredLines(
             $image,
             $skuLines,
@@ -197,7 +169,7 @@ class InboundReceiptQrPdfService
             22
         );
         $nameLineHeight = $nameFontSize + self::NAME_LINE_GAP;
-        $nameTop = $skuPanelY + $skuPanelHeight + 62;
+        $nameTop = $skuPanelY + $skuPanelHeight + 52;
         $this->drawCenteredLines(
             $image,
             $nameLines,
@@ -210,23 +182,34 @@ class InboundReceiptQrPdfService
             $nameLineHeight
         );
 
+        $footerPanelY = $sheetY + $sheetHeight - 190;
+
         $qtyPanelWidth = 220;
-        $qtyPanelHeight = 110;
-        $qtyPanelX = (int) floor((self::PAGE_WIDTH - $qtyPanelWidth) / 2);
-        $qtyPanelY = $sheetY + $sheetHeight - 172;
+        $qtyPanelHeight = 116;
+        $qtyPanelX = $sheetX + 86;
+        $qtyPanelY = $footerPanelY + 16;
         imagefilledrectangle($image, $qtyPanelX, $qtyPanelY, $qtyPanelX + $qtyPanelWidth, $qtyPanelY + $qtyPanelHeight, $panel);
         imagerectangle($image, $qtyPanelX, $qtyPanelY, $qtyPanelX + $qtyPanelWidth, $qtyPanelY + $qtyPanelHeight, $line);
         $this->drawCenteredText(
             $image,
             'QTY',
-            (int) floor(self::PAGE_WIDTH / 2),
+            $qtyPanelX + (int) floor($qtyPanelWidth / 2),
             $qtyPanelY + 36,
             14,
             $muted,
             true,
             $boldFont
         );
-        $this->drawCenteredText($image, $qty, (int) floor(self::PAGE_WIDTH / 2), $qtyPanelY + 88, 38, $text, true, $boldFont);
+        $this->drawCenteredText($image, $qty, $qtyPanelX + (int) floor($qtyPanelWidth / 2), $qtyPanelY + 92, 42, $text, true, $boldFont);
+
+        $inboundPanelWidth = 166;
+        $inboundPanelHeight = 166;
+        $inboundPanelX = $sheetX + $sheetWidth - 86 - $inboundPanelWidth;
+        $inboundPanelY = $footerPanelY;
+        imagefilledrectangle($image, $inboundPanelX, $inboundPanelY, $inboundPanelX + $inboundPanelWidth, $inboundPanelY + $inboundPanelHeight, $panel);
+        imagerectangle($image, $inboundPanelX, $inboundPanelY, $inboundPanelX + $inboundPanelWidth, $inboundPanelY + $inboundPanelHeight, $line);
+        $inboundQrBinary = $this->itemQrCodeService->rawPngForSku((string) $transaction->code, 150);
+        $this->pastePngCentered($image, $inboundQrBinary, $inboundPanelX, $inboundPanelY, $inboundPanelWidth, $inboundPanelHeight, 12);
 
         ob_start();
         imagejpeg($image, null, 96);
@@ -296,6 +279,43 @@ class InboundReceiptQrPdfService
             $this->drawCenteredText($image, $line, $centerX, $currentY, $size, $color, $bold, $font);
             $currentY += $lineHeight;
         }
+    }
+
+    private function pastePngCentered($image, string $pngBinary, int $x, int $y, int $width, int $height, int $padding): void
+    {
+        $png = imagecreatefromstring($pngBinary);
+        if ($png === false) {
+            return;
+        }
+
+        $sourceWidth = imagesx($png);
+        $sourceHeight = imagesy($png);
+        $targetMaxWidth = max(1, $width - ($padding * 2));
+        $targetMaxHeight = max(1, $height - ($padding * 2));
+        $scale = min(
+            $targetMaxWidth / max(1, $sourceWidth),
+            $targetMaxHeight / max(1, $sourceHeight)
+        );
+
+        $targetWidth = (int) max(1, floor($sourceWidth * $scale));
+        $targetHeight = (int) max(1, floor($sourceHeight * $scale));
+        $targetX = $x + (int) floor(($width - $targetWidth) / 2);
+        $targetY = $y + (int) floor(($height - $targetHeight) / 2);
+
+        imagecopyresampled(
+            $image,
+            $png,
+            $targetX,
+            $targetY,
+            0,
+            0,
+            $targetWidth,
+            $targetHeight,
+            $sourceWidth,
+            $sourceHeight
+        );
+
+        imagedestroy($png);
     }
 
     private function fitFontSize(string $text, ?string $font, int $startSize, int $maxWidth, int $minSize): int

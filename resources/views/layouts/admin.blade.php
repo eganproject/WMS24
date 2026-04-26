@@ -60,81 +60,100 @@
         }
 
         .table-search-toolbar {
-            width: 100%;
+            width: min(100%, 430px);
             display: flex;
-            align-items: stretch;
-            gap: 0.95rem;
-            flex-wrap: wrap;
-            padding: 0.55rem;
-            border: 1px solid #e6ebf2;
-            border-radius: 1rem;
-            background: linear-gradient(180deg, #f7f9fc 0%, #f1f4f8 100%);
-            box-shadow: 0 8px 22px rgba(15, 23, 42, 0.04);
+            align-items: center;
+            gap: 0.35rem;
+            flex-wrap: nowrap;
+            padding: 0.35rem;
+            border: 1px solid #e4e6ef;
+            border-radius: 0.75rem;
+            background: #f5f8fa;
         }
 
         .table-search-toolbar .table-search-input {
-            flex: 1 1 300px;
-            min-width: min(100%, 250px);
+            flex: 1 1 auto;
+            min-width: 0;
             width: auto !important;
-            min-height: 48px;
-            border-radius: 0.9rem !important;
-            border: 1px solid #d3dbe7 !important;
-            background: #f3f6fa !important;
+            min-height: 42px;
+            border-radius: 0.55rem !important;
+            border: 0 !important;
+            background: transparent !important;
             color: #181c32;
-            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+            box-shadow: none !important;
         }
 
         .table-search-toolbar .table-search-input:focus {
-            border-color: #009ef7 !important;
-            background: #f7f9fc !important;
-            box-shadow: 0 0 0 0.25rem rgba(0, 158, 247, 0.12) !important;
+            background: #fff !important;
+            box-shadow: 0 0 0 0.2rem rgba(0, 158, 247, 0.08) !important;
         }
 
         .table-search-toolbar .position-absolute.ms-6 {
             opacity: 0.6;
+            pointer-events: none;
         }
 
         .table-search-mode-wrap {
             display: inline-flex;
             align-items: center;
-            gap: 0.7rem;
-            min-height: 48px;
-            padding: 0.45rem 0.8rem 0.45rem 0.9rem;
-            border: 1px solid #d3dbe7;
-            border-radius: 0.9rem;
-            background: #f3f6fa;
-            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+            flex: 0 0 auto;
+            gap: 0.25rem;
+            min-height: 38px;
+            padding: 0.25rem;
+            border: 1px solid #e4e6ef;
+            border-radius: 0.6rem;
+            background: #fff;
         }
 
         .table-search-mode-label {
-            margin: 0;
-            display: inline-flex;
-            align-items: center;
-            padding: 0.38rem 0.6rem;
-            border-radius: 999px;
-            background: #e7eef7;
-            font-size: 0.68rem;
-            line-height: 1;
-            font-weight: 700;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            color: #3f4254;
-            white-space: nowrap;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+            position: absolute;
+            clip: rect(0, 0, 0, 0);
         }
 
         .table-search-mode-select {
-            min-width: 150px;
-            border: 0;
-            background: transparent;
-            box-shadow: none !important;
-            padding: 0.35rem 2rem 0.35rem 0.15rem;
-            color: #181c32;
-            font-weight: 600;
+            position: absolute;
+            width: 1px !important;
+            height: 1px !important;
+            padding: 0 !important;
+            margin: -1px !important;
+            overflow: hidden !important;
+            clip: rect(0, 0, 0, 0) !important;
+            white-space: nowrap !important;
+            border: 0 !important;
         }
 
-        .table-search-mode-select:focus {
+        .table-search-mode-select:focus,
+        .table-search-mode-select:focus-visible {
             border: 0;
             box-shadow: none !important;
+        }
+
+        .table-search-mode-button {
+            width: 34px;
+            height: 34px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 0;
+            border-radius: 0.45rem;
+            background: transparent;
+            color: #7e8299;
+            transition: color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .table-search-mode-button:hover,
+        .table-search-mode-button:focus-visible {
+            color: #009ef7;
+            background: #eef6ff;
+        }
+
+        .table-search-mode-button.is-active {
+            color: #fff;
+            background: #009ef7;
+            box-shadow: 0 4px 10px rgba(0, 158, 247, 0.2);
         }
 
         .table-search-card-header {
@@ -183,10 +202,7 @@
             }
 
             .table-search-toolbar {
-                flex-direction: column;
-                align-items: stretch;
-                gap: 0.75rem;
-                padding: 0.7rem;
+                width: 100%;
             }
 
             .table-search-toolbar .table-search-input {
@@ -196,14 +212,7 @@
             }
 
             .table-search-mode-wrap {
-                width: 100%;
-                justify-content: space-between;
-                padding-inline: 0.8rem;
-            }
-
-            .table-search-mode-select {
-                min-width: 0;
-                width: 100%;
+                margin-left: auto;
             }
         }
 
@@ -315,19 +324,57 @@
                     modeWrap.className = 'table-search-mode-wrap';
                     const modeLabel = document.createElement('span');
                     modeLabel.className = 'table-search-mode-label';
-                    modeLabel.textContent = 'Mode Cari';
+                    modeLabel.textContent = 'Mode pencarian';
 
                     const select = document.createElement('select');
-                    select.className = 'form-select form-select-solid table-search-mode-select';
+                    select.className = 'table-search-mode-select';
                     select.setAttribute('aria-label', 'Mode pencarian tabel');
                     select.setAttribute('data-search-mode-control', '1');
                     select.innerHTML = `
                         <option value="contains" selected>Kemiripan</option>
                         <option value="exact">Presisi</option>
                     `;
-                    select.addEventListener('change', reloadAllDataTables);
-                    modeWrap.append(modeLabel, select);
+
+                    const modeOptions = [
+                        { value: 'contains', icon: 'fas fa-search', label: 'Cari berdasarkan kemiripan' },
+                        { value: 'exact', icon: 'fas fa-bullseye', label: 'Cari presisi' },
+                    ];
+
+                    const updateModeButtons = () => {
+                        modeWrap.querySelectorAll('[data-search-mode-value]').forEach((button) => {
+                            const isActive = button.dataset.searchModeValue === select.value;
+                            button.classList.toggle('is-active', isActive);
+                            button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+                        });
+                    };
+
+                    const buttons = modeOptions.map((option) => {
+                        const button = document.createElement('button');
+                        button.type = 'button';
+                        button.className = 'table-search-mode-button';
+                        button.dataset.searchModeValue = option.value;
+                        button.setAttribute('aria-label', option.label);
+                        button.setAttribute('title', option.label);
+                        button.innerHTML = `<i class="${option.icon}" aria-hidden="true"></i>`;
+                        button.addEventListener('click', () => {
+                            if (select.value === option.value) {
+                                return;
+                            }
+
+                            select.value = option.value;
+                            updateModeButtons();
+                            select.dispatchEvent(new Event('change', { bubbles: true }));
+                        });
+                        return button;
+                    });
+
+                    select.addEventListener('change', () => {
+                        updateModeButtons();
+                        reloadAllDataTables();
+                    });
+                    modeWrap.append(modeLabel, select, ...buttons);
                     host.appendChild(modeWrap);
+                    updateModeButtons();
 
                     input.dataset.searchModeReady = '1';
                 });

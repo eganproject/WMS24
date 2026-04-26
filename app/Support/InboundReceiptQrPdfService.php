@@ -87,7 +87,7 @@ class InboundReceiptQrPdfService
 
         $sku      = trim((string) $item->sku);
         $name     = trim((string) $item->name);
-        $qty      = number_format((float) ($row->qty ?? 0), 0, ',', '.');
+        $qty      = number_format((float) ($row->koli ?? 0), 0, ',', '.');
         $centerX  = (int) floor(self::PAGE_WIDTH / 2);
 
         $cx = self::OUTER_MARGIN;

@@ -362,7 +362,6 @@
 
         const sources = [
             '{{ asset('vendor/html5-qrcode.min.js') }}',
-            'https://unpkg.com/html5-qrcode@2.3.10/minified/html5-qrcode.min.js',
         ];
 
         html5LoadPromise = new Promise((resolve) => {

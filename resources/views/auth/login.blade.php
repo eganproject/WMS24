@@ -6,9 +6,6 @@
     <link rel="shortcut icon" href="{{ asset('metronic/media/logos/favicon.png') }}" />
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ config('app.name', 'Gudang 24') }} | Login</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
             --bg: #0b0c0f;
@@ -26,7 +23,7 @@
 
         body {
             margin: 0;
-            font-family: 'Sora', sans-serif;
+            font-family: "Sora", "Inter", "Segoe UI", Arial, sans-serif;
             color: var(--ink);
             background:
                 radial-gradient(700px 400px at 8% -10%, rgba(34, 211, 238, 0.18) 0%, rgba(34, 211, 238, 0) 55%),

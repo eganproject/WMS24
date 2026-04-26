@@ -5,10 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Picker Mobile')</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+    <link rel="stylesheet" href="{{ asset('metronic/plugins/global/plugins.bundle.css') }}">
     <style>
         :root {
             --bg: #f5f3ef;
@@ -26,7 +23,7 @@
 
         body {
             margin: 0;
-            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-family: "Plus Jakarta Sans", "Inter", "Segoe UI", Arial, sans-serif;
             color: var(--text);
             background: radial-gradient(1200px 600px at 10% -20%, #fff7ed 0%, rgba(255, 247, 237, 0) 55%),
                         radial-gradient(900px 500px at 100% 0%, #ecfdf3 0%, rgba(236, 253, 243, 0) 55%),
@@ -281,6 +278,6 @@
 </head>
 <body>
     @yield('content')
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="{{ asset('metronic/plugins/global/plugins.bundle.js') }}"></script>
 </body>
 </html>

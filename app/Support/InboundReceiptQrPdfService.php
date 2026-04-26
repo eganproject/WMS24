@@ -182,6 +182,11 @@ class InboundReceiptQrPdfService
 
     private function resolveFontPath(bool $bold): ?string
     {
+        $projectFont = resource_path('fonts/'.($bold ? 'bold' : 'regular').'.ttf');
+        if (@is_file($projectFont)) {
+            return $projectFont;
+        }
+
         $candidates = $bold
             ? [
                 'C:\\Windows\\Fonts\\arialbd.ttf',

@@ -546,30 +546,36 @@
             receiptQrPreviewBody.innerHTML = `
                 <div class="row g-5">
                     ${items.map((item) => {
+                        const qrUrl = String(item?.qr_url || '');
+                        const qrPreviewUrl = qrUrl
+                            ? `${qrUrl}${qrUrl.includes('?') ? '&' : '?'}v=${Date.now()}`
+                            : '';
+
                         return `
                             <div class="col-md-6 col-xl-4">
                                 <div class="card border border-gray-300 shadow-sm h-100 overflow-hidden">
-                                    <div class="card-body p-4 d-flex flex-column" style="min-height: 640px;">
-                                        <div class="text-center mb-4 flex-grow-1 d-flex align-items-center justify-content-center">
+                                    <div class="card-body p-4 d-flex flex-column" style="min-height: 680px;">
+                                        <div class="text-center mb-4 flex-grow-1 d-flex align-items-center justify-content-center rounded bg-light border border-gray-200 p-3">
                                             <img
-                                                src="${escapeHtml(item?.qr_url || '')}"
+                                                src="${escapeHtml(qrPreviewUrl)}"
                                                 alt="QR ${escapeHtml(item?.sku || '-')}"
-                                                class="img-fluid rounded bg-light p-3 border border-gray-200"
-                                                style="max-height: 390px;"
+                                                class="img-fluid"
+                                                style="max-height: 395px;"
                                             >
                                         </div>
                                         <div class="border-top border-gray-200 pt-4 text-center">
-                                            <div class="fw-bolder text-gray-900 mb-2" style="font-size: 1.8rem; letter-spacing: 0.03em; line-height: 1.1;">
+                                            <div class="text-muted fw-bold text-uppercase mb-2" style="font-size: 0.72rem; letter-spacing: 0.18em;">SKU</div>
+                                            <div class="fw-bolder text-gray-900 mx-auto mb-3" style="font-size: clamp(2.3rem, 3.8vw, 3.35rem); letter-spacing: 0.02em; line-height: 0.98; max-width: 100%; overflow-wrap: anywhere;">
                                                 ${escapeHtml(item?.sku || '-')}
                                             </div>
-                                            <div class="text-muted fs-7 mb-3">${escapeHtml(item?.name || '-')}</div>
-                                            <div class="fw-bolder text-gray-900 mb-3" style="font-size: 1.6rem; letter-spacing: 0.08em; line-height: 1;">${escapeHtml(payload?.transacted_period || '-')}</div>
-                                            <div class="rounded border border-gray-200 bg-light px-3 py-3 mx-auto" style="max-width: 260px;">
+                                            <div class="text-gray-700 fs-6 fw-semibold mb-4" style="min-height: 2.5rem;">${escapeHtml(item?.name || '-')}</div>
+                                            <div class="fw-bolder text-gray-900 mb-3" style="font-size: 1.75rem; letter-spacing: 0.1em; line-height: 1;">${escapeHtml(payload?.transacted_period || '-')}</div>
+                                            <div class="rounded border border-gray-200 bg-light px-3 py-3 mx-auto" style="max-width: 280px;">
                                                 <img
                                                     src="${escapeHtml(payload?.code_barcode_data_url || '')}"
                                                     alt="Barcode inbound"
                                                     class="img-fluid"
-                                                    style="width: 220px; height: 58px; object-fit: contain;"
+                                                    style="width: 240px; height: 64px; object-fit: contain;"
                                                 >
                                             </div>
                                         </div>

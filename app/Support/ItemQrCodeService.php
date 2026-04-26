@@ -23,7 +23,7 @@ class ItemQrCodeService
         }
 
         $canvasWidth = $qrSize + 140;
-        $canvasHeight = $qrSize + 230;
+        $canvasHeight = $qrSize + 270;
         $image = imagecreatetruecolor($canvasWidth, $canvasHeight);
 
         if ($image === false) {
@@ -68,10 +68,10 @@ class ItemQrCodeService
         $boldFont = $this->resolveFontPath(true);
 
         if ($regularFont !== null && $boldFont !== null && function_exists('imagettftext')) {
-            $this->drawCenteredTtfText($image, 'SKU', $regularFont, 13, 0, (int) round($canvasWidth / 2), $qrPanelY + $qrSize + 56, $label, 3);
+            $this->drawCenteredTtfText($image, 'SKU', $regularFont, 14, 0, (int) round($canvasWidth / 2), $qrPanelY + $qrSize + 58, $label, 3);
 
-            $fontSize = $this->fitFontSize($sku, $boldFont, 24, $cardWidth - 72);
-            $this->drawCenteredTtfText($image, $sku, $boldFont, $fontSize, 0, (int) round($canvasWidth / 2), $qrPanelY + $qrSize + 98, $text);
+            $fontSize = $this->fitFontSize($sku, $boldFont, 42, $cardWidth - 64, 22);
+            $this->drawCenteredTtfText($image, $sku, $boldFont, $fontSize, 0, (int) round($canvasWidth / 2), $qrPanelY + $qrSize + 118, $text);
         } else {
             imagestring($image, 3, (int) round(($canvasWidth - (strlen('SKU') * imagefontwidth(3))) / 2), $qrPanelY + $qrSize + 42, 'SKU', $label);
             imagestring($image, 5, (int) round(($canvasWidth - (strlen($sku) * imagefontwidth(5))) / 2), $qrPanelY + $qrSize + 70, $sku, $text);
@@ -140,9 +140,9 @@ class ItemQrCodeService
         return null;
     }
 
-    private function fitFontSize(string $text, string $font, int $startSize, int $maxWidth): int
+    private function fitFontSize(string $text, string $font, int $startSize, int $maxWidth, int $minSize = 14): int
     {
-        for ($size = $startSize; $size >= 14; $size--) {
+        for ($size = $startSize; $size >= $minSize; $size--) {
             $box = imagettfbbox($size, 0, $font, $text);
             if ($box === false) {
                 return $startSize;
@@ -154,7 +154,7 @@ class ItemQrCodeService
             }
         }
 
-        return 14;
+        return $minSize;
     }
 
     private function drawCenteredTtfText($image, string $text, string $font, int $size, int $angle, int $centerX, int $baselineY, int $color, int $letterSpacing = 0): void

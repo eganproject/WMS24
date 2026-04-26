@@ -14,7 +14,6 @@ class InboundReceiptQrPdfService
     private const PAGE_WIDTH_PT = 283.46;
     private const PAGE_HEIGHT_PT = 425.20;
     private const OUTER_MARGIN = 40;
-    private const SKU_LINE_GAP = 18;
     private const NAME_LINE_GAP = 12;
 
     public function __construct(
@@ -102,9 +101,12 @@ class InboundReceiptQrPdfService
         imagerectangle($image, $cx, $cy, $cx + $cw, $cy + $ch, $borderColor);
 
         // ── SKU HEADER BAND ──────────────────────────────────────────
-        $skuLines    = $this->splitTextForLines($sku, 2);
-        $skuLineCount = count($skuLines);
-        $headerH     = $skuLineCount > 1 ? 460 : 380;
+        // SKU is always single line (max 10 chars); fit to almost full card width
+        $skuMaxW     = $cw - 60;
+        $skuFontSize = $this->fitFontSize($sku, $boldFont, 500, $skuMaxW, 200);
+        // Header height: space for "S K U" label (100px) + SKU text + padding
+        $skuCapH     = (int) round($skuFontSize * 0.72);
+        $headerH     = 100 + $skuCapH + 80;
 
         imagefilledrectangle($image, $cx, $cy, $cx + $cw, $cy + $headerH, $headerBg);
         // Green left accent
@@ -113,20 +115,11 @@ class InboundReceiptQrPdfService
         imageline($image, $cx, $cy + $headerH, $cx + $cw, $cy + $headerH, $borderColor);
 
         // "S K U" spaced label
-        $this->drawCenteredText($image, 'S  K  U', $centerX, $cy + 92, 36, $textMuted, false, $regularFont);
+        $this->drawCenteredText($image, 'S  K  U', $centerX, $cy + 70, 36, $textMuted, false, $regularFont);
 
-        // SKU value: large bold dark, vertically centred in remaining header space
-        $skuMaxW     = $cw - 180;
-        $skuFontSize = $this->fitWrappedFontSize($skuLines, $boldFont, 320, $skuMaxW, 200);
-        $skuLineH    = $skuFontSize + self::SKU_LINE_GAP;
-        // capHeight ≈ 70 % of font size; baseline = capTop + capHeight
-        $capH        = (int) round($skuFontSize * 0.70);
-        $blockVisH   = $capH + ($skuLineCount > 1 ? ($skuLineH) : 0);
-        $usableTop   = $cy + 120;
-        $usableBot   = $cy + $headerH - 20;
-        $blockTop    = $usableTop + (int) floor(($usableBot - $usableTop - $blockVisH) / 2);
-        $skuBaseline = $blockTop + $capH;
-        $this->drawCenteredLines($image, $skuLines, $centerX, $skuBaseline, $skuFontSize, $textDark, true, $boldFont, $skuLineH);
+        // SKU value: single line, large bold dark, vertically centred below the label
+        $skuBaseline = $cy + 100 + $skuCapH + (int) round(($headerH - 100 - $skuCapH - 80) / 2) + 20;
+        $this->drawCenteredText($image, $sku, $centerX, $skuBaseline, $skuFontSize, $textDark, true, $boldFont);
 
         // ── QR CODE PANEL ─────────────────────────────────────────────
         // Fill remaining vertical space, leaving room for name (150) + sep/gap (26) + footer (140) + gap (28+28) + bottom padding (40)
@@ -334,24 +327,6 @@ class InboundReceiptQrPdfService
         }
 
         return $minSize;
-    }
-
-    private function splitTextForLines(string $text, int $maxLines): array
-    {
-        $text = trim($text);
-        if ($text === '') {
-            return ['-'];
-        }
-
-        if (strlen($text) <= 16 || $maxLines <= 1) {
-            return [$text];
-        }
-
-        $length = strlen($text);
-        $chunkSize = (int) ceil($length / $maxLines);
-        $parts = str_split($text, max(1, $chunkSize));
-
-        return array_slice($parts, 0, $maxLines);
     }
 
     private function wrapTextByWidth(string $text, ?string $font, int $fontSize, int $maxWidth, int $maxLines): array

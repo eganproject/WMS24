@@ -28,15 +28,14 @@
                     <div>{{ $transaction->supplier?->name ?? '-' }}</div>
                 </div>
             @endif
-            @if(isset($transaction->surat_jalan_no) || isset($transaction->surat_jalan_at))
+            @if(!empty($showDeliveryNoteFields ?? false) || !empty($transaction->surat_jalan_no) || !empty($transaction->surat_jalan_at))
                 <div class="col-md-4">
-                    <div class="fw-bold text-gray-600">Surat Jalan</div>
-                    <div>
-                        {{ $transaction->surat_jalan_no ?? '-' }}
-                        @if(!empty($transaction->surat_jalan_at))
-                            <div class="text-muted fs-7">{{ $transaction->surat_jalan_at?->format('Y-m-d') }}</div>
-                        @endif
-                    </div>
+                    <div class="fw-bold text-gray-600">No. Surat Jalan</div>
+                    <div>{{ $transaction->surat_jalan_no ?: '-' }}</div>
+                </div>
+                <div class="col-md-4">
+                    <div class="fw-bold text-gray-600">Tgl. Surat Jalan</div>
+                    <div>{{ $transaction->surat_jalan_at?->format('Y-m-d') ?: '-' }}</div>
                 </div>
             @endif
             <div class="col-md-4">

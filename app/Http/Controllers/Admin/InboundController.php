@@ -353,6 +353,7 @@ class InboundController extends Controller
                 'inbound_transactions.ref_no',
                 'inbound_transactions.supplier_id',
                 'inbound_transactions.surat_jalan_no',
+                'inbound_transactions.surat_jalan_at',
                 'inbound_transactions.note',
                 'inbound_transactions.warehouse_id',
                 'inbound_transactions.status',
@@ -437,6 +438,8 @@ class InboundController extends Controller
                     'scanned_qty' => $scannedQty,
                 ],
                 'note' => $row->note ?? '',
+                'surat_jalan_no' => $row->surat_jalan_no ?? '',
+                'surat_jalan_at' => $row->surat_jalan_at?->format('Y-m-d') ?? '',
                 'type' => $row->type,
                 'status' => $row->status ?? InboundScanStatus::PENDING_SCAN,
             ];

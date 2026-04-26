@@ -106,6 +106,9 @@
                         <th>Tanggal</th>
                         <th>Submit By</th>
                         <th>Gudang</th>
+                        @if(!empty($showDeliveryNoteFields ?? false))
+                            <th>Surat Jalan</th>
+                        @endif
                         @if(!empty($showSupplierColumn ?? false))
                             <th>Supplier</th>
                         @endif
@@ -957,6 +960,14 @@
                 { data: 'transacted_at' },
                 { data: 'submit_by' },
                 { data: 'warehouse', render: (data, type, row) => renderWarehouseBadge(data, row?.warehouse_id) },
+                @if(!empty($showDeliveryNoteFields ?? false))
+                    { data: 'surat_jalan_no', orderable: false, searchable: false, render: (data, type, row) => {
+                        const no = data || '';
+                        const at = row?.surat_jalan_at || '';
+                        if (!no && !at) return '<span class="text-muted">-</span>';
+                        return (no || '-') + (at ? `<div class="text-muted fs-8">${at}</div>` : '');
+                    }},
+                @endif
                 @if(!empty($showSupplierColumn ?? false))
                     { data: 'supplier' },
                 @endif

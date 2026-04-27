@@ -46,6 +46,7 @@ class MenuSeeder extends Seeder
             ['name' => 'Retur', 'slug' => 'outbound-return', 'route' => 'admin.outbound.returns.index', 'icon' => 'fas fa-undo', 'parent_slug' => 'outbound', 'sort_order' => 12],
             ['name' => 'QC Scan Desktop', 'slug' => 'outbound-qc-scan', 'route' => 'admin.outbound.qc-scan.index', 'icon' => 'fas fa-barcode', 'parent_slug' => 'outbound', 'sort_order' => 13],
             ['name' => 'History QC', 'slug' => 'outbound-qc-history', 'route' => 'admin.outbound.qc-history.index', 'icon' => 'fas fa-search', 'parent_slug' => 'outbound', 'sort_order' => 13.25],
+            ['name' => 'Transit QC', 'slug' => 'outbound-transit-qc', 'route' => 'admin.outbound.transit-qc.index', 'icon' => 'fas fa-dolly', 'parent_slug' => 'outbound', 'sort_order' => 13.3],
             ['name' => 'Riwayat Scan Out', 'slug' => 'outbound-scan-out-history', 'route' => 'admin.outbound.scan-out-history.index', 'icon' => 'fas fa-truck-loading', 'parent_slug' => 'outbound', 'sort_order' => 13.5],
             ['name' => 'SKU Exception QC', 'slug' => 'outbound-qc-scan-exceptions', 'route' => 'admin.outbound.qc-scan-exceptions.index', 'icon' => 'fas fa-ban', 'parent_slug' => 'outbound', 'sort_order' => 13.8],
             ['name' => 'Laporan Scan Out', 'slug' => 'outbound-scan-out-report', 'route' => 'admin.reports.scan-out-reports.index', 'icon' => 'fas fa-truck-loading', 'parent_slug' => 'reports', 'sort_order' => 1.2],

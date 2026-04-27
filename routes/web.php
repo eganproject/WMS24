@@ -19,6 +19,7 @@ use App\Http\Controllers\Admin\ResiImportController;
 use App\Http\Controllers\Admin\CustomerReturnController;
 use App\Http\Controllers\Admin\PickingListController;
 use App\Http\Controllers\Admin\QcHistoryController;
+use App\Http\Controllers\Admin\TransitQcController;
 use App\Http\Controllers\Admin\QcScanWorkbenchController;
 use App\Http\Controllers\Admin\QcScanExceptionController;
 use App\Http\Controllers\Admin\ScanOutHistoryController;
@@ -351,6 +352,8 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::post('/qc-scan/reset', [QcScanWorkbenchController::class, 'reset'])->name('qc-scan.reset');
         Route::get('/qc-history', [QcHistoryController::class, 'index'])->name('qc-history.index');
         Route::get('/qc-history/data', [QcHistoryController::class, 'data'])->name('qc-history.data');
+        Route::get('/transit-qc', [TransitQcController::class, 'index'])->name('transit-qc.index');
+        Route::get('/transit-qc/data', [TransitQcController::class, 'data'])->name('transit-qc.data');
         Route::get('/scan-out-history', [ScanOutHistoryController::class, 'index'])->name('scan-out-history.index');
         Route::get('/scan-out-history/data', [ScanOutHistoryController::class, 'data'])->name('scan-out-history.data');
         Route::get('/qc-scan-exceptions', [QcScanExceptionController::class, 'index'])->name('qc-scan-exceptions.index');

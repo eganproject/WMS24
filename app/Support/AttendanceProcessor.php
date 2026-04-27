@@ -105,6 +105,20 @@ class AttendanceProcessor
         $lateCutoff = $plannedStart->copy()->addMinutes((int) $shift->late_tolerance_minutes);
         $checkoutCutoff = $plannedEnd->copy()->subMinutes((int) $shift->checkout_tolerance_minutes);
 
+        // Jangan tandai absen jika jendela toleransi keterlambatan belum tertutup
+        if (!$checkInAt && now()->lessThanOrEqualTo($lateCutoff)) {
+            Attendance::query()
+                ->where('employee_id', $employee->id)
+                ->whereDate('attendance_date', $date)
+                ->where('status', Attendance::STATUS_ABSENT)
+                ->delete();
+
+            return new Attendance([
+                'employee_id' => $employee->id,
+                'attendance_date' => $date->toDateString(),
+            ]);
+        }
+
         $lateMinutes = $checkInAt ? max(0, Carbon::parse($checkInAt)->diffInMinutes($lateCutoff, false) * -1) : 0;
         $earlyLeaveMinutes = $checkOutAt ? max(0, Carbon::parse($checkOutAt)->diffInMinutes($checkoutCutoff, false)) : 0;
         $workMinutes = $checkInAt && $checkOutAt

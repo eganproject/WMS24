@@ -3,13 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Models\AttendanceDevice;
+use App\Support\AttendanceLateNotifier;
 use App\Support\AttendanceProcessor;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 
 class AttendanceFingerprintWebhookController extends Controller
 {
-    public function __invoke(Request $request, AttendanceProcessor $processor)
+    public function __invoke(Request $request, AttendanceProcessor $processor, AttendanceLateNotifier $lateNotifier)
     {
         $secret = (string) config('services.attendance.webhook_secret');
         if ($secret !== '' && !hash_equals($secret, (string) $request->header('X-Attendance-Webhook-Secret'))) {
@@ -31,7 +32,7 @@ class AttendanceFingerprintWebhookController extends Controller
             return response()->json(['message' => 'Device absensi tidak ditemukan'], 422);
         }
 
-        $rawLog = $processor->recordFingerprintScan(
+        $result = $processor->recordFingerprintScanWithResult(
             $device,
             $validated['device_user_id'],
             Carbon::parse($validated['scan_at']),
@@ -39,11 +40,20 @@ class AttendanceFingerprintWebhookController extends Controller
             $validated['state'] ?? null,
             $validated['raw_payload'] ?? $request->all()
         );
+        $rawLog = $result['raw_log'];
+        $attendance = $result['attendance']?->loadMissing(['employee', 'shift']);
+        $isLateCheckIn = $lateNotifier->shouldNotify($attendance, $rawLog);
+        if ($isLateCheckIn) {
+            $lateNotifier->notifyTelegramIfLate($attendance, $rawLog);
+        }
 
         return response()->json([
             'ok' => true,
             'raw_log_id' => $rawLog->id,
             'employee_id' => $rawLog->employee_id,
+            'attendance_status' => $attendance?->status,
+            'late_minutes' => (int) ($attendance?->late_minutes ?? 0),
+            'late_notification_sent' => $isLateCheckIn,
         ]);
     }
 

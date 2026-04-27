@@ -325,6 +325,28 @@ const calendarEventsUrl = '{{ route('admin.attendance.schedules.calendar-events'
 const positionStoreUrl = '{{ route('admin.attendance.positions.store') }}';
 const positionUpdateTpl = '{{ route('admin.attendance.positions.update', ':id') }}';
 const positionDeleteTpl = '{{ route('admin.attendance.positions.destroy', ':id') }}';
+function renderAttendanceStatusBadge(value) {
+    const labels = {
+        present: 'Hadir',
+        late: 'Terlambat',
+        absent: 'Absen',
+        leave: 'Cuti/Izin',
+        holiday: 'Libur',
+        day_off: 'Libur',
+        incomplete: 'Belum Lengkap',
+    };
+    const classes = {
+        present: 'badge-light-success',
+        late: 'badge-light-warning',
+        absent: 'badge-light-danger',
+        leave: 'badge-light-info',
+        holiday: 'badge-light-danger',
+        day_off: 'badge-light-secondary',
+        incomplete: 'badge-light-primary',
+    };
+
+    return `<span class="badge ${classes[value] || 'badge-light'}">${labels[value] || value || '-'}</span>`;
+}
 const tableConfigs = {
     employees_table: { url: '{{ route('admin.attendance.employees.data') }}', columns: ['employee_code','name','area','user','phone','position','employment_status'] },
     positions_table: { url: '{{ route('admin.attendance.positions.data') }}', columns: [
@@ -344,7 +366,7 @@ const tableConfigs = {
     templates_table: { url: '{{ route('admin.attendance.templates.data') }}', columns: ['name','is_active','days'] },
     leaves_table: { url: '{{ route('admin.attendance.leaves.data') }}', columns: ['employee','leave_type','start_date','end_date','status','reason'] },
     raw_logs_table: { url: '{{ route('admin.attendance.raw-logs.data') }}', columns: ['device','employee','device_user_id','scan_at','verify_type','state'] },
-    attendances_table: { url: '{{ route('admin.attendance.attendances.data') }}', columns: ['employee','attendance_date','shift','check_in_at','check_out_at','late_minutes','early_leave_minutes','work_minutes','overtime_minutes','status','source','note'] },
+    attendances_table: { url: '{{ route('admin.attendance.attendances.data') }}', columns: ['employee','attendance_date','shift','check_in_at','check_out_at','late_minutes','early_leave_minutes','work_minutes','overtime_minutes',{ data: 'status', render: renderAttendanceStatusBadge },'source','note'] },
 };
 const tables = {};
 
@@ -541,7 +563,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     Swal?.fire('Error', firstError || json?.message || 'Gagal menyimpan data', 'error');
                     return;
                 }
-                Swal?.fire('Berhasil', json?.message || 'Data tersimpan', 'success');
+                if (json?.notification?.late_check_in) {
+                    Swal?.fire('Absensi Terlambat', json.notification.message || 'Karyawan terlambat.', 'warning');
+                } else {
+                    Swal?.fire('Berhasil', json?.message || 'Data tersimpan', 'success');
+                }
                 form.reset();
                 $(form).find('select').trigger('change.select2');
                 updateTemplateShiftState(form);

@@ -18,6 +18,7 @@ use App\Models\User;
 use App\Models\WeeklyScheduleTemplate;
 use App\Models\WeeklyScheduleTemplateDay;
 use App\Models\WorkShift;
+use App\Support\AttendanceLateNotifier;
 use App\Support\AttendanceProcessor;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -610,7 +611,7 @@ class AttendanceController extends Controller
         ]);
     }
 
-    public function storeRawLog(Request $request, AttendanceProcessor $processor)
+    public function storeRawLog(Request $request, AttendanceProcessor $processor, AttendanceLateNotifier $lateNotifier)
     {
         $validated = $request->validate([
             'attendance_device_id' => ['required', 'integer', 'exists:attendance_devices,id'],
@@ -621,7 +622,7 @@ class AttendanceController extends Controller
         ]);
 
         $device = AttendanceDevice::findOrFail($validated['attendance_device_id']);
-        $rawLog = $processor->recordFingerprintScan(
+        $result = $processor->recordFingerprintScanWithResult(
             $device,
             $validated['device_user_id'],
             Carbon::parse($validated['scan_at']),
@@ -629,8 +630,29 @@ class AttendanceController extends Controller
             $validated['state'] ?? null,
             ['source' => 'manual_input']
         );
+        $rawLog = $result['raw_log'];
+        $attendance = $result['attendance']?->loadMissing(['employee', 'shift']);
+        $isLateCheckIn = $lateNotifier->shouldNotify($attendance, $rawLog);
+        if ($isLateCheckIn) {
+            $lateNotifier->notifyTelegramIfLate($attendance, $rawLog);
+        }
 
-        return response()->json(['message' => 'Raw log fingerprint berhasil disimpan', 'raw_log' => $rawLog]);
+        return response()->json([
+            'message' => 'Raw log fingerprint berhasil disimpan',
+            'raw_log' => $rawLog,
+            'attendance' => $attendance ? [
+                'id' => $attendance->id,
+                'employee' => $attendance->employee ? "{$attendance->employee->employee_code} - {$attendance->employee->name}" : null,
+                'attendance_date' => $attendance->attendance_date?->format('Y-m-d'),
+                'status' => $attendance->status,
+                'late_minutes' => (int) $attendance->late_minutes,
+                'check_in_at' => $attendance->check_in_at?->format('Y-m-d H:i:s'),
+            ] : null,
+            'notification' => [
+                'late_check_in' => $isLateCheckIn,
+                'message' => $isLateCheckIn ? $lateNotifier->message($attendance) : null,
+            ],
+        ]);
     }
 
     public function attendancesData(Request $request)

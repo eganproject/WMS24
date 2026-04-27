@@ -26,6 +26,17 @@ class AttendanceProcessor
         ?string $state = null,
         ?array $rawPayload = null
     ): AttendanceRawLog {
+        return $this->recordFingerprintScanWithResult($device, $deviceUserId, $scanAt, $verifyType, $state, $rawPayload)['raw_log'];
+    }
+
+    public function recordFingerprintScanWithResult(
+        AttendanceDevice $device,
+        string $deviceUserId,
+        Carbon|string $scanAt,
+        ?string $verifyType = null,
+        ?string $state = null,
+        ?array $rawPayload = null
+    ): array {
         $scanAt = $scanAt instanceof Carbon ? $scanAt : Carbon::parse($scanAt);
         $employeeId = $this->employeeIdForDeviceUser($device, $deviceUserId);
 
@@ -47,11 +58,15 @@ class AttendanceProcessor
 
             $device->forceFill(['last_synced_at' => now()])->save();
 
+            $attendance = null;
             if ($employeeId) {
-                $this->rebuildDailyAttendance(Employee::findOrFail($employeeId), $scanAt->toDateString());
+                $attendance = $this->rebuildDailyAttendance(Employee::findOrFail($employeeId), $scanAt->toDateString());
             }
 
-            return $rawLog;
+            return [
+                'raw_log' => $rawLog,
+                'attendance' => $attendance,
+            ];
         });
     }
 

@@ -837,6 +837,20 @@ class TelegramBotService
         return in_array((string) $chatId, array_map('strval', $allowedChatIds), true);
     }
 
+    public function notifyAllowedChats(string $text): int
+    {
+        $chatIds = array_filter(array_map('strval', config('services.telegram.allowed_chat_ids', [])));
+        if (empty($chatIds)) {
+            return 0;
+        }
+
+        foreach ($chatIds as $chatId) {
+            $this->sendMessage($chatId, $text);
+        }
+
+        return count($chatIds);
+    }
+
     private function sendMessage(string $chatId, string $text): void
     {
         $token = (string) config('services.telegram.bot_token');

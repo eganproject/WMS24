@@ -6,10 +6,15 @@ use App\Models\Attendance;
 use App\Models\AttendanceDevice;
 use App\Models\Employee;
 use App\Models\EmployeeFingerprint;
+use App\Models\EmployeeLeave;
+use App\Models\EmployeePosition;
+use App\Models\Role;
 use App\Models\EmployeeSchedule;
+use App\Models\User;
 use App\Models\WorkShift;
 use App\Support\AttendanceProcessor;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class AttendanceProcessorTest extends TestCase
@@ -100,5 +105,138 @@ class AttendanceProcessorTest extends TestCase
         $response->assertOk()
             ->assertJsonPath('ok', true)
             ->assertJsonPath('employee_id', $employee->id);
+    }
+
+    public function test_attendance_datatable_endpoints_return_json(): void
+    {
+        $user = User::factory()->create();
+        $role = Role::create(['name' => 'Admin', 'slug' => 'admin']);
+        $user->roles()->attach($role);
+        $this->actingAs($user);
+
+        $position = EmployeePosition::create(['name' => 'Picker', 'is_active' => true]);
+        $employee = Employee::create([
+            'employee_code' => 'EMP003',
+            'name' => 'Rina',
+            'position_id' => $position->id,
+            'employment_status' => 'active',
+        ]);
+        $device = AttendanceDevice::create(['name' => 'Fingerprint Test', 'port' => 4370, 'is_active' => true]);
+        EmployeeFingerprint::create([
+            'employee_id' => $employee->id,
+            'attendance_device_id' => $device->id,
+            'device_user_id' => '3001',
+            'is_active' => true,
+        ]);
+        $shift = WorkShift::create([
+            'name' => 'Pagi',
+            'start_time' => '08:00',
+            'end_time' => '17:00',
+            'is_active' => true,
+        ]);
+        EmployeeSchedule::create([
+            'employee_id' => $employee->id,
+            'work_shift_id' => $shift->id,
+            'schedule_date' => '2026-04-27',
+            'schedule_type' => 'work',
+            'created_by' => $user->id,
+        ]);
+        EmployeeLeave::create([
+            'employee_id' => $employee->id,
+            'leave_type' => 'permission',
+            'start_date' => '2026-04-28',
+            'end_date' => '2026-04-28',
+            'status' => 'approved',
+            'approved_by' => $user->id,
+            'approved_at' => now(),
+        ]);
+
+        $routes = [
+            'admin.attendance.employees.data',
+            'admin.attendance.positions.data',
+            'admin.attendance.devices.data',
+            'admin.attendance.fingerprints.data',
+            'admin.attendance.shifts.data',
+            'admin.attendance.schedules.data',
+            'admin.attendance.leaves.data',
+            'admin.attendance.raw-logs.data',
+            'admin.attendance.attendances.data',
+        ];
+
+        foreach ($routes as $route) {
+            $this->getJson(route($route, ['draw' => 1]))
+                ->assertOk()
+                ->assertJsonStructure(['draw', 'recordsTotal', 'recordsFiltered', 'data']);
+        }
+
+        $this->getJson(route('admin.attendance.schedules.calendar-events', [
+            'start' => '2026-04-01',
+            'end' => '2026-04-30',
+        ]))->assertOk();
+    }
+
+    public function test_manual_raw_log_late_check_in_returns_notification_and_sends_telegram(): void
+    {
+        config([
+            'services.telegram.bot_token' => 'TEST_TOKEN',
+            'services.telegram.allowed_chat_ids' => ['12345'],
+        ]);
+        Http::fake([
+            'api.telegram.org/*' => Http::response(['ok' => true], 200),
+        ]);
+
+        $user = User::factory()->create();
+        $role = Role::create(['name' => 'Admin', 'slug' => 'admin']);
+        $user->roles()->attach($role);
+        $this->actingAs($user);
+
+        $employee = Employee::create([
+            'employee_code' => 'EMP004',
+            'name' => 'Andi',
+            'employment_status' => 'active',
+        ]);
+        $device = AttendanceDevice::create(['name' => 'Fingerprint Lobby', 'port' => 4370, 'is_active' => true]);
+        EmployeeFingerprint::create([
+            'employee_id' => $employee->id,
+            'attendance_device_id' => $device->id,
+            'device_user_id' => '4001',
+            'is_active' => true,
+        ]);
+        $shift = WorkShift::create([
+            'name' => 'Pagi',
+            'start_time' => '08:00',
+            'end_time' => '17:00',
+            'late_tolerance_minutes' => 5,
+            'is_active' => true,
+        ]);
+        EmployeeSchedule::create([
+            'employee_id' => $employee->id,
+            'work_shift_id' => $shift->id,
+            'schedule_date' => '2026-04-27',
+            'schedule_type' => 'work',
+            'created_by' => $user->id,
+        ]);
+
+        $response = $this->postJson(route('admin.attendance.raw-logs.store'), [
+            'attendance_device_id' => $device->id,
+            'device_user_id' => '4001',
+            'scan_at' => '2026-04-27 08:12:00',
+            'verify_type' => 'fingerprint',
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('attendance.employee', 'EMP004 - Andi')
+            ->assertJsonPath('attendance.late_minutes', 7)
+            ->assertJsonPath('notification.late_check_in', true);
+
+        Http::assertSent(function ($request) {
+            $payload = $request->data();
+
+            return $request->url() === 'https://api.telegram.org/botTEST_TOKEN/sendMessage'
+                && $payload['chat_id'] === '12345'
+                && str_contains($payload['text'], 'Notifikasi Absensi Terlambat')
+                && str_contains($payload['text'], 'EMP004 - Andi')
+                && str_contains($payload['text'], 'Terlambat: 7 menit');
+        });
     }
 }

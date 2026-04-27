@@ -387,13 +387,22 @@ class AttendanceController extends Controller
                 }
             });
 
+        $today = now()->toDateString();
+
         Attendance::query()
             ->with('employee:id,employee_code,name')
             ->when($employeeId, fn ($query) => $query->where('employee_id', $employeeId))
             ->whereDate('attendance_date', '>=', $start)
             ->whereDate('attendance_date', '<=', $end)
             ->get()
-            ->each(function (Attendance $attendance) use (&$eventsByDate) {
+            ->each(function (Attendance $attendance) use (&$eventsByDate, $today) {
+                $attendanceDate = $attendance->attendance_date?->toDateString();
+
+                // Jangan tampilkan Alpha untuk hari yang belum berjalan
+                if ($attendance->status === Attendance::STATUS_ABSENT && $attendanceDate > $today) {
+                    return;
+                }
+
                 $color = match ($attendance->status) {
                     Attendance::STATUS_PRESENT => '#50cd89',
                     Attendance::STATUS_LATE => '#ffc700',
@@ -415,14 +424,19 @@ class AttendanceController extends Controller
                     default => $attendance->status,
                 };
 
-                $this->addCalendarSummary($eventsByDate, $attendance->attendance_date?->toDateString(), 'attendance_'.$attendance->status, [
+                $checkInStr  = $attendance->check_in_at  ? 'Masuk: '.$attendance->check_in_at->format('H:i')  : null;
+                $checkOutStr = $attendance->check_out_at ? 'Pulang: '.$attendance->check_out_at->format('H:i') : null;
+
+                $this->addCalendarSummary($eventsByDate, $attendanceDate, 'attendance_'.$attendance->status, [
                     'label' => $label,
                     'color' => $color,
                     'textColor' => in_array($attendance->status, [Attendance::STATUS_LATE, Attendance::STATUS_LEAVE], true) ? '#181c32' : '#ffffff',
-                    'detail' => trim(implode(' ', array_filter([
+                    'detail' => trim(implode(' | ', array_filter([
                         $attendance->employee ? "{$attendance->employee->employee_code} - {$attendance->employee->name}" : null,
-                        $attendance->late_minutes > 0 ? "(telat {$attendance->late_minutes} menit)" : null,
-                        $attendance->note ? "- {$attendance->note}" : null,
+                        $checkInStr,
+                        $checkOutStr,
+                        $attendance->late_minutes > 0 ? "telat {$attendance->late_minutes} menit" : null,
+                        $attendance->note ? $attendance->note : null,
                     ]))),
                 ]);
             });

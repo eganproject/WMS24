@@ -36,6 +36,11 @@
                 <input type="text" class="form-control form-control-solid w-250px" placeholder="Cari data aktif" id="attendance_search" />
             </div>
         </div>
+        <div class="card-toolbar">
+            <button type="button" class="btn btn-light-primary" id="attendance_refresh_tab">
+                Refresh Tab
+            </button>
+        </div>
     </div>
     <div class="card-body py-6">
         <ul class="nav nav-tabs nav-line-tabs mb-8 fs-6">
@@ -381,6 +386,18 @@ const tableConfigs = {
     attendances_table: { url: '{{ route('admin.attendance.attendances.data') }}', columns: ['employee','attendance_date','shift','check_in_at','check_out_at','late_minutes','early_leave_minutes','work_minutes','overtime_minutes',{ data: 'status', render: renderAttendanceStatusBadge },'source','note'] },
 };
 const tables = {};
+const tabTableMap = {
+    tab_employees: ['employees_table'],
+    tab_devices: ['devices_table'],
+    tab_fingerprints: ['fingerprints_table'],
+    tab_shifts: ['shifts_table'],
+    tab_schedules: ['schedules_table'],
+    tab_holidays: ['holidays_table'],
+    tab_templates: ['templates_table'],
+    tab_leaves: ['leaves_table'],
+    tab_raw_logs: ['raw_logs_table'],
+    tab_attendances: ['attendances_table'],
+};
 
 const escapeAttr = (value) => String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -474,6 +491,37 @@ document.addEventListener('DOMContentLoaded', () => {
         Object.values(tables).forEach((table) => table.ajax.reload());
     });
 
+    const resetFormsInTab = (tabId) => {
+        const tab = document.getElementById(tabId);
+        if (!tab) return;
+
+        tab.querySelectorAll('form.ajax-form').forEach((form) => {
+            form.reset();
+            if (typeof $ !== 'undefined') {
+                $(form).find('select').trigger('change.select2');
+            }
+        });
+        updateTemplateShiftState(tab);
+    };
+
+    const refreshAttendanceTab = (tabId, options = {}) => {
+        const shouldResetForms = options.resetForms ?? false;
+
+        if (shouldResetForms) {
+            resetFormsInTab(tabId);
+        }
+
+        (tabTableMap[tabId] || []).forEach((tableId) => {
+            tables[tableId]?.ajax.reload(null, false);
+        });
+
+        if (tabId === 'tab_schedules') {
+            initScheduleCalendar();
+            scheduleCalendar?.refetchEvents();
+            scheduleCalendar?.updateSize();
+        }
+    };
+
     let scheduleCalendar = null;
     const calendarEl = document.getElementById('attendance_schedule_calendar');
     const calendarEmployeeFilter = document.getElementById('calendar_employee_filter');
@@ -545,11 +593,26 @@ document.addEventListener('DOMContentLoaded', () => {
         initScheduleCalendar();
         scheduleCalendar?.updateSize();
     });
+    document.querySelectorAll('a[data-bs-toggle="tab"]').forEach((tabLink) => {
+        tabLink.addEventListener('shown.bs.tab', (event) => {
+            const tabId = event.target.getAttribute('href')?.replace('#', '');
+            if (tabId) {
+                refreshAttendanceTab(tabId);
+            }
+        });
+    });
     if (document.getElementById('tab_schedules')?.classList.contains('show')) {
         initScheduleCalendar();
     }
     calendarEmployeeFilter?.addEventListener('change', () => scheduleCalendar?.refetchEvents());
     document.getElementById('calendar_refresh')?.addEventListener('click', () => scheduleCalendar?.refetchEvents());
+    document.getElementById('attendance_refresh_tab')?.addEventListener('click', () => {
+        const activeTabId = document.querySelector('.tab-pane.active')?.id;
+        if (!activeTabId) return;
+
+        refreshAttendanceTab(activeTabId, { resetForms: true });
+        Swal?.fire('Berhasil', 'Data tab aktif dimuat ulang.', 'success');
+    });
 
     document.querySelectorAll('.ajax-form').forEach((form) => {
         form.addEventListener('submit', async (event) => {

@@ -262,4 +262,42 @@ class AttendanceProcessorTest extends TestCase
                 && str_contains($payload['text'], 'Terlambat: 7 menit');
         });
     }
+
+    public function test_schedule_template_can_use_weekend_work_shifts(): void
+    {
+        $user = User::factory()->create();
+        $role = Role::create(['name' => 'Admin', 'slug' => 'admin']);
+        $user->roles()->attach($role);
+        $this->actingAs($user);
+
+        $shift = WorkShift::create([
+            'name' => 'Pagi',
+            'start_time' => '08:00',
+            'end_time' => '17:00',
+            'is_active' => true,
+        ]);
+
+        $days = collect(range(1, 7))->map(fn (int $day) => [
+            'day_of_week' => $day,
+            'schedule_type' => 'work',
+            'work_shift_id' => $shift->id,
+        ])->all();
+
+        $this->postJson(route('admin.attendance.templates.store'), [
+            'name' => 'Template Weekend Masuk',
+            'is_active' => 1,
+            'days' => $days,
+        ])->assertOk();
+
+        $this->assertDatabaseHas('weekly_schedule_template_days', [
+            'day_of_week' => 6,
+            'schedule_type' => 'work',
+            'work_shift_id' => $shift->id,
+        ]);
+        $this->assertDatabaseHas('weekly_schedule_template_days', [
+            'day_of_week' => 7,
+            'schedule_type' => 'work',
+            'work_shift_id' => $shift->id,
+        ]);
+    }
 }

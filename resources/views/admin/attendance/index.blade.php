@@ -204,7 +204,8 @@
                     <div class="row g-3 align-items-end mb-4">
                         <div class="col-md-4">
                             <label class="form-label fw-bold">Nama Template</label>
-                            <input name="name" class="form-control form-control-solid" placeholder="Template Senin-Jumat" required>
+                            <input name="name" class="form-control form-control-solid" placeholder="Template kerja fleksibel" required>
+                            <div class="form-text">Atur Masuk atau Libur per hari sesuai pola kerja karyawan.</div>
                         </div>
                         <div class="col-md-2">
                             <input type="hidden" name="is_active" value="1">
@@ -226,8 +227,8 @@
                                         <td class="fw-bold">{{ $dayName }}</td>
                                         <td>
                                             <select class="form-select form-select-solid template-day-type">
-                                                <option value="work" @selected($dayNumber <= 5)>Masuk</option>
-                                                <option value="day_off" @selected($dayNumber > 5)>Libur</option>
+                                                <option value="work" selected>Masuk</option>
+                                                <option value="day_off">Libur</option>
                                             </select>
                                         </td>
                                         <td>

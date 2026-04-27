@@ -16,6 +16,7 @@ class MenuSeeder extends Seeder
             ['name' => 'Inbound', 'slug' => 'inbound', 'route' => null, 'icon' => 'fas fa-arrow-down', 'parent_slug' => null, 'sort_order' => 13],
             ['name' => 'Outbound', 'slug' => 'outbound', 'route' => null, 'icon' => 'fas fa-arrow-up', 'parent_slug' => null, 'sort_order' => 14],
             ['name' => 'Laporan', 'slug' => 'reports', 'route' => null, 'icon' => 'fas fa-chart-line', 'parent_slug' => null, 'sort_order' => 15],
+            ['name' => 'Absensi', 'slug' => 'attendance', 'route' => 'admin.attendance.index', 'icon' => 'fas fa-fingerprint', 'parent_slug' => null, 'sort_order' => 16],
             ['name' => 'Users', 'slug' => 'users', 'route' => 'admin.masterdata.users.index', 'icon' => 'fas fa-users', 'parent_slug' => 'master-data', 'sort_order' => 20],
             ['name' => 'Roles', 'slug' => 'roles', 'route' => 'admin.masterdata.roles.index', 'icon' => 'fas fa-user-shield', 'parent_slug' => 'master-data', 'sort_order' => 21],
             ['name' => 'Kurir', 'slug' => 'kurir', 'route' => 'admin.masterdata.kurir.index', 'icon' => 'fas fa-truck', 'parent_slug' => 'master-data', 'sort_order' => 21.45],

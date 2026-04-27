@@ -58,6 +58,11 @@ class User extends Authenticatable
         return $this->belongsTo(Area::class, 'area_id');
     }
 
+    public function employee()
+    {
+        return $this->hasOne(Employee::class);
+    }
+
     public static function defaultAvatar(): string
     {
         $choices = [

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\AttendanceFingerprintWebhookController;
 use App\Http\Controllers\TelegramWebhookController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
@@ -25,6 +26,7 @@ use App\Http\Controllers\Admin\ScanOutReportController;
 use App\Http\Controllers\Admin\LowStockReportController;
 use App\Http\Controllers\Admin\ReturnReportController;
 use App\Http\Controllers\Admin\ActivityLogController;
+use App\Http\Controllers\Admin\AttendanceController;
 use App\Http\Controllers\Admin\StockOpnameReportController;
 use App\Http\Controllers\Admin\ReplenishmentReportController;
 use App\Http\Controllers\Admin\RoleController;
@@ -55,6 +57,10 @@ Route::get('/healthz', function () {
 Route::post('/telegram/webhook', TelegramWebhookController::class)
     ->withoutMiddleware([ValidateCsrfToken::class])
     ->name('telegram.webhook');
+
+Route::post('/attendance/fingerprint/webhook', AttendanceFingerprintWebhookController::class)
+    ->withoutMiddleware([ValidateCsrfToken::class])
+    ->name('attendance.fingerprint.webhook');
 
 Route::get('/dashboard', [DashboardController::class, 'index'])
     ->middleware(['auth', 'verified'])
@@ -370,5 +376,46 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/stock-opname/data', [StockOpnameReportController::class, 'data'])->name('stock-opname.data');
         Route::get('/stock-opname/sku-diff', [StockOpnameReportController::class, 'diffSku'])->name('stock-opname.diff-sku');
         Route::get('/stock-opname/export', [StockOpnameReportController::class, 'export'])->name('stock-opname.export');
+    });
+
+    Route::prefix('attendance')->as('attendance.')->group(function () {
+        Route::get('/', [AttendanceController::class, 'index'])->name('index');
+        Route::get('/employees/data', [AttendanceController::class, 'employeesData'])->name('employees.data');
+        Route::post('/employees', [AttendanceController::class, 'storeEmployee'])->name('employees.store');
+        Route::put('/employees/{employee}', [AttendanceController::class, 'updateEmployee'])->name('employees.update');
+        Route::delete('/employees/{employee}', [AttendanceController::class, 'destroyEmployee'])->name('employees.destroy');
+        Route::get('/positions/data', [AttendanceController::class, 'positionsData'])->name('positions.data');
+        Route::post('/positions', [AttendanceController::class, 'storePosition'])->name('positions.store');
+        Route::put('/positions/{position}', [AttendanceController::class, 'updatePosition'])->name('positions.update');
+        Route::delete('/positions/{position}', [AttendanceController::class, 'destroyPosition'])->name('positions.destroy');
+        Route::get('/devices/data', [AttendanceController::class, 'devicesData'])->name('devices.data');
+        Route::post('/devices', [AttendanceController::class, 'storeDevice'])->name('devices.store');
+        Route::put('/devices/{device}', [AttendanceController::class, 'updateDevice'])->name('devices.update');
+        Route::delete('/devices/{device}', [AttendanceController::class, 'destroyDevice'])->name('devices.destroy');
+        Route::get('/fingerprints/data', [AttendanceController::class, 'fingerprintsData'])->name('fingerprints.data');
+        Route::post('/fingerprints', [AttendanceController::class, 'storeFingerprint'])->name('fingerprints.store');
+        Route::put('/fingerprints/{fingerprint}', [AttendanceController::class, 'updateFingerprint'])->name('fingerprints.update');
+        Route::delete('/fingerprints/{fingerprint}', [AttendanceController::class, 'destroyFingerprint'])->name('fingerprints.destroy');
+        Route::get('/shifts/data', [AttendanceController::class, 'shiftsData'])->name('shifts.data');
+        Route::post('/shifts', [AttendanceController::class, 'storeShift'])->name('shifts.store');
+        Route::put('/shifts/{shift}', [AttendanceController::class, 'updateShift'])->name('shifts.update');
+        Route::delete('/shifts/{shift}', [AttendanceController::class, 'destroyShift'])->name('shifts.destroy');
+        Route::get('/schedules/data', [AttendanceController::class, 'schedulesData'])->name('schedules.data');
+        Route::get('/schedules/calendar-events', [AttendanceController::class, 'calendarEvents'])->name('schedules.calendar-events');
+        Route::post('/schedules', [AttendanceController::class, 'storeSchedule'])->name('schedules.store');
+        Route::delete('/schedules/{schedule}', [AttendanceController::class, 'destroySchedule'])->name('schedules.destroy');
+        Route::get('/holidays/data', [AttendanceController::class, 'holidaysData'])->name('holidays.data');
+        Route::post('/holidays', [AttendanceController::class, 'storeHoliday'])->name('holidays.store');
+        Route::put('/holidays/{holiday}', [AttendanceController::class, 'updateHoliday'])->name('holidays.update');
+        Route::delete('/holidays/{holiday}', [AttendanceController::class, 'destroyHoliday'])->name('holidays.destroy');
+        Route::get('/templates/data', [AttendanceController::class, 'templatesData'])->name('templates.data');
+        Route::post('/templates', [AttendanceController::class, 'storeTemplate'])->name('templates.store');
+        Route::put('/templates/{template}', [AttendanceController::class, 'updateTemplate'])->name('templates.update');
+        Route::post('/templates/assign', [AttendanceController::class, 'assignTemplate'])->name('templates.assign');
+        Route::get('/leaves/data', [AttendanceController::class, 'leavesData'])->name('leaves.data');
+        Route::post('/leaves', [AttendanceController::class, 'storeLeave'])->name('leaves.store');
+        Route::get('/raw-logs/data', [AttendanceController::class, 'rawLogsData'])->name('raw-logs.data');
+        Route::post('/raw-logs', [AttendanceController::class, 'storeRawLog'])->name('raw-logs.store');
+        Route::get('/attendances/data', [AttendanceController::class, 'attendancesData'])->name('attendances.data');
     });
 });

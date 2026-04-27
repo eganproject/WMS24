@@ -44,4 +44,8 @@ return [
         )),
     ],
 
+    'attendance' => [
+        'webhook_secret' => env('ATTENDANCE_WEBHOOK_SECRET'),
+    ],
+
 ];

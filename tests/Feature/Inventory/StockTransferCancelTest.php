@@ -4,6 +4,9 @@ namespace Tests\Feature\Inventory;
 
 use App\Models\Item;
 use App\Models\ItemStock;
+use App\Models\DamagedGood;
+use App\Models\DamagedGoodItem;
+use App\Models\StockMutation;
 use App\Models\StockTransfer;
 use App\Models\User;
 use App\Models\Warehouse;
@@ -138,5 +141,102 @@ class StockTransferCancelTest extends TestCase
             ])
             ->assertStatus(422)
             ->assertJsonPath('message', 'Transfer sudah diproses QC');
+    }
+
+    public function test_transfer_qc_reject_goes_to_damaged_warehouse(): void
+    {
+        $user = User::factory()->create();
+        $fromWarehouse = Warehouse::firstOrCreate(
+            ['code' => 'GUDANG_BESAR'],
+            ['name' => 'Gudang Besar']
+        );
+        $toWarehouse = Warehouse::firstOrCreate(
+            ['code' => 'GUDANG_DISPLAY'],
+            ['name' => 'Gudang Display']
+        );
+        $damagedWarehouse = Warehouse::firstOrCreate(
+            ['code' => 'GUDANG_RUSAK'],
+            ['name' => 'Gudang Rusak', 'type' => 'damaged']
+        );
+        $item = Item::create([
+            'sku' => 'TRF-REJECT-001',
+            'name' => 'Transfer Reject Item',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+        ]);
+
+        ItemStock::create([
+            'item_id' => $item->id,
+            'warehouse_id' => $fromWarehouse->id,
+            'stock' => 20,
+        ]);
+
+        $this->withoutMiddleware();
+
+        $this->actingAs($user)
+            ->postJson(route('admin.inventory.stock-transfers.store'), [
+                'from_warehouse_id' => $fromWarehouse->id,
+                'to_warehouse_id' => $toWarehouse->id,
+                'transacted_at' => now()->format('Y-m-d H:i'),
+                'items' => [
+                    [
+                        'item_id' => $item->id,
+                        'qty' => 5,
+                    ],
+                ],
+            ])
+            ->assertOk();
+
+        $transfer = StockTransfer::query()->firstOrFail();
+
+        $this->actingAs($user)
+            ->postJson(route('admin.inventory.stock-transfers.qc', $transfer->id), [
+                'items' => [
+                    [
+                        'item_id' => $item->id,
+                        'qty_ok' => 3,
+                        'qty_reject' => 2,
+                        'qc_note' => 'Kemasan rusak',
+                    ],
+                ],
+            ])
+            ->assertOk();
+
+        $this->assertDatabaseHas('item_stocks', [
+            'item_id' => $item->id,
+            'warehouse_id' => $fromWarehouse->id,
+            'stock' => 15,
+        ]);
+        $this->assertDatabaseHas('item_stocks', [
+            'item_id' => $item->id,
+            'warehouse_id' => $toWarehouse->id,
+            'stock' => 3,
+        ]);
+        $this->assertDatabaseHas('item_stocks', [
+            'item_id' => $item->id,
+            'warehouse_id' => $damagedWarehouse->id,
+            'stock' => 2,
+        ]);
+        $this->assertTrue(StockMutation::query()
+            ->where('item_id', $item->id)
+            ->where('warehouse_id', $damagedWarehouse->id)
+            ->where('source_type', 'transfer')
+            ->where('source_subtype', 'qc_reject')
+            ->where('direction', 'in')
+            ->where('qty', 2)
+            ->exists());
+
+        $damagedGood = DamagedGood::query()
+            ->where('source_type', DamagedGood::SOURCE_TRANSFER_REJECT)
+            ->where('source_ref', $transfer->code)
+            ->where('status', 'approved')
+            ->firstOrFail();
+
+        $this->assertDatabaseHas('damaged_good_items', [
+            'damaged_good_id' => $damagedGood->id,
+            'item_id' => $item->id,
+            'qty' => 2,
+            'reason_code' => DamagedGoodItem::REASON_OTHER,
+        ]);
     }
 }

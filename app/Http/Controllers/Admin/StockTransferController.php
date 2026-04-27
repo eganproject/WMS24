@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\DamagedGood;
+use App\Models\DamagedGoodItem;
 use App\Models\Item;
 use App\Models\StockTransfer;
 use App\Models\StockTransferItem;
@@ -243,9 +245,32 @@ class StockTransferController extends Controller
                 ]);
             }
         }
+        $hasReject = collect($validated['items'])->sum(fn ($row) => (int) ($row['qty_reject'] ?? 0)) > 0;
+        $damagedWarehouseId = WarehouseService::damagedWarehouseId();
+        if ($hasReject && $damagedWarehouseId <= 0) {
+            throw ValidationException::withMessages([
+                'items' => 'Gudang Rusak belum dikonfigurasi.',
+            ]);
+        }
 
         DB::beginTransaction();
         try {
+            $damagedGood = null;
+            if ($hasReject) {
+                $damagedGood = DamagedGood::create([
+                    'code' => $this->generateCode('DMG'),
+                    'source_type' => DamagedGood::SOURCE_TRANSFER_REJECT,
+                    'source_warehouse_id' => $transfer->from_warehouse_id,
+                    'source_ref' => $transfer->code,
+                    'note' => 'Reject QC transfer gudang '.$transfer->code,
+                    'transacted_at' => now(),
+                    'created_by' => auth()->id(),
+                    'status' => 'approved',
+                    'approved_at' => now(),
+                    'approved_by' => auth()->id(),
+                ]);
+            }
+
             foreach ($validated['items'] as $row) {
                 $itemId = (int) $row['item_id'];
                 $transferItem = $itemMap->get($itemId);
@@ -275,16 +300,24 @@ class StockTransferController extends Controller
                 }
 
                 if ($reject > 0) {
+                    DamagedGoodItem::create([
+                        'damaged_good_id' => $damagedGood->id,
+                        'item_id' => $itemId,
+                        'qty' => $reject,
+                        'reason_code' => DamagedGoodItem::REASON_OTHER,
+                        'note' => $row['qc_note'] ?? null,
+                    ]);
+
                     StockService::mutate([
                         'item_id' => $itemId,
-                        'warehouse_id' => $transfer->from_warehouse_id,
+                        'warehouse_id' => $damagedWarehouseId,
                         'direction' => 'in',
                         'qty' => $reject,
                         'source_type' => 'transfer',
                         'source_subtype' => 'qc_reject',
                         'source_id' => $transfer->id,
                         'source_code' => $transfer->code,
-                        'note' => $row['qc_note'] ?? null,
+                        'note' => trim('Reject QC transfer dari '.$transfer->fromWarehouse?->name.' ke '.$transfer->toWarehouse?->name.'. '.($row['qc_note'] ?? '')),
                         'occurred_at' => now(),
                         'created_by' => auth()->id(),
                     ]);

@@ -277,6 +277,17 @@ class AttendanceController extends Controller
             ->when($request->input('date_to'), fn ($q, $date) => $q->whereDate('schedule_date', '<=', $date))
             ->latest('schedule_date');
 
+        $search = trim((string) $request->input('q', ''));
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->where('schedule_date', 'like', "%{$search}%")
+                    ->orWhere('schedule_type', 'like', "%{$search}%")
+                    ->orWhereHas('employee', fn ($eq) => $eq
+                        ->where('name', 'like', "%{$search}%")
+                        ->orWhere('employee_code', 'like', "%{$search}%"));
+            });
+        }
+
         return $this->datatable($query, $request, fn (EmployeeSchedule $schedule) => [
             'id' => $schedule->id,
             'employee_id' => $schedule->employee_id,

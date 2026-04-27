@@ -466,6 +466,23 @@ class AttendanceController extends Controller
         return response()->json(['message' => 'Jadwal karyawan berhasil disimpan', 'schedule' => $schedule]);
     }
 
+    public function updateSchedule(Request $request, EmployeeSchedule $schedule)
+    {
+        $oldEmployee = $schedule->employee;
+        $oldDate = $schedule->schedule_date;
+        $validated = $this->validateSchedule($request);
+
+        $schedule->update($validated);
+        $schedule->refresh();
+
+        if ($oldEmployee) {
+            app(AttendanceProcessor::class)->rebuildDailyAttendance($oldEmployee, $oldDate);
+        }
+        app(AttendanceProcessor::class)->rebuildDailyAttendance($schedule->employee, $schedule->schedule_date);
+
+        return response()->json(['message' => 'Jadwal karyawan berhasil diperbarui', 'schedule' => $schedule]);
+    }
+
     public function destroySchedule(EmployeeSchedule $schedule)
     {
         $employee = $schedule->employee;
@@ -587,6 +604,17 @@ class AttendanceController extends Controller
         return response()->json(['message' => 'Template jadwal berhasil diperbarui']);
     }
 
+    public function destroyTemplate(WeeklyScheduleTemplate $template)
+    {
+        if (EmployeeScheduleAssignment::where('weekly_schedule_template_id', $template->id)->exists()) {
+            return response()->json(['message' => 'Template sudah pernah diterapkan ke karyawan dan tidak bisa dihapus. Nonaktifkan template jika tidak dipakai.'], 422);
+        }
+
+        $template->delete();
+
+        return response()->json(['message' => 'Template jadwal berhasil dihapus']);
+    }
+
     public function assignTemplate(Request $request)
     {
         $validated = $request->validate([
@@ -642,21 +670,50 @@ class AttendanceController extends Controller
 
     public function storeLeave(Request $request)
     {
-        $validated = $request->validate([
-            'employee_id' => ['required', 'integer', 'exists:employees,id'],
-            'leave_type' => ['required', 'string', 'max:30'],
-            'start_date' => ['required', 'date'],
-            'end_date' => ['required', 'date', 'after_or_equal:start_date'],
-            'reason' => ['nullable', 'string'],
-            'status' => ['required', 'string', 'max:30'],
-        ]);
+        $validated = $this->validateLeave($request);
 
         $leave = EmployeeLeave::create($validated + [
             'approved_by' => $validated['status'] === 'approved' ? auth()->id() : null,
             'approved_at' => $validated['status'] === 'approved' ? now() : null,
         ]);
+        $this->rebuildAttendanceRange($leave->employee, $leave->start_date, $leave->end_date);
 
         return response()->json(['message' => 'Cuti/izin berhasil dibuat', 'leave' => $leave]);
+    }
+
+    public function updateLeave(Request $request, EmployeeLeave $leave)
+    {
+        $oldEmployee = $leave->employee;
+        $oldStart = $leave->start_date;
+        $oldEnd = $leave->end_date;
+        $validated = $this->validateLeave($request);
+
+        $leave->update($validated + [
+            'approved_by' => $validated['status'] === 'approved' ? auth()->id() : null,
+            'approved_at' => $validated['status'] === 'approved' ? now() : null,
+        ]);
+        $leave->refresh();
+
+        if ($oldEmployee) {
+            $this->rebuildAttendanceRange($oldEmployee, $oldStart, $oldEnd);
+        }
+        $this->rebuildAttendanceRange($leave->employee, $leave->start_date, $leave->end_date);
+
+        return response()->json(['message' => 'Cuti/izin berhasil diperbarui', 'leave' => $leave]);
+    }
+
+    public function destroyLeave(EmployeeLeave $leave)
+    {
+        $employee = $leave->employee;
+        $start = $leave->start_date;
+        $end = $leave->end_date;
+        $leave->delete();
+
+        if ($employee) {
+            $this->rebuildAttendanceRange($employee, $start, $end);
+        }
+
+        return response()->json(['message' => 'Cuti/izin berhasil dihapus']);
     }
 
     public function rawLogsData(Request $request)
@@ -669,6 +726,8 @@ class AttendanceController extends Controller
 
         return $this->datatable($query, $request, fn (AttendanceRawLog $log) => [
             'id' => $log->id,
+            'attendance_device_id' => $log->attendance_device_id,
+            'employee_id' => $log->employee_id,
             'device' => $log->device?->name ?? '-',
             'employee' => $log->employee ? "{$log->employee->employee_code} - {$log->employee->name}" : 'Belum terhubung',
             'device_user_id' => $log->device_user_id,
@@ -722,6 +781,53 @@ class AttendanceController extends Controller
         ]);
     }
 
+    public function updateRawLog(Request $request, AttendanceRawLog $rawLog)
+    {
+        $validated = $request->validate([
+            'attendance_device_id' => ['required', 'integer', 'exists:attendance_devices,id'],
+            'device_user_id' => ['required', 'string', 'max:100'],
+            'scan_at' => ['required', 'date'],
+            'verify_type' => ['nullable', 'string', 'max:50'],
+            'state' => ['nullable', 'string', 'max:50'],
+        ]);
+
+        $oldEmployee = $rawLog->employee;
+        $oldDate = $rawLog->scan_at?->toDateString();
+        $employeeId = EmployeeFingerprint::query()
+            ->where('attendance_device_id', $validated['attendance_device_id'])
+            ->where('device_user_id', $validated['device_user_id'])
+            ->where('is_active', true)
+            ->value('employee_id');
+
+        $rawLog->update($validated + [
+            'employee_id' => $employeeId,
+            'scan_at' => Carbon::parse($validated['scan_at']),
+        ]);
+        $rawLog->refresh();
+
+        if ($oldEmployee && $oldDate) {
+            app(AttendanceProcessor::class)->rebuildDailyAttendance($oldEmployee, $oldDate);
+        }
+        if ($rawLog->employee) {
+            app(AttendanceProcessor::class)->rebuildDailyAttendance($rawLog->employee, $rawLog->scan_at);
+        }
+
+        return response()->json(['message' => 'Raw log fingerprint berhasil diperbarui', 'raw_log' => $rawLog]);
+    }
+
+    public function destroyRawLog(AttendanceRawLog $rawLog)
+    {
+        $employee = $rawLog->employee;
+        $date = $rawLog->scan_at?->toDateString();
+        $rawLog->delete();
+
+        if ($employee && $date) {
+            app(AttendanceProcessor::class)->rebuildDailyAttendance($employee, $date);
+        }
+
+        return response()->json(['message' => 'Raw log fingerprint berhasil dihapus']);
+    }
+
     public function attendancesData(Request $request)
     {
         $query = Attendance::query()
@@ -732,6 +838,8 @@ class AttendanceController extends Controller
 
         return $this->datatable($query, $request, fn (Attendance $attendance) => [
             'id' => $attendance->id,
+            'employee_id' => $attendance->employee_id,
+            'work_shift_id' => $attendance->work_shift_id,
             'employee' => $attendance->employee ? "{$attendance->employee->employee_code} - {$attendance->employee->name}" : '-',
             'attendance_date' => $attendance->attendance_date?->format('Y-m-d'),
             'shift' => $attendance->shift?->name ?? '-',
@@ -745,6 +853,37 @@ class AttendanceController extends Controller
             'source' => $attendance->source,
             'note' => $attendance->note,
         ]);
+    }
+
+    public function updateAttendance(Request $request, Attendance $attendance)
+    {
+        $validated = $request->validate([
+            'employee_id' => ['required', 'integer', 'exists:employees,id'],
+            'attendance_date' => ['required', 'date'],
+            'work_shift_id' => ['nullable', 'integer', 'exists:work_shifts,id'],
+            'check_in_at' => ['nullable', 'date'],
+            'check_out_at' => ['nullable', 'date'],
+            'late_minutes' => ['required', 'integer', 'min:0'],
+            'early_leave_minutes' => ['required', 'integer', 'min:0'],
+            'work_minutes' => ['required', 'integer', 'min:0'],
+            'overtime_minutes' => ['required', 'integer', 'min:0'],
+            'status' => ['required', 'string', 'max:30'],
+            'source' => ['nullable', 'string', 'max:30'],
+            'note' => ['nullable', 'string'],
+        ]);
+
+        $attendance->update($validated + [
+            'source' => $validated['source'] ?? 'manual',
+        ]);
+
+        return response()->json(['message' => 'Rekap absensi berhasil diperbarui', 'attendance' => $attendance]);
+    }
+
+    public function destroyAttendance(Attendance $attendance)
+    {
+        $attendance->delete();
+
+        return response()->json(['message' => 'Rekap absensi berhasil dihapus']);
     }
 
     private function validateEmployee(Request $request, ?Employee $employee = null): array
@@ -828,6 +967,33 @@ class AttendanceController extends Controller
             'schedule_type' => ['required', 'string', 'max:30'],
             'note' => ['nullable', 'string'],
         ]);
+    }
+
+    private function validateLeave(Request $request): array
+    {
+        return $request->validate([
+            'employee_id' => ['required', 'integer', 'exists:employees,id'],
+            'leave_type' => ['required', 'string', 'max:30'],
+            'start_date' => ['required', 'date'],
+            'end_date' => ['required', 'date', 'after_or_equal:start_date'],
+            'reason' => ['nullable', 'string'],
+            'status' => ['required', 'string', 'max:30'],
+        ]);
+    }
+
+    private function rebuildAttendanceRange(?Employee $employee, Carbon|string|null $start, Carbon|string|null $end): void
+    {
+        if (!$employee || !$start || !$end) {
+            return;
+        }
+
+        $current = $start instanceof Carbon ? $start->copy()->startOfDay() : Carbon::parse($start)->startOfDay();
+        $until = $end instanceof Carbon ? $end->copy()->startOfDay() : Carbon::parse($end)->startOfDay();
+
+        while ($current->lte($until)) {
+            app(AttendanceProcessor::class)->rebuildDailyAttendance($employee, $current);
+            $current->addDay();
+        }
     }
 
     private function syncTemplateDays(WeeklyScheduleTemplate $template, array $days): void

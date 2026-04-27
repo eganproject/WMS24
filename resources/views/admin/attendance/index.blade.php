@@ -103,7 +103,7 @@
                         <button type="button" class="btn btn-light-primary" data-bs-toggle="modal" data-bs-target="#modal_positions">Jabatan</button>
                     </div>
                 </form>
-                <x-attendance-table id="employees_table" :headers="['Kode','Nama','Area','User','Telepon','Jabatan','Status']" />
+                <x-attendance-table id="employees_table" :headers="['Kode','Nama','Area','User','Telepon','Jabatan','Status','Aksi']" />
             </div>
 
             <div class="tab-pane fade" id="tab_devices">
@@ -115,9 +115,10 @@
                     <div class="col-md-1"><label class="form-label fw-bold">Port</label><input type="number" name="port" value="4370" class="form-control form-control-solid" placeholder="Port" required></div>
                     <div class="col-md-2"><label class="form-label fw-bold">Lokasi</label><input name="location" class="form-control form-control-solid" placeholder="Pintu masuk"></div>
                     <div class="col-md-2"><label class="form-label fw-bold">Tipe Device</label><input name="device_type" class="form-control form-control-solid" placeholder="ZKTeco"></div>
-                    <div class="col-md-1 d-flex align-items-end"><input type="hidden" name="is_active" value="1"><button class="btn btn-primary w-100">Tambah</button></div>
+                    <div class="col-md-1 d-flex align-items-end"><input type="hidden" name="is_active" value="0"><label class="form-check form-check-custom form-check-solid mb-3"><input type="checkbox" name="is_active" value="1" class="form-check-input" checked><span class="form-check-label">Aktif</span></label></div>
+                    <div class="col-md-1 d-flex align-items-end"><button class="btn btn-primary w-100">Tambah</button></div>
                 </form>
-                <x-attendance-table id="devices_table" :headers="['Nama','Serial','IP','Port','Lokasi','Tipe','Aktif','Sync Terakhir']" />
+                <x-attendance-table id="devices_table" :headers="['Nama','Serial','IP','Port','Lokasi','Tipe','Aktif','Sync Terakhir','Aksi']" />
             </div>
 
             <div class="tab-pane fade" id="tab_fingerprints">
@@ -127,9 +128,10 @@
                     <div class="col-md-3"><label class="form-label fw-bold">Device</label><select name="attendance_device_id" class="form-select form-select-solid"><option value="">Semua device</option>@foreach($devices as $device)<option value="{{ $device->id }}">{{ $device->name }}</option>@endforeach</select></div>
                     <div class="col-md-2"><label class="form-label fw-bold">User ID Mesin</label><input name="device_user_id" class="form-control form-control-solid" placeholder="1001" required></div>
                     <div class="col-md-2"><label class="form-label fw-bold">UID</label><input name="fingerprint_uid" class="form-control form-control-solid" placeholder="Opsional"></div>
-                    <div class="col-md-1 d-flex align-items-end"><input type="hidden" name="is_active" value="1"><button class="btn btn-primary w-100">Tambah</button></div>
+                    <div class="col-md-1 d-flex align-items-end"><input type="hidden" name="is_active" value="0"><label class="form-check form-check-custom form-check-solid mb-3"><input type="checkbox" name="is_active" value="1" class="form-check-input" checked><span class="form-check-label">Aktif</span></label></div>
+                    <div class="col-md-1 d-flex align-items-end"><button class="btn btn-primary w-100">Tambah</button></div>
                 </form>
-                <x-attendance-table id="fingerprints_table" :headers="['Karyawan','Device','Device User ID','UID','Aktif','Enrolled']" />
+                <x-attendance-table id="fingerprints_table" :headers="['Karyawan','Device','Device User ID','UID','Aktif','Enrolled','Aksi']" />
             </div>
 
             <div class="tab-pane fade" id="tab_shifts">
@@ -143,9 +145,10 @@
                     <div class="col-md-2"><label class="form-label fw-bold">Toleransi Telat</label><input type="number" name="late_tolerance_minutes" value="0" min="0" class="form-control form-control-solid" placeholder="Menit"></div>
                     <div class="col-md-2"><label class="form-label fw-bold">Toleransi Pulang</label><input type="number" name="checkout_tolerance_minutes" value="0" min="0" class="form-control form-control-solid" placeholder="Menit"></div>
                     <div class="col-md-1 d-flex align-items-end"><label class="form-check form-check-custom form-check-solid mb-3"><input type="checkbox" name="crosses_midnight" value="1" class="form-check-input"><span class="form-check-label">Malam</span></label></div>
-                    <div class="col-md-1 d-flex align-items-end"><input type="hidden" name="is_active" value="1"><button class="btn btn-primary w-100">Tambah</button></div>
+                    <div class="col-md-1 d-flex align-items-end"><input type="hidden" name="is_active" value="0"><label class="form-check form-check-custom form-check-solid mb-3"><input type="checkbox" name="is_active" value="1" class="form-check-input" checked><span class="form-check-label">Aktif</span></label></div>
+                    <div class="col-md-1 d-flex align-items-end"><button class="btn btn-primary w-100">Tambah</button></div>
                 </form>
-                <x-attendance-table id="shifts_table" :headers="['Nama','Masuk','Pulang','Istirahat','Telat','Pulang Cepat','Malam','Aktif']" />
+                <x-attendance-table id="shifts_table" :headers="['Nama','Masuk','Pulang','Istirahat','Telat','Pulang Cepat','Malam','Aktif','Aksi']" />
             </div>
 
             <div class="tab-pane fade" id="tab_schedules">
@@ -188,7 +191,7 @@
                     </div>
                 </div>
 
-                <x-attendance-table id="schedules_table" :headers="['Karyawan','Tanggal','Tipe','Shift','Catatan']" />
+                <x-attendance-table id="schedules_table" :headers="['Karyawan','Tanggal','Tipe','Shift','Catatan','Aksi']" />
             </div>
 
             <div class="tab-pane fade" id="tab_holidays">
@@ -200,7 +203,7 @@
                     <div class="col-md-2 d-flex align-items-end"><label class="form-check form-check-custom form-check-solid mb-3"><input type="checkbox" name="is_paid" value="1" class="form-check-input" checked><span class="form-check-label">Dibayar</span></label></div>
                     <div class="col-md-2 d-flex align-items-end"><button class="btn btn-primary w-100">Tambah Libur</button></div>
                 </form>
-                <x-attendance-table id="holidays_table" :headers="['Tanggal','Nama','Tipe','Dibayar']" />
+                <x-attendance-table id="holidays_table" :headers="['Tanggal','Nama','Tipe','Dibayar','Aksi']" />
             </div>
 
             <div class="tab-pane fade" id="tab_templates">
@@ -213,7 +216,10 @@
                             <div class="form-text">Atur Masuk atau Libur per hari sesuai pola kerja karyawan.</div>
                         </div>
                         <div class="col-md-2">
-                            <input type="hidden" name="is_active" value="1">
+                            <input type="hidden" name="is_active" value="0">
+                            <label class="form-check form-check-custom form-check-solid mb-3"><input type="checkbox" name="is_active" value="1" class="form-check-input" checked><span class="form-check-label">Aktif</span></label>
+                        </div>
+                        <div class="col-md-2">
                             <button class="btn btn-primary w-100">Tambah Template</button>
                         </div>
                     </div>
@@ -258,7 +264,7 @@
                     <div class="col-md-2"><label class="form-label fw-bold">Berlaku Sampai</label><input type="text" name="effective_until" class="form-control form-control-solid js-date" placeholder="Opsional"></div>
                     <div class="col-md-2 d-flex align-items-end"><button class="btn btn-light-primary w-100">Assign Template</button></div>
                 </form>
-                <x-attendance-table id="templates_table" :headers="['Nama','Aktif','Isi Hari']" />
+                <x-attendance-table id="templates_table" :headers="['Nama','Aktif','Isi Hari','Aksi']" />
             </div>
 
             <div class="tab-pane fade" id="tab_leaves">
@@ -272,7 +278,7 @@
                     <div class="col-md-1 d-flex align-items-end"><button class="btn btn-primary w-100">Tambah</button></div>
                     <div class="col-md-12"><label class="form-label fw-bold">Alasan</label><input name="reason" class="form-control form-control-solid" placeholder="Alasan cuti/izin"></div>
                 </form>
-                <x-attendance-table id="leaves_table" :headers="['Karyawan','Tipe','Mulai','Selesai','Status','Alasan']" />
+                <x-attendance-table id="leaves_table" :headers="['Karyawan','Tipe','Mulai','Selesai','Status','Alasan','Aksi']" />
             </div>
 
             <div class="tab-pane fade" id="tab_raw_logs">
@@ -285,11 +291,27 @@
                     <div class="col-md-1"><label class="form-label fw-bold">State</label><input name="state" class="form-control form-control-solid" placeholder="0"></div>
                     <div class="col-md-1 d-flex align-items-end"><button class="btn btn-primary w-100">Scan</button></div>
                 </form>
-                <x-attendance-table id="raw_logs_table" :headers="['Device','Karyawan','Device User ID','Waktu Scan','Verify','State']" />
+                <x-attendance-table id="raw_logs_table" :headers="['Device','Karyawan','Device User ID','Waktu Scan','Verify','State','Aksi']" />
             </div>
 
             <div class="tab-pane fade" id="tab_attendances">
-                <x-attendance-table id="attendances_table" :headers="['Karyawan','Tanggal','Shift','Masuk','Pulang','Telat','Pulang Cepat','Menit Kerja','Lembur','Status','Source','Catatan']" />
+                <form class="row g-3 mb-6 ajax-form" data-table="attendances_table" action="#">
+                    @csrf
+                    <div class="col-md-3"><label class="form-label fw-bold">Karyawan</label><select name="employee_id" class="form-select form-select-solid" required>@foreach($employees as $employee)<option value="{{ $employee->id }}">{{ $employee->employee_code }} - {{ $employee->name }}</option>@endforeach</select></div>
+                    <div class="col-md-2"><label class="form-label fw-bold">Tanggal</label><input type="text" name="attendance_date" class="form-control form-control-solid js-date" placeholder="YYYY-MM-DD" required></div>
+                    <div class="col-md-2"><label class="form-label fw-bold">Shift</label><select name="work_shift_id" class="form-select form-select-solid"><option value="">Tanpa shift</option>@foreach($shifts as $shift)<option value="{{ $shift->id }}">{{ $shift->name }}</option>@endforeach</select></div>
+                    <div class="col-md-2"><label class="form-label fw-bold">Masuk</label><input type="text" name="check_in_at" class="form-control form-control-solid js-datetime" placeholder="YYYY-MM-DD HH:mm"></div>
+                    <div class="col-md-2"><label class="form-label fw-bold">Pulang</label><input type="text" name="check_out_at" class="form-control form-control-solid js-datetime" placeholder="YYYY-MM-DD HH:mm"></div>
+                    <div class="col-md-1"><label class="form-label fw-bold">Telat</label><input type="number" name="late_minutes" min="0" value="0" class="form-control form-control-solid"></div>
+                    <div class="col-md-2"><label class="form-label fw-bold">Pulang Cepat</label><input type="number" name="early_leave_minutes" min="0" value="0" class="form-control form-control-solid"></div>
+                    <div class="col-md-2"><label class="form-label fw-bold">Menit Kerja</label><input type="number" name="work_minutes" min="0" value="0" class="form-control form-control-solid"></div>
+                    <div class="col-md-2"><label class="form-label fw-bold">Lembur</label><input type="number" name="overtime_minutes" min="0" value="0" class="form-control form-control-solid"></div>
+                    <div class="col-md-2"><label class="form-label fw-bold">Status</label><select name="status" class="form-select form-select-solid"><option value="present">Hadir</option><option value="late">Terlambat</option><option value="absent">Alpha</option><option value="incomplete">Belum Lengkap</option><option value="leave">Cuti/Izin</option><option value="holiday">Libur Perusahaan</option><option value="day_off">Libur</option></select></div>
+                    <div class="col-md-2"><label class="form-label fw-bold">Source</label><input name="source" class="form-control form-control-solid" value="manual"></div>
+                    <div class="col-md-2"><label class="form-label fw-bold">Catatan</label><input name="note" class="form-control form-control-solid" placeholder="Opsional"></div>
+                    <div class="col-md-2 d-flex align-items-end"><button class="btn btn-primary w-100">Update Rekap</button></div>
+                </form>
+                <x-attendance-table id="attendances_table" :headers="['Karyawan','Tanggal','Shift','Masuk','Pulang','Telat','Pulang Cepat','Menit Kerja','Lembur','Status','Source','Catatan','Aksi']" />
             </div>
         </div>
     </div>
@@ -343,6 +365,18 @@ const assignTemplateUrl = '{{ route('admin.attendance.templates.assign') }}';
 const positionStoreUrl = '{{ route('admin.attendance.positions.store') }}';
 const positionUpdateTpl = '{{ route('admin.attendance.positions.update', ':id') }}';
 const positionDeleteTpl = '{{ route('admin.attendance.positions.destroy', ':id') }}';
+const crudUrls = {
+    employees_table: { update: '{{ route('admin.attendance.employees.update', ':id') }}', destroy: '{{ route('admin.attendance.employees.destroy', ':id') }}' },
+    devices_table: { update: '{{ route('admin.attendance.devices.update', ':id') }}', destroy: '{{ route('admin.attendance.devices.destroy', ':id') }}' },
+    fingerprints_table: { update: '{{ route('admin.attendance.fingerprints.update', ':id') }}', destroy: '{{ route('admin.attendance.fingerprints.destroy', ':id') }}' },
+    shifts_table: { update: '{{ route('admin.attendance.shifts.update', ':id') }}', destroy: '{{ route('admin.attendance.shifts.destroy', ':id') }}' },
+    schedules_table: { update: '{{ route('admin.attendance.schedules.update', ':id') }}', destroy: '{{ route('admin.attendance.schedules.destroy', ':id') }}' },
+    holidays_table: { update: '{{ route('admin.attendance.holidays.update', ':id') }}', destroy: '{{ route('admin.attendance.holidays.destroy', ':id') }}' },
+    templates_table: { update: '{{ route('admin.attendance.templates.update', ':id') }}', destroy: '{{ route('admin.attendance.templates.destroy', ':id') }}' },
+    leaves_table: { update: '{{ route('admin.attendance.leaves.update', ':id') }}', destroy: '{{ route('admin.attendance.leaves.destroy', ':id') }}' },
+    raw_logs_table: { update: '{{ route('admin.attendance.raw-logs.update', ':id') }}', destroy: '{{ route('admin.attendance.raw-logs.destroy', ':id') }}' },
+    attendances_table: { update: '{{ route('admin.attendance.attendances.update', ':id') }}', destroy: '{{ route('admin.attendance.attendances.destroy', ':id') }}' },
+};
 function renderAttendanceStatusBadge(value) {
     const labels = {
         present: 'Hadir',
@@ -366,7 +400,7 @@ function renderAttendanceStatusBadge(value) {
     return `<span class="badge ${classes[value] || 'badge-light'}">${labels[value] || value || '-'}</span>`;
 }
 const tableConfigs = {
-    employees_table: { url: '{{ route('admin.attendance.employees.data') }}', columns: ['employee_code','name','area','user','phone','position','employment_status'] },
+    employees_table: { url: '{{ route('admin.attendance.employees.data') }}', columns: ['employee_code','name','area','user','phone','position','employment_status','__actions'] },
     positions_table: { url: '{{ route('admin.attendance.positions.data') }}', columns: [
         'name',
         'description',
@@ -376,15 +410,15 @@ const tableConfigs = {
             <button class="btn btn-sm btn-light-danger btn-position-delete" data-id="${value}">Hapus</button>
         ` },
     ] },
-    devices_table: { url: '{{ route('admin.attendance.devices.data') }}', columns: ['name','serial_number','ip_address','port','location','device_type','is_active','last_synced_at'] },
-    fingerprints_table: { url: '{{ route('admin.attendance.fingerprints.data') }}', columns: ['employee','device','device_user_id','fingerprint_uid','is_active','enrolled_at'] },
-    shifts_table: { url: '{{ route('admin.attendance.shifts.data') }}', columns: ['name','start_time','end_time','break_start_time','late_tolerance_minutes','checkout_tolerance_minutes','crosses_midnight','is_active'] },
-    schedules_table: { url: '{{ route('admin.attendance.schedules.data') }}', columns: ['employee','schedule_date','schedule_type','shift','note'] },
-    holidays_table: { url: '{{ route('admin.attendance.holidays.data') }}', columns: ['holiday_date','name','type','is_paid'] },
-    templates_table: { url: '{{ route('admin.attendance.templates.data') }}', columns: ['name','is_active','days'] },
-    leaves_table: { url: '{{ route('admin.attendance.leaves.data') }}', columns: ['employee','leave_type','start_date','end_date','status','reason'] },
-    raw_logs_table: { url: '{{ route('admin.attendance.raw-logs.data') }}', columns: ['device','employee','device_user_id','scan_at','verify_type','state'] },
-    attendances_table: { url: '{{ route('admin.attendance.attendances.data') }}', columns: ['employee','attendance_date','shift','check_in_at','check_out_at','late_minutes','early_leave_minutes','work_minutes','overtime_minutes',{ data: 'status', render: renderAttendanceStatusBadge },'source','note'] },
+    devices_table: { url: '{{ route('admin.attendance.devices.data') }}', columns: ['name','serial_number','ip_address','port','location','device_type','is_active','last_synced_at','__actions'] },
+    fingerprints_table: { url: '{{ route('admin.attendance.fingerprints.data') }}', columns: ['employee','device','device_user_id','fingerprint_uid','is_active','enrolled_at','__actions'] },
+    shifts_table: { url: '{{ route('admin.attendance.shifts.data') }}', columns: ['name','start_time','end_time','break_start_time','late_tolerance_minutes','checkout_tolerance_minutes','crosses_midnight','is_active','__actions'] },
+    schedules_table: { url: '{{ route('admin.attendance.schedules.data') }}', columns: ['employee','schedule_date','schedule_type','shift','note','__actions'] },
+    holidays_table: { url: '{{ route('admin.attendance.holidays.data') }}', columns: ['holiday_date','name','type','is_paid','__actions'] },
+    templates_table: { url: '{{ route('admin.attendance.templates.data') }}', columns: ['name','is_active','days','__actions'] },
+    leaves_table: { url: '{{ route('admin.attendance.leaves.data') }}', columns: ['employee','leave_type','start_date','end_date','status','reason','__actions'] },
+    raw_logs_table: { url: '{{ route('admin.attendance.raw-logs.data') }}', columns: ['device','employee','device_user_id','scan_at','verify_type','state','__actions'] },
+    attendances_table: { url: '{{ route('admin.attendance.attendances.data') }}', columns: ['employee','attendance_date','shift','check_in_at','check_out_at','late_minutes','early_leave_minutes','work_minutes','overtime_minutes',{ data: 'status', render: renderAttendanceStatusBadge },'source','note','__actions'] },
 };
 const tables = {};
 const tabTableMap = {
@@ -406,6 +440,19 @@ const escapeAttr = (value) => String(value ?? '')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;');
 
+const crudUrl = (tableId, action, id) => crudUrls[tableId]?.[action]?.replace(':id', id);
+const renderCrudActions = (tableId, row) => {
+    if (!row?.id || !crudUrls[tableId]) return '-';
+    const payload = escapeAttr(encodeURIComponent(JSON.stringify(row)));
+
+    return `
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-sm btn-light-primary btn-crud-edit" data-table="${tableId}" data-row="${payload}">Edit</button>
+            <button type="button" class="btn btn-sm btn-light-danger btn-crud-delete" data-table="${tableId}" data-id="${row.id}">Hapus</button>
+        </div>
+    `;
+};
+
 const renderValue = (value) => {
     if (Array.isArray(value)) {
         return value.map((day) => `${day.day_of_week}: ${day.schedule_type}${day.shift ? ' - ' + day.shift : ''}`).join('<br>');
@@ -417,7 +464,7 @@ const renderValue = (value) => {
 
 document.addEventListener('DOMContentLoaded', () => {
     if (typeof $ !== 'undefined' && $.fn.select2) {
-        document.querySelectorAll('#tab_employees select, #tab_fingerprints select, #tab_schedules select, #tab_holidays select, #tab_templates select, #tab_leaves select, #tab_raw_logs select, #modal_positions select').forEach((select) => {
+        document.querySelectorAll('#tab_employees select, #tab_fingerprints select, #tab_schedules select, #tab_holidays select, #tab_templates select, #tab_leaves select, #tab_raw_logs select, #tab_attendances select, #modal_positions select').forEach((select) => {
             const allowClear = select.querySelector('option[value=""]') !== null;
             const parentModal = select.closest('.modal');
             $(select).select2({
@@ -478,6 +525,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         orderable: false,
                     };
                 }
+                if (column === '__actions') {
+                    return {
+                        data: null,
+                        render: (value, type, row) => renderCrudActions(id, row),
+                        orderable: false,
+                    };
+                }
 
                 return {
                     data: column,
@@ -498,6 +552,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         tab.querySelectorAll('form.ajax-form').forEach((form) => {
             form.reset();
+            clearEditState(form);
             if (typeof $ !== 'undefined') {
                 $(form).find('select').trigger('change.select2');
             }
@@ -615,10 +670,82 @@ document.addEventListener('DOMContentLoaded', () => {
         Swal?.fire('Berhasil', 'Data tab aktif dimuat ulang.', 'success');
     });
 
+    const formSelectorByTable = {
+        templates_table: '.template-days-form',
+    };
+    const formForTable = (tableId) => document.querySelector(formSelectorByTable[tableId] || `form.ajax-form[data-table="${tableId}"]`);
+    const setFieldValue = (form, name, value) => {
+        const field = form.querySelector(`[name="${name}"][type="checkbox"]`) || form.querySelector(`[name="${name}"]`);
+        if (!field) return;
+
+        if (field.type === 'checkbox') {
+            field.checked = value === true || value === 1 || value === '1';
+        } else {
+            field.value = value ?? '';
+        }
+
+        if (typeof $ !== 'undefined' && $(field).data('select2')) {
+            $(field).trigger('change.select2');
+        }
+    };
+    const clearEditState = (form) => {
+        delete form.dataset.editUrl;
+        delete form.dataset.editingId;
+        const submit = form.querySelector('button[type="submit"], button:not([type])');
+        if (submit && submit.dataset.createText) {
+            submit.textContent = submit.dataset.createText;
+        }
+    };
+    const setEditState = (form, tableId, row) => {
+        form.dataset.editUrl = crudUrl(tableId, 'update', row.id);
+        form.dataset.editingId = row.id;
+        const submit = form.querySelector('button[type="submit"], button:not([type])');
+        if (submit) {
+            submit.dataset.createText ||= submit.textContent;
+            submit.textContent = 'Update';
+        }
+    };
+    const fillTemplateForm = (form, row) => {
+        setFieldValue(form, 'name', row.name);
+        setFieldValue(form, 'is_active', row.is_active ? 1 : 0);
+        const days = Array.isArray(row.days) ? row.days : [];
+        form.querySelectorAll('.template-day-row').forEach((dayRow) => {
+            const day = days.find((item) => String(item.day_of_week) === String(dayRow.dataset.day));
+            const type = dayRow.querySelector('.template-day-type');
+            const shift = dayRow.querySelector('.template-day-shift');
+            type.value = day?.schedule_type || 'day_off';
+            shift.value = day?.work_shift_id || '';
+            if (typeof $ !== 'undefined' && $(type).data('select2')) {
+                $(type).trigger('change.select2');
+            }
+        });
+        updateTemplateShiftState(form);
+    };
+    const fillCrudForm = (tableId, row) => {
+        const form = formForTable(tableId);
+        if (!form || !crudUrls[tableId]?.update) return;
+
+        form.reset();
+        if (tableId === 'templates_table') {
+            fillTemplateForm(form, row);
+        } else {
+            Object.entries(row).forEach(([key, value]) => setFieldValue(form, key, value));
+        }
+        setEditState(form, tableId, row);
+        form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+
     document.querySelectorAll('.ajax-form').forEach((form) => {
         form.addEventListener('submit', async (event) => {
             event.preventDefault();
             const formData = new FormData(form);
+            const isEditing = Boolean(form.dataset.editUrl);
+            if (isEditing) {
+                formData.append('_method', 'PUT');
+            } else if (form.getAttribute('action') === '#') {
+                Swal?.fire('Info', 'Pilih data dari tabel lalu klik Edit terlebih dahulu.', 'info');
+                return;
+            }
             if (form.classList.contains('template-days-form')) {
                 let hasWorkDayWithoutShift = false;
                 form.querySelectorAll('.template-day-row').forEach((row, index) => {
@@ -641,7 +768,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             try {
-                const response = await fetch(form.action, {
+                const response = await fetch(isEditing ? form.dataset.editUrl : form.action, {
                     method: 'POST',
                     headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' },
                     body: formData,
@@ -658,6 +785,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     Swal?.fire('Berhasil', json?.message || 'Data tersimpan', 'success');
                 }
                 form.reset();
+                clearEditState(form);
                 $(form).find('select').trigger('change.select2');
                 updateTemplateShiftState(form);
                 const tableId = form.getAttribute('data-table');
@@ -670,6 +798,49 @@ document.addEventListener('DOMContentLoaded', () => {
                 Swal?.fire('Error', 'Gagal mengirim request', 'error');
             }
         });
+    });
+
+    document.addEventListener('click', async (event) => {
+        const editButton = event.target.closest('.btn-crud-edit');
+        if (editButton) {
+            const row = JSON.parse(decodeURIComponent(editButton.dataset.row || '{}'));
+            fillCrudForm(editButton.dataset.table, row);
+            return;
+        }
+
+        const deleteButton = event.target.closest('.btn-crud-delete');
+        if (!deleteButton) return;
+
+        const tableId = deleteButton.dataset.table;
+        const deleteUrl = crudUrl(tableId, 'destroy', deleteButton.dataset.id);
+        if (!deleteUrl) return;
+
+        const confirmation = typeof Swal !== 'undefined'
+            ? await Swal.fire({
+                title: 'Hapus data?',
+                text: 'Data yang dihapus tidak bisa dikembalikan.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Hapus',
+                cancelButtonText: 'Batal',
+            })
+            : { isConfirmed: confirm('Hapus data ini?') };
+
+        if (!confirmation.isConfirmed) return;
+
+        const response = await fetch(deleteUrl, {
+            method: 'DELETE',
+            headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' },
+        });
+        const json = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            Swal?.fire('Error', json?.message || 'Gagal menghapus data', 'error');
+            return;
+        }
+
+        Swal?.fire('Berhasil', json?.message || 'Data berhasil dihapus', 'success');
+        tables[tableId]?.ajax.reload(null, false);
+        scheduleCalendar?.refetchEvents();
     });
 
     const updateTemplateShiftState = (scope = document) => {

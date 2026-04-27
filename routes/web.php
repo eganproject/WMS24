@@ -403,6 +403,7 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/schedules/data', [AttendanceController::class, 'schedulesData'])->name('schedules.data');
         Route::get('/schedules/calendar-events', [AttendanceController::class, 'calendarEvents'])->name('schedules.calendar-events');
         Route::post('/schedules', [AttendanceController::class, 'storeSchedule'])->name('schedules.store');
+        Route::put('/schedules/{schedule}', [AttendanceController::class, 'updateSchedule'])->name('schedules.update');
         Route::delete('/schedules/{schedule}', [AttendanceController::class, 'destroySchedule'])->name('schedules.destroy');
         Route::get('/holidays/data', [AttendanceController::class, 'holidaysData'])->name('holidays.data');
         Route::post('/holidays', [AttendanceController::class, 'storeHoliday'])->name('holidays.store');
@@ -411,11 +412,18 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/templates/data', [AttendanceController::class, 'templatesData'])->name('templates.data');
         Route::post('/templates', [AttendanceController::class, 'storeTemplate'])->name('templates.store');
         Route::put('/templates/{template}', [AttendanceController::class, 'updateTemplate'])->name('templates.update');
+        Route::delete('/templates/{template}', [AttendanceController::class, 'destroyTemplate'])->name('templates.destroy');
         Route::post('/templates/assign', [AttendanceController::class, 'assignTemplate'])->name('templates.assign');
         Route::get('/leaves/data', [AttendanceController::class, 'leavesData'])->name('leaves.data');
         Route::post('/leaves', [AttendanceController::class, 'storeLeave'])->name('leaves.store');
+        Route::put('/leaves/{leave}', [AttendanceController::class, 'updateLeave'])->name('leaves.update');
+        Route::delete('/leaves/{leave}', [AttendanceController::class, 'destroyLeave'])->name('leaves.destroy');
         Route::get('/raw-logs/data', [AttendanceController::class, 'rawLogsData'])->name('raw-logs.data');
         Route::post('/raw-logs', [AttendanceController::class, 'storeRawLog'])->name('raw-logs.store');
+        Route::put('/raw-logs/{rawLog}', [AttendanceController::class, 'updateRawLog'])->name('raw-logs.update');
+        Route::delete('/raw-logs/{rawLog}', [AttendanceController::class, 'destroyRawLog'])->name('raw-logs.destroy');
         Route::get('/attendances/data', [AttendanceController::class, 'attendancesData'])->name('attendances.data');
+        Route::put('/attendances/{attendance}', [AttendanceController::class, 'updateAttendance'])->name('attendances.update');
+        Route::delete('/attendances/{attendance}', [AttendanceController::class, 'destroyAttendance'])->name('attendances.destroy');
     });
 });

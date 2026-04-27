@@ -339,6 +339,7 @@
 const csrfToken = '{{ csrf_token() }}';
 const searchInput = document.getElementById('attendance_search');
 const calendarEventsUrl = '{{ route('admin.attendance.schedules.calendar-events') }}';
+const assignTemplateUrl = '{{ route('admin.attendance.templates.assign') }}';
 const positionStoreUrl = '{{ route('admin.attendance.positions.store') }}';
 const positionUpdateTpl = '{{ route('admin.attendance.positions.update', ':id') }}';
 const positionDeleteTpl = '{{ route('admin.attendance.positions.destroy', ':id') }}';
@@ -661,6 +662,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateTemplateShiftState(form);
                 const tableId = form.getAttribute('data-table');
                 tables[tableId]?.ajax.reload();
+                if (form.action === assignTemplateUrl) {
+                    tables.schedules_table?.ajax.reload();
+                }
                 scheduleCalendar?.refetchEvents();
             } catch (error) {
                 Swal?.fire('Error', 'Gagal mengirim request', 'error');

@@ -11,6 +11,8 @@ use App\Models\EmployeePosition;
 use App\Models\Role;
 use App\Models\EmployeeSchedule;
 use App\Models\User;
+use App\Models\WeeklyScheduleTemplate;
+use App\Models\WeeklyScheduleTemplateDay;
 use App\Models\WorkShift;
 use App\Support\AttendanceProcessor;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -299,5 +301,69 @@ class AttendanceProcessorTest extends TestCase
             'schedule_type' => 'work',
             'work_shift_id' => $shift->id,
         ]);
+    }
+
+    public function test_assigning_schedule_template_generates_visible_employee_schedules(): void
+    {
+        $user = User::factory()->create();
+        $role = Role::create(['name' => 'Admin', 'slug' => 'admin']);
+        $user->roles()->attach($role);
+        $this->actingAs($user);
+
+        $employee = Employee::create([
+            'employee_code' => 'EMP006',
+            'name' => 'Wawan',
+            'employment_status' => 'active',
+        ]);
+        $shift = WorkShift::create([
+            'name' => 'Pagi',
+            'start_time' => '08:00',
+            'end_time' => '17:00',
+            'is_active' => true,
+        ]);
+        $template = WeeklyScheduleTemplate::create([
+            'name' => 'Template 3 Hari',
+            'is_active' => true,
+        ]);
+        WeeklyScheduleTemplateDay::create([
+            'weekly_schedule_template_id' => $template->id,
+            'day_of_week' => 1,
+            'schedule_type' => 'work',
+            'work_shift_id' => $shift->id,
+        ]);
+        WeeklyScheduleTemplateDay::create([
+            'weekly_schedule_template_id' => $template->id,
+            'day_of_week' => 2,
+            'schedule_type' => 'day_off',
+        ]);
+
+        $this->postJson(route('admin.attendance.templates.assign'), [
+            'employee_id' => $employee->id,
+            'weekly_schedule_template_id' => $template->id,
+            'effective_from' => '2026-04-27',
+            'effective_until' => '2026-04-28',
+        ])
+            ->assertOk()
+            ->assertJsonPath('generated_until', '2026-04-28');
+
+        $this->assertTrue(EmployeeSchedule::query()
+            ->where('employee_id', $employee->id)
+            ->whereDate('schedule_date', '2026-04-27')
+            ->where('schedule_type', 'work')
+            ->where('work_shift_id', $shift->id)
+            ->exists());
+        $this->assertTrue(EmployeeSchedule::query()
+            ->where('employee_id', $employee->id)
+            ->whereDate('schedule_date', '2026-04-28')
+            ->where('schedule_type', 'day_off')
+            ->whereNull('work_shift_id')
+            ->exists());
+
+        $this->getJson(route('admin.attendance.schedules.data', ['draw' => 1]))
+            ->assertOk()
+            ->assertJsonFragment([
+                'employee' => 'EMP006 - Wawan',
+                'schedule_date' => '2026-04-27',
+            ]);
     }
 }

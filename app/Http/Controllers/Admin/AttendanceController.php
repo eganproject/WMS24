@@ -596,9 +596,30 @@ class AttendanceController extends Controller
             'effective_until' => ['nullable', 'date', 'after_or_equal:effective_from'],
         ]);
 
-        $assignment = EmployeeScheduleAssignment::create($validated);
+        $from = Carbon::parse($validated['effective_from'])->startOfDay();
+        $until = !empty($validated['effective_until'])
+            ? Carbon::parse($validated['effective_until'])->startOfDay()
+            : $from->copy()->endOfMonth();
 
-        return response()->json(['message' => 'Template jadwal berhasil ditetapkan ke karyawan', 'assignment' => $assignment]);
+        if ($from->diffInDays($until) > 366) {
+            return response()->json([
+                'message' => 'Rentang penerapan template maksimal 366 hari.',
+                'errors' => ['effective_until' => ['Rentang penerapan template maksimal 366 hari.']],
+            ], 422);
+        }
+
+        $assignment = DB::transaction(function () use ($validated, $from, $until) {
+            $assignment = EmployeeScheduleAssignment::create($validated);
+            $this->materializeTemplateSchedules($assignment, $from, $until);
+
+            return $assignment;
+        });
+
+        return response()->json([
+            'message' => 'Template jadwal berhasil ditetapkan ke karyawan dan jadwal sudah dibuat.',
+            'assignment' => $assignment,
+            'generated_until' => $until->toDateString(),
+        ]);
     }
 
     public function leavesData(Request $request)
@@ -819,6 +840,40 @@ class AttendanceController extends Controller
                 'schedule_type' => $day['schedule_type'],
                 'work_shift_id' => ($day['schedule_type'] ?? '') === EmployeeSchedule::TYPE_WORK ? ($day['work_shift_id'] ?? null) : null,
             ]);
+        }
+    }
+
+    private function materializeTemplateSchedules(EmployeeScheduleAssignment $assignment, Carbon $from, Carbon $until): void
+    {
+        $templateDays = WeeklyScheduleTemplateDay::query()
+            ->where('weekly_schedule_template_id', $assignment->weekly_schedule_template_id)
+            ->get()
+            ->keyBy('day_of_week');
+
+        $employee = Employee::findOrFail($assignment->employee_id);
+        $current = $from->copy();
+
+        while ($current->lte($until)) {
+            $templateDay = $templateDays->get((int) $current->dayOfWeekIso);
+
+            if ($templateDay) {
+                $schedule = EmployeeSchedule::query()->updateOrCreate(
+                    [
+                        'employee_id' => $assignment->employee_id,
+                        'schedule_date' => $current->toDateString(),
+                    ],
+                    [
+                        'work_shift_id' => $templateDay->schedule_type === EmployeeSchedule::TYPE_WORK ? $templateDay->work_shift_id : null,
+                        'schedule_type' => $templateDay->schedule_type,
+                        'note' => 'Dibuat dari template jadwal',
+                        'created_by' => auth()->id(),
+                    ]
+                );
+
+                app(AttendanceProcessor::class)->rebuildDailyAttendance($employee, $schedule->schedule_date);
+            }
+
+            $current->addDay();
         }
     }
 

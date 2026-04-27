@@ -441,7 +441,7 @@ class AttendanceController extends Controller
                     'count' => $group['count'],
                     'details' => $group['details'],
                 ],
-            ]))
+            ])->values())
             ->values();
 
         return response()->json($events->values());

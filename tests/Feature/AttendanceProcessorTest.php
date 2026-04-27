@@ -141,6 +141,18 @@ class AttendanceProcessorTest extends TestCase
             'schedule_type' => 'work',
             'created_by' => $user->id,
         ]);
+        $secondEmployee = Employee::create([
+            'employee_code' => 'EMP005',
+            'name' => 'Doni',
+            'employment_status' => 'active',
+        ]);
+        EmployeeSchedule::create([
+            'employee_id' => $secondEmployee->id,
+            'work_shift_id' => $shift->id,
+            'schedule_date' => '2026-04-27',
+            'schedule_type' => 'work',
+            'created_by' => $user->id,
+        ]);
         EmployeeLeave::create([
             'employee_id' => $employee->id,
             'leave_type' => 'permission',
@@ -169,10 +181,21 @@ class AttendanceProcessorTest extends TestCase
                 ->assertJsonStructure(['draw', 'recordsTotal', 'recordsFiltered', 'data']);
         }
 
-        $this->getJson(route('admin.attendance.schedules.calendar-events', [
+        $calendarResponse = $this->getJson(route('admin.attendance.schedules.calendar-events', [
             'start' => '2026-04-01',
             'end' => '2026-04-30',
-        ]))->assertOk();
+        ]))
+            ->assertOk()
+            ->assertJsonFragment([
+                'title' => '2 Jadwal Masuk',
+                'start' => '2026-04-27',
+            ]);
+
+        $scheduleSummary = collect($calendarResponse->json())
+            ->firstWhere('title', '2 Jadwal Masuk');
+
+        $this->assertSame(2, $scheduleSummary['extendedProps']['count']);
+        $this->assertCount(2, $scheduleSummary['extendedProps']['details']);
     }
 
     public function test_manual_raw_log_late_check_in_returns_notification_and_sends_telegram(): void

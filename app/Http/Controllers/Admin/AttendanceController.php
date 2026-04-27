@@ -294,7 +294,7 @@ class AttendanceController extends Controller
         $start = Carbon::parse($request->input('start', now()->startOfMonth()->toDateString()))->toDateString();
         $end = Carbon::parse($request->input('end', now()->endOfMonth()->toDateString()))->toDateString();
         $employeeId = $request->integer('employee_id') ?: null;
-        $events = collect();
+        $eventsByDate = [];
 
         EmployeeSchedule::query()
             ->with(['employee:id,employee_code,name', 'shift:id,name'])
@@ -302,7 +302,7 @@ class AttendanceController extends Controller
             ->whereDate('schedule_date', '>=', $start)
             ->whereDate('schedule_date', '<=', $end)
             ->get()
-            ->each(function (EmployeeSchedule $schedule) use ($events) {
+            ->each(function (EmployeeSchedule $schedule) use (&$eventsByDate) {
                 $label = match ($schedule->schedule_type) {
                     EmployeeSchedule::TYPE_WORK => 'Masuk',
                     EmployeeSchedule::TYPE_DAY_OFF => 'Libur',
@@ -310,25 +310,23 @@ class AttendanceController extends Controller
                     EmployeeSchedule::TYPE_LEAVE => 'Cuti/Izin',
                     default => $schedule->schedule_type,
                 };
-                $color = match ($schedule->schedule_type) {
-                    EmployeeSchedule::TYPE_WORK => '#009ef7',
-                    EmployeeSchedule::TYPE_DAY_OFF => '#7e8299',
-                    EmployeeSchedule::TYPE_HOLIDAY => '#f1416c',
-                    EmployeeSchedule::TYPE_LEAVE => '#ffc700',
-                    default => '#7239ea',
-                };
+                $date = $schedule->schedule_date?->toDateString();
 
-                $events->push([
-                    'title' => "{$schedule->employee?->employee_code} - {$label}".($schedule->shift ? " ({$schedule->shift->name})" : ''),
-                    'start' => $schedule->schedule_date?->toDateString(),
-                    'allDay' => true,
-                    'backgroundColor' => $color,
-                    'borderColor' => $color,
-                    'extendedProps' => [
-                        'type' => 'schedule',
-                        'employee' => $schedule->employee?->name,
-                        'note' => $schedule->note,
-                    ],
+                $this->addCalendarSummary($eventsByDate, $date, 'schedule_'.$schedule->schedule_type, [
+                    'label' => 'Jadwal '.$label,
+                    'color' => match ($schedule->schedule_type) {
+                        EmployeeSchedule::TYPE_WORK => '#009ef7',
+                        EmployeeSchedule::TYPE_DAY_OFF => '#7e8299',
+                        EmployeeSchedule::TYPE_HOLIDAY => '#f1416c',
+                        EmployeeSchedule::TYPE_LEAVE => '#ffc700',
+                        default => '#7239ea',
+                    },
+                    'textColor' => in_array($schedule->schedule_type, [EmployeeSchedule::TYPE_LEAVE], true) ? '#181c32' : '#ffffff',
+                    'detail' => trim(implode(' ', array_filter([
+                        $schedule->employee ? "{$schedule->employee->employee_code} - {$schedule->employee->name}" : null,
+                        $schedule->shift ? "({$schedule->shift->name})" : null,
+                        $schedule->note ? "- {$schedule->note}" : null,
+                    ]))),
                 ]);
             });
 
@@ -336,14 +334,14 @@ class AttendanceController extends Controller
             ->whereDate('holiday_date', '>=', $start)
             ->whereDate('holiday_date', '<=', $end)
             ->get()
-            ->each(fn (Holiday $holiday) => $events->push([
-                'title' => 'Libur: '.$holiday->name,
-                'start' => $holiday->holiday_date?->toDateString(),
-                'allDay' => true,
-                'backgroundColor' => '#f1416c',
-                'borderColor' => '#f1416c',
-                'extendedProps' => ['type' => 'holiday'],
-            ]));
+            ->each(function (Holiday $holiday) use (&$eventsByDate) {
+                $this->addCalendarSummary($eventsByDate, $holiday->holiday_date?->toDateString(), 'company_holiday', [
+                    'label' => 'Libur Perusahaan',
+                    'color' => '#f1416c',
+                    'textColor' => '#ffffff',
+                    'detail' => $holiday->name,
+                ]);
+            });
 
         EmployeeLeave::query()
             ->with('employee:id,employee_code,name')
@@ -352,20 +350,23 @@ class AttendanceController extends Controller
             ->whereDate('start_date', '<=', $end)
             ->whereDate('end_date', '>=', $start)
             ->get()
-            ->each(fn (EmployeeLeave $leave) => $events->push([
-                'title' => "{$leave->employee?->employee_code} - Cuti/Izin",
-                'start' => $leave->start_date?->toDateString(),
-                'end' => $leave->end_date?->copy()->addDay()->toDateString(),
-                'allDay' => true,
-                'backgroundColor' => '#ffc700',
-                'borderColor' => '#ffc700',
-                'textColor' => '#181c32',
-                'extendedProps' => [
-                    'type' => 'leave',
-                    'employee' => $leave->employee?->name,
-                    'note' => $leave->reason,
-                ],
-            ]));
+            ->each(function (EmployeeLeave $leave) use (&$eventsByDate, $start, $end) {
+                $current = $leave->start_date->copy()->max(Carbon::parse($start));
+                $until = $leave->end_date->copy()->min(Carbon::parse($end));
+
+                while ($current->lte($until)) {
+                    $this->addCalendarSummary($eventsByDate, $current->toDateString(), 'approved_leave', [
+                        'label' => 'Cuti/Izin Disetujui',
+                        'color' => '#ffc700',
+                        'textColor' => '#181c32',
+                        'detail' => trim(implode(' ', array_filter([
+                            $leave->employee ? "{$leave->employee->employee_code} - {$leave->employee->name}" : null,
+                            $leave->reason ? "- {$leave->reason}" : null,
+                        ]))),
+                    ]);
+                    $current->addDay();
+                }
+            });
 
         Attendance::query()
             ->with('employee:id,employee_code,name')
@@ -373,7 +374,7 @@ class AttendanceController extends Controller
             ->whereDate('attendance_date', '>=', $start)
             ->whereDate('attendance_date', '<=', $end)
             ->get()
-            ->each(function (Attendance $attendance) use ($events) {
+            ->each(function (Attendance $attendance) use (&$eventsByDate) {
                 $color = match ($attendance->status) {
                     Attendance::STATUS_PRESENT => '#50cd89',
                     Attendance::STATUS_LATE => '#ffc700',
@@ -384,23 +385,68 @@ class AttendanceController extends Controller
                     Attendance::STATUS_LEAVE => '#ffc700',
                     default => '#7e8299',
                 };
+                $label = match ($attendance->status) {
+                    Attendance::STATUS_PRESENT => 'Hadir',
+                    Attendance::STATUS_LATE => 'Terlambat',
+                    Attendance::STATUS_ABSENT => 'Alpha',
+                    Attendance::STATUS_INCOMPLETE => 'Tidak Lengkap',
+                    Attendance::STATUS_DAY_OFF => 'Libur',
+                    Attendance::STATUS_HOLIDAY => 'Libur Perusahaan',
+                    Attendance::STATUS_LEAVE => 'Cuti/Izin',
+                    default => $attendance->status,
+                };
 
-                $events->push([
-                    'title' => "{$attendance->employee?->employee_code} - {$attendance->status}",
-                    'start' => $attendance->attendance_date?->toDateString(),
-                    'allDay' => true,
-                    'backgroundColor' => $color,
-                    'borderColor' => $color,
+                $this->addCalendarSummary($eventsByDate, $attendance->attendance_date?->toDateString(), 'attendance_'.$attendance->status, [
+                    'label' => $label,
+                    'color' => $color,
                     'textColor' => in_array($attendance->status, [Attendance::STATUS_LATE, Attendance::STATUS_LEAVE], true) ? '#181c32' : '#ffffff',
-                    'extendedProps' => [
-                        'type' => 'attendance',
-                        'employee' => $attendance->employee?->name,
-                        'note' => $attendance->note,
-                    ],
+                    'detail' => trim(implode(' ', array_filter([
+                        $attendance->employee ? "{$attendance->employee->employee_code} - {$attendance->employee->name}" : null,
+                        $attendance->late_minutes > 0 ? "(telat {$attendance->late_minutes} menit)" : null,
+                        $attendance->note ? "- {$attendance->note}" : null,
+                    ]))),
                 ]);
             });
 
+        $events = collect($eventsByDate)
+            ->flatMap(fn (array $groups, string $date) => collect($groups)->map(fn (array $group) => [
+                'title' => $group['count'].' '.$group['label'],
+                'start' => $date,
+                'allDay' => true,
+                'backgroundColor' => $group['color'],
+                'borderColor' => $group['color'],
+                'textColor' => $group['textColor'],
+                'extendedProps' => [
+                    'type' => 'summary',
+                    'label' => $group['label'],
+                    'count' => $group['count'],
+                    'details' => $group['details'],
+                ],
+            ]))
+            ->values();
+
         return response()->json($events->values());
+    }
+
+    private function addCalendarSummary(array &$eventsByDate, ?string $date, string $key, array $payload): void
+    {
+        if (!$date) {
+            return;
+        }
+
+        $eventsByDate[$date][$key] ??= [
+            'label' => $payload['label'],
+            'color' => $payload['color'],
+            'textColor' => $payload['textColor'] ?? '#ffffff',
+            'count' => 0,
+            'details' => [],
+        ];
+
+        $eventsByDate[$date][$key]['count']++;
+
+        if (!empty($payload['detail'])) {
+            $eventsByDate[$date][$key]['details'][] = $payload['detail'];
+        }
     }
 
     public function storeSchedule(Request $request)

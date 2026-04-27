@@ -14,6 +14,17 @@
         border-radius: 0.475rem;
         padding: 0.125rem 0.25rem;
     }
+
+    .attendance-calendar-detail {
+        max-height: 420px;
+        overflow-y: auto;
+        text-align: left;
+    }
+
+    .attendance-calendar-detail ol {
+        padding-left: 1.25rem;
+        margin-bottom: 0;
+    }
 </style>
 @endpush
 
@@ -483,6 +494,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 week: 'Minggu',
                 list: 'List',
             },
+            dayMaxEvents: 4,
             eventSources: [{
                 events: (info, success, failure) => {
                     const params = new URLSearchParams({
@@ -503,13 +515,25 @@ document.addEventListener('DOMContentLoaded', () => {
             }],
             eventClick: (info) => {
                 const props = info.event.extendedProps || {};
-                const detail = [
-                    info.event.title,
-                    props.employee ? `Karyawan: ${props.employee}` : null,
-                    props.note ? `Catatan: ${props.note}` : null,
-                ].filter(Boolean).join('\n');
+                const details = Array.isArray(props.details) ? props.details : [];
+                const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (char) => ({
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#039;',
+                }[char]));
+                const html = details.length
+                    ? `<div class="attendance-calendar-detail"><ol>${details.map((row) => `<li>${escapeHtml(row)}</li>`).join('')}</ol></div>`
+                    : `<div class="attendance-calendar-detail">${escapeHtml(info.event.title)}</div>`;
+
                 if (typeof Swal !== 'undefined') {
-                    Swal.fire('Detail Kalender', detail, 'info');
+                    Swal.fire({
+                        title: escapeHtml(info.event.title),
+                        html,
+                        icon: 'info',
+                        width: 720,
+                    });
                 }
             },
         });

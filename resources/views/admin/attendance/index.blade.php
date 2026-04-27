@@ -152,6 +152,11 @@
             </div>
 
             <div class="tab-pane fade" id="tab_schedules">
+                <div class="d-flex justify-content-end mb-4">
+                    <a href="{{ route('admin.attendance.employee-schedule.index') }}" class="btn btn-light-info btn-sm">
+                        &#128197; Lihat Jadwal Per Karyawan
+                    </a>
+                </div>
                 <form class="row g-3 mb-6 ajax-form" data-table="schedules_table" action="{{ route('admin.attendance.schedules.store') }}">
                     @csrf
                     <div class="col-md-3"><label class="form-label fw-bold">Karyawan</label><select name="employee_id" class="form-select form-select-solid" required>@foreach($employees as $employee)<option value="{{ $employee->id }}">{{ $employee->employee_code }} - {{ $employee->name }}</option>@endforeach</select></div>

@@ -27,6 +27,13 @@ use Illuminate\Validation\Rule;
 
 class AttendanceController extends Controller
 {
+    public function employeeSchedule()
+    {
+        return view('admin.attendance.employee-schedule', [
+            'employees' => Employee::query()->orderBy('name')->get(['id', 'employee_code', 'name']),
+        ]);
+    }
+
     public function index()
     {
         return view('admin.attendance.index', [
@@ -273,6 +280,7 @@ class AttendanceController extends Controller
     {
         $query = EmployeeSchedule::query()
             ->with(['employee:id,employee_code,name', 'shift:id,name'])
+            ->when($request->input('employee_id'), fn ($q, $id) => $q->where('employee_id', $id))
             ->when($request->input('date_from'), fn ($q, $date) => $q->whereDate('schedule_date', '>=', $date))
             ->when($request->input('date_to'), fn ($q, $date) => $q->whereDate('schedule_date', '<=', $date))
             ->latest('schedule_date');

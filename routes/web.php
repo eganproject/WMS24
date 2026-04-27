@@ -380,6 +380,7 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
 
     Route::prefix('attendance')->as('attendance.')->group(function () {
         Route::get('/', [AttendanceController::class, 'index'])->name('index');
+        Route::get('/employee-schedule', [AttendanceController::class, 'employeeSchedule'])->name('employee-schedule.index');
         Route::get('/employees/data', [AttendanceController::class, 'employeesData'])->name('employees.data');
         Route::post('/employees', [AttendanceController::class, 'storeEmployee'])->name('employees.store');
         Route::put('/employees/{employee}', [AttendanceController::class, 'updateEmployee'])->name('employees.update');

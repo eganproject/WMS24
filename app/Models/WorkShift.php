@@ -17,6 +17,8 @@ class WorkShift extends Model
         'break_end_time',
         'late_tolerance_minutes',
         'checkout_tolerance_minutes',
+        'overtime_start_after_minutes',
+        'minimum_overtime_minutes',
         'crosses_midnight',
         'is_active',
     ];

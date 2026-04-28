@@ -17,6 +17,11 @@ class Attendance extends Model
     public const STATUS_DAY_OFF = 'day_off';
     public const STATUS_INCOMPLETE = 'incomplete';
 
+    public const OVERTIME_NONE = 'none';
+    public const OVERTIME_PENDING = 'pending';
+    public const OVERTIME_APPROVED = 'approved';
+    public const OVERTIME_REJECTED = 'rejected';
+
     protected $fillable = [
         'employee_id',
         'attendance_date',
@@ -27,6 +32,10 @@ class Attendance extends Model
         'early_leave_minutes',
         'work_minutes',
         'overtime_minutes',
+        'calculated_overtime_minutes',
+        'approved_overtime_minutes',
+        'overtime_status',
+        'overtime_note',
         'status',
         'note',
         'source',
@@ -49,5 +58,10 @@ class Attendance extends Model
     public function shift()
     {
         return $this->belongsTo(WorkShift::class, 'work_shift_id');
+    }
+
+    public function approver()
+    {
+        return $this->belongsTo(User::class, 'approved_by');
     }
 }

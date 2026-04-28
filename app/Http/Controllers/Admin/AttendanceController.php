@@ -24,6 +24,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class AttendanceController extends Controller
 {
@@ -246,6 +247,8 @@ class AttendanceController extends Controller
             'break_end_time' => $this->timeValue($shift->break_end_time),
             'late_tolerance_minutes' => $shift->late_tolerance_minutes,
             'checkout_tolerance_minutes' => $shift->checkout_tolerance_minutes,
+            'overtime_start_after_minutes' => $shift->overtime_start_after_minutes,
+            'minimum_overtime_minutes' => $shift->minimum_overtime_minutes,
             'crosses_midnight' => $shift->crosses_midnight,
             'is_active' => $shift->is_active,
         ]);
@@ -824,25 +827,37 @@ class AttendanceController extends Controller
             'state' => ['nullable', 'string', 'max:50'],
         ]);
 
-        $oldEmployee = $rawLog->employee;
-        $oldDate = $rawLog->scan_at?->toDateString();
-        $employeeId = EmployeeFingerprint::query()
+        $scanAt = Carbon::parse($validated['scan_at']);
+        $duplicateExists = AttendanceRawLog::query()
             ->where('attendance_device_id', $validated['attendance_device_id'])
             ->where('device_user_id', $validated['device_user_id'])
-            ->where('is_active', true)
-            ->value('employee_id');
+            ->where('scan_at', $scanAt->toDateTimeString())
+            ->whereKeyNot($rawLog->id)
+            ->exists();
+
+        if ($duplicateExists) {
+            throw ValidationException::withMessages([
+                'scan_at' => ['Raw log dengan device, user, dan waktu scan yang sama sudah ada.'],
+            ]);
+        }
+
+        $oldEmployee = $rawLog->employee;
+        $oldScanAt = $rawLog->scan_at?->copy();
+        $device = AttendanceDevice::findOrFail($validated['attendance_device_id']);
+        $processor = app(AttendanceProcessor::class);
+        $employeeId = $processor->employeeIdForDeviceUser($device, $validated['device_user_id']);
 
         $rawLog->update($validated + [
             'employee_id' => $employeeId,
-            'scan_at' => Carbon::parse($validated['scan_at']),
+            'scan_at' => $scanAt,
         ]);
         $rawLog->refresh();
 
-        if ($oldEmployee && $oldDate) {
-            app(AttendanceProcessor::class)->rebuildDailyAttendance($oldEmployee, $oldDate);
+        if ($oldEmployee && $oldScanAt) {
+            $processor->rebuildAttendanceForScan($oldEmployee, $oldScanAt);
         }
         if ($rawLog->employee) {
-            app(AttendanceProcessor::class)->rebuildDailyAttendance($rawLog->employee, $rawLog->scan_at);
+            $processor->rebuildAttendanceForScan($rawLog->employee, $rawLog->scan_at);
         }
 
         return response()->json(['message' => 'Raw log fingerprint berhasil diperbarui', 'raw_log' => $rawLog]);
@@ -851,11 +866,11 @@ class AttendanceController extends Controller
     public function destroyRawLog(AttendanceRawLog $rawLog)
     {
         $employee = $rawLog->employee;
-        $date = $rawLog->scan_at?->toDateString();
+        $scanAt = $rawLog->scan_at?->copy();
         $rawLog->delete();
 
-        if ($employee && $date) {
-            app(AttendanceProcessor::class)->rebuildDailyAttendance($employee, $date);
+        if ($employee && $scanAt) {
+            app(AttendanceProcessor::class)->rebuildAttendanceForScan($employee, $scanAt);
         }
 
         return response()->json(['message' => 'Raw log fingerprint berhasil dihapus']);
@@ -864,7 +879,7 @@ class AttendanceController extends Controller
     public function attendancesData(Request $request)
     {
         $query = Attendance::query()
-            ->with(['employee:id,employee_code,name', 'shift:id,name'])
+            ->with(['employee:id,employee_code,name', 'shift:id,name', 'approver:id,name'])
             ->when($request->input('date_from'), fn ($q, $date) => $q->whereDate('attendance_date', '>=', $date))
             ->when($request->input('date_to'), fn ($q, $date) => $q->whereDate('attendance_date', '<=', $date))
             ->latest('attendance_date');
@@ -882,6 +897,12 @@ class AttendanceController extends Controller
             'early_leave_minutes' => $attendance->early_leave_minutes,
             'work_minutes' => $attendance->work_minutes,
             'overtime_minutes' => $attendance->overtime_minutes,
+            'calculated_overtime_minutes' => $attendance->calculated_overtime_minutes,
+            'approved_overtime_minutes' => $attendance->approved_overtime_minutes,
+            'overtime_status' => $attendance->overtime_status,
+            'overtime_note' => $attendance->overtime_note,
+            'approved_by' => $attendance->approver?->name,
+            'approved_at' => $attendance->approved_at?->format('Y-m-d H:i:s'),
             'status' => $attendance->status,
             'source' => $attendance->source,
             'note' => $attendance->note,
@@ -899,15 +920,39 @@ class AttendanceController extends Controller
             'late_minutes' => ['required', 'integer', 'min:0'],
             'early_leave_minutes' => ['required', 'integer', 'min:0'],
             'work_minutes' => ['required', 'integer', 'min:0'],
-            'overtime_minutes' => ['required', 'integer', 'min:0'],
+            'calculated_overtime_minutes' => ['required', 'integer', 'min:0'],
+            'approved_overtime_minutes' => ['nullable', 'integer', 'min:0'],
+            'overtime_status' => ['required', Rule::in([
+                Attendance::OVERTIME_NONE,
+                Attendance::OVERTIME_PENDING,
+                Attendance::OVERTIME_APPROVED,
+                Attendance::OVERTIME_REJECTED,
+            ])],
+            'overtime_note' => ['nullable', 'string'],
             'status' => ['required', 'string', 'max:30'],
             'source' => ['nullable', 'string', 'max:30'],
             'note' => ['nullable', 'string'],
         ]);
 
-        $attendance->update($validated + [
+        if ($validated['overtime_status'] === Attendance::OVERTIME_APPROVED && $validated['approved_overtime_minutes'] === null) {
+            throw ValidationException::withMessages([
+                'approved_overtime_minutes' => ['Menit lembur disetujui wajib diisi saat status lembur Approved.'],
+            ]);
+        }
+
+        $approvedMinutes = match ($validated['overtime_status']) {
+            Attendance::OVERTIME_APPROVED => (int) $validated['approved_overtime_minutes'],
+            Attendance::OVERTIME_REJECTED => 0,
+            default => null,
+        };
+
+        $attendance->update(array_merge($validated, [
+            'overtime_minutes' => $validated['overtime_status'] === Attendance::OVERTIME_APPROVED ? $approvedMinutes : 0,
+            'approved_overtime_minutes' => $approvedMinutes,
+            'approved_by' => in_array($validated['overtime_status'], [Attendance::OVERTIME_APPROVED, Attendance::OVERTIME_REJECTED], true) ? auth()->id() : null,
+            'approved_at' => in_array($validated['overtime_status'], [Attendance::OVERTIME_APPROVED, Attendance::OVERTIME_REJECTED], true) ? now() : null,
             'source' => $validated['source'] ?? 'manual',
-        ]);
+        ]));
 
         return response()->json(['message' => 'Rekap absensi berhasil diperbarui', 'attendance' => $attendance]);
     }
@@ -982,6 +1027,8 @@ class AttendanceController extends Controller
             'break_end_time' => ['nullable', 'date_format:H:i'],
             'late_tolerance_minutes' => ['required', 'integer', 'min:0'],
             'checkout_tolerance_minutes' => ['required', 'integer', 'min:0'],
+            'overtime_start_after_minutes' => ['required', 'integer', 'min:0'],
+            'minimum_overtime_minutes' => ['required', 'integer', 'min:0'],
             'crosses_midnight' => ['nullable', 'boolean'],
             'is_active' => ['nullable', 'boolean'],
         ]);
@@ -995,9 +1042,14 @@ class AttendanceController extends Controller
     {
         return $request->validate([
             'employee_id' => ['required', 'integer', 'exists:employees,id'],
-            'work_shift_id' => ['nullable', 'integer', 'exists:work_shifts,id'],
+            'work_shift_id' => [Rule::requiredIf($request->input('schedule_type') === EmployeeSchedule::TYPE_WORK), 'nullable', 'integer', 'exists:work_shifts,id'],
             'schedule_date' => ['required', 'date'],
-            'schedule_type' => ['required', 'string', 'max:30'],
+            'schedule_type' => ['required', Rule::in([
+                EmployeeSchedule::TYPE_WORK,
+                EmployeeSchedule::TYPE_DAY_OFF,
+                EmployeeSchedule::TYPE_HOLIDAY,
+                EmployeeSchedule::TYPE_LEAVE,
+            ])],
             'note' => ['nullable', 'string'],
         ]);
     }
@@ -1033,6 +1085,12 @@ class AttendanceController extends Controller
     {
         $template->days()->delete();
         foreach ($days as $day) {
+            if (($day['schedule_type'] ?? '') === EmployeeSchedule::TYPE_WORK && empty($day['work_shift_id'])) {
+                throw ValidationException::withMessages([
+                    'days' => ['Hari kerja pada template wajib memiliki shift.'],
+                ]);
+            }
+
             WeeklyScheduleTemplateDay::create([
                 'weekly_schedule_template_id' => $template->id,
                 'day_of_week' => $day['day_of_week'],

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Attendance;
 use App\Models\AttendanceDevice;
+use App\Models\AttendanceRawLog;
 use App\Models\Employee;
 use App\Models\EmployeeFingerprint;
 use App\Models\EmployeeLeave;
@@ -365,5 +366,301 @@ class AttendanceProcessorTest extends TestCase
                 'employee' => 'EMP006 - Wawan',
                 'schedule_date' => '2026-04-27',
             ]);
+    }
+
+    public function test_work_minutes_only_subtracts_break_overlap(): void
+    {
+        $employee = Employee::create([
+            'employee_code' => 'EMP007',
+            'name' => 'Nina',
+            'employment_status' => 'active',
+        ]);
+        $device = AttendanceDevice::create(['name' => 'Fingerprint Gudang 2', 'port' => 4370, 'is_active' => true]);
+        EmployeeFingerprint::create([
+            'employee_id' => $employee->id,
+            'attendance_device_id' => $device->id,
+            'device_user_id' => '7001',
+            'is_active' => true,
+        ]);
+        $shift = WorkShift::create([
+            'name' => 'Pagi Dengan Istirahat',
+            'start_time' => '08:00',
+            'end_time' => '17:00',
+            'break_start_time' => '13:00',
+            'break_end_time' => '14:00',
+            'is_active' => true,
+        ]);
+        EmployeeSchedule::create([
+            'employee_id' => $employee->id,
+            'work_shift_id' => $shift->id,
+            'schedule_date' => '2026-04-27',
+            'schedule_type' => 'work',
+        ]);
+
+        $processor = app(AttendanceProcessor::class);
+        $processor->recordFingerprintScan($device, '7001', '2026-04-27 08:00:00');
+        $processor->recordFingerprintScan($device, '7001', '2026-04-27 12:00:00');
+
+        $attendance = Attendance::where('employee_id', $employee->id)->firstOrFail();
+
+        $this->assertSame(240, $attendance->work_minutes);
+    }
+
+    public function test_cross_midnight_shift_subtracts_next_day_break(): void
+    {
+        $employee = Employee::create([
+            'employee_code' => 'EMP008',
+            'name' => 'Rudi',
+            'employment_status' => 'active',
+        ]);
+        $device = AttendanceDevice::create(['name' => 'Fingerprint Malam', 'port' => 4370, 'is_active' => true]);
+        EmployeeFingerprint::create([
+            'employee_id' => $employee->id,
+            'attendance_device_id' => $device->id,
+            'device_user_id' => '8001',
+            'is_active' => true,
+        ]);
+        $shift = WorkShift::create([
+            'name' => 'Malam',
+            'start_time' => '22:00',
+            'end_time' => '06:00',
+            'break_start_time' => '02:00',
+            'break_end_time' => '03:00',
+            'crosses_midnight' => true,
+            'is_active' => true,
+        ]);
+        EmployeeSchedule::create([
+            'employee_id' => $employee->id,
+            'work_shift_id' => $shift->id,
+            'schedule_date' => '2026-04-27',
+            'schedule_type' => 'work',
+        ]);
+
+        $processor = app(AttendanceProcessor::class);
+        $processor->recordFingerprintScan($device, '8001', '2026-04-27 22:00:00');
+        $processor->recordFingerprintScan($device, '8001', '2026-04-28 06:00:00');
+
+        $attendance = Attendance::where('employee_id', $employee->id)->firstOrFail();
+
+        $this->assertSame(420, $attendance->work_minutes);
+    }
+
+    public function test_work_schedule_requires_shift(): void
+    {
+        $user = User::factory()->create();
+        $role = Role::create(['name' => 'Admin', 'slug' => 'admin']);
+        $user->roles()->attach($role);
+        $this->actingAs($user);
+
+        $employee = Employee::create([
+            'employee_code' => 'EMP009',
+            'name' => 'Tono',
+            'employment_status' => 'active',
+        ]);
+
+        $this->postJson(route('admin.attendance.schedules.store'), [
+            'employee_id' => $employee->id,
+            'schedule_date' => '2026-04-27',
+            'schedule_type' => 'work',
+        ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['work_shift_id']);
+    }
+
+    public function test_work_template_day_requires_shift(): void
+    {
+        $user = User::factory()->create();
+        $role = Role::create(['name' => 'Admin', 'slug' => 'admin']);
+        $user->roles()->attach($role);
+        $this->actingAs($user);
+
+        $this->postJson(route('admin.attendance.templates.store'), [
+            'name' => 'Template Invalid',
+            'is_active' => 1,
+            'days' => [
+                [
+                    'day_of_week' => 1,
+                    'schedule_type' => 'work',
+                ],
+            ],
+        ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['days']);
+    }
+
+    public function test_raw_log_update_uses_global_fingerprint_mapping_and_rejects_duplicates(): void
+    {
+        $user = User::factory()->create();
+        $role = Role::create(['name' => 'Admin', 'slug' => 'admin']);
+        $user->roles()->attach($role);
+        $this->actingAs($user);
+
+        $employee = Employee::create([
+            'employee_code' => 'EMP010',
+            'name' => 'Dewi',
+            'employment_status' => 'active',
+        ]);
+        $device = AttendanceDevice::create(['name' => 'Fingerprint Update', 'port' => 4370, 'is_active' => true]);
+        EmployeeFingerprint::create([
+            'employee_id' => $employee->id,
+            'attendance_device_id' => null,
+            'device_user_id' => '10001',
+            'is_active' => true,
+        ]);
+        $rawLog = AttendanceRawLog::create([
+            'attendance_device_id' => $device->id,
+            'device_user_id' => 'OLD',
+            'scan_at' => '2026-04-27 08:00:00',
+        ]);
+        AttendanceRawLog::create([
+            'attendance_device_id' => $device->id,
+            'device_user_id' => '10001',
+            'scan_at' => '2026-04-27 09:00:00',
+        ]);
+
+        $this->putJson(route('admin.attendance.raw-logs.update', $rawLog), [
+            'attendance_device_id' => $device->id,
+            'device_user_id' => '10001',
+            'scan_at' => '2026-04-27 08:00:00',
+            'verify_type' => 'fingerprint',
+        ])->assertOk();
+
+        $this->assertDatabaseHas('attendance_raw_logs', [
+            'id' => $rawLog->id,
+            'employee_id' => $employee->id,
+            'device_user_id' => '10001',
+        ]);
+
+        $this->putJson(route('admin.attendance.raw-logs.update', $rawLog), [
+            'attendance_device_id' => $device->id,
+            'device_user_id' => '10001',
+            'scan_at' => '2026-04-27 09:00:00',
+            'verify_type' => 'fingerprint',
+        ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['scan_at']);
+    }
+
+    public function test_overtime_calculation_respects_start_after_and_minimum_minutes(): void
+    {
+        $device = AttendanceDevice::create(['name' => 'Fingerprint Lembur', 'port' => 4370, 'is_active' => true]);
+        $shift = WorkShift::create([
+            'name' => 'Pagi Lembur',
+            'start_time' => '08:00',
+            'end_time' => '17:00',
+            'overtime_start_after_minutes' => 30,
+            'minimum_overtime_minutes' => 45,
+            'is_active' => true,
+        ]);
+        $processor = app(AttendanceProcessor::class);
+
+        $employeeBelowMinimum = Employee::create([
+            'employee_code' => 'EMP011',
+            'name' => 'Bima',
+            'employment_status' => 'active',
+        ]);
+        EmployeeFingerprint::create([
+            'employee_id' => $employeeBelowMinimum->id,
+            'attendance_device_id' => $device->id,
+            'device_user_id' => '11001',
+            'is_active' => true,
+        ]);
+        EmployeeSchedule::create([
+            'employee_id' => $employeeBelowMinimum->id,
+            'work_shift_id' => $shift->id,
+            'schedule_date' => '2026-04-27',
+            'schedule_type' => 'work',
+        ]);
+        $processor->recordFingerprintScan($device, '11001', '2026-04-27 08:00:00');
+        $processor->recordFingerprintScan($device, '11001', '2026-04-27 17:50:00');
+
+        $belowMinimumAttendance = Attendance::where('employee_id', $employeeBelowMinimum->id)->firstOrFail();
+        $this->assertSame(0, $belowMinimumAttendance->calculated_overtime_minutes);
+        $this->assertSame('none', $belowMinimumAttendance->overtime_status);
+
+        $employeePending = Employee::create([
+            'employee_code' => 'EMP012',
+            'name' => 'Lina',
+            'employment_status' => 'active',
+        ]);
+        EmployeeFingerprint::create([
+            'employee_id' => $employeePending->id,
+            'attendance_device_id' => $device->id,
+            'device_user_id' => '12001',
+            'is_active' => true,
+        ]);
+        EmployeeSchedule::create([
+            'employee_id' => $employeePending->id,
+            'work_shift_id' => $shift->id,
+            'schedule_date' => '2026-04-27',
+            'schedule_type' => 'work',
+        ]);
+        $processor->recordFingerprintScan($device, '12001', '2026-04-27 08:00:00');
+        $processor->recordFingerprintScan($device, '12001', '2026-04-27 18:20:00');
+
+        $pendingAttendance = Attendance::where('employee_id', $employeePending->id)->firstOrFail();
+        $this->assertSame(50, $pendingAttendance->calculated_overtime_minutes);
+        $this->assertNull($pendingAttendance->approved_overtime_minutes);
+        $this->assertSame(0, $pendingAttendance->overtime_minutes);
+        $this->assertSame('pending', $pendingAttendance->overtime_status);
+    }
+
+    public function test_attendance_update_approves_overtime_as_final_minutes(): void
+    {
+        $user = User::factory()->create();
+        $role = Role::create(['name' => 'Admin', 'slug' => 'admin']);
+        $user->roles()->attach($role);
+        $this->actingAs($user);
+
+        $employee = Employee::create([
+            'employee_code' => 'EMP013',
+            'name' => 'Sari',
+            'employment_status' => 'active',
+        ]);
+        $shift = WorkShift::create([
+            'name' => 'Pagi Approval',
+            'start_time' => '08:00',
+            'end_time' => '17:00',
+            'is_active' => true,
+        ]);
+        $attendance = Attendance::create([
+            'employee_id' => $employee->id,
+            'attendance_date' => '2026-04-27',
+            'work_shift_id' => $shift->id,
+            'check_in_at' => '2026-04-27 08:00:00',
+            'check_out_at' => '2026-04-27 18:00:00',
+            'work_minutes' => 600,
+            'calculated_overtime_minutes' => 60,
+            'overtime_status' => 'pending',
+            'status' => 'present',
+            'source' => 'fingerprint',
+        ]);
+
+        $this->putJson(route('admin.attendance.attendances.update', $attendance), [
+            'employee_id' => $employee->id,
+            'attendance_date' => '2026-04-27',
+            'work_shift_id' => $shift->id,
+            'check_in_at' => '2026-04-27 08:00:00',
+            'check_out_at' => '2026-04-27 18:00:00',
+            'late_minutes' => 0,
+            'early_leave_minutes' => 0,
+            'work_minutes' => 600,
+            'calculated_overtime_minutes' => 60,
+            'approved_overtime_minutes' => 45,
+            'overtime_status' => 'approved',
+            'overtime_note' => 'Disetujui sesuai surat lembur',
+            'status' => 'present',
+            'source' => 'manual',
+            'note' => 'Koreksi lembur',
+        ])->assertOk();
+
+        $this->assertDatabaseHas('attendances', [
+            'id' => $attendance->id,
+            'calculated_overtime_minutes' => 60,
+            'approved_overtime_minutes' => 45,
+            'overtime_minutes' => 45,
+            'overtime_status' => 'approved',
+            'approved_by' => $user->id,
+        ]);
     }
 }

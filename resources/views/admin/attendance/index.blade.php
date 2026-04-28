@@ -25,6 +25,22 @@
         padding-left: 1.25rem;
         margin-bottom: 0;
     }
+
+    .attendance-form-section {
+        border: 1px solid #e4e6ef;
+        border-radius: 0.75rem;
+        padding: 1rem;
+        background: #f9fafb;
+    }
+
+    .attendance-form-section-title {
+        color: #3f4254;
+        font-size: 0.85rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        margin-bottom: 0.85rem;
+    }
 </style>
 @endpush
 
@@ -144,11 +160,13 @@
                     <div class="col-md-1"><label class="form-label fw-bold">Istirahat Selesai</label><input type="text" name="break_end_time" class="form-control form-control-solid js-time" placeholder="13:00"></div>
                     <div class="col-md-2"><label class="form-label fw-bold">Toleransi Telat</label><input type="number" name="late_tolerance_minutes" value="0" min="0" class="form-control form-control-solid" placeholder="Menit"></div>
                     <div class="col-md-2"><label class="form-label fw-bold">Toleransi Pulang</label><input type="number" name="checkout_tolerance_minutes" value="0" min="0" class="form-control form-control-solid" placeholder="Menit"></div>
+                    <div class="col-md-2"><label class="form-label fw-bold">Lembur Mulai Setelah</label><input type="number" name="overtime_start_after_minutes" value="0" min="0" class="form-control form-control-solid" placeholder="Menit setelah pulang"></div>
+                    <div class="col-md-2"><label class="form-label fw-bold">Minimal Lembur</label><input type="number" name="minimum_overtime_minutes" value="0" min="0" class="form-control form-control-solid" placeholder="Menit"></div>
                     <div class="col-md-1 d-flex align-items-end"><label class="form-check form-check-custom form-check-solid mb-3"><input type="checkbox" name="crosses_midnight" value="1" class="form-check-input"><span class="form-check-label">Malam</span></label></div>
                     <div class="col-md-1 d-flex align-items-end"><input type="hidden" name="is_active" value="0"><label class="form-check form-check-custom form-check-solid mb-3"><input type="checkbox" name="is_active" value="1" class="form-check-input" checked><span class="form-check-label">Aktif</span></label></div>
                     <div class="col-md-1 d-flex align-items-end"><button class="btn btn-primary w-100">Tambah</button></div>
                 </form>
-                <x-attendance-table id="shifts_table" :headers="['Nama','Masuk','Pulang','Istirahat','Telat','Pulang Cepat','Malam','Aktif','Aksi']" />
+                <x-attendance-table id="shifts_table" :headers="['Nama','Masuk','Pulang','Istirahat','Telat','Pulang Cepat','Lembur Setelah','Minimal Lembur','Malam','Aktif','Aksi']" />
             </div>
 
             <div class="tab-pane fade" id="tab_schedules">
@@ -302,21 +320,34 @@
             <div class="tab-pane fade" id="tab_attendances">
                 <form class="row g-3 mb-6 ajax-form" data-table="attendances_table" action="#">
                     @csrf
-                    <div class="col-md-3"><label class="form-label fw-bold">Karyawan</label><select name="employee_id" class="form-select form-select-solid" required>@foreach($employees as $employee)<option value="{{ $employee->id }}">{{ $employee->employee_code }} - {{ $employee->name }}</option>@endforeach</select></div>
-                    <div class="col-md-2"><label class="form-label fw-bold">Tanggal</label><input type="text" name="attendance_date" class="form-control form-control-solid js-date" placeholder="YYYY-MM-DD" required></div>
-                    <div class="col-md-2"><label class="form-label fw-bold">Shift</label><select name="work_shift_id" class="form-select form-select-solid"><option value="">Tanpa shift</option>@foreach($shifts as $shift)<option value="{{ $shift->id }}">{{ $shift->name }}</option>@endforeach</select></div>
-                    <div class="col-md-2"><label class="form-label fw-bold">Masuk</label><input type="text" name="check_in_at" class="form-control form-control-solid js-datetime" placeholder="YYYY-MM-DD HH:mm"></div>
-                    <div class="col-md-2"><label class="form-label fw-bold">Pulang</label><input type="text" name="check_out_at" class="form-control form-control-solid js-datetime" placeholder="YYYY-MM-DD HH:mm"></div>
-                    <div class="col-md-1"><label class="form-label fw-bold">Telat</label><input type="number" name="late_minutes" min="0" value="0" class="form-control form-control-solid"></div>
-                    <div class="col-md-2"><label class="form-label fw-bold">Pulang Cepat</label><input type="number" name="early_leave_minutes" min="0" value="0" class="form-control form-control-solid"></div>
-                    <div class="col-md-2"><label class="form-label fw-bold">Menit Kerja</label><input type="number" name="work_minutes" min="0" value="0" class="form-control form-control-solid"></div>
-                    <div class="col-md-2"><label class="form-label fw-bold">Lembur</label><input type="number" name="overtime_minutes" min="0" value="0" class="form-control form-control-solid"></div>
-                    <div class="col-md-2"><label class="form-label fw-bold">Status</label><select name="status" class="form-select form-select-solid"><option value="present">Hadir</option><option value="late">Terlambat</option><option value="absent">Alpha</option><option value="incomplete">Belum Lengkap</option><option value="leave">Cuti/Izin</option><option value="holiday">Libur Perusahaan</option><option value="day_off">Libur</option></select></div>
-                    <div class="col-md-2"><label class="form-label fw-bold">Source</label><input name="source" class="form-control form-control-solid" value="manual"></div>
-                    <div class="col-md-2"><label class="form-label fw-bold">Catatan</label><input name="note" class="form-control form-control-solid" placeholder="Opsional"></div>
-                    <div class="col-md-2 d-flex align-items-end"><button class="btn btn-primary w-100">Update Rekap</button></div>
+                    <div class="col-12 attendance-form-section">
+                        <div class="attendance-form-section-title">Data Kehadiran</div>
+                        <div class="row g-3">
+                            <div class="col-md-3"><label class="form-label fw-bold">Karyawan</label><select name="employee_id" class="form-select form-select-solid" required>@foreach($employees as $employee)<option value="{{ $employee->id }}">{{ $employee->employee_code }} - {{ $employee->name }}</option>@endforeach</select></div>
+                            <div class="col-md-2"><label class="form-label fw-bold">Tanggal</label><input type="text" name="attendance_date" class="form-control form-control-solid js-date" placeholder="YYYY-MM-DD" required></div>
+                            <div class="col-md-2"><label class="form-label fw-bold">Shift</label><select name="work_shift_id" class="form-select form-select-solid"><option value="">Tanpa shift</option>@foreach($shifts as $shift)<option value="{{ $shift->id }}">{{ $shift->name }}</option>@endforeach</select></div>
+                            <div class="col-md-2"><label class="form-label fw-bold">Masuk</label><input type="text" name="check_in_at" class="form-control form-control-solid js-datetime" placeholder="YYYY-MM-DD HH:mm"></div>
+                            <div class="col-md-2"><label class="form-label fw-bold">Pulang</label><input type="text" name="check_out_at" class="form-control form-control-solid js-datetime" placeholder="YYYY-MM-DD HH:mm"></div>
+                            <div class="col-md-1"><label class="form-label fw-bold">Telat</label><input type="number" name="late_minutes" min="0" value="0" class="form-control form-control-solid"></div>
+                            <div class="col-md-2"><label class="form-label fw-bold">Pulang Cepat</label><input type="number" name="early_leave_minutes" min="0" value="0" class="form-control form-control-solid"></div>
+                            <div class="col-md-2"><label class="form-label fw-bold">Menit Kerja</label><input type="number" name="work_minutes" min="0" value="0" class="form-control form-control-solid"></div>
+                            <div class="col-md-2"><label class="form-label fw-bold">Status Absensi</label><select name="status" class="form-select form-select-solid"><option value="present">Hadir</option><option value="late">Terlambat</option><option value="absent">Alpha</option><option value="incomplete">Belum Lengkap</option><option value="leave">Cuti/Izin</option><option value="holiday">Libur Perusahaan</option><option value="day_off">Libur</option></select></div>
+                            <div class="col-md-2"><label class="form-label fw-bold">Source</label><input name="source" class="form-control form-control-solid" value="manual"></div>
+                            <div class="col-md-4"><label class="form-label fw-bold">Catatan Absensi</label><input name="note" class="form-control form-control-solid" placeholder="Opsional"></div>
+                        </div>
+                    </div>
+                    <div class="col-12 attendance-form-section">
+                        <div class="attendance-form-section-title">Approval Lembur</div>
+                        <div class="row g-3">
+                            <div class="col-md-2"><label class="form-label fw-bold">Lembur Terhitung</label><input type="number" name="calculated_overtime_minutes" min="0" value="0" class="form-control form-control-solid"></div>
+                            <div class="col-md-2"><label class="form-label fw-bold">Lembur Disetujui</label><input type="number" name="approved_overtime_minutes" min="0" class="form-control form-control-solid" placeholder="Menit final"></div>
+                            <div class="col-md-2"><label class="form-label fw-bold">Status Lembur</label><select name="overtime_status" class="form-select form-select-solid"><option value="none">Tidak Ada</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option></select></div>
+                            <div class="col-md-4"><label class="form-label fw-bold">Catatan Lembur</label><input name="overtime_note" class="form-control form-control-solid" placeholder="Alasan approve/reject/koreksi"></div>
+                            <div class="col-md-2 d-flex align-items-end"><button class="btn btn-primary w-100">Update Rekap</button></div>
+                        </div>
+                    </div>
                 </form>
-                <x-attendance-table id="attendances_table" :headers="['Karyawan','Tanggal','Shift','Masuk','Pulang','Telat','Pulang Cepat','Menit Kerja','Lembur','Status','Source','Catatan','Aksi']" />
+                <x-attendance-table id="attendances_table" :headers="['Karyawan','Tanggal','Shift','Masuk','Pulang','Telat','Pulang Cepat','Menit Kerja','Lembur Hitung','Lembur Approved','Status Lembur','Status','Source','Catatan','Aksi']" />
             </div>
         </div>
     </div>
@@ -404,6 +435,22 @@ function renderAttendanceStatusBadge(value) {
 
     return `<span class="badge ${classes[value] || 'badge-light'}">${labels[value] || value || '-'}</span>`;
 }
+function renderOvertimeStatusBadge(value) {
+    const labels = {
+        none: 'Tidak Ada',
+        pending: 'Pending',
+        approved: 'Approved',
+        rejected: 'Rejected',
+    };
+    const classes = {
+        none: 'badge-light-secondary',
+        pending: 'badge-light-warning',
+        approved: 'badge-light-success',
+        rejected: 'badge-light-danger',
+    };
+
+    return `<span class="badge ${classes[value] || 'badge-light'}">${labels[value] || value || '-'}</span>`;
+}
 const tableConfigs = {
     employees_table: { url: '{{ route('admin.attendance.employees.data') }}', columns: ['employee_code','name','area','user','phone','position','employment_status','__actions'] },
     positions_table: { url: '{{ route('admin.attendance.positions.data') }}', columns: [
@@ -417,13 +464,13 @@ const tableConfigs = {
     ] },
     devices_table: { url: '{{ route('admin.attendance.devices.data') }}', columns: ['name','serial_number','ip_address','port','location','device_type','is_active','last_synced_at','__actions'] },
     fingerprints_table: { url: '{{ route('admin.attendance.fingerprints.data') }}', columns: ['employee','device','device_user_id','fingerprint_uid','is_active','enrolled_at','__actions'] },
-    shifts_table: { url: '{{ route('admin.attendance.shifts.data') }}', columns: ['name','start_time','end_time','break_start_time','late_tolerance_minutes','checkout_tolerance_minutes','crosses_midnight','is_active','__actions'] },
+    shifts_table: { url: '{{ route('admin.attendance.shifts.data') }}', columns: ['name','start_time','end_time','break_start_time','late_tolerance_minutes','checkout_tolerance_minutes','overtime_start_after_minutes','minimum_overtime_minutes','crosses_midnight','is_active','__actions'] },
     schedules_table: { url: '{{ route('admin.attendance.schedules.data') }}', columns: ['employee','schedule_date','schedule_type','shift','note','__actions'] },
     holidays_table: { url: '{{ route('admin.attendance.holidays.data') }}', columns: ['holiday_date','name','type','is_paid','__actions'] },
     templates_table: { url: '{{ route('admin.attendance.templates.data') }}', columns: ['name','is_active','days','__actions'] },
     leaves_table: { url: '{{ route('admin.attendance.leaves.data') }}', columns: ['employee','leave_type','start_date','end_date','status','reason','__actions'] },
     raw_logs_table: { url: '{{ route('admin.attendance.raw-logs.data') }}', columns: ['device','employee','device_user_id','scan_at','verify_type','state','__actions'] },
-    attendances_table: { url: '{{ route('admin.attendance.attendances.data') }}', columns: ['employee','attendance_date','shift','check_in_at','check_out_at','late_minutes','early_leave_minutes','work_minutes','overtime_minutes',{ data: 'status', render: renderAttendanceStatusBadge },'source','note','__actions'] },
+    attendances_table: { url: '{{ route('admin.attendance.attendances.data') }}', columns: ['employee','attendance_date','shift','check_in_at','check_out_at','late_minutes','early_leave_minutes','work_minutes','calculated_overtime_minutes','approved_overtime_minutes',{ data: 'overtime_status', render: renderOvertimeStatusBadge },{ data: 'status', render: renderAttendanceStatusBadge },'source','note','__actions'] },
 };
 const tables = {};
 const tabTableMap = {

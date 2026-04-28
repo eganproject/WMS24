@@ -60,7 +60,7 @@ class AttendanceProcessor
 
             $attendance = null;
             if ($employeeId) {
-                $attendance = $this->rebuildDailyAttendance(Employee::findOrFail($employeeId), $scanAt->toDateString());
+                $attendance = $this->rebuildAttendanceForScan(Employee::findOrFail($employeeId), $scanAt);
             }
 
             return [
@@ -84,6 +84,10 @@ class AttendanceProcessor
                 'early_leave_minutes' => 0,
                 'work_minutes' => 0,
                 'overtime_minutes' => 0,
+                'calculated_overtime_minutes' => 0,
+                'approved_overtime_minutes' => null,
+                'overtime_status' => Attendance::OVERTIME_NONE,
+                'overtime_note' => null,
                 'status' => $schedule['status'],
                 'note' => $schedule['note'],
                 'source' => 'system',
@@ -121,11 +125,13 @@ class AttendanceProcessor
 
         $lateMinutes = $checkInAt ? max(0, Carbon::parse($checkInAt)->diffInMinutes($lateCutoff, false) * -1) : 0;
         $earlyLeaveMinutes = $checkOutAt ? max(0, Carbon::parse($checkOutAt)->diffInMinutes($checkoutCutoff, false)) : 0;
-        $workMinutes = $checkInAt && $checkOutAt
-            ? max(0, Carbon::parse($checkInAt)->diffInMinutes(Carbon::parse($checkOutAt)))
+        $checkIn = $checkInAt ? Carbon::parse($checkInAt) : null;
+        $checkOut = $checkOutAt ? Carbon::parse($checkOutAt) : null;
+        $workMinutes = $checkIn && $checkOut
+            ? max(0, $checkIn->diffInMinutes($checkOut))
             : 0;
-        $workMinutes = max(0, $workMinutes - $this->breakMinutes($shift));
-        $overtimeMinutes = $checkOutAt ? max(0, $plannedEnd->diffInMinutes(Carbon::parse($checkOutAt), false)) : 0;
+        $workMinutes = max(0, $workMinutes - $this->breakOverlapMinutes($shift, $date, $checkIn, $checkOut));
+        $calculatedOvertimeMinutes = $this->calculatedOvertimeMinutes($shift, $plannedEnd, $checkOut);
 
         $status = match (true) {
             !$checkInAt => Attendance::STATUS_ABSENT,
@@ -141,11 +147,30 @@ class AttendanceProcessor
             'late_minutes' => $lateMinutes,
             'early_leave_minutes' => $earlyLeaveMinutes,
             'work_minutes' => $workMinutes,
-            'overtime_minutes' => $overtimeMinutes,
+            ...$this->overtimeAttributes($employee, $date, $calculatedOvertimeMinutes),
             'status' => $status,
             'note' => $schedule['note'],
             'source' => 'fingerprint',
         ]);
+    }
+
+    public function rebuildAttendanceForScan(Employee $employee, Carbon|string $scanAt): Attendance
+    {
+        $scanAt = $scanAt instanceof Carbon ? $scanAt->copy() : Carbon::parse($scanAt);
+        $previousDate = $scanAt->copy()->subDay()->startOfDay();
+        $previousSchedule = $this->resolveSchedule($employee, $previousDate);
+
+        if (
+            $previousSchedule['type'] === EmployeeSchedule::TYPE_WORK
+            && $previousSchedule['shift']?->crosses_midnight
+        ) {
+            [$windowStart, $windowEnd] = $this->scanWindow($previousDate, $previousSchedule['shift']);
+            if ($scanAt->betweenIncluded($windowStart, $windowEnd)) {
+                return $this->rebuildDailyAttendance($employee, $previousDate);
+            }
+        }
+
+        return $this->rebuildDailyAttendance($employee, $scanAt->toDateString());
     }
 
     public function resolveSchedule(Employee $employee, Carbon $date): array
@@ -226,7 +251,7 @@ class AttendanceProcessor
         ];
     }
 
-    private function employeeIdForDeviceUser(AttendanceDevice $device, string $deviceUserId): ?int
+    public function employeeIdForDeviceUser(AttendanceDevice $device, string $deviceUserId): ?int
     {
         return EmployeeFingerprint::query()
             ->where('device_user_id', $deviceUserId)
@@ -259,6 +284,78 @@ class AttendanceProcessor
         return $attendance;
     }
 
+    private function overtimeAttributes(Employee $employee, Carbon $date, int $calculatedMinutes): array
+    {
+        $attendance = Attendance::query()
+            ->where('employee_id', $employee->id)
+            ->whereDate('attendance_date', $date)
+            ->first();
+
+        if ($calculatedMinutes <= 0) {
+            return [
+                'overtime_minutes' => 0,
+                'calculated_overtime_minutes' => 0,
+                'approved_overtime_minutes' => null,
+                'overtime_status' => Attendance::OVERTIME_NONE,
+                'overtime_note' => null,
+                'approved_by' => null,
+                'approved_at' => null,
+            ];
+        }
+
+        if ($attendance?->overtime_status === Attendance::OVERTIME_APPROVED) {
+            $approvedMinutes = (int) ($attendance->approved_overtime_minutes ?? $attendance->overtime_minutes ?? $calculatedMinutes);
+
+            return [
+                'overtime_minutes' => $approvedMinutes,
+                'calculated_overtime_minutes' => $calculatedMinutes,
+                'approved_overtime_minutes' => $approvedMinutes,
+                'overtime_status' => Attendance::OVERTIME_APPROVED,
+                'overtime_note' => $attendance->overtime_note,
+                'approved_by' => $attendance->approved_by,
+                'approved_at' => $attendance->approved_at,
+            ];
+        }
+
+        if ($attendance?->overtime_status === Attendance::OVERTIME_REJECTED) {
+            return [
+                'overtime_minutes' => 0,
+                'calculated_overtime_minutes' => $calculatedMinutes,
+                'approved_overtime_minutes' => 0,
+                'overtime_status' => Attendance::OVERTIME_REJECTED,
+                'overtime_note' => $attendance->overtime_note,
+                'approved_by' => $attendance->approved_by,
+                'approved_at' => $attendance->approved_at,
+            ];
+        }
+
+        return [
+            'overtime_minutes' => 0,
+            'calculated_overtime_minutes' => $calculatedMinutes,
+            'approved_overtime_minutes' => null,
+            'overtime_status' => Attendance::OVERTIME_PENDING,
+            'overtime_note' => $attendance?->overtime_note,
+            'approved_by' => null,
+            'approved_at' => null,
+        ];
+    }
+
+    private function calculatedOvertimeMinutes(WorkShift $shift, Carbon $plannedEnd, ?Carbon $checkOut): int
+    {
+        if (!$checkOut) {
+            return 0;
+        }
+
+        $overtimeStart = $plannedEnd->copy()->addMinutes((int) $shift->overtime_start_after_minutes);
+        $minutes = max(0, (int) $overtimeStart->diffInMinutes($checkOut, false));
+
+        if ($minutes < (int) $shift->minimum_overtime_minutes) {
+            return 0;
+        }
+
+        return $minutes;
+    }
+
     private function statusForScheduleType(string $scheduleType): string
     {
         return match ($scheduleType) {
@@ -283,15 +380,31 @@ class AttendanceProcessor
         return $nextDay ? $value->addDay() : $value;
     }
 
-    private function breakMinutes(WorkShift $shift): int
+    private function breakOverlapMinutes(WorkShift $shift, Carbon $date, ?Carbon $checkIn, ?Carbon $checkOut): int
     {
-        if (!$shift->break_start_time || !$shift->break_end_time) {
+        if (!$shift->break_start_time || !$shift->break_end_time || !$checkIn || !$checkOut) {
             return 0;
         }
 
-        $start = Carbon::parse($shift->break_start_time);
-        $end = Carbon::parse($shift->break_end_time);
+        $start = $this->breakDateTime($date, $shift, $shift->break_start_time);
+        $end = $this->breakDateTime($date, $shift, $shift->break_end_time);
+        if ($end->lessThanOrEqualTo($start)) {
+            $end->addDay();
+        }
 
-        return max(0, $start->diffInMinutes($end, false));
+        $overlapStart = $checkIn->greaterThan($start) ? $checkIn : $start;
+        $overlapEnd = $checkOut->lessThan($end) ? $checkOut : $end;
+
+        return $overlapEnd->greaterThan($overlapStart)
+            ? (int) $overlapStart->diffInMinutes($overlapEnd)
+            : 0;
+    }
+
+    private function breakDateTime(Carbon $date, WorkShift $shift, string $time): Carbon
+    {
+        $time = substr($time, 0, 5);
+        $shiftStart = substr($shift->start_time, 0, 5);
+
+        return $this->shiftDateTime($date, $time, $shift->crosses_midnight && $time < $shiftStart);
     }
 }

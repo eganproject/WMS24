@@ -16,7 +16,6 @@ class InboundScanWorkbenchController extends BaseInboundScanController
                 'complete' => route('admin.inbound.scan.complete'),
                 'reset' => route('admin.inbound.scan.reset'),
                 'receipts' => route('admin.inbound.receipts.index'),
-                'manuals' => route('admin.inbound.manuals.index'),
             ],
         ]);
     }

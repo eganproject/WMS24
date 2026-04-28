@@ -604,10 +604,6 @@
                     <i class="fas fa-dolly"></i>
                     <span>Daftar Penerimaan</span>
                 </a>
-                <a href="{{ $routes['manuals'] }}" class="scan-hero-link">
-                    <i class="fas fa-edit"></i>
-                    <span>Inbound Manual</span>
-                </a>
             </div>
         </div>
         <div class="scan-hero-hints" id="help_panel">

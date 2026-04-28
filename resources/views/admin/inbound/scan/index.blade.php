@@ -60,10 +60,16 @@
         font-size: 13px;
         font-weight: 700;
     }
+    .scan-hero-link:hover {
+        background: #f8fafc;
+    }
     .scan-hero-hints {
-        display: grid;
+        display: none;
         grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 12px;
+    }
+    .scan-hero-hints.is-open {
+        display: grid;
     }
     .scan-hint-card {
         border-radius: 18px;
@@ -590,6 +596,10 @@
                 </div>
             </div>
             <div class="scan-hero-actions">
+                <button type="button" class="scan-hero-link" id="btn_toggle_help">
+                    <i class="fas fa-keyboard"></i>
+                    <span>Bantuan Shortcut</span>
+                </button>
                 <a href="{{ $routes['receipts'] }}" class="scan-hero-link">
                     <i class="fas fa-dolly"></i>
                     <span>Daftar Penerimaan</span>
@@ -600,7 +610,7 @@
                 </a>
             </div>
         </div>
-        <div class="scan-hero-hints">
+        <div class="scan-hero-hints" id="help_panel">
             <div class="scan-hint-card">
                 <div class="scan-hint-label">Shortcut</div>
                 <div class="scan-hint-value">`F1` fokus pencarian inbound, `F2` fokus scan SKU, `Ctrl + Enter` untuk complete inbound.</div>
@@ -768,6 +778,8 @@
         summaryAudit: document.getElementById('summary_audit'),
         activityLog: document.getElementById('activity_log'),
         btnClearLog: document.getElementById('btn_clear_log'),
+        btnToggleHelp: document.getElementById('btn_toggle_help'),
+        helpPanel: document.getElementById('help_panel'),
     };
 
     const state = {
@@ -781,9 +793,24 @@
 
     let logEntries = [];
     let audioContext = null;
+    let helpOpen = false;
 
     const focusSearch = () => el.searchQuery?.focus();
     const focusSku = () => el.skuCode?.focus();
+
+    const renderPanels = () => {
+        if (el.helpPanel) {
+            el.helpPanel.classList.toggle('is-open', helpOpen);
+        }
+        if (el.btnToggleHelp) {
+            const label = el.btnToggleHelp.querySelector('span');
+            if (label) {
+                label.textContent = helpOpen ? 'Sembunyikan Bantuan' : 'Bantuan Shortcut';
+            } else {
+                el.btnToggleHelp.textContent = helpOpen ? 'Sembunyikan Bantuan' : 'Bantuan Shortcut';
+            }
+        }
+    };
 
     const nowLabel = () => new Date().toLocaleTimeString('id-ID', {
         hour: '2-digit',
@@ -1459,7 +1486,14 @@
         logEntries = [];
         renderActivityLog();
     });
+    if (el.btnToggleHelp) {
+        el.btnToggleHelp.addEventListener('click', () => {
+            helpOpen = !helpOpen;
+            renderPanels();
+        });
+    }
 
+    renderPanels();
     renderActivityLog();
     renderTransaction(null);
     searchTransactions();

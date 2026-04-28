@@ -15,7 +15,7 @@ return new class extends Migration
         DB::table('menus')->updateOrInsert(
             ['slug' => 'attendance'],
             [
-                'name' => 'Absensi',
+                'name' => 'Attendance',
                 'route' => null,
                 'icon' => 'fas fa-fingerprint',
                 'parent_id' => null,

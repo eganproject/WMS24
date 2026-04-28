@@ -52,6 +52,7 @@ class MenuSeeder extends Seeder
             ['name' => 'Laporan Scan Out', 'slug' => 'outbound-scan-out-report', 'route' => 'admin.reports.scan-out-reports.index', 'icon' => 'fas fa-truck-loading', 'parent_slug' => 'reports', 'sort_order' => 1.2],
             ['name' => 'Laporan Stok Pengaman', 'slug' => 'report-low-stock', 'route' => 'admin.reports.low-stock.index', 'icon' => 'fas fa-exclamation-triangle', 'parent_slug' => 'reports', 'sort_order' => 1.25],
             ['name' => 'Laporan Retur', 'slug' => 'report-returns', 'route' => 'admin.reports.returns.index', 'icon' => 'fas fa-undo', 'parent_slug' => 'reports', 'sort_order' => 1.26],
+            ['name' => 'Laporan Absensi', 'slug' => 'report-attendance', 'route' => 'admin.reports.attendance.index', 'icon' => 'fas fa-user-clock', 'parent_slug' => 'reports', 'sort_order' => 1.265],
             ['name' => 'Replenishment Display', 'slug' => 'report-replenishment', 'route' => 'admin.reports.replenishment.index', 'icon' => 'fas fa-sync-alt', 'parent_slug' => 'reports', 'sort_order' => 1.27],
             ['name' => 'Aktivitas User', 'slug' => 'activity-logs', 'route' => 'admin.reports.activity-logs.index', 'icon' => 'fas fa-clipboard-check', 'parent_slug' => 'reports', 'sort_order' => 2],
             ['name' => 'Laporan Stock Opname', 'slug' => 'report-stock-opname', 'route' => 'admin.reports.stock-opname.index', 'icon' => 'fas fa-clipboard-list', 'parent_slug' => 'reports', 'sort_order' => 3],
@@ -65,7 +66,6 @@ class MenuSeeder extends Seeder
             ['name' => 'Cuti/Izin', 'slug' => 'attendance-leaves', 'route' => 'admin.attendance.leaves.index', 'icon' => 'fas fa-plane-departure', 'parent_slug' => 'attendance', 'sort_order' => 8],
             ['name' => 'Raw Log Fingerprint', 'slug' => 'attendance-raw-logs', 'route' => 'admin.attendance.raw-logs.index', 'icon' => 'fas fa-list', 'parent_slug' => 'attendance', 'sort_order' => 9],
             ['name' => 'Rekap Absensi', 'slug' => 'attendance-recap', 'route' => 'admin.attendance.attendances.index', 'icon' => 'fas fa-clipboard-check', 'parent_slug' => 'attendance', 'sort_order' => 10],
-            ['name' => 'Laporan Absensi', 'slug' => 'report-attendance', 'route' => 'admin.reports.attendance.index', 'icon' => 'fas fa-user-clock', 'parent_slug' => 'attendance', 'sort_order' => 11],
         ];
 
         foreach ($menuRows as $menu) {

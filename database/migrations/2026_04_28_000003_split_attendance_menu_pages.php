@@ -42,7 +42,6 @@ return new class extends Migration
             ['name' => 'Cuti/Izin', 'slug' => 'attendance-leaves', 'route' => 'admin.attendance.leaves.index', 'icon' => 'fas fa-plane-departure', 'sort_order' => 8],
             ['name' => 'Raw Log Fingerprint', 'slug' => 'attendance-raw-logs', 'route' => 'admin.attendance.raw-logs.index', 'icon' => 'fas fa-list', 'sort_order' => 9],
             ['name' => 'Rekap Absensi', 'slug' => 'attendance-recap', 'route' => 'admin.attendance.attendances.index', 'icon' => 'fas fa-clipboard-check', 'sort_order' => 10],
-            ['name' => 'Laporan Absensi', 'slug' => 'report-attendance', 'route' => 'admin.reports.attendance.index', 'icon' => 'fas fa-user-clock', 'sort_order' => 11],
         ];
 
         foreach ($children as $child) {
@@ -59,6 +58,15 @@ return new class extends Migration
                     'created_at' => now(),
                 ]
             );
+        }
+
+        $reportsMenuId = DB::table('menus')->where('slug', 'reports')->value('id');
+        if ($reportsMenuId) {
+            DB::table('menus')->where('slug', 'report-attendance')->update([
+                'parent_id' => $reportsMenuId,
+                'sort_order' => 1.265,
+                'updated_at' => now(),
+            ]);
         }
 
         if (!Schema::hasTable('roles') || !Schema::hasTable('permission_menu')) {

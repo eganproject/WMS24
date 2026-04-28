@@ -28,6 +28,7 @@ use App\Http\Controllers\Admin\LowStockReportController;
 use App\Http\Controllers\Admin\ReturnReportController;
 use App\Http\Controllers\Admin\ActivityLogController;
 use App\Http\Controllers\Admin\AttendanceController;
+use App\Http\Controllers\Admin\AttendanceReportController;
 use App\Http\Controllers\Admin\StockOpnameReportController;
 use App\Http\Controllers\Admin\ReplenishmentReportController;
 use App\Http\Controllers\Admin\RoleController;
@@ -373,6 +374,8 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/low-stock/data', [LowStockReportController::class, 'data'])->name('low-stock.data');
         Route::get('/returns', [ReturnReportController::class, 'index'])->name('returns.index');
         Route::get('/returns/data', [ReturnReportController::class, 'data'])->name('returns.data');
+        Route::get('/attendance', [AttendanceReportController::class, 'index'])->name('attendance.index');
+        Route::get('/attendance/data', [AttendanceReportController::class, 'data'])->name('attendance.data');
         Route::get('/replenishment', [ReplenishmentReportController::class, 'index'])->name('replenishment.index');
         Route::get('/replenishment/data', [ReplenishmentReportController::class, 'data'])->name('replenishment.data');
         Route::get('/stock-opname', [StockOpnameReportController::class, 'index'])->name('stock-opname.index');
@@ -383,6 +386,16 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
 
     Route::prefix('attendance')->as('attendance.')->group(function () {
         Route::get('/', [AttendanceController::class, 'index'])->name('index');
+        Route::get('/employees', [AttendanceController::class, 'sectionPage'])->defaults('section', 'employees')->name('employees.index');
+        Route::get('/devices', [AttendanceController::class, 'sectionPage'])->defaults('section', 'devices')->name('devices.index');
+        Route::get('/fingerprints', [AttendanceController::class, 'sectionPage'])->defaults('section', 'fingerprints')->name('fingerprints.index');
+        Route::get('/shifts', [AttendanceController::class, 'sectionPage'])->defaults('section', 'shifts')->name('shifts.index');
+        Route::get('/schedules', [AttendanceController::class, 'sectionPage'])->defaults('section', 'schedules')->name('schedules.index');
+        Route::get('/holidays', [AttendanceController::class, 'sectionPage'])->defaults('section', 'holidays')->name('holidays.index');
+        Route::get('/templates', [AttendanceController::class, 'sectionPage'])->defaults('section', 'templates')->name('templates.index');
+        Route::get('/leaves', [AttendanceController::class, 'sectionPage'])->defaults('section', 'leaves')->name('leaves.index');
+        Route::get('/raw-logs', [AttendanceController::class, 'sectionPage'])->defaults('section', 'raw_logs')->name('raw-logs.index');
+        Route::get('/attendances', [AttendanceController::class, 'sectionPage'])->defaults('section', 'attendances')->name('attendances.index');
         Route::get('/employee-schedule', [AttendanceController::class, 'employeeSchedule'])->name('employee-schedule.index');
         Route::get('/employees/data', [AttendanceController::class, 'employeesData'])->name('employees.data');
         Route::post('/employees', [AttendanceController::class, 'storeEmployee'])->name('employees.store');

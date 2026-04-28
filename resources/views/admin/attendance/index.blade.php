@@ -45,6 +45,11 @@
 @endpush
 
 @section('content')
+@php
+    $activeSection = $activeSection ?? 'employees';
+    $sectionLinks = $sectionLinks ?? [];
+    $activeSectionLabel = $sectionLinks[$activeSection]['label'] ?? 'Absensi';
+@endphp
 <div class="card">
     <div class="card-header border-0 pt-6">
         <div class="card-title">
@@ -53,27 +58,28 @@
             </div>
         </div>
         <div class="card-toolbar">
-            <button type="button" class="btn btn-light-primary" id="attendance_refresh_tab">
-                Refresh Tab
+            <button type="button" class="btn btn-light-primary" id="attendance_refresh_tab" data-active-section="{{ $activeSection }}">
+                Refresh Halaman
             </button>
         </div>
     </div>
     <div class="card-body py-6">
-        <ul class="nav nav-tabs nav-line-tabs mb-8 fs-6">
-            <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab_employees">Karyawan</a></li>
-            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab_devices">Device</a></li>
-            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab_fingerprints">Fingerprint</a></li>
-            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab_shifts">Shift</a></li>
-            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab_schedules">Jadwal</a></li>
-            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab_holidays">Libur</a></li>
-            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab_templates">Template</a></li>
-            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab_leaves">Cuti/Izin</a></li>
-            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab_raw_logs">Raw Log</a></li>
-            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab_attendances">Rekap</a></li>
-        </ul>
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-8">
+            <div>
+                <div class="text-muted fs-7 fw-bold text-uppercase">Modul Absensi</div>
+                <h2 class="fw-bolder mb-0">{{ $activeSectionLabel }}</h2>
+            </div>
+            <div class="d-flex flex-wrap gap-2">
+                @foreach($sectionLinks as $sectionKey => $section)
+                    <a href="{{ route($section['route']) }}" class="btn btn-sm {{ $activeSection === $sectionKey ? 'btn-primary' : 'btn-light' }}">
+                        <i class="{{ $section['icon'] }} me-1"></i>{{ $section['label'] }}
+                    </a>
+                @endforeach
+            </div>
+        </div>
 
         <div class="tab-content">
-            <div class="tab-pane fade show active" id="tab_employees">
+            <div class="tab-pane fade {{ $activeSection === 'employees' ? 'show active' : '' }}" id="tab_employees">
                 <form class="row g-3 mb-6 ajax-form" data-table="employees_table" action="{{ route('admin.attendance.employees.store') }}">
                     @csrf
                     <div class="col-md-2"><label class="form-label fw-bold">Kode Karyawan</label><input name="employee_code" class="form-control form-control-solid" placeholder="EMP001" required></div>
@@ -122,7 +128,7 @@
                 <x-attendance-table id="employees_table" :headers="['Kode','Nama','Area','User','Telepon','Jabatan','Status','Aksi']" />
             </div>
 
-            <div class="tab-pane fade" id="tab_devices">
+            <div class="tab-pane fade {{ $activeSection === 'devices' ? 'show active' : '' }}" id="tab_devices">
                 <form class="row g-3 mb-6 ajax-form" data-table="devices_table" action="{{ route('admin.attendance.devices.store') }}">
                     @csrf
                     <div class="col-md-2"><label class="form-label fw-bold">Nama Device</label><input name="name" class="form-control form-control-solid" placeholder="Fingerprint Gudang" required></div>
@@ -137,7 +143,7 @@
                 <x-attendance-table id="devices_table" :headers="['Nama','Serial','IP','Port','Lokasi','Tipe','Aktif','Sync Terakhir','Aksi']" />
             </div>
 
-            <div class="tab-pane fade" id="tab_fingerprints">
+            <div class="tab-pane fade {{ $activeSection === 'fingerprints' ? 'show active' : '' }}" id="tab_fingerprints">
                 <form class="row g-3 mb-6 ajax-form" data-table="fingerprints_table" action="{{ route('admin.attendance.fingerprints.store') }}">
                     @csrf
                     <div class="col-md-3"><label class="form-label fw-bold">Karyawan</label><select name="employee_id" class="form-select form-select-solid" required>@foreach($employees as $employee)<option value="{{ $employee->id }}">{{ $employee->employee_code }} - {{ $employee->name }}</option>@endforeach</select></div>
@@ -150,7 +156,7 @@
                 <x-attendance-table id="fingerprints_table" :headers="['Karyawan','Device','Device User ID','UID','Aktif','Enrolled','Aksi']" />
             </div>
 
-            <div class="tab-pane fade" id="tab_shifts">
+            <div class="tab-pane fade {{ $activeSection === 'shifts' ? 'show active' : '' }}" id="tab_shifts">
                 <form class="row g-3 mb-6 ajax-form" data-table="shifts_table" action="{{ route('admin.attendance.shifts.store') }}">
                     @csrf
                     <div class="col-md-2"><label class="form-label fw-bold">Nama Shift</label><input name="name" class="form-control form-control-solid" placeholder="Shift Pagi" required></div>
@@ -169,7 +175,7 @@
                 <x-attendance-table id="shifts_table" :headers="['Nama','Masuk','Pulang','Istirahat','Telat','Pulang Cepat','Lembur Setelah','Minimal Lembur','Malam','Aktif','Aksi']" />
             </div>
 
-            <div class="tab-pane fade" id="tab_schedules">
+            <div class="tab-pane fade {{ $activeSection === 'schedules' ? 'show active' : '' }}" id="tab_schedules">
                 <div class="d-flex justify-content-end mb-4">
                     <a href="{{ route('admin.attendance.employee-schedule.index') }}" class="btn btn-light-info btn-sm">
                         &#128197; Lihat Jadwal Per Karyawan
@@ -217,7 +223,7 @@
                 <x-attendance-table id="schedules_table" :headers="['Karyawan','Tanggal','Tipe','Shift','Catatan','Aksi']" />
             </div>
 
-            <div class="tab-pane fade" id="tab_holidays">
+            <div class="tab-pane fade {{ $activeSection === 'holidays' ? 'show active' : '' }}" id="tab_holidays">
                 <form class="row g-3 mb-6 ajax-form" data-table="holidays_table" action="{{ route('admin.attendance.holidays.store') }}">
                     @csrf
                     <div class="col-md-2"><label class="form-label fw-bold">Tanggal Libur</label><input type="text" name="holiday_date" class="form-control form-control-solid js-date" placeholder="YYYY-MM-DD" required></div>
@@ -229,7 +235,7 @@
                 <x-attendance-table id="holidays_table" :headers="['Tanggal','Nama','Tipe','Dibayar','Aksi']" />
             </div>
 
-            <div class="tab-pane fade" id="tab_templates">
+            <div class="tab-pane fade {{ $activeSection === 'templates' ? 'show active' : '' }}" id="tab_templates">
                 <form class="mb-6 ajax-form template-days-form" data-table="templates_table" action="{{ route('admin.attendance.templates.store') }}">
                     @csrf
                     <div class="row g-3 align-items-end mb-4">
@@ -290,7 +296,7 @@
                 <x-attendance-table id="templates_table" :headers="['Nama','Aktif','Isi Hari','Aksi']" />
             </div>
 
-            <div class="tab-pane fade" id="tab_leaves">
+            <div class="tab-pane fade {{ $activeSection === 'leaves' ? 'show active' : '' }}" id="tab_leaves">
                 <form class="row g-3 mb-6 ajax-form" data-table="leaves_table" action="{{ route('admin.attendance.leaves.store') }}">
                     @csrf
                     <div class="col-md-3"><label class="form-label fw-bold">Karyawan</label><select name="employee_id" class="form-select form-select-solid" required>@foreach($employees as $employee)<option value="{{ $employee->id }}">{{ $employee->employee_code }} - {{ $employee->name }}</option>@endforeach</select></div>
@@ -304,7 +310,7 @@
                 <x-attendance-table id="leaves_table" :headers="['Karyawan','Tipe','Mulai','Selesai','Status','Alasan','Aksi']" />
             </div>
 
-            <div class="tab-pane fade" id="tab_raw_logs">
+            <div class="tab-pane fade {{ $activeSection === 'raw_logs' ? 'show active' : '' }}" id="tab_raw_logs">
                 <form class="row g-3 mb-6 ajax-form" data-table="raw_logs_table" action="{{ route('admin.attendance.raw-logs.store') }}">
                     @csrf
                     <div class="col-md-3"><label class="form-label fw-bold">Device</label><select name="attendance_device_id" class="form-select form-select-solid" required>@foreach($devices as $device)<option value="{{ $device->id }}">{{ $device->name }}</option>@endforeach</select></div>
@@ -317,7 +323,7 @@
                 <x-attendance-table id="raw_logs_table" :headers="['Device','Karyawan','Device User ID','Waktu Scan','Verify','State','Aksi']" />
             </div>
 
-            <div class="tab-pane fade" id="tab_attendances">
+            <div class="tab-pane fade {{ $activeSection === 'attendances' ? 'show active' : '' }}" id="tab_attendances">
                 <form class="row g-3 mb-6 ajax-form" data-table="attendances_table" action="#">
                     @csrf
                     <div class="col-12 attendance-form-section">

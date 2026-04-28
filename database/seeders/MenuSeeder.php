@@ -16,7 +16,7 @@ class MenuSeeder extends Seeder
             ['name' => 'Inbound', 'slug' => 'inbound', 'route' => null, 'icon' => 'fas fa-arrow-down', 'parent_slug' => null, 'sort_order' => 13],
             ['name' => 'Outbound', 'slug' => 'outbound', 'route' => null, 'icon' => 'fas fa-arrow-up', 'parent_slug' => null, 'sort_order' => 14],
             ['name' => 'Laporan', 'slug' => 'reports', 'route' => null, 'icon' => 'fas fa-chart-line', 'parent_slug' => null, 'sort_order' => 15],
-            ['name' => 'Absensi', 'slug' => 'attendance', 'route' => 'admin.attendance.index', 'icon' => 'fas fa-fingerprint', 'parent_slug' => null, 'sort_order' => 16],
+            ['name' => 'Absensi', 'slug' => 'attendance', 'route' => null, 'icon' => 'fas fa-fingerprint', 'parent_slug' => null, 'sort_order' => 16],
             ['name' => 'Users', 'slug' => 'users', 'route' => 'admin.masterdata.users.index', 'icon' => 'fas fa-users', 'parent_slug' => 'master-data', 'sort_order' => 20],
             ['name' => 'Roles', 'slug' => 'roles', 'route' => 'admin.masterdata.roles.index', 'icon' => 'fas fa-user-shield', 'parent_slug' => 'master-data', 'sort_order' => 21],
             ['name' => 'Kurir', 'slug' => 'kurir', 'route' => 'admin.masterdata.kurir.index', 'icon' => 'fas fa-truck', 'parent_slug' => 'master-data', 'sort_order' => 21.45],
@@ -55,6 +55,17 @@ class MenuSeeder extends Seeder
             ['name' => 'Replenishment Display', 'slug' => 'report-replenishment', 'route' => 'admin.reports.replenishment.index', 'icon' => 'fas fa-sync-alt', 'parent_slug' => 'reports', 'sort_order' => 1.27],
             ['name' => 'Aktivitas User', 'slug' => 'activity-logs', 'route' => 'admin.reports.activity-logs.index', 'icon' => 'fas fa-clipboard-check', 'parent_slug' => 'reports', 'sort_order' => 2],
             ['name' => 'Laporan Stock Opname', 'slug' => 'report-stock-opname', 'route' => 'admin.reports.stock-opname.index', 'icon' => 'fas fa-clipboard-list', 'parent_slug' => 'reports', 'sort_order' => 3],
+            ['name' => 'Karyawan Absensi', 'slug' => 'attendance-employees', 'route' => 'admin.attendance.employees.index', 'icon' => 'fas fa-users', 'parent_slug' => 'attendance', 'sort_order' => 1],
+            ['name' => 'Device Absensi', 'slug' => 'attendance-devices', 'route' => 'admin.attendance.devices.index', 'icon' => 'fas fa-fingerprint', 'parent_slug' => 'attendance', 'sort_order' => 2],
+            ['name' => 'Mapping Fingerprint', 'slug' => 'attendance-fingerprints', 'route' => 'admin.attendance.fingerprints.index', 'icon' => 'fas fa-id-badge', 'parent_slug' => 'attendance', 'sort_order' => 3],
+            ['name' => 'Shift Kerja', 'slug' => 'attendance-shifts', 'route' => 'admin.attendance.shifts.index', 'icon' => 'fas fa-clock', 'parent_slug' => 'attendance', 'sort_order' => 4],
+            ['name' => 'Jadwal Kerja', 'slug' => 'attendance-schedules', 'route' => 'admin.attendance.schedules.index', 'icon' => 'fas fa-calendar-alt', 'parent_slug' => 'attendance', 'sort_order' => 5],
+            ['name' => 'Hari Libur', 'slug' => 'attendance-holidays', 'route' => 'admin.attendance.holidays.index', 'icon' => 'fas fa-calendar-day', 'parent_slug' => 'attendance', 'sort_order' => 6],
+            ['name' => 'Template Jadwal', 'slug' => 'attendance-templates', 'route' => 'admin.attendance.templates.index', 'icon' => 'fas fa-calendar-week', 'parent_slug' => 'attendance', 'sort_order' => 7],
+            ['name' => 'Cuti/Izin', 'slug' => 'attendance-leaves', 'route' => 'admin.attendance.leaves.index', 'icon' => 'fas fa-plane-departure', 'parent_slug' => 'attendance', 'sort_order' => 8],
+            ['name' => 'Raw Log Fingerprint', 'slug' => 'attendance-raw-logs', 'route' => 'admin.attendance.raw-logs.index', 'icon' => 'fas fa-list', 'parent_slug' => 'attendance', 'sort_order' => 9],
+            ['name' => 'Rekap Absensi', 'slug' => 'attendance-recap', 'route' => 'admin.attendance.attendances.index', 'icon' => 'fas fa-clipboard-check', 'parent_slug' => 'attendance', 'sort_order' => 10],
+            ['name' => 'Laporan Absensi', 'slug' => 'report-attendance', 'route' => 'admin.reports.attendance.index', 'icon' => 'fas fa-user-clock', 'parent_slug' => 'attendance', 'sort_order' => 11],
         ];
 
         foreach ($menuRows as $menu) {

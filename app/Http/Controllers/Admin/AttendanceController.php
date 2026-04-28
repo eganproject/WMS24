@@ -37,7 +37,14 @@ class AttendanceController extends Controller
 
     public function index()
     {
+        return redirect()->route('admin.attendance.employees.index');
+    }
+
+    public function section(string $section)
+    {
         return view('admin.attendance.index', [
+            'activeSection' => $section,
+            'sectionLinks' => $this->sectionLinks(),
             'areas' => Area::query()->orderBy('code')->get(['id', 'code', 'name']),
             'users' => User::query()->orderBy('name')->get(['id', 'name', 'email']),
             'positions' => EmployeePosition::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']),
@@ -46,6 +53,27 @@ class AttendanceController extends Controller
             'shifts' => WorkShift::query()->orderBy('name')->get(['id', 'name', 'start_time', 'end_time']),
             'templates' => WeeklyScheduleTemplate::query()->orderBy('name')->get(['id', 'name']),
         ]);
+    }
+
+    public function sectionPage(Request $request)
+    {
+        return $this->section((string) $request->route('section'));
+    }
+
+    private function sectionLinks(): array
+    {
+        return [
+            'employees' => ['label' => 'Karyawan', 'route' => 'admin.attendance.employees.index', 'icon' => 'fas fa-users'],
+            'devices' => ['label' => 'Device', 'route' => 'admin.attendance.devices.index', 'icon' => 'fas fa-fingerprint'],
+            'fingerprints' => ['label' => 'Fingerprint', 'route' => 'admin.attendance.fingerprints.index', 'icon' => 'fas fa-id-badge'],
+            'shifts' => ['label' => 'Shift', 'route' => 'admin.attendance.shifts.index', 'icon' => 'fas fa-clock'],
+            'schedules' => ['label' => 'Jadwal', 'route' => 'admin.attendance.schedules.index', 'icon' => 'fas fa-calendar-alt'],
+            'holidays' => ['label' => 'Libur', 'route' => 'admin.attendance.holidays.index', 'icon' => 'fas fa-calendar-day'],
+            'templates' => ['label' => 'Template', 'route' => 'admin.attendance.templates.index', 'icon' => 'fas fa-calendar-week'],
+            'leaves' => ['label' => 'Cuti/Izin', 'route' => 'admin.attendance.leaves.index', 'icon' => 'fas fa-plane-departure'],
+            'raw_logs' => ['label' => 'Raw Log', 'route' => 'admin.attendance.raw-logs.index', 'icon' => 'fas fa-list'],
+            'attendances' => ['label' => 'Rekap', 'route' => 'admin.attendance.attendances.index', 'icon' => 'fas fa-clipboard-check'],
+        ];
     }
 
     public function employeesData(Request $request)

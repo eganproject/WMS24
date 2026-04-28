@@ -201,6 +201,34 @@ class AttendanceProcessorTest extends TestCase
         $this->assertCount(2, $scheduleSummary['extendedProps']['details']);
     }
 
+    public function test_attendance_operational_sections_are_available_as_separate_pages(): void
+    {
+        $user = User::factory()->create();
+        $role = Role::create(['name' => 'Admin', 'slug' => 'admin']);
+        $user->roles()->attach($role);
+        $this->actingAs($user);
+
+        $this->get(route('admin.attendance.index'))
+            ->assertRedirect(route('admin.attendance.employees.index'));
+
+        foreach ([
+            'admin.attendance.employees.index',
+            'admin.attendance.devices.index',
+            'admin.attendance.fingerprints.index',
+            'admin.attendance.shifts.index',
+            'admin.attendance.schedules.index',
+            'admin.attendance.holidays.index',
+            'admin.attendance.templates.index',
+            'admin.attendance.leaves.index',
+            'admin.attendance.raw-logs.index',
+            'admin.attendance.attendances.index',
+        ] as $route) {
+            $this->get(route($route))
+                ->assertOk()
+                ->assertSee('Modul Absensi');
+        }
+    }
+
     public function test_manual_raw_log_late_check_in_returns_notification_and_sends_telegram(): void
     {
         config([
@@ -662,5 +690,88 @@ class AttendanceProcessorTest extends TestCase
             'overtime_status' => 'approved',
             'approved_by' => $user->id,
         ]);
+    }
+
+    public function test_attendance_report_returns_hr_summary_per_employee(): void
+    {
+        $user = User::factory()->create();
+        $role = Role::create(['name' => 'Admin', 'slug' => 'admin']);
+        $user->roles()->attach($role);
+        $this->actingAs($user);
+
+        $employee = Employee::create([
+            'employee_code' => 'EMP014',
+            'name' => 'Maya',
+            'employment_status' => 'active',
+        ]);
+        $shift = WorkShift::create([
+            'name' => 'Pagi Report',
+            'start_time' => '08:00',
+            'end_time' => '17:00',
+            'is_active' => true,
+        ]);
+
+        foreach (['2026-04-27', '2026-04-28', '2026-04-29'] as $date) {
+            EmployeeSchedule::create([
+                'employee_id' => $employee->id,
+                'work_shift_id' => $shift->id,
+                'schedule_date' => $date,
+                'schedule_type' => 'work',
+            ]);
+        }
+
+        Attendance::create([
+            'employee_id' => $employee->id,
+            'attendance_date' => '2026-04-27',
+            'work_shift_id' => $shift->id,
+            'check_in_at' => '2026-04-27 08:00:00',
+            'check_out_at' => '2026-04-27 18:00:00',
+            'work_minutes' => 600,
+            'calculated_overtime_minutes' => 60,
+            'approved_overtime_minutes' => 45,
+            'overtime_minutes' => 45,
+            'overtime_status' => 'approved',
+            'status' => 'present',
+            'source' => 'fingerprint',
+        ]);
+        Attendance::create([
+            'employee_id' => $employee->id,
+            'attendance_date' => '2026-04-28',
+            'work_shift_id' => $shift->id,
+            'check_in_at' => '2026-04-28 08:20:00',
+            'check_out_at' => '2026-04-28 17:00:00',
+            'late_minutes' => 20,
+            'work_minutes' => 520,
+            'status' => 'late',
+            'source' => 'fingerprint',
+        ]);
+        Attendance::create([
+            'employee_id' => $employee->id,
+            'attendance_date' => '2026-04-29',
+            'work_shift_id' => $shift->id,
+            'status' => 'absent',
+            'source' => 'system',
+        ]);
+
+        $response = $this->getJson(route('admin.reports.attendance.data', [
+            'draw' => 1,
+            'date_from' => '2026-04-27',
+            'date_to' => '2026-04-29',
+            'employee_id' => $employee->id,
+        ]));
+
+        $response->assertOk()
+            ->assertJsonPath('summary.employees', 1)
+            ->assertJsonPath('summary.scheduled_work_days', 3)
+            ->assertJsonPath('summary.present_days', 1)
+            ->assertJsonPath('summary.late_days', 1)
+            ->assertJsonPath('summary.absent_days', 1)
+            ->assertJsonPath('summary.approved_overtime_minutes', 45)
+            ->assertJsonPath('data.0.employee_label', 'EMP014 - Maya')
+            ->assertJsonPath('data.0.scheduled_work_days', 3)
+            ->assertJsonPath('data.0.attendance_rate', 66.67)
+            ->assertJsonPath('data.0.approved_overtime_minutes', 45);
+
+        $this->assertCount(3, $response->json('data.0.detail_rows'));
     }
 }

@@ -4,6 +4,7 @@ namespace Tests\Feature\Admin;
 
 use App\Http\Middleware\AuthorizeMenuPermission;
 use App\Models\Item;
+use App\Models\ItemStock;
 use App\Models\OutboundTransaction;
 use App\Models\Supplier;
 use App\Models\User;
@@ -32,6 +33,11 @@ class OutboundReturnImportTest extends TestCase
             'item_type' => Item::TYPE_SINGLE,
             'category_id' => 0,
             'koli_qty' => 6,
+        ]);
+        ItemStock::create([
+            'item_id' => $item->id,
+            'warehouse_id' => WarehouseService::displayWarehouseId(),
+            'stock' => 12,
         ]);
 
         $file = $this->makeExcelUpload([

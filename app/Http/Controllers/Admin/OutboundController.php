@@ -169,6 +169,7 @@ class OutboundController extends Controller
                 if ($warehouseId <= 0) {
                     $warehouseId = WarehouseService::displayWarehouseId();
                 }
+                StockService::assertSellableAvailable($group['items'], $warehouseId);
                 $transactedAt = now();
                 if (!empty($group['transacted_at'])) {
                     try {
@@ -245,6 +246,7 @@ class OutboundController extends Controller
             $createdItems = 0;
             foreach ($groups as $group) {
                 $transactedAt = now();
+                StockService::assertSellableAvailable($group['items'], $warehouseId);
                 if (!empty($group['transacted_at'])) {
                     try {
                         $transactedAt = Carbon::parse($group['transacted_at']);
@@ -572,6 +574,8 @@ class OutboundController extends Controller
             default => 'OUT-MNL',
         };
 
+        StockService::assertSellableAvailable($validated['items'], $warehouseId);
+
         $code = $this->generateCode($prefix);
         $transactedAt = $validated['transacted_at'] ?? now();
 
@@ -629,6 +633,8 @@ class OutboundController extends Controller
         } else {
             $warehouseId = WarehouseService::displayWarehouseId();
         }
+
+        StockService::assertSellableAvailable($validated['items'], $warehouseId);
 
         DB::beginTransaction();
         try {

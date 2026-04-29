@@ -3,6 +3,7 @@
 namespace Tests\Feature\Admin;
 
 use App\Models\Item;
+use App\Models\ItemStock;
 use App\Models\OutboundItem;
 use App\Models\OutboundTransaction;
 use App\Models\Supplier;
@@ -27,6 +28,11 @@ class OutboundReturnKoliTest extends TestCase
             'item_type' => Item::TYPE_SINGLE,
             'category_id' => 0,
             'koli_qty' => 12,
+        ]);
+        ItemStock::create([
+            'item_id' => $item->id,
+            'warehouse_id' => WarehouseService::displayWarehouseId(),
+            'stock' => 24,
         ]);
 
         $response = $this->actingAs($user)
@@ -86,6 +92,45 @@ class OutboundReturnKoliTest extends TestCase
 
         $response->assertStatus(422)
             ->assertJsonValidationErrors(['items.0.qty', 'items.0.koli']);
+    }
+
+    public function test_store_return_rejects_when_selected_warehouse_stock_is_short(): void
+    {
+        $this->createWarehouseFixtures();
+        $user = User::factory()->create();
+        $supplier = Supplier::create(['name' => 'Supplier Retur']);
+        $item = Item::create([
+            'sku' => 'SKU-OUT-RET-STOCK',
+            'name' => 'Item Retur Stok Kurang',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+            'koli_qty' => 12,
+        ]);
+        ItemStock::create([
+            'item_id' => $item->id,
+            'warehouse_id' => WarehouseService::displayWarehouseId(),
+            'stock' => 11,
+        ]);
+
+        $response = $this->actingAs($user)
+            ->withoutMiddleware()
+            ->postJson(route('admin.outbound.returns.store'), [
+                'supplier_id' => $supplier->id,
+                'transacted_at' => now()->format('Y-m-d H:i'),
+                'items' => [
+                    [
+                        'item_id' => $item->id,
+                        'qty' => 12,
+                        'koli' => 1,
+                    ],
+                ],
+            ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['qty'])
+            ->assertJsonPath('errors.qty.0', 'Stok tidak mencukupi untuk SKU SKU-OUT-RET-STOCK. Tersedia 11, dibutuhkan 12.');
+
+        $this->assertDatabaseCount('outbound_transactions', 0);
     }
 
     public function test_show_return_includes_derived_koli_for_edit_form(): void

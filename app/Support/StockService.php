@@ -135,6 +135,31 @@ class StockService
             ->value('stock') ?? 0);
     }
 
+    public static function assertSellableAvailable(iterable $rows, int $warehouseId): void
+    {
+        $requirements = BundleService::expandItemRows($rows);
+        if (empty($requirements)) {
+            return;
+        }
+
+        $itemIds = collect($requirements)->pluck('item_id')->unique()->values()->all();
+        $stocks = ItemStock::query()
+            ->where('warehouse_id', $warehouseId)
+            ->whereIn('item_id', $itemIds)
+            ->get(['item_id', 'stock'])
+            ->keyBy('item_id');
+
+        foreach ($requirements as $requirement) {
+            $available = (int) ($stocks->get((int) $requirement['item_id'])?->stock ?? 0);
+            $required = (int) $requirement['qty'];
+            if ($available < $required) {
+                throw ValidationException::withMessages([
+                    'qty' => "Stok tidak mencukupi untuk SKU {$requirement['sku']}. Tersedia {$available}, dibutuhkan {$required}.",
+                ]);
+            }
+        }
+    }
+
     public static function depleteSellableRows(iterable $rows, int $warehouseId, array $context = []): void
     {
         $requirements = BundleService::expandItemRows($rows);

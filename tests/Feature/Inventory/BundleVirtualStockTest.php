@@ -155,8 +155,7 @@ class BundleVirtualStockTest extends TestCase
         ]);
 
         $this->withoutMiddleware();
-        $this->actingAs($user)
-            ->postJson(route('admin.outbound.manuals.approve', $transaction->id))
+        $this->completeManualOutboundQc($user, $transaction, $bundle->sku, 3)
             ->assertOk();
 
         $this->assertDatabaseHas('item_stocks', [
@@ -263,8 +262,7 @@ class BundleVirtualStockTest extends TestCase
         ]);
 
         $this->withoutMiddleware();
-        $this->actingAs($user)
-            ->postJson(route('admin.outbound.manuals.approve', $transaction->id))
+        $this->completeManualOutboundQc($user, $transaction, $bundle->sku, 3)
             ->assertStatus(422)
             ->assertJsonPath('errors.qty.0', 'Stok tidak mencukupi untuk SKU CMP-FAIL-B.');
 
@@ -442,8 +440,7 @@ class BundleVirtualStockTest extends TestCase
         ]);
 
         $this->withoutMiddleware();
-        $this->actingAs($user)
-            ->postJson(route('admin.outbound.manuals.approve', $transaction->id))
+        $this->completeManualOutboundQc($user, $transaction, $bundle->sku, 2)
             ->assertOk();
 
         $mutation = StockMutation::query()->where('reference_item_id', $bundle->id)->firstOrFail();
@@ -468,5 +465,33 @@ class BundleVirtualStockTest extends TestCase
             ['code' => 'GUDANG_DISPLAY'],
             ['name' => 'Gudang Display']
         );
+    }
+
+    private function completeManualOutboundQc(User $user, OutboundTransaction $transaction, string $sku, int $qty)
+    {
+        $this->actingAs($user)
+            ->postJson(route('admin.outbound.manuals.approve', $transaction->id))
+            ->assertOk();
+
+        $openResponse = $this->actingAs($user)
+            ->postJson(route('admin.outbound.manual-qc.open'), [
+                'transaction_id' => $transaction->id,
+            ])
+            ->assertOk();
+
+        $sessionId = $openResponse->json('transaction.session.id');
+
+        $this->actingAs($user)
+            ->postJson(route('admin.outbound.manual-qc.scan-sku'), [
+                'session_id' => $sessionId,
+                'code' => $sku,
+                'qty' => $qty,
+            ])
+            ->assertOk();
+
+        return $this->actingAs($user)
+            ->postJson(route('admin.outbound.manual-qc.complete'), [
+                'session_id' => $sessionId,
+            ]);
     }
 }

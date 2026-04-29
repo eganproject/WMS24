@@ -411,7 +411,7 @@
             if (status && statusLabels?.[status]) {
                 const klass = status === 'completed' || status === 'approved'
                     ? 'badge-light-success'
-                    : (status === 'scanning' ? 'badge-light-primary' : 'badge-light-warning');
+                    : (status === 'scanning' || status === 'qc_scanning' ? 'badge-light-primary' : 'badge-light-warning');
                 return `<span class="badge ${klass}">${statusLabels[status]}</span>`;
             }
             if (status === 'approved') return '<span class="badge badge-light-success">Disetujui</span>';
@@ -439,10 +439,18 @@
 
         const renderScanProgress = (progress) => {
             const expectedKoli = Number(progress?.expected_koli || 0);
+            const expectedQty = Number(progress?.expected_qty || 0);
+            if (!expectedKoli && expectedQty) {
+                const scannedQtyOnly = Number(progress?.scanned_qty || 0);
+                const qtyDone = scannedQtyOnly >= expectedQty;
+                const qtyKlass = qtyDone
+                    ? 'badge-light-success'
+                    : (scannedQtyOnly > 0 ? 'badge-light-primary' : 'badge-light-warning');
+                return `<div><span class="badge ${qtyKlass}">Qty ${scannedQtyOnly}/${expectedQty}</span></div>`;
+            }
             if (!expectedKoli) return '-';
 
             const scannedKoli = Number(progress?.scanned_koli || 0);
-            const expectedQty = Number(progress?.expected_qty || 0);
             const scannedQty = Number(progress?.scanned_qty || 0);
             const isDone = scannedKoli >= expectedKoli;
             const klass = isDone

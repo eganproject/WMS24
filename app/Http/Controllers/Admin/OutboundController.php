@@ -11,6 +11,7 @@ use App\Models\Warehouse;
 use App\Models\StockMutation;
 use App\Imports\OutboundReturnsImport;
 use App\Support\BundleService;
+use App\Support\OutboundManualQcStatus;
 use App\Support\OutboundKoliExpectation;
 use App\Support\StockService;
 use App\Support\Permission;
@@ -373,6 +374,12 @@ class OutboundController extends Controller
                 'manual' => 'Import Manual Outbound',
                 default => null,
             },
+            'statusLabels' => $type === 'manual' ? OutboundManualQcStatus::labels() : [],
+            'lockedStatuses' => $type === 'manual' ? OutboundManualQcStatus::lockedForEdit() : ['approved'],
+            'deleteWarningText' => $type === 'manual'
+                ? 'Data outbound manual akan dihapus jika belum masuk tahap QC.'
+                : 'Data akan dihapus dan stok akan dikembalikan',
+            'showScanProgressColumn' => $type === 'manual',
         ]);
     }
 
@@ -390,7 +397,7 @@ class OutboundController extends Controller
         }
 
         $query = OutboundTransaction::query()
-            ->with(['items.item', 'creator', 'warehouse', 'supplier'])
+            ->with(['items.item', 'creator', 'warehouse', 'supplier', 'qcSession.items'])
             ->select([
                 'outbound_transactions.id',
                 'outbound_transactions.code',
@@ -456,6 +463,17 @@ class OutboundController extends Controller
             })->filter()->values();
             $itemLabel = $labels->implode(', ');
             $totalQty = (int) $items->sum('qty');
+            $qcItems = $row->qcSession?->items ?? collect();
+            $scanProgress = null;
+            if (($row->type ?? '') === 'manual') {
+                $scanProgress = [
+                    'expected_qty' => $qcItems->isNotEmpty() ? (int) $qcItems->sum('expected_qty') : $totalQty,
+                    'scanned_qty' => $qcItems->isNotEmpty()
+                        ? (int) $qcItems->sum('scanned_qty')
+                        : (($row->status ?? '') === OutboundManualQcStatus::APPROVED ? $totalQty : 0),
+                ];
+            }
+
             return [
                 'id' => $row->id,
                 'code' => $row->code,
@@ -469,6 +487,7 @@ class OutboundController extends Controller
                 'note' => $row->note ?? '',
                 'type' => $row->type,
                 'status' => $row->status ?? 'pending',
+                'scan_progress' => $scanProgress,
             ];
         });
 
@@ -614,9 +633,9 @@ class OutboundController extends Controller
         DB::beginTransaction();
         try {
             $tx = OutboundTransaction::where('type', $type)->findOrFail($id);
-            if (($tx->status ?? 'pending') === 'approved') {
+            if (in_array($tx->status ?? 'pending', $this->lockedStatusesFor($type), true)) {
                 DB::rollBack();
-                return response()->json(['message' => 'Data sudah disetujui dan tidak bisa diubah'], 422);
+                return response()->json(['message' => 'Data sudah masuk tahap QC/selesai dan tidak bisa diubah'], 422);
             }
 
             StockService::rollbackBySource('outbound', $tx->id);
@@ -662,9 +681,9 @@ class OutboundController extends Controller
         DB::beginTransaction();
         try {
             $tx = OutboundTransaction::where('type', $type)->findOrFail($id);
-            if (($tx->status ?? 'pending') === 'approved') {
+            if (in_array($tx->status ?? 'pending', $this->lockedStatusesFor($type), true)) {
                 DB::rollBack();
-                return response()->json(['message' => 'Data sudah disetujui dan tidak bisa dihapus'], 422);
+                return response()->json(['message' => 'Data sudah masuk tahap QC/selesai dan tidak bisa dihapus'], 422);
             }
 
             StockService::rollbackBySource('outbound', $tx->id);
@@ -703,6 +722,27 @@ class OutboundController extends Controller
             if (($tx->status ?? 'pending') === 'approved') {
                 DB::rollBack();
                 return response()->json(['message' => 'Data sudah disetujui']);
+            }
+
+            if ($type === 'manual') {
+                if (($tx->status ?? '') === OutboundManualQcStatus::PENDING_QC) {
+                    DB::rollBack();
+                    return response()->json(['message' => 'Outbound manual sudah menunggu QC.']);
+                }
+
+                if (($tx->status ?? '') === OutboundManualQcStatus::QC_SCANNING) {
+                    DB::rollBack();
+                    return response()->json(['message' => 'Outbound manual sedang diproses QC.']);
+                }
+
+                $tx->status = OutboundManualQcStatus::PENDING_QC;
+                $tx->approved_at = null;
+                $tx->approved_by = null;
+                $tx->save();
+
+                DB::commit();
+
+                return response()->json(['message' => 'Outbound manual masuk tahap QC. Silakan proses di menu QC Manual.']);
             }
 
             $hasMutations = StockMutation::where('source_type', 'outbound')
@@ -862,6 +902,15 @@ class OutboundController extends Controller
             'manual' => 'Manual',
             'return' => 'Retur',
         ];
+    }
+
+    private function lockedStatusesFor(string $type): array
+    {
+        if ($type === 'manual') {
+            return OutboundManualQcStatus::lockedForEdit();
+        }
+
+        return ['approved'];
     }
 
     private function applyDateFilter($query, Request $request): void

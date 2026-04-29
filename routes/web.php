@@ -9,6 +9,7 @@ use App\Http\Controllers\Admin\ItemStockController;
 use App\Http\Controllers\Admin\InboundController;
 use App\Http\Controllers\Admin\InboundScanWorkbenchController;
 use App\Http\Controllers\Admin\OutboundController;
+use App\Http\Controllers\Admin\OutboundManualQcController;
 use App\Http\Controllers\Admin\StockMutationController;
 use App\Http\Controllers\Admin\StockOpnameController;
 use App\Http\Controllers\Admin\StockAdjustmentController;
@@ -334,6 +335,13 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::delete('/manuals/{id}', [OutboundController::class, 'manualsDestroy'])->name('manuals.destroy');
         Route::get('/manuals/{id}/detail', [OutboundController::class, 'manualsDetail'])->name('manuals.detail');
         Route::post('/manuals/{id}/approve', [OutboundController::class, 'manualsApprove'])->name('manuals.approve');
+
+        Route::get('/manual-qc', [OutboundManualQcController::class, 'index'])->name('manual-qc.index');
+        Route::get('/manual-qc/transactions', [OutboundManualQcController::class, 'transactions'])->name('manual-qc.transactions');
+        Route::post('/manual-qc/open', [OutboundManualQcController::class, 'open'])->name('manual-qc.open');
+        Route::post('/manual-qc/scan-sku', [OutboundManualQcController::class, 'scanSku'])->name('manual-qc.scan-sku');
+        Route::post('/manual-qc/complete', [OutboundManualQcController::class, 'complete'])->name('manual-qc.complete');
+        Route::post('/manual-qc/reset', [OutboundManualQcController::class, 'reset'])->name('manual-qc.reset');
 
         Route::get('/returns', [OutboundController::class, 'returns'])->name('returns.index');
         Route::get('/returns/data', [OutboundController::class, 'returnsData'])->name('returns.data');

@@ -33,6 +33,11 @@ class OutboundTransaction extends Model
         return $this->hasMany(OutboundItem::class, 'outbound_transaction_id');
     }
 
+    public function qcSession()
+    {
+        return $this->hasOne(OutboundQcSession::class, 'outbound_transaction_id');
+    }
+
     public function warehouse()
     {
         return $this->belongsTo(Warehouse::class, 'warehouse_id');

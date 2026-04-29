@@ -139,6 +139,7 @@ class ActivityLogDescription
             'admin.outbound.pickers' => 'Outbound Picker',
             'admin.outbound.manuals' => 'Outbound Manual',
             'admin.outbound.returns' => 'Retur Outbound',
+            'admin.outbound.manual-qc' => 'QC Manual Outbound',
             'admin.outbound.qc-scan' => 'QC Outbound',
             'admin.outbound.qc-scan-exceptions' => 'Exception QC Outbound',
             'picker.inbound-scan' => 'Scan Inbound Mobile',

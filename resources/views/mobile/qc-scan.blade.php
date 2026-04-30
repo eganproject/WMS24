@@ -179,6 +179,7 @@
             <div class="subtitle">QC Resi</div>
         </div>
         <div class="topbar-actions">
+            <a href="{{ $routes['desktopQcScan'] }}" class="logout">Versi Desktop</a>
             <a href="{{ $routes['dashboard'] }}" class="logout">Dashboard</a>
             <form method="POST" action="{{ $routes['logout'] }}">
                 @csrf

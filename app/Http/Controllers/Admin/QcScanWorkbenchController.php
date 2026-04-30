@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Http\Controllers\Picker\QcScanController as BaseQcScanController;
+use App\Http\Controllers\Mobile\QcScanController as BaseQcScanController;
 
 class QcScanWorkbenchController extends BaseQcScanController
 {

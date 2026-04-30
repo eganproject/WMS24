@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Picker;
+namespace App\Http\Controllers\Mobile;
 
 use App\Http\Controllers\Controller;
 use App\Models\QcResiScan;
@@ -23,15 +23,16 @@ class QcScanController extends Controller
 {
     public function index()
     {
-        return view('picker.qc-scan', [
+        return view('mobile.qc-scan', [
             'routes' => [
-                'dashboard' => route('picker.dashboard'),
-                'scanResi' => route('picker.qc.scan'),
-                'scanSku' => route('picker.qc.scan-sku'),
-                'hold' => route('picker.qc.hold'),
-                'complete' => route('picker.qc.complete'),
-                'reset' => route('picker.qc.reset'),
+                'dashboard' => route('mobile.dashboard'),
+                'scanResi' => route('mobile.qc.scan'),
+                'scanSku' => route('mobile.qc.scan-sku'),
+                'hold' => route('mobile.qc.hold'),
+                'complete' => route('mobile.qc.complete'),
+                'reset' => route('mobile.qc.reset'),
                 'logout' => route('logout'),
+                'desktopQcScan' => route('admin.outbound.qc-scan.index'),
             ],
         ]);
     }
@@ -106,7 +107,7 @@ class QcScanController extends Controller
                 ->lockForUpdate()
                 ->first();
 
-            if ($qc && ($qc->status ?? '') === QcTransitStatus::PASSED) {
+            if ($qc && !in_array($qc->status, [QcTransitStatus::DRAFT, QcTransitStatus::HOLD], true)) {
                 DB::rollBack();
                 return response()->json([
                     'message' => 'Resi sudah QC selesai.',
@@ -195,7 +196,7 @@ class QcScanController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            if (($qc->status ?? '') === QcTransitStatus::PASSED) {
+            if (!in_array($qc->status, [QcTransitStatus::DRAFT, QcTransitStatus::HOLD], true)) {
                 DB::rollBack();
                 return response()->json([
                     'message' => 'QC sudah selesai, tidak bisa scan ulang.',
@@ -302,7 +303,7 @@ class QcScanController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            if (($qc->status ?? '') === QcTransitStatus::PASSED) {
+            if (!in_array($qc->status, [QcTransitStatus::DRAFT, QcTransitStatus::HOLD], true)) {
                 DB::rollBack();
                 return response()->json([
                     'message' => 'QC sudah selesai, tidak bisa dilewatkan.',
@@ -349,11 +350,18 @@ class QcScanController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            if (($qc->status ?? '') === QcTransitStatus::PASSED) {
+            if (!in_array($qc->status, [QcTransitStatus::DRAFT, QcTransitStatus::HOLD], true)) {
                 DB::rollBack();
                 return response()->json([
                     'message' => 'QC sudah selesai sebelumnya.',
                 ]);
+            }
+
+            if (ShipmentScanOut::where('resi_id', $qc->resi_id)->exists()) {
+                DB::rollBack();
+                return response()->json([
+                    'message' => 'Resi sudah scan out, QC tidak bisa diselesaikan ulang.',
+                ], 422);
             }
 
             $items = QcResiScanItem::where('qc_resi_scan_id', $qc->id)->get();
@@ -468,7 +476,7 @@ class QcScanController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            if (($qc->status ?? '') === QcTransitStatus::PASSED) {
+            if (!in_array($qc->status, [QcTransitStatus::DRAFT, QcTransitStatus::HOLD], true)) {
                 DB::rollBack();
                 return response()->json([
                     'message' => 'QC sudah selesai, tidak bisa direset.',

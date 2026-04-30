@@ -37,7 +37,7 @@ class AuthenticatedSessionController extends Controller
             $hasInboundScan = $roles->contains('inbound-scan');
             $hasOtherRoles = $roles->diff(['picker', 'admin-scan', 'qc', 'inbound-scan'])->isNotEmpty();
             if (!$hasOtherRoles && ($hasPicker || $hasAdminScan || $hasQc || $hasInboundScan)) {
-                return redirect()->route('picker.dashboard');
+                return redirect()->route('mobile.dashboard');
             }
         }
 

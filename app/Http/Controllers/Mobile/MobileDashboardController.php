@@ -1,10 +1,10 @@
 <?php
 
-namespace App\Http\Controllers\Picker;
+namespace App\Http\Controllers\Mobile;
 
 use App\Http\Controllers\Controller;
 
-class PickerDashboardController extends Controller
+class MobileDashboardController extends Controller
 {
     public function index()
     {
@@ -16,13 +16,13 @@ class PickerDashboardController extends Controller
         $hasInboundScan = $roles->contains('inbound-scan');
         $hasOtherRoles = $roles->diff(['picker', 'admin-scan', 'qc', 'inbound-scan'])->isNotEmpty();
 
-        return view('picker.dashboard', [
+        return view('mobile.dashboard', [
             'routes' => [
                 'opname' => route('opname.index'),
-                'inboundScan' => route('picker.inbound-scan.index'),
-                'qc' => route('picker.qc.index'),
-                'scanOut' => route('picker.scan-out.index'),
-                'pickingList' => route('picker.picking-list.index'),
+                'inboundScan' => route('mobile.inbound-scan.index'),
+                'qc' => route('mobile.qc.index'),
+                'scanOut' => route('mobile.scan-out.index'),
+                'pickingList' => route('mobile.picking-list.index'),
                 'logout' => route('logout'),
             ],
             'showInboundScan' => $hasInboundScan || $hasOtherRoles,

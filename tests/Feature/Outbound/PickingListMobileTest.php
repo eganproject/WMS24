@@ -31,7 +31,7 @@ class PickingListMobileTest extends TestCase
         ]);
 
         $response = $this->actingAs($user)
-            ->getJson(route('picker.picking-list.data', ['date' => now()->toDateString()]));
+            ->getJson(route('mobile.picking-list.data', ['date' => now()->toDateString()]));
 
         $response
             ->assertOk()
@@ -45,10 +45,10 @@ class PickingListMobileTest extends TestCase
         $user = $this->createUserWithRole('picker');
 
         $this->actingAs($user)
-            ->get(route('picker.picking-list.index'))
+            ->get(route('mobile.picking-list.index'))
             ->assertOk()
             ->assertDontSee('data-action="pick"', false)
-            ->assertSee('Menampilkan sisa qty picking list terbaru untuk monitoring picker.');
+            ->assertSee('Menampilkan sisa qty picking list terbaru untuk monitoring mobile.');
     }
 
     public function test_picker_mobile_list_filters_items_by_user_area_assignment(): void
@@ -97,7 +97,7 @@ class PickingListMobileTest extends TestCase
         $user->save();
 
         $this->actingAs($user)
-            ->getJson(route('picker.picking-list.data', [
+            ->getJson(route('mobile.picking-list.data', [
                 'date' => now()->toDateString(),
                 'area_id' => $areaA->id,
             ]))
@@ -152,7 +152,7 @@ class PickingListMobileTest extends TestCase
         $user = $this->createUserWithRole('picker');
 
         $this->actingAs($user)
-            ->getJson(route('picker.picking-list.data', ['date' => now()->toDateString()]))
+            ->getJson(route('mobile.picking-list.data', ['date' => now()->toDateString()]))
             ->assertOk()
             ->assertJsonCount(2, 'items');
     }

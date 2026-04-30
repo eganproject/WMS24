@@ -40,11 +40,11 @@ use App\Http\Controllers\Admin\LocationController;
 use App\Http\Controllers\Admin\KurirController;
 use App\Http\Controllers\Admin\SupplierController;
 use App\Http\Controllers\Mobile\StockOpnameMobileController;
-use App\Http\Controllers\Picker\PickerDashboardController;
-use App\Http\Controllers\Picker\InboundScanController;
-use App\Http\Controllers\Picker\ScanOutController;
-use App\Http\Controllers\Picker\QcScanController;
-use App\Http\Controllers\Picker\PickingListMobileController;
+use App\Http\Controllers\Mobile\MobileDashboardController;
+use App\Http\Controllers\Mobile\InboundScanController;
+use App\Http\Controllers\Mobile\ScanOutController;
+use App\Http\Controllers\Mobile\QcScanController;
+use App\Http\Controllers\Mobile\PickingListMobileController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 
@@ -75,8 +75,8 @@ Route::middleware('auth')->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
-Route::middleware('auth')->prefix('picker')->as('picker.')->group(function () {
-    Route::get('/dashboard', [PickerDashboardController::class, 'index'])->name('dashboard');
+Route::middleware('auth')->prefix('mobile')->as('mobile.')->group(function () {
+    Route::get('/dashboard', [MobileDashboardController::class, 'index'])->name('dashboard');
     Route::get('/inbound-scan', [InboundScanController::class, 'index'])->name('inbound-scan.index');
     Route::get('/inbound-scan/transactions', [InboundScanController::class, 'transactions'])->name('inbound-scan.transactions');
     Route::post('/inbound-scan/open', [InboundScanController::class, 'open'])->name('inbound-scan.open');

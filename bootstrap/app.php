@@ -20,12 +20,22 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'activity.log' => \App\Http\Middleware\LogUserActivity::class,
             'menu.permission' => \App\Http\Middleware\AuthorizeMenuPermission::class,
-            'restrict.picker' => \App\Http\Middleware\RestrictPickerAccess::class,
+            'restrict.mobile' => \App\Http\Middleware\RestrictMobileAccess::class,
         ]);
 
-        $middleware->appendToGroup('web', 'restrict.picker');
+        $middleware->validateCsrfTokens(except: [
+            'logout',
+        ]);
+
+        $middleware->appendToGroup('web', 'restrict.mobile');
         $middleware->appendToGroup('web', 'activity.log');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        $exceptions->render(function (\Illuminate\Session\TokenMismatchException $_, \Illuminate\Http\Request $request) {
+            if ($request->expectsJson()) {
+                return response()->json(['message' => 'Sesi habis. Silakan login kembali.'], 419);
+            }
+
+            return redirect()->route('login')->withErrors(['session' => 'Sesi habis. Silakan login kembali.']);
+        });
     })->create();

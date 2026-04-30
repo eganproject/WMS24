@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Picker;
+namespace App\Http\Controllers\Mobile;
 
 use App\Http\Controllers\Controller;
 use App\Models\Area;
@@ -22,10 +22,10 @@ class PickingListMobileController extends Controller
             $areaQuery->whereKey((int) $authUser->area_id);
         }
 
-        return view('picker.picking-list', [
+        return view('mobile.picking-list', [
             'routes' => [
-                'dashboard' => route('picker.dashboard'),
-                'data' => route('picker.picking-list.data'),
+                'dashboard' => route('mobile.dashboard'),
+                'data' => route('mobile.picking-list.data'),
                 'logout' => route('logout'),
             ],
             'areas' => $areaQuery->get(['id', 'code', 'name']),

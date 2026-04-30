@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Picker;
+namespace App\Http\Controllers\Mobile;
 
 use App\Http\Controllers\Controller;
 use App\Models\InboundScanSession;
@@ -16,14 +16,14 @@ class InboundScanController extends Controller
 {
     public function index()
     {
-        return view('picker.inbound-scan', [
+        return view('mobile.inbound-scan', [
             'routes' => [
-                'dashboard' => route('picker.dashboard'),
-                'search' => route('picker.inbound-scan.transactions'),
-                'open' => route('picker.inbound-scan.open'),
-                'scanSku' => route('picker.inbound-scan.scan-sku'),
-                'complete' => route('picker.inbound-scan.complete'),
-                'reset' => route('picker.inbound-scan.reset'),
+                'dashboard' => route('mobile.dashboard'),
+                'search' => route('mobile.inbound-scan.transactions'),
+                'open' => route('mobile.inbound-scan.open'),
+                'scanSku' => route('mobile.inbound-scan.scan-sku'),
+                'complete' => route('mobile.inbound-scan.complete'),
+                'reset' => route('mobile.inbound-scan.reset'),
                 'logout' => route('logout'),
             ],
         ]);
@@ -282,25 +282,46 @@ class InboundScanController extends Controller
 
             $variance = [];
             foreach ($items as $item) {
-                if ((int) $item->scanned_koli !== (int) $item->expected_koli || (int) $item->scanned_qty !== (int) $item->expected_qty) {
+                $scannedKoli = (int) $item->scanned_koli;
+                $expectedKoli = (int) $item->expected_koli;
+                $scannedQty = (int) $item->scanned_qty;
+                $expectedQty = (int) $item->expected_qty;
+                if ($scannedKoli !== $expectedKoli || $scannedQty !== $expectedQty) {
+                    $type = match (true) {
+                        $scannedKoli === 0 => 'not_received',
+                        $scannedKoli > $expectedKoli => 'over',
+                        default => 'under',
+                    };
                     $variance[] = [
                         'sku' => $item->sku,
-                        'expected_koli' => (int) $item->expected_koli,
-                        'scanned_koli' => (int) $item->scanned_koli,
-                        'expected_qty' => (int) $item->expected_qty,
-                        'scanned_qty' => (int) $item->scanned_qty,
-                        'diff_koli' => (int) $item->scanned_koli - (int) $item->expected_koli,
-                        'diff_qty' => (int) $item->scanned_qty - (int) $item->expected_qty,
+                        'type' => $type,
+                        'expected_koli' => $expectedKoli,
+                        'scanned_koli' => $scannedKoli,
+                        'expected_qty' => $expectedQty,
+                        'scanned_qty' => $scannedQty,
+                        'diff_koli' => $scannedKoli - $expectedKoli,
+                        'diff_qty' => $scannedQty - $expectedQty,
                     ];
                 }
             }
 
             if (!empty($variance) && empty($validated['confirm_variance'])) {
+                $counts = collect($variance)->countBy('type');
+                $parts = array_filter([
+                    ($counts['not_received'] ?? 0) > 0 ? ($counts['not_received']).' SKU tidak diterima sama sekali' : null,
+                    ($counts['under'] ?? 0) > 0 ? ($counts['under']).' SKU kurang dari surat jalan' : null,
+                    ($counts['over'] ?? 0) > 0 ? ($counts['over']).' SKU melebihi surat jalan' : null,
+                ]);
+                $message = implode(', ', $parts).'. Jika dilanjutkan, stok masuk sesuai hasil scan fisik.';
+
+                $order = ['not_received' => 0, 'under' => 1, 'over' => 2];
+                usort($variance, fn ($a, $b) => ($order[$a['type']] ?? 9) <=> ($order[$b['type']] ?? 9));
+
                 DB::rollBack();
                 return response()->json([
-                    'message' => 'Ada selisih antara surat jalan dan hasil scan. Jika dilanjutkan, stok akan masuk sesuai hasil scan.',
+                    'message' => $message,
                     'action' => 'confirm_variance',
-                    'details' => $variance,
+                    'details' => array_values($variance),
                 ], 409);
             }
 

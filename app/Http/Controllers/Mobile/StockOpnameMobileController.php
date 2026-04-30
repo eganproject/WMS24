@@ -21,7 +21,7 @@ class StockOpnameMobileController extends Controller
     {
         return view('mobile.stock-opname.index', [
             'routes' => [
-                'dashboard' => route('picker.dashboard'),
+                'dashboard' => route('mobile.dashboard'),
                 'batchCreate' => route('opname.batch.create'),
                 'batchShow' => route('opname.batch.show', '__CODE__'),
                 'batchComplete' => route('opname.batch.complete', '__CODE__'),

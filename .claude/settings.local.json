@@ -8,7 +8,10 @@
       "Bash(cp \"C:/Windows/Fonts/arialbd.ttf\" \"c:/laragon/www/wms24/resources/fonts/bold.ttf\")",
       "Bash(cp \"C:/Windows/Fonts/arial.ttf\" \"c:/laragon/www/wms24/resources/fonts/regular.ttf\")",
       "Bash(php -r ' *)",
-      "Bash(xargs grep *)"
+      "Bash(xargs grep *)",
+      "Bash(sed 's|namespace App\\\\\\\\Http\\\\\\\\Controllers\\\\\\\\Picker;|namespace App\\\\\\\\Http\\\\\\\\Controllers\\\\\\\\Mobile;|g; s|picker\\\\.dashboard|mobile.dashboard|g; s|picker\\\\.inbound-scan\\\\.|mobile.inbound-scan.|g; s|picker\\\\.qc\\\\.|mobile.qc.|g; s|picker\\\\.scan-out\\\\.|mobile.scan-out.|g; s|picker\\\\.picking-list\\\\.|mobile.picking-list.|g; s|view\\(\\\\x27picker\\\\.|view\\(\\\\x27mobile.|g' app/Http/Controllers/Picker/InboundScanController.php)",
+      "Bash(sed 's|namespace App\\\\\\\\Http\\\\\\\\Controllers\\\\\\\\Picker;|namespace App\\\\\\\\Http\\\\\\\\Controllers\\\\\\\\Mobile;|g; s|picker\\\\.dashboard|mobile.dashboard|g; s|picker\\\\.inbound-scan\\\\.|mobile.inbound-scan.|g; s|picker\\\\.qc\\\\.|mobile.qc.|g; s|picker\\\\.scan-out\\\\.|mobile.scan-out.|g; s|picker\\\\.picking-list\\\\.|mobile.picking-list.|g; s|view\\(\\\\x27picker\\\\.|view\\(\\\\x27mobile.|g' app/Http/Controllers/Picker/ScanOutController.php)",
+      "Bash(sed 's|namespace App\\\\\\\\Http\\\\\\\\Controllers\\\\\\\\Picker;|namespace App\\\\\\\\Http\\\\\\\\Controllers\\\\\\\\Mobile;|g; s|picker\\\\.dashboard|mobile.dashboard|g; s|picker\\\\.inbound-scan\\\\.|mobile.inbound-scan.|g; s|picker\\\\.qc\\\\.|mobile.qc.|g; s|picker\\\\.scan-out\\\\.|mobile.scan-out.|g; s|picker\\\\.picking-list\\\\.|mobile.picking-list.|g; s|view\\(\\\\x27picker\\\\.|view\\(\\\\x27mobile.|g' app/Http/Controllers/Picker/PickingListMobileController.php)"
     ]
   }
 }

@@ -6,7 +6,7 @@ use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
-class RestrictPickerAccess
+class RestrictMobileAccess
 {
     public function handle(Request $request, Closure $next): Response
     {
@@ -32,19 +32,21 @@ class RestrictPickerAccess
         $routeName = $request->route()?->getName() ?? '';
         $path = trim($request->path(), '/');
 
-        $isDashboardRoute = $routeName === 'picker.dashboard' || $path === 'picker/dashboard';
-        $isQcRoute = str_starts_with($routeName, 'picker.qc') || str_starts_with($path, 'picker/qc');
-        $isInboundScanRoute = str_starts_with($routeName, 'picker.inbound-scan')
-            || str_starts_with($path, 'picker/inbound-scan');
-        $isScanOutRoute = str_starts_with($routeName, 'picker.scan-out')
-            || str_starts_with($path, 'picker/scan-out');
-        $isPickingListRoute = (str_starts_with($routeName, 'picker.') || str_starts_with($path, 'picker'))
+        $isDashboardRoute = $routeName === 'mobile.dashboard' || $path === 'mobile/dashboard';
+        $isQcRoute = str_starts_with($routeName, 'mobile.qc') || str_starts_with($path, 'mobile/qc');
+        $isInboundScanRoute = str_starts_with($routeName, 'mobile.inbound-scan')
+            || str_starts_with($path, 'mobile/inbound-scan');
+        $isScanOutRoute = str_starts_with($routeName, 'mobile.scan-out')
+            || str_starts_with($path, 'mobile/scan-out');
+        $isPickingListRoute = (str_starts_with($routeName, 'mobile.') || str_starts_with($path, 'mobile'))
             && !$isInboundScanRoute
             && !$isQcRoute
             && !$isScanOutRoute
             && !$isDashboardRoute;
         $isOpnameRoute = str_starts_with($routeName, 'opname.') || str_starts_with($path, 'opname');
         $isLogoutRoute = $routeName === 'logout';
+        $isDesktopQcRoute = str_starts_with($routeName, 'admin.outbound.qc-scan.')
+            || str_starts_with($path, 'admin/outbound/qc-scan');
 
         if ($isDashboardRoute || $isLogoutRoute || $isOpnameRoute) {
             return $next($request);
@@ -54,7 +56,7 @@ class RestrictPickerAccess
         if ($hasPicker && $isPickingListRoute) {
             $allowed = true;
         }
-        if ($hasQc && $isQcRoute) {
+        if ($hasQc && ($isQcRoute || $isDesktopQcRoute)) {
             $allowed = true;
         }
         if ($hasInboundScan && $isInboundScanRoute) {
@@ -74,6 +76,6 @@ class RestrictPickerAccess
             ], 403);
         }
 
-        return redirect()->route('picker.dashboard');
+        return redirect()->route('mobile.dashboard');
     }
 }

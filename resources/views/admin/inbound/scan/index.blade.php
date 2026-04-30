@@ -893,9 +893,20 @@
                 const diffLine = diffKoli || diffQty
                     ? `<div style="color:#c2410c; font-size:12px;">Selisih koli ${diffKoli > 0 ? '+' : ''}${diffKoli} | qty ${diffQty > 0 ? '+' : ''}${diffQty}</div>`
                     : '';
+                let badge = '', rowStyle = '';
+                if (row.type === 'not_received') {
+                    badge = '<span style="background:#fee2e2;color:#b91c1c;font-size:11px;padding:1px 6px;border-radius:4px;font-weight:700;margin-right:4px;">TIDAK DITERIMA</span>';
+                    rowStyle = 'border-left:3px solid #ef4444;padding-left:6px;';
+                } else if (row.type === 'over') {
+                    badge = '<span style="background:#dbeafe;color:#1d4ed8;font-size:11px;padding:1px 6px;border-radius:4px;font-weight:700;margin-right:4px;">LEBIH</span>';
+                    rowStyle = 'border-left:3px solid #3b82f6;padding-left:6px;';
+                } else if (row.type === 'under') {
+                    badge = '<span style="background:#ffedd5;color:#c2410c;font-size:11px;padding:1px 6px;border-radius:4px;font-weight:700;margin-right:4px;">KURANG</span>';
+                    rowStyle = 'border-left:3px solid #f97316;padding-left:6px;';
+                }
                 return `
-                    <li style="margin-bottom:8px;">
-                        <strong>${escapeHtml(row.sku || '-')}</strong>
+                    <li style="margin-bottom:8px;${rowStyle}">
+                        ${badge}<strong>${escapeHtml(row.sku || '-')}</strong>
                         <div style="color:#64748b; font-size:12px;">Koli ${row.scanned_koli ?? 0}/${row.expected_koli ?? 0}</div>
                         <div style="color:#64748b; font-size:12px;">Qty ${row.scanned_qty ?? 0}/${row.expected_qty ?? 0}</div>
                         ${diffLine}

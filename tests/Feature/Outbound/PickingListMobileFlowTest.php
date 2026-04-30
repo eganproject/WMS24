@@ -50,7 +50,7 @@ class PickingListMobileFlowTest extends TestCase
             'note' => 'SKU dikecualikan dari picking list mobile',
         ]);
 
-        $response = $this->actingAs($pickerUser)->getJson(route('picker.picking-list.data', [
+        $response = $this->actingAs($pickerUser)->getJson(route('mobile.picking-list.data', [
             'date' => $today,
             'per_page' => 10,
         ]));

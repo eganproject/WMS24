@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Picker;
+namespace App\Http\Controllers\Mobile;
 
 use App\Http\Controllers\Controller;
 use App\Models\Kurir;
@@ -15,11 +15,11 @@ class ScanOutController extends Controller
 {
     public function index()
     {
-        return view('picker.scan-out', [
+        return view('mobile.scan-out', [
             'routes' => [
-                'dashboard' => route('picker.dashboard'),
-                'scan' => route('picker.scan-out.scan'),
-                'history' => route('picker.scan-out.history'),
+                'dashboard' => route('mobile.dashboard'),
+                'scan' => route('mobile.scan-out.scan'),
+                'history' => route('mobile.scan-out.history'),
                 'logout' => route('logout'),
             ],
         ]);
@@ -27,11 +27,11 @@ class ScanOutController extends Controller
 
     public function history()
     {
-        return view('picker.scan-out-history', [
+        return view('mobile.scan-out-history', [
             'routes' => [
-                'dashboard' => route('picker.dashboard'),
-                'scanOut' => route('picker.scan-out.index'),
-                'data' => route('picker.scan-out.history-data'),
+                'dashboard' => route('mobile.dashboard'),
+                'scanOut' => route('mobile.scan-out.index'),
+                'data' => route('mobile.scan-out.history-data'),
                 'logout' => route('logout'),
             ],
             'today' => now()->toDateString(),
@@ -114,6 +114,19 @@ class ScanOutController extends Controller
 
         DB::beginTransaction();
         try {
+            // Lock QcResiScan first — this record always exists after QC started
+            $qc = QcResiScan::query()
+                ->where('resi_id', $resi->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$qc || $qc->status !== QcTransitStatus::PASSED) {
+                DB::rollBack();
+                return response()->json([
+                    'message' => 'Resi belum lolos QC dan belum siap scan out.',
+                ], 422);
+            }
+
             $existingScan = ShipmentScanOut::where('resi_id', $resi->id)
                 ->lockForUpdate()
                 ->first();
@@ -121,18 +134,6 @@ class ScanOutController extends Controller
                 DB::rollBack();
                 return response()->json([
                     'message' => 'Resi sudah discan keluar.',
-                ], 422);
-            }
-
-            $qc = QcResiScan::query()
-                ->where('resi_id', $resi->id)
-                ->lockForUpdate()
-                ->first();
-
-            if (!$qc || ($qc->status ?? '') !== QcTransitStatus::PASSED) {
-                DB::rollBack();
-                return response()->json([
-                    'message' => 'Resi belum lolos QC dan belum siap scan out.',
                 ], 422);
             }
 
@@ -155,6 +156,11 @@ class ScanOutController extends Controller
             ]);
 
             DB::commit();
+        } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+            DB::rollBack();
+            return response()->json([
+                'message' => 'Resi sudah discan keluar.',
+            ], 422);
         } catch (\Throwable $e) {
             DB::rollBack();
             return response()->json([

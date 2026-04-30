@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Http\Controllers\Picker\InboundScanController as BaseInboundScanController;
+use App\Http\Controllers\Mobile\InboundScanController as BaseInboundScanController;
 
 class InboundScanWorkbenchController extends BaseInboundScanController
 {

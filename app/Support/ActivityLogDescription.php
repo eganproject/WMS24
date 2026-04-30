@@ -142,9 +142,9 @@ class ActivityLogDescription
             'admin.outbound.manual-qc' => 'QC Manual Outbound',
             'admin.outbound.qc-scan' => 'QC Outbound',
             'admin.outbound.qc-scan-exceptions' => 'Exception QC Outbound',
-            'picker.inbound-scan' => 'Scan Inbound Mobile',
-            'picker.qc' => 'QC Mobile',
-            'picker.scan-out' => 'Scan Out Mobile',
+            'mobile.inbound-scan' => 'Scan Inbound Mobile',
+            'mobile.qc' => 'QC Mobile',
+            'mobile.scan-out' => 'Scan Out Mobile',
             'opname.batch' => 'Batch Stock Opname Mobile',
             'opname.items' => 'Item Stock Opname Mobile',
         ];

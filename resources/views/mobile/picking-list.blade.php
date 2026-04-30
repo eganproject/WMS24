@@ -137,7 +137,7 @@
             <div style="font-weight:700;">Daftar Picking List</div>
             <div class="muted" id="total_items">0 item</div>
         </div>
-        <div class="page-status" id="page_status">Menampilkan sisa qty picking list terbaru untuk monitoring picker.</div>
+        <div class="page-status" id="page_status">Menampilkan sisa qty picking list terbaru untuk monitoring mobile.</div>
         <div class="muted" id="list_empty">Belum ada data.</div>
         <div class="items-list" id="list_items"></div>
         <div class="pagination-bar">
@@ -215,7 +215,7 @@
     const renderList = (items, meta) => {
         const total = meta?.total ?? items.length;
         el.total.textContent = `${total} item`;
-        setPageStatus('Menampilkan sisa qty picking list terbaru untuk monitoring picker.', 'default');
+        setPageStatus('Menampilkan sisa qty picking list terbaru untuk monitoring mobile.', 'default');
         if (!items.length) {
             el.empty.style.display = 'block';
             el.list.innerHTML = '';

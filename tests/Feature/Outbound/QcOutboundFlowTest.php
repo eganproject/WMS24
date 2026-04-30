@@ -47,7 +47,7 @@ class QcOutboundFlowTest extends TestCase
         ]);
 
         $this->actingAs($qcUser)
-            ->postJson(route('picker.qc.scan'), [
+            ->postJson(route('mobile.qc.scan'), [
                 'type' => 'no_resi',
                 'code' => 'RESI-001',
             ])
@@ -57,7 +57,7 @@ class QcOutboundFlowTest extends TestCase
         $qc = QcResiScan::firstOrFail();
 
         $this->actingAs($qcUser)
-            ->postJson(route('picker.qc.scan-sku'), [
+            ->postJson(route('mobile.qc.scan-sku'), [
                 'qc_id' => $qc->id,
                 'code' => 'SKU-001',
                 'qty' => 2,
@@ -66,7 +66,7 @@ class QcOutboundFlowTest extends TestCase
             ->assertJsonPath('qc.summary.total_scanned', 2);
 
         $this->actingAs($qcUser)
-            ->postJson(route('picker.qc.complete'), [
+            ->postJson(route('mobile.qc.complete'), [
                 'qc_id' => $qc->id,
             ])
             ->assertOk()
@@ -98,7 +98,7 @@ class QcOutboundFlowTest extends TestCase
         ]);
 
         $this->actingAs($scanOutUser)
-            ->postJson(route('picker.scan-out.scan'), [
+            ->postJson(route('mobile.scan-out.scan'), [
                 'type' => 'no_resi',
                 'code' => 'RESI-001',
             ])
@@ -139,7 +139,7 @@ class QcOutboundFlowTest extends TestCase
         ]);
 
         $this->actingAs($scanOutUser)
-            ->postJson(route('picker.scan-out.scan'), [
+            ->postJson(route('mobile.scan-out.scan'), [
                 'type' => 'no_resi',
                 'code' => 'RESI-002',
             ])
@@ -147,7 +147,7 @@ class QcOutboundFlowTest extends TestCase
             ->assertJsonPath('message', 'Resi belum lolos QC dan belum siap scan out.');
 
         $this->actingAs($qcUser)
-            ->postJson(route('picker.qc.scan'), [
+            ->postJson(route('mobile.qc.scan'), [
                 'type' => 'no_resi',
                 'code' => 'RESI-002',
             ])
@@ -156,7 +156,7 @@ class QcOutboundFlowTest extends TestCase
         $qc = QcResiScan::where('resi_id', $resi->id)->firstOrFail();
 
         $this->actingAs($qcUser)
-            ->postJson(route('picker.qc.scan-sku'), [
+            ->postJson(route('mobile.qc.scan-sku'), [
                 'qc_id' => $qc->id,
                 'code' => 'SKU-002',
                 'qty' => 1,
@@ -164,14 +164,14 @@ class QcOutboundFlowTest extends TestCase
             ->assertOk();
 
         $this->actingAs($qcUser)
-            ->postJson(route('picker.qc.complete'), [
+            ->postJson(route('mobile.qc.complete'), [
                 'qc_id' => $qc->id,
             ])
             ->assertOk()
             ->assertJsonPath('qc.status', 'passed');
 
         $this->actingAs($scanOutUser)
-            ->postJson(route('picker.scan-out.scan'), [
+            ->postJson(route('mobile.scan-out.scan'), [
                 'type' => 'no_resi',
                 'code' => 'RESI-002',
             ])
@@ -211,7 +211,7 @@ class QcOutboundFlowTest extends TestCase
         ]);
 
         $this->actingAs($qcUser)
-            ->postJson(route('picker.qc.scan'), [
+            ->postJson(route('mobile.qc.scan'), [
                 'type' => 'no_resi',
                 'code' => $resiA->no_resi,
             ])
@@ -220,7 +220,7 @@ class QcOutboundFlowTest extends TestCase
         $qcA = QcResiScan::where('resi_id', $resiA->id)->firstOrFail();
 
         $this->actingAs($qcUser)
-            ->postJson(route('picker.qc.scan-sku'), [
+            ->postJson(route('mobile.qc.scan-sku'), [
                 'qc_id' => $qcA->id,
                 'code' => $item->sku,
                 'qty' => 1,
@@ -228,7 +228,7 @@ class QcOutboundFlowTest extends TestCase
             ->assertOk();
 
         $this->actingAs($qcUser)
-            ->postJson(route('picker.qc.hold'), [
+            ->postJson(route('mobile.qc.hold'), [
                 'qc_id' => $qcA->id,
                 'reason' => 'Menunggu pengecekan fisik',
             ])
@@ -236,7 +236,7 @@ class QcOutboundFlowTest extends TestCase
             ->assertJsonPath('qc.status', 'hold');
 
         $this->actingAs($qcUser)
-            ->postJson(route('picker.qc.scan'), [
+            ->postJson(route('mobile.qc.scan'), [
                 'type' => 'no_resi',
                 'code' => $resiB->no_resi,
             ])
@@ -245,7 +245,7 @@ class QcOutboundFlowTest extends TestCase
         $qcB = QcResiScan::where('resi_id', $resiB->id)->firstOrFail();
 
         $this->actingAs($qcUser)
-            ->postJson(route('picker.qc.scan-sku'), [
+            ->postJson(route('mobile.qc.scan-sku'), [
                 'qc_id' => $qcB->id,
                 'code' => $item->sku,
                 'qty' => 1,
@@ -255,7 +255,7 @@ class QcOutboundFlowTest extends TestCase
             ->assertJsonPath('details.0.available', 0);
 
         $this->actingAs($qcUser)
-            ->postJson(route('picker.qc.reset'), [
+            ->postJson(route('mobile.qc.reset'), [
                 'qc_id' => $qcA->id,
                 'reason' => 'Alokasi dibatalkan',
             ])
@@ -264,7 +264,7 @@ class QcOutboundFlowTest extends TestCase
             ->assertJsonPath('qc.summary.total_scanned', 0);
 
         $this->actingAs($qcUser)
-            ->postJson(route('picker.qc.scan-sku'), [
+            ->postJson(route('mobile.qc.scan-sku'), [
                 'qc_id' => $qcB->id,
                 'code' => $item->sku,
                 'qty' => 1,
@@ -312,7 +312,7 @@ class QcOutboundFlowTest extends TestCase
         ]);
 
         $this->actingAs($qcUser)
-            ->postJson(route('picker.qc.scan'), [
+            ->postJson(route('mobile.qc.scan'), [
                 'type' => 'no_resi',
                 'code' => $resi->no_resi,
             ])
@@ -321,7 +321,7 @@ class QcOutboundFlowTest extends TestCase
         $qc = QcResiScan::where('resi_id', $resi->id)->firstOrFail();
 
         $this->actingAs($qcUser)
-            ->postJson(route('picker.qc.scan-sku'), [
+            ->postJson(route('mobile.qc.scan-sku'), [
                 'qc_id' => $qc->id,
                 'code' => $item->sku,
                 'qty' => 2,
@@ -329,7 +329,7 @@ class QcOutboundFlowTest extends TestCase
             ->assertOk();
 
         $this->actingAs($qcUser)
-            ->postJson(route('picker.qc.complete'), [
+            ->postJson(route('mobile.qc.complete'), [
                 'qc_id' => $qc->id,
             ])
             ->assertOk()
@@ -351,34 +351,34 @@ class QcOutboundFlowTest extends TestCase
         $inboundScanUser = $this->createUserWithRole('inbound-scan');
 
         $this->actingAs($pickerUser)
-            ->get(route('picker.picking-list.index'))
+            ->get(route('mobile.picking-list.index'))
             ->assertOk();
 
         $this->actingAs($qcUser)
-            ->get(route('picker.qc.index'))
+            ->get(route('mobile.qc.index'))
             ->assertOk();
 
         $this->actingAs($scanOutUser)
-            ->get(route('picker.scan-out.index'))
+            ->get(route('mobile.scan-out.index'))
             ->assertOk();
 
         $this->actingAs($inboundScanUser)
-            ->get(route('picker.inbound-scan.index'))
+            ->get(route('mobile.inbound-scan.index'))
             ->assertOk();
 
         $this->actingAs($qcUser)
-            ->get(route('picker.scan-out.index'))
-            ->assertRedirect(route('picker.dashboard'));
+            ->get(route('mobile.scan-out.index'))
+            ->assertRedirect(route('mobile.dashboard'));
 
         $this->actingAs($scanOutUser)
-            ->postJson(route('picker.qc.scan'), [
+            ->postJson(route('mobile.qc.scan'), [
                 'type' => 'no_resi',
                 'code' => 'FORBIDDEN',
             ])
             ->assertForbidden();
 
         $this->actingAs($pickerUser)
-            ->postJson(route('picker.scan-out.scan'), [
+            ->postJson(route('mobile.scan-out.scan'), [
                 'type' => 'no_resi',
                 'code' => 'FORBIDDEN',
             ])

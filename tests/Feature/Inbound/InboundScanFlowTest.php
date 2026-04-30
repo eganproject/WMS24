@@ -62,7 +62,7 @@ class InboundScanFlowTest extends TestCase
         ]);
 
         $this->actingAs($scanner)
-            ->postJson(route('picker.inbound-scan.open'), [
+            ->postJson(route('mobile.inbound-scan.open'), [
                 'transaction_id' => $transaction->id,
             ])
             ->assertOk()
@@ -73,7 +73,7 @@ class InboundScanFlowTest extends TestCase
         $session = InboundScanSession::firstOrFail();
 
         $this->actingAs($scanner)
-            ->postJson(route('picker.inbound-scan.scan-sku'), [
+            ->postJson(route('mobile.inbound-scan.scan-sku'), [
                 'session_id' => $session->id,
                 'code' => 'SKU-IN-001',
             ])
@@ -82,7 +82,7 @@ class InboundScanFlowTest extends TestCase
             ->assertJsonPath('transaction.summary.scanned_qty', 10);
 
         $this->actingAs($scanner)
-            ->postJson(route('picker.inbound-scan.scan-sku'), [
+            ->postJson(route('mobile.inbound-scan.scan-sku'), [
                 'session_id' => $session->id,
                 'code' => 'SKU-IN-001',
             ])
@@ -91,7 +91,7 @@ class InboundScanFlowTest extends TestCase
             ->assertJsonPath('transaction.summary.scanned_qty', 20);
 
         $this->actingAs($scanner)
-            ->postJson(route('picker.inbound-scan.scan-sku'), [
+            ->postJson(route('mobile.inbound-scan.scan-sku'), [
                 'session_id' => $session->id,
                 'code' => 'SKU-IN-001',
             ])
@@ -99,7 +99,7 @@ class InboundScanFlowTest extends TestCase
             ->assertJsonPath('action', 'confirm_over_scan');
 
         $this->actingAs($scanner)
-            ->postJson(route('picker.inbound-scan.complete'), [
+            ->postJson(route('mobile.inbound-scan.complete'), [
                 'session_id' => $session->id,
             ])
             ->assertOk()
@@ -159,7 +159,7 @@ class InboundScanFlowTest extends TestCase
         $transaction = InboundTransaction::firstOrFail();
 
         $this->actingAs($scanner)
-            ->postJson(route('picker.inbound-scan.open'), [
+            ->postJson(route('mobile.inbound-scan.open'), [
                 'transaction_id' => $transaction->id,
             ])
             ->assertOk()
@@ -214,7 +214,7 @@ class InboundScanFlowTest extends TestCase
         $transaction = InboundTransaction::firstOrFail();
 
         $this->actingAs($scanner)
-            ->postJson(route('picker.inbound-scan.open'), [
+            ->postJson(route('mobile.inbound-scan.open'), [
                 'transaction_id' => $transaction->id,
             ])
             ->assertOk()
@@ -223,7 +223,7 @@ class InboundScanFlowTest extends TestCase
         $session = InboundScanSession::firstOrFail();
 
         $this->actingAs($scanner)
-            ->postJson(route('picker.inbound-scan.scan-sku'), [
+            ->postJson(route('mobile.inbound-scan.scan-sku'), [
                 'session_id' => $session->id,
                 'code' => 'SKU-IN-003',
             ])
@@ -232,14 +232,14 @@ class InboundScanFlowTest extends TestCase
             ->assertJsonPath('transaction.summary.scanned_qty', 10);
 
         $this->actingAs($scanner)
-            ->postJson(route('picker.inbound-scan.complete'), [
+            ->postJson(route('mobile.inbound-scan.complete'), [
                 'session_id' => $session->id,
             ])
             ->assertStatus(409)
             ->assertJsonPath('action', 'confirm_variance');
 
         $this->actingAs($scanner)
-            ->postJson(route('picker.inbound-scan.complete'), [
+            ->postJson(route('mobile.inbound-scan.complete'), [
                 'session_id' => $session->id,
                 'confirm_variance' => true,
             ])

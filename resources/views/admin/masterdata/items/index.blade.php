@@ -63,7 +63,8 @@
                     </div>
                 </div>
                 @if($canCreate)
-                    <button type="button" class="btn btn-light-primary me-3" id="btn_import_items" data-bs-toggle="modal" data-bs-target="#modal_import_items">Import Excel</button>
+                    <button type="button" class="btn btn-light-primary me-3" id="btn_import_items" data-bs-toggle="modal" data-bs-target="#modal_import_items">Import Items</button>
+                    <button type="button" class="btn btn-light-warning me-3" id="btn_import_bundle" data-bs-toggle="modal" data-bs-target="#modal_import_bundle">Import Bundle</button>
                     <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modal_item_form" id="btn_open_create_item">
                         Add Item
                     </button>
@@ -289,6 +290,57 @@
 </div>
 <!--end::Import Modal-->
 
+<!--begin::Import Bundle Modal-->
+<div class="modal fade" id="modal_import_bundle" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered mw-650px">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="fw-bolder">Import Komponen Bundle (Excel)</h2>
+                <div class="btn btn-icon btn-sm btn-active-icon-primary" data-bs-dismiss="modal">
+                    <span class="svg-icon svg-icon-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+                            <rect opacity="0.5" x="6" y="17.3137" width="16" height="2" rx="1" transform="rotate(-45 6 17.3137)" fill="black" />
+                            <rect x="7.41422" y="6" width="16" height="2" rx="1" transform="rotate(45 7.41422 6)" fill="black" />
+                        </svg>
+                    </span>
+                </div>
+            </div>
+            <div class="modal-body scroll-y px-10 py-10">
+                <div class="mb-7">
+                    <p class="fw-semibold mb-3">Import ini digunakan untuk mengatur komponen (BOM) dari item bundle yang sudah ada.</p>
+                    <div class="alert alert-light-warning border border-warning border-dashed mb-5">
+                        <strong>Perhatian:</strong> Import ini akan <strong>mengganti seluruh komponen</strong> bundle yang ada di file. Komponen lama akan dihapus dan diganti dengan data dari file.<br>
+                        Bundle harus sudah dibuat terlebih dahulu melalui form master item.
+                    </div>
+                    <ul class="ms-5 mb-4">
+                        <li><strong>bundle_sku</strong> (wajib) — SKU item bundle yang sudah ada (item_type = bundle)</li>
+                        <li><strong>component_sku</strong> (wajib) — SKU item komponen (item_type = single)</li>
+                        <li><strong>required_qty</strong> (wajib) — jumlah komponen yang dibutuhkan per satu bundle</li>
+                    </ul>
+                    <p class="text-muted small mb-1">Satu bundle bisa memiliki banyak baris komponen. Kelompokkan semua komponen bundle di bawah <code>bundle_sku</code> yang sama.</p>
+                    <p class="text-muted small mb-1">Alias yang didukung: <code>sku_bundle</code> / <code>bundle</code> untuk bundle; <code>sku_komponen</code> / <code>komponen</code> untuk komponen; <code>qty</code> / <code>jumlah</code> untuk jumlah.</p>
+                    <p class="text-muted small mb-0">Gunakan format Excel (.xlsx/.xls) dengan header di baris pertama.</p>
+                    <div class="mt-4">
+                        <a href="{{ route('admin.masterdata.items.bundle-template') }}" class="btn btn-light-primary">
+                            Download Template Bundle
+                        </a>
+                    </div>
+                </div>
+                <div class="mb-10">
+                    <label class="required fs-6 fw-bold form-label mb-2">File Excel</label>
+                    <input type="file" class="form-control form-control-solid" id="import_bundle_file" accept=".xlsx,.xls" />
+                    <div class="invalid-feedback d-block" id="error_import_bundle_file"></div>
+                </div>
+                <div class="text-end">
+                    <button type="button" class="btn btn-light me-3" data-bs-dismiss="modal">Batal</button>
+                    <button type="button" class="btn btn-warning" id="btn_import_bundle_submit">Import</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<!--end::Import Bundle Modal-->
+
 <div class="modal fade" id="modal_item_qr" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered mw-550px">
         <div class="modal-content">
@@ -328,6 +380,7 @@
     const updateTpl = '{{ route('admin.masterdata.items.update', ':id') }}';
     const deleteTpl = '{{ route('admin.masterdata.items.destroy', ':id') }}';
     const importUrl = '{{ route('admin.masterdata.items.import') }}';
+    const bundleImportUrl = '{{ route('admin.masterdata.items.bundle-import') }}';
     const qrCodeTpl = '{{ route('admin.masterdata.items.qr-code', ':id') }}';
     const canUpdate = {{ $canUpdate ? 'true' : 'false' }};
     const canDelete = {{ $canDelete ? 'true' : 'false' }};
@@ -381,6 +434,11 @@
         const importInput = document.getElementById('import_items_file');
         const importError = document.getElementById('error_import_file');
         const importSubmit = document.getElementById('btn_import_items_submit');
+        const bundleImportModalEl = document.getElementById('modal_import_bundle');
+        const bundleImportModal = bundleImportModalEl ? new bootstrap.Modal(bundleImportModalEl) : null;
+        const bundleImportInput = document.getElementById('import_bundle_file');
+        const bundleImportError = document.getElementById('error_import_bundle_file');
+        const bundleImportSubmit = document.getElementById('btn_import_bundle_submit');
         const qrModalEl = document.getElementById('modal_item_qr');
         const qrModal = qrModalEl ? new bootstrap.Modal(qrModalEl) : null;
         const qrLabelEl = document.getElementById('item_qr_label');
@@ -724,6 +782,59 @@
         importBtn?.addEventListener('click', () => {
             if (importInput) importInput.value = '';
             if (importError) importError.textContent = '';
+        });
+
+        document.getElementById('btn_import_bundle')?.addEventListener('click', () => {
+            if (bundleImportInput) bundleImportInput.value = '';
+            if (bundleImportError) bundleImportError.textContent = '';
+        });
+
+        bundleImportSubmit?.addEventListener('click', async () => {
+            if (bundleImportError) bundleImportError.textContent = '';
+            const file = bundleImportInput?.files?.[0];
+            if (!file) {
+                if (bundleImportError) bundleImportError.textContent = 'Pilih file Excel terlebih dahulu.';
+                return;
+            }
+            const confirmed = await confirmAction();
+            if (!confirmed) return;
+            const formData = new FormData();
+            formData.append('file', file);
+            try {
+                const res = await fetch(bundleImportUrl, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Accept': 'application/json',
+                    },
+                    body: formData,
+                });
+                const text = await res.text();
+                let json;
+                try { json = JSON.parse(text); } catch (e) {
+                    closeSwal();
+                    notifyError('Respons server tidak valid');
+                    return;
+                }
+                closeSwal();
+                if (!res.ok) {
+                    if (json?.errors) {
+                        const msg = Object.values(json.errors).flat().join(', ');
+                        notifyError(msg || 'Gagal import bundle');
+                    } else {
+                        notifyError(json.message || 'Gagal import bundle');
+                    }
+                    return;
+                }
+                notifySuccess(`${json.message || 'Import selesai'} (${json.processed} bundle diproses)`);
+                if (bundleImportInput) bundleImportInput.value = '';
+                bundleImportModal?.hide();
+                reloadTable();
+            } catch (err) {
+                console.error(err);
+                closeSwal();
+                notifyError('Gagal import bundle');
+            }
         });
 
         importSubmit?.addEventListener('click', async ()=> {

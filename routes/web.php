@@ -155,9 +155,11 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         // Items
         Route::get('/items/data', [\App\Http\Controllers\Admin\ItemController::class, 'data'])->name('items.data');
         Route::get('/items/template', [\App\Http\Controllers\Admin\ItemController::class, 'template'])->name('items.template');
+        Route::get('/items/bundle-template', [\App\Http\Controllers\Admin\ItemController::class, 'bundleTemplate'])->name('items.bundle-template');
         Route::get('/items/{item}/qr-code', [\App\Http\Controllers\Admin\ItemController::class, 'qrCode'])->name('items.qr-code');
         Route::resource('items', \App\Http\Controllers\Admin\ItemController::class)->except(['create','show','edit'])->names('items');
         Route::post('/items/import', [\App\Http\Controllers\Admin\ItemController::class, 'import'])->name('items.import');
+        Route::post('/items/bundle-import', [\App\Http\Controllers\Admin\ItemController::class, 'bundleImport'])->name('items.bundle-import');
 
         // Stores
         Route::get('/stores/data', [\App\Http\Controllers\Admin\StoreController::class, 'data'])->name('stores.data');

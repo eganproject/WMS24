@@ -9,7 +9,9 @@ use App\Models\InboundTransaction;
 use App\Models\Item;
 use App\Models\ItemStock;
 use App\Models\Area;
+use App\Exports\ItemBundleTemplateExport;
 use App\Exports\ItemsTemplateExport;
+use App\Imports\ItemBundleImport;
 use App\Imports\ItemsImport;
 use App\Models\ItemBundleComponent;
 use App\Support\BundleService;
@@ -399,6 +401,44 @@ class ItemController extends Controller
             'created' => $created,
             'updated' => $updated,
         ]);
+    }
+
+    public function bundleImport(Request $request)
+    {
+        $request->validate([
+            'file' => ['required', 'file', 'mimes:xlsx,xls', 'max:5120'],
+        ]);
+
+        $processed = 0;
+        DB::beginTransaction();
+        try {
+            $import = new ItemBundleImport();
+            Excel::import($import, $request->file('file'));
+
+            foreach ($import->groups as $group) {
+                BundleService::syncComponents($group['bundle'], $group['components']);
+                $processed++;
+            }
+
+            DB::commit();
+        } catch (ValidationException $e) {
+            DB::rollBack();
+            throw $e;
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return response()->json(['message' => 'Gagal import bundle: '.$e->getMessage()], 500);
+        }
+
+        return response()->json([
+            'message' => 'Import bundle selesai',
+            'processed' => $processed,
+        ]);
+    }
+
+    public function bundleTemplate()
+    {
+        $filename = 'bundle-template-'.now()->format('YmdHis').'.xlsx';
+        return Excel::download(new ItemBundleTemplateExport(), $filename);
     }
 
     public function template()

@@ -10,6 +10,7 @@ use App\Http\Controllers\Admin\InboundController;
 use App\Http\Controllers\Admin\InboundScanWorkbenchController;
 use App\Http\Controllers\Admin\OutboundController;
 use App\Http\Controllers\Admin\OutboundManualQcController;
+use App\Http\Controllers\Admin\DeliveryNoteController;
 use App\Http\Controllers\Admin\StockMutationController;
 use App\Http\Controllers\Admin\StockOpnameController;
 use App\Http\Controllers\Admin\StockAdjustmentController;
@@ -319,6 +320,11 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
     });
 
     Route::prefix('outbound')->as('outbound.')->group(function () {
+        Route::get('/delivery-notes', [DeliveryNoteController::class, 'index'])->name('delivery-notes.index');
+        Route::get('/delivery-notes/data', [DeliveryNoteController::class, 'data'])->name('delivery-notes.data');
+        Route::get('/delivery-notes/{id}', [DeliveryNoteController::class, 'show'])->name('delivery-notes.show');
+        Route::get('/delivery-notes/{id}/print', [DeliveryNoteController::class, 'print'])->name('delivery-notes.print');
+
         Route::get('/pickers', [OutboundController::class, 'pickers'])->name('pickers.index');
         Route::get('/pickers/data', [OutboundController::class, 'pickersData'])->name('pickers.data');
         Route::post('/pickers', [OutboundController::class, 'pickersStore'])->name('pickers.store');

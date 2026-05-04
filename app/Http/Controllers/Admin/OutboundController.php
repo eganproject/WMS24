@@ -325,6 +325,8 @@ class OutboundController extends Controller
                 'update' => route('admin.outbound.pickers.update', ':id'),
                 'delete' => route('admin.outbound.pickers.destroy', ':id'),
                 'detail' => route('admin.outbound.pickers.detail', ':id'),
+                'delivery_note' => route('admin.outbound.delivery-notes.show', ':id'),
+                'delivery_note_print' => route('admin.outbound.delivery-notes.print', ':id'),
                 'approve' => route('admin.outbound.pickers.approve', ':id'),
             ],
             'manual' => [
@@ -333,6 +335,8 @@ class OutboundController extends Controller
                 'update' => route('admin.outbound.manuals.update', ':id'),
                 'delete' => route('admin.outbound.manuals.destroy', ':id'),
                 'detail' => route('admin.outbound.manuals.detail', ':id'),
+                'delivery_note' => route('admin.outbound.delivery-notes.show', ':id'),
+                'delivery_note_print' => route('admin.outbound.delivery-notes.print', ':id'),
                 'approve' => route('admin.outbound.manuals.approve', ':id'),
             ],
             'return' => [
@@ -341,6 +345,8 @@ class OutboundController extends Controller
                 'update' => route('admin.outbound.returns.update', ':id'),
                 'delete' => route('admin.outbound.returns.destroy', ':id'),
                 'detail' => route('admin.outbound.returns.detail', ':id'),
+                'delivery_note' => route('admin.outbound.delivery-notes.show', ':id'),
+                'delivery_note_print' => route('admin.outbound.delivery-notes.print', ':id'),
                 'approve' => route('admin.outbound.returns.approve', ':id'),
             ],
         ];

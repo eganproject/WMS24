@@ -1065,6 +1065,14 @@
                         ? lockedStatuses.includes(row?.status)
                         : row?.status === 'approved';
                     const detailItem = `<div class="menu-item px-3"><a href="${resolveRoute(rowType, 'detail').replace(':id', data)}" class="menu-link px-3">Detail</a></div>`;
+                    const deliveryNoteRoute = resolveRoute(rowType, 'delivery_note');
+                    const deliveryNotePrintRoute = resolveRoute(rowType, 'delivery_note_print');
+                    const deliveryNoteItem = (['manual', 'return'].includes(rowType) && row?.surat_jalan_no && deliveryNoteRoute)
+                        ? `<div class="menu-item px-3"><a href="${deliveryNoteRoute.replace(':id', data)}" class="menu-link px-3">Detail Surat Jalan</a></div>`
+                        : '';
+                    const deliveryNotePrintItem = (['manual', 'return'].includes(rowType) && row?.surat_jalan_no && deliveryNotePrintRoute)
+                        ? `<div class="menu-item px-3"><a href="${deliveryNotePrintRoute.replace(':id', data)}" class="menu-link px-3" target="_blank" rel="noopener">Cetak Surat Jalan</a></div>`
+                        : '';
                     const qrPdfRoute = resolveRoute(rowType, 'qr_pdf');
                     const qrPdfItem = (rowType === 'receipt' && qrPdfRoute)
                         ? `<div class="menu-item px-3"><a href="${qrPdfRoute.replace(':id', data)}" class="menu-link px-3">Unduh QR Code</a></div>`
@@ -1078,7 +1086,7 @@
                     const delItem = (!isLocked && perms.delete)
                         ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 text-danger btn-delete" data-id="${data}" data-type="${rowType}">Hapus</a></div>`
                         : '';
-                    const actions = `${detailItem}${qrPdfItem}${approveItem}${editItem}${delItem}`;
+                    const actions = `${detailItem}${deliveryNoteItem}${deliveryNotePrintItem}${qrPdfItem}${approveItem}${editItem}${delItem}`;
                     if (!actions) return '';
                     return `
                         <div class="text-end">

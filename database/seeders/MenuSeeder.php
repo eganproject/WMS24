@@ -43,6 +43,7 @@ class MenuSeeder extends Seeder
             // ['name' => 'Picker', 'slug' => 'outbound-picker', 'route' => 'admin.outbound.pickers.index', 'icon' => 'fas fa-people-carry', 'parent_slug' => 'outbound', 'sort_order' => 10],
             ['name' => 'Manual', 'slug' => 'outbound-manual', 'route' => 'admin.outbound.manuals.index', 'icon' => 'fas fa-edit', 'parent_slug' => 'outbound', 'sort_order' => 11],
             ['name' => 'Retur', 'slug' => 'outbound-return', 'route' => 'admin.outbound.returns.index', 'icon' => 'fas fa-undo', 'parent_slug' => 'outbound', 'sort_order' => 12],
+            ['name' => 'History Surat Jalan', 'slug' => 'outbound-delivery-notes', 'route' => 'admin.outbound.delivery-notes.index', 'icon' => 'fas fa-file-invoice', 'parent_slug' => 'outbound', 'sort_order' => 12.25],
             ['name' => 'QC Manual', 'slug' => 'outbound-manual-qc', 'route' => 'admin.outbound.manual-qc.index', 'icon' => 'fas fa-clipboard-check', 'parent_slug' => 'outbound', 'sort_order' => 12.5],
             ['name' => 'QC Scan Desktop', 'slug' => 'outbound-qc-scan', 'route' => 'admin.outbound.qc-scan.index', 'icon' => 'fas fa-barcode', 'parent_slug' => 'outbound', 'sort_order' => 13],
             ['name' => 'History QC', 'slug' => 'outbound-qc-history', 'route' => 'admin.outbound.qc-history.index', 'icon' => 'fas fa-search', 'parent_slug' => 'outbound', 'sort_order' => 13.25],

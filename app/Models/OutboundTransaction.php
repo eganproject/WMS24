@@ -51,6 +51,11 @@ class OutboundTransaction extends Model
         return $this->belongsTo(Supplier::class, 'supplier_id');
     }
 
+    public function damagedAllocation()
+    {
+        return $this->hasOne(DamagedAllocation::class, 'outbound_transaction_id');
+    }
+
     public function creator()
     {
         return $this->belongsTo(User::class, 'created_by');

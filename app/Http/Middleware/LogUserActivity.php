@@ -32,9 +32,12 @@ class LogUserActivity
         $routeName = $route?->getName();
         $method = strtoupper($request->method());
         $payload = $this->sanitizePayload($request);
+        $userId = $user->newQuery()->whereKey($user->getKey())->exists()
+            ? $user->id
+            : null;
 
         ActivityLog::create([
-            'user_id' => $user->id,
+            'user_id' => $userId,
             'action' => ActivityLogDescription::describe($request, $response, $payload),
             'route_name' => $routeName,
             'method' => $method,

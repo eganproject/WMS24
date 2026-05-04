@@ -8,44 +8,63 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
-        $dbName = DB::getDatabaseName();
-        $exists = DB::table('information_schema.STATISTICS')
-            ->where('TABLE_SCHEMA', $dbName)
-            ->where('TABLE_NAME', 'stock_mutations')
-            ->where('INDEX_NAME', 'sm_source_item_unique')
-            ->exists();
-
-        if ($exists) {
+        if (Schema::hasIndex('stock_mutations', 'sm_source_item_unique')) {
             return;
         }
 
-        // Remove duplicate rows — keep the highest-id record per (source_type, source_id, item_id, reference_item_id)
+        $uniqueColumns = [
+            'source_type',
+            'source_id',
+            'item_id',
+            'reference_item_id',
+            'warehouse_id',
+            'direction',
+            'source_subtype',
+        ];
+
+        // Merge exact duplicate mutation rows into one row before adding the guard index.
         $duplicates = DB::table('stock_mutations')
-            ->select('source_type', 'source_id', 'item_id', 'reference_item_id')
-            ->groupBy('source_type', 'source_id', 'item_id', 'reference_item_id')
+            ->select($uniqueColumns)
+            ->groupBy($uniqueColumns)
             ->havingRaw('COUNT(*) > 1')
             ->get();
 
         foreach ($duplicates as $dup) {
-            $ids = DB::table('stock_mutations')
-                ->where('source_type', $dup->source_type)
-                ->where('source_id', $dup->source_id)
-                ->where('item_id', $dup->item_id)
-                ->where('reference_item_id', $dup->reference_item_id)
-                ->orderByDesc('id')
-                ->pluck('id');
+            $query = DB::table('stock_mutations');
+            foreach ($uniqueColumns as $column) {
+                $value = $dup->{$column};
+                $value === null
+                    ? $query->whereNull($column)
+                    : $query->where($column, $value);
+            }
 
-            if ($ids->count() > 1) {
-                DB::table('stock_mutations')
-                    ->whereIn('id', $ids->slice(1)->values()->all())
-                    ->delete();
+            $rows = $query
+                ->orderByDesc('id')
+                ->get(['id', 'qty']);
+
+            if ($rows->count() > 1) {
+                $keepId = $rows->first()->id;
+                $deleteIds = $rows->slice(1)->pluck('id')->values()->all();
+
+                DB::table('stock_mutations')->where('id', $keepId)->update([
+                    'qty' => (int) $rows->sum('qty'),
+                ]);
+                DB::table('stock_mutations')->whereIn('id', $deleteIds)->delete();
             }
         }
 
         try {
             Schema::table('stock_mutations', function (Blueprint $table) {
                 $table->unique(
-                    ['source_type', 'source_id', 'item_id', 'reference_item_id'],
+                    [
+                        'source_type',
+                        'source_id',
+                        'item_id',
+                        'reference_item_id',
+                        'warehouse_id',
+                        'direction',
+                        'source_subtype',
+                    ],
                     'sm_source_item_unique'
                 );
             });

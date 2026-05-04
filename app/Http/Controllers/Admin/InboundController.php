@@ -297,6 +297,11 @@ class InboundController extends Controller
             'statusLabels' => $statusLabels,
             'lockedStatuses' => [InboundScanStatus::SCANNING, InboundScanStatus::COMPLETED, 'approved'],
             'showDeliveryNoteFields' => true,
+            'deliveryNotePrefixMap' => [
+                'receipt' => 'SJ-INB-RCV',
+                'return' => 'SJ-INB-RET',
+                'manual' => 'SJ-INB-MNL',
+            ],
             'suppliers' => $suppliers,
             'supplierFlowTypes' => $this->usesSupplier($type) ? [$type] : [],
             'showSupplierColumn' => $this->usesSupplier($type),
@@ -528,11 +533,7 @@ class InboundController extends Controller
     private function store(Request $request, string $type)
     {
         $validated = $this->validatePayload($request, $type);
-        $prefix = match ($type) {
-            'receipt' => 'INB-RCV',
-            'return' => 'INB-RET',
-            default => 'INB-MNL',
-        };
+        $prefix = $this->prefixForType($type);
 
         DB::beginTransaction();
         try {
@@ -541,7 +542,7 @@ class InboundController extends Controller
                 'type' => $type,
                 'ref_no' => $validated['ref_no'] ?? null,
                 'supplier_id' => $validated['supplier_id'] ?? null,
-                'surat_jalan_no' => $validated['surat_jalan_no'] ?? null,
+                'surat_jalan_no' => $this->resolveDeliveryNoteNo($validated['surat_jalan_no'] ?? null, 'SJ-'.$prefix),
                 'surat_jalan_at' => $validated['surat_jalan_at'] ?? null,
                 'note' => $validated['note'] ?? null,
                 'warehouse_id' => WarehouseService::defaultWarehouseId(),
@@ -601,7 +602,7 @@ class InboundController extends Controller
             $transaction->update([
                 'ref_no' => $validated['ref_no'] ?? null,
                 'supplier_id' => $validated['supplier_id'] ?? null,
-                'surat_jalan_no' => $validated['surat_jalan_no'] ?? null,
+                'surat_jalan_no' => $this->resolveDeliveryNoteNo($validated['surat_jalan_no'] ?? null, 'SJ-'.$this->prefixForType($type)),
                 'surat_jalan_at' => $validated['surat_jalan_at'] ?? null,
                 'note' => $validated['note'] ?? null,
                 'transacted_at' => $validated['transacted_at'] ?? $transaction->transacted_at,
@@ -810,7 +811,7 @@ class InboundController extends Controller
                     'type' => $type,
                     'ref_no' => $group['ref_no'] ?? null,
                     'supplier_id' => $this->usesSupplier($type) ? ($group['supplier_id'] ?? null) : null,
-                    'surat_jalan_no' => $group['surat_jalan_no'] ?? null,
+                    'surat_jalan_no' => $this->resolveDeliveryNoteNo($group['surat_jalan_no'] ?? null, 'SJ-'.$prefix),
                     'surat_jalan_at' => $suratJalanAt,
                     'note' => $group['note'] ?? null,
                     'warehouse_id' => WarehouseService::defaultWarehouseId(),
@@ -944,6 +945,22 @@ class InboundController extends Controller
     private function generateCode(string $prefix): string
     {
         return $prefix.'-'.now()->format('YmdHis').'-'.Str::upper(Str::random(4));
+    }
+
+    private function prefixForType(string $type): string
+    {
+        return match ($type) {
+            'receipt' => 'INB-RCV',
+            'return' => 'INB-RET',
+            default => 'INB-MNL',
+        };
+    }
+
+    private function resolveDeliveryNoteNo(?string $value, string $prefix): string
+    {
+        $value = trim((string) $value);
+
+        return $value !== '' ? $value : $this->generateCode($prefix);
     }
 
     private function qrTransaction(string $type, int $id): InboundTransaction

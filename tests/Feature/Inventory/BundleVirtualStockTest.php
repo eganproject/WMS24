@@ -262,9 +262,10 @@ class BundleVirtualStockTest extends TestCase
         ]);
 
         $this->withoutMiddleware();
-        $this->completeManualOutboundQc($user, $transaction, $bundle->sku, 3)
+        $this->actingAs($user)
+            ->postJson(route('admin.outbound.manuals.approve', $transaction->id))
             ->assertStatus(422)
-            ->assertJsonPath('errors.qty.0', 'Stok tidak mencukupi untuk SKU CMP-FAIL-B.');
+            ->assertJsonPath('errors.qty.0', 'Stok tidak mencukupi untuk SKU CMP-FAIL-B. Tersedia 2, dibutuhkan 3.');
 
         $this->assertDatabaseHas('item_stocks', [
             'item_id' => $componentA->id,

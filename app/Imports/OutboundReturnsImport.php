@@ -14,7 +14,7 @@ use Maatwebsite\Excel\Concerns\WithHeadingRow;
 
 class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
 {
-    /** @var array<string,array{ref_no:?string,supplier_id:?int,note:?string,transacted_at:?string,warehouse_id:?int,items:array<int,array{item_id:int,qty:int,note:?string}>}> */
+    /** @var array<string,array{ref_no:?string,supplier_id:?int,surat_jalan_no:?string,surat_jalan_at:?string,note:?string,transacted_at:?string,warehouse_id:?int,items:array<int,array{item_id:int,qty:int,note:?string}>}> */
     public array $groups = [];
 
     public function __construct(private readonly bool $requireSupplier = false)
@@ -33,7 +33,7 @@ class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
         $headers = array_keys($first?->toArray() ?? []);
         if (!in_array('sku', $headers, true)) {
             throw ValidationException::withMessages([
-                'file' => 'Header wajib: sku, qty/koli (opsional: ref_no, note, item_note, transacted_at, warehouse/gudang)',
+                'file' => 'Header wajib: sku, qty/koli (opsional: ref_no, surat_jalan_no, surat_jalan_at, note, item_note, transacted_at, warehouse/gudang)',
             ]);
         }
         $qtyKey = $this->detectQtyKey($headers);
@@ -105,10 +105,13 @@ class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
             $note = trim((string) ($row['note'] ?? ''));
             $itemNote = trim((string) ($row['item_note'] ?? $row['note_item'] ?? ''));
             $transactedAt = trim((string) ($row['transacted_at'] ?? $row['tanggal'] ?? ''));
+            $suratJalanNo = trim((string) ($row['surat_jalan_no'] ?? $row['sj_no'] ?? ''));
+            $suratJalanAt = trim((string) ($row['surat_jalan_at'] ?? $row['tanggal_surat_jalan'] ?? ''));
             $warehouseId = $this->parseWarehouseId($row, $warehouseMaps, $errors, $rowIndex);
 
             $groupKey = implode('::', [
                 $ref !== '' ? $ref : '__default__',
+                $suratJalanNo !== '' ? $suratJalanNo : 'null_sj',
                 $this->requireSupplier && $supplierId ? (string) $supplierId : 'null_supplier',
                 (string) ($warehouseId ?: 'null'),
             ]);
@@ -116,6 +119,8 @@ class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
                 $this->groups[$groupKey] = [
                     'ref_no' => $ref !== '' ? $ref : null,
                     'supplier_id' => $supplierId,
+                    'surat_jalan_no' => $suratJalanNo !== '' ? $suratJalanNo : null,
+                    'surat_jalan_at' => $suratJalanAt !== '' ? $suratJalanAt : null,
                     'note' => $note !== '' ? $note : null,
                     'transacted_at' => $transactedAt !== '' ? $transactedAt : null,
                     'warehouse_id' => $warehouseId,
@@ -124,6 +129,12 @@ class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
             } else {
                 if ($this->groups[$groupKey]['supplier_id'] === null && $supplierId) {
                     $this->groups[$groupKey]['supplier_id'] = $supplierId;
+                }
+                if ($this->groups[$groupKey]['surat_jalan_no'] === null && $suratJalanNo !== '') {
+                    $this->groups[$groupKey]['surat_jalan_no'] = $suratJalanNo;
+                }
+                if ($this->groups[$groupKey]['surat_jalan_at'] === null && $suratJalanAt !== '') {
+                    $this->groups[$groupKey]['surat_jalan_at'] = $suratJalanAt;
                 }
                 if ($this->groups[$groupKey]['note'] === null && $note !== '') {
                     $this->groups[$groupKey]['note'] = $note;

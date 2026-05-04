@@ -191,13 +191,26 @@
                     </div>
 
                     <div class="row g-3 mb-6">
-                        <div class="col-md-5">
+                        <div class="col-md-4">
                             <label class="fs-6 fw-bold form-label mb-2">Ref Alokasi</label>
                             <input type="text" class="form-control form-control-solid" name="source_ref" id="allocation_source_ref" placeholder="Contoh: BA retur, berita acara disposal, atau nomor pekerjaan rework" />
                             <div class="invalid-feedback d-block" id="error_source_ref"></div>
                         </div>
+                        <div class="col-md-4">
+                            <label class="fs-6 fw-bold form-label mb-2">No Surat Jalan</label>
+                            <input type="text" class="form-control form-control-solid" name="surat_jalan_no" id="allocation_surat_jalan_no" />
+                            <div class="invalid-feedback d-block" id="error_surat_jalan_no"></div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="fs-6 fw-bold form-label mb-2">Tanggal Surat Jalan</label>
+                            <input type="text" class="form-control form-control-solid" name="surat_jalan_at" id="allocation_surat_jalan_at" placeholder="YYYY-MM-DD" />
+                            <div class="invalid-feedback d-block" id="error_surat_jalan_at"></div>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-6">
                         {{-- J: Renamed "Batch Recipe" → "Jumlah Batch" dengan penjelasan lebih jelas --}}
-                        <div class="col-md-3" id="recipe_multiplier_wrap" style="display:none;">
+                        <div class="col-md-4" id="recipe_multiplier_wrap" style="display:none;">
                             <label class="required fs-6 fw-bold form-label mb-2">Jumlah Batch</label>
                             <input type="number" min="1" class="form-control form-control-solid" name="recipe_multiplier" id="allocation_recipe_multiplier" value="1" />
                             <div class="form-text text-muted">Berapa kali resep dijalankan. Misal: 2 = 2× semua input & output.</div>
@@ -360,7 +373,10 @@
         const recipePreviewSection = document.getElementById('recipe_preview_section');
         const recipeSummaryContent = document.getElementById('recipe_summary_content');
         const transactedAtEl       = document.getElementById('allocation_transacted_at');
+        const suratJalanNoEl       = document.getElementById('allocation_surat_jalan_no');
+        const suratJalanAtEl       = document.getElementById('allocation_surat_jalan_at');
         let fpTransacted = null;
+        let fpSuratJalan = null;
         let sourceLineOptions = [];
         let recipeOptions     = [];
 
@@ -378,7 +394,7 @@
 
         /* ── clear errors ────────────────────────────────── */
         const clearErrors = () => {
-            ['error_type','error_supplier_id','error_recipe_id','error_recipe_multiplier','error_target_warehouse_id','error_source_ref','error_transacted_at','error_source_items','error_output_items','error_note'].forEach(id => {
+            ['error_type','error_supplier_id','error_recipe_id','error_recipe_multiplier','error_target_warehouse_id','error_source_ref','error_surat_jalan_no','error_surat_jalan_at','error_transacted_at','error_source_items','error_output_items','error_note'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.textContent = '';
             });
@@ -407,9 +423,24 @@
             type: typeEl, supplier_id: supplierEl, recipe_id: recipeEl,
             recipe_multiplier: recipeMultiplierEl, target_warehouse_id: targetWarehouseEl,
             source_ref: document.getElementById('allocation_source_ref'),
+            surat_jalan_no: suratJalanNoEl,
+            surat_jalan_at: suratJalanAtEl,
             transacted_at: transactedAtEl,
             note: document.getElementById('allocation_note'),
         })[key] || null;
+
+        const generateDeliveryNoteNo = (allocationType = '') => {
+            const prefix = {
+                return_supplier: 'SJ-DGA-RET',
+                disposal: 'SJ-DGA-DSP',
+                rework: 'SJ-DGA-RWK',
+            }[allocationType] || 'SJ-DGA';
+            const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
+            const pad = (n) => String(n).padStart(2, '0');
+            const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+            const random = Math.random().toString(36).slice(2, 6).toUpperCase();
+            return `${prefix}-${stamp}-${random}`;
+        };
 
         /* ── recipe helpers ──────────────────────────────── */
         const ensureRecipeOption = (recipe) => {
@@ -770,6 +801,9 @@
             form.dataset.editId = '';
             if (modalTitle)        modalTitle.textContent = 'Tambah Alokasi Barang Rusak';
             if (typeEl)            typeEl.value            = 'return_supplier';
+            if (suratJalanNoEl)    suratJalanNoEl.value    = generateDeliveryNoteNo('return_supplier');
+            if (fpSuratJalan) fpSuratJalan.clear();
+            else if (suratJalanAtEl) suratJalanAtEl.value = '';
             if (recipeEl)          recipeEl.value          = '';
             if (recipeMultiplierEl) recipeMultiplierEl.value = '1';
             if (targetWarehouseEl) targetWarehouseEl.value = defaultTargetWarehouseId ? String(defaultTargetWarehouseId) : '';
@@ -795,11 +829,19 @@
         if (typeof flatpickr !== 'undefined' && transactedAtEl) {
             fpTransacted = flatpickr(transactedAtEl, { enableTime: true, dateFormat: 'Y-m-d H:i', allowInput: true });
         }
+        if (typeof flatpickr !== 'undefined' && suratJalanAtEl) {
+            fpSuratJalan = flatpickr(suratJalanAtEl, { dateFormat: 'Y-m-d', allowInput: true });
+        }
         initSelect2(supplierEl,       'Pilih supplier');
         initSelect2(recipeEl,         'Pilih resep rework');
         initSelect2(targetWarehouseEl,'Pilih gudang hasil');
 
-        typeEl?.addEventListener('change', toggleTypeFields);
+        typeEl?.addEventListener('change', () => {
+            if (!form?.dataset?.editId && suratJalanNoEl && (!suratJalanNoEl.value || suratJalanNoEl.value.startsWith('SJ-DGA'))) {
+                suratJalanNoEl.value = generateDeliveryNoteNo(typeEl?.value || '');
+            }
+            toggleTypeFields();
+        });
         recipeEl?.addEventListener('change', toggleTypeFields);
         recipeMultiplierEl?.addEventListener('input', renderRecipeSummary);
         addSourceItemBtn?.addEventListener('click', () => createSourceRow());
@@ -892,9 +934,13 @@
                 /* Kode + Tanggal */
                 {
                     data: 'code',
-                    render: (data, type, row) =>
-                        `<div class="fw-bolder text-gray-800">${esc(data)}</div>` +
-                        `<div class="text-muted fs-8">${esc(row.transacted_at || '-')}</div>`
+                    render: (data, type, row) => {
+                        const sj = row.surat_jalan_no ? `<div class="text-muted fs-8">SJ ${esc(row.surat_jalan_no)}</div>` : '';
+                        const outbound = row.outbound_code ? `<div class="text-muted fs-8">Outbound ${esc(row.outbound_code)}</div>` : '';
+                        return `<div class="fw-bolder text-gray-800">${esc(data)}</div>` +
+                            `${sj}${outbound}` +
+                            `<div class="text-muted fs-8">${esc(row.transacted_at || '-')}</div>`;
+                    }
                 },
                 /* G: Tipe — badge berwarna */
                 {
@@ -1016,6 +1062,9 @@
                     if ($(targetWarehouseEl).data('select2')) $(targetWarehouseEl).val(targetWarehouseEl.value || null).trigger('change.select2');
                 }
                 document.getElementById('allocation_source_ref').value = json.source_ref || '';
+                if (suratJalanNoEl) suratJalanNoEl.value = json.surat_jalan_no || '';
+                if (fpSuratJalan) fpSuratJalan.setDate(json.surat_jalan_at || null, true, 'Y-m-d');
+                else if (suratJalanAtEl) suratJalanAtEl.value = json.surat_jalan_at || '';
                 document.getElementById('allocation_note').value        = json.note       || '';
                 if (fpTransacted) fpTransacted.setDate(json.transacted_at || null, true, 'Y-m-d H:i');
                 else transactedAtEl.value = json.transacted_at || '';

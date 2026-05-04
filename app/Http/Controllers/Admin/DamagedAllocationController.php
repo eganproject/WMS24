@@ -8,6 +8,8 @@ use App\Models\DamagedAllocationItem;
 use App\Models\DamagedGoodItem;
 use App\Models\Item;
 use App\Models\ItemStock;
+use App\Models\OutboundItem;
+use App\Models\OutboundTransaction;
 use App\Models\ReworkRecipe;
 use App\Models\StockMutation;
 use App\Models\Supplier;
@@ -71,6 +73,7 @@ class DamagedAllocationController extends Controller
                 'outputItems.item',
                 'supplier',
                 'targetWarehouse',
+                'outboundTransaction',
                 'recipe',
                 'creator',
             ])
@@ -82,6 +85,7 @@ class DamagedAllocationController extends Controller
             $query->where(function ($q) use ($search, $exact) {
                 $this->applyTextSearch($q, 'damaged_allocations.code', $search, $exact);
                 $this->applyTextSearch($q, 'damaged_allocations.source_ref', $search, $exact, 'or');
+                $this->applyTextSearch($q, 'damaged_allocations.surat_jalan_no', $search, $exact, 'or');
                 $this->applyTextSearch($q, 'damaged_allocations.note', $search, $exact, 'or');
                 $q->orWhereHas('supplier', function ($supplierQ) use ($search, $exact) {
                     $this->applyTextSearch($supplierQ, 'name', $search, $exact);
@@ -157,6 +161,9 @@ class DamagedAllocationController extends Controller
                 'type_raw' => $row->type ?? '',
                 'status' => $row->status ?? 'pending',
                 'transacted_at' => $row->transacted_at?->format('Y-m-d H:i') ?? '',
+                'surat_jalan_no' => $row->surat_jalan_no ?? '',
+                'surat_jalan_at' => $row->surat_jalan_at?->format('Y-m-d') ?? '',
+                'outbound_code' => $row->outboundTransaction?->code,
                 'submit_by' => $row->creator?->name ?? '-',
                 'source_items' => $sourceLabel ?: '-',
                 'output_items' => $outputLabel ?: '-',
@@ -181,6 +188,7 @@ class DamagedAllocationController extends Controller
             'outputItems.item',
             'supplier',
             'targetWarehouse',
+            'outboundTransaction',
             'recipe.inputItems.item',
             'recipe.outputItems.item',
             'recipe.targetWarehouse',
@@ -199,7 +207,11 @@ class DamagedAllocationController extends Controller
             'recipe' => $this->serializeRecipe($allocation->recipe),
             'supplier_id' => $allocation->supplier_id,
             'target_warehouse_id' => $allocation->target_warehouse_id,
+            'outbound_transaction_id' => $allocation->outbound_transaction_id,
+            'outbound_code' => $allocation->outboundTransaction?->code,
             'source_ref' => $allocation->source_ref,
+            'surat_jalan_no' => $allocation->surat_jalan_no,
+            'surat_jalan_at' => $allocation->surat_jalan_at?->format('Y-m-d'),
             'note' => $allocation->note,
             'status' => $allocation->status ?? 'pending',
             'transacted_at' => $allocation->transacted_at?->format('Y-m-d H:i'),
@@ -255,6 +267,8 @@ class DamagedAllocationController extends Controller
                 'supplier_id' => $validated['supplier_id'],
                 'target_warehouse_id' => $validated['target_warehouse_id'],
                 'source_ref' => $validated['source_ref'] ?? null,
+                'surat_jalan_no' => $this->resolveDeliveryNoteNo($validated['surat_jalan_no'] ?? null, (string) $validated['type']),
+                'surat_jalan_at' => $validated['surat_jalan_at'] ?? null,
                 'note' => $validated['note'] ?? null,
                 'transacted_at' => $validated['transacted_at'] ?? now(),
                 'created_by' => auth()->id(),
@@ -306,6 +320,8 @@ class DamagedAllocationController extends Controller
                 'supplier_id' => $validated['supplier_id'],
                 'target_warehouse_id' => $validated['target_warehouse_id'],
                 'source_ref' => $validated['source_ref'] ?? null,
+                'surat_jalan_no' => $this->resolveDeliveryNoteNo($validated['surat_jalan_no'] ?? null, (string) $validated['type']),
+                'surat_jalan_at' => $validated['surat_jalan_at'] ?? null,
                 'note' => $validated['note'] ?? null,
                 'transacted_at' => $validated['transacted_at'] ?? now(),
             ]);
@@ -445,7 +461,7 @@ class DamagedAllocationController extends Controller
 
             $approvedAt = now();
             if (!$hasMutations) {
-                foreach ($sourceItems as $row) {
+                foreach ($this->groupAllocationRowsByItem($sourceItems) as $row) {
                     StockService::mutate([
                         'item_id' => $row->item_id,
                         'warehouse_id' => $damagedWarehouseId,
@@ -462,7 +478,7 @@ class DamagedAllocationController extends Controller
                 }
 
                 if ($allocation->type === 'rework') {
-                    foreach ($allocation->outputItems as $row) {
+                    foreach ($this->groupAllocationRowsByItem($allocation->outputItems ?? collect()) as $row) {
                         StockService::mutate([
                             'item_id' => $row->item_id,
                             'warehouse_id' => $allocation->target_warehouse_id,
@@ -478,6 +494,10 @@ class DamagedAllocationController extends Controller
                         ]);
                     }
                 }
+            }
+
+            if ($allocation->type === 'return_supplier') {
+                $this->syncReturnSupplierOutbound($allocation, $sourceItems, $damagedWarehouseId, $approvedAt);
             }
 
             $allocation->status = 'approved';
@@ -503,6 +523,20 @@ class DamagedAllocationController extends Controller
         ]);
     }
 
+    private function groupAllocationRowsByItem(Collection $rows): Collection
+    {
+        return $rows
+            ->groupBy('item_id')
+            ->map(function (Collection $group, $itemId) {
+                return (object) [
+                    'item_id' => (int) $itemId,
+                    'qty' => (int) $group->sum('qty'),
+                    'note' => $group->pluck('note')->first(fn ($note) => $note !== null && $note !== '') ?? null,
+                ];
+            })
+            ->values();
+    }
+
     private function sourceMutationSubtype(string $allocationType): string
     {
         return match ($allocationType) {
@@ -511,6 +545,77 @@ class DamagedAllocationController extends Controller
             'rework' => 'rework_source',
             default => 'source',
         };
+    }
+
+    private function syncReturnSupplierOutbound(
+        DamagedAllocation $allocation,
+        Collection $sourceItems,
+        int $damagedWarehouseId,
+        Carbon $approvedAt
+    ): void {
+        $outbound = $allocation->outboundTransaction;
+        if (!$outbound) {
+            $outbound = OutboundTransaction::create([
+                'code' => $this->generateCode('OUT-RET'),
+                'type' => 'return',
+                'ref_no' => $allocation->source_ref ?: $allocation->code,
+                'supplier_id' => $allocation->supplier_id,
+                'surat_jalan_no' => $this->resolveDeliveryNoteNo($allocation->surat_jalan_no, 'return_supplier'),
+                'surat_jalan_at' => $allocation->surat_jalan_at,
+                'note' => trim('Linked dari alokasi barang rusak '.$allocation->code.'. '.($allocation->note ?? '')),
+                'warehouse_id' => $damagedWarehouseId,
+                'transacted_at' => $allocation->transacted_at ?? $approvedAt,
+                'created_by' => $allocation->created_by,
+                'status' => 'approved',
+                'approved_at' => $approvedAt,
+                'approved_by' => auth()->id(),
+            ]);
+
+            $allocation->outbound_transaction_id = $outbound->id;
+        } else {
+            $outbound->update([
+                'ref_no' => $allocation->source_ref ?: $allocation->code,
+                'supplier_id' => $allocation->supplier_id,
+                'surat_jalan_no' => $this->resolveDeliveryNoteNo($allocation->surat_jalan_no, 'return_supplier'),
+                'surat_jalan_at' => $allocation->surat_jalan_at,
+                'note' => trim('Linked dari alokasi barang rusak '.$allocation->code.'. '.($allocation->note ?? '')),
+                'warehouse_id' => $damagedWarehouseId,
+                'transacted_at' => $allocation->transacted_at ?? $approvedAt,
+                'status' => 'approved',
+                'approved_at' => $approvedAt,
+                'approved_by' => auth()->id(),
+            ]);
+        }
+
+        OutboundItem::where('outbound_transaction_id', $outbound->id)->delete();
+
+        $sourceItems
+            ->groupBy('item_id')
+            ->each(function (Collection $rows, $itemId) use ($outbound) {
+                OutboundItem::create([
+                    'outbound_transaction_id' => $outbound->id,
+                    'item_id' => (int) $itemId,
+                    'qty' => (int) $rows->sum('qty'),
+                    'note' => $rows->pluck('note')->first(fn ($note) => $note !== null && $note !== '') ?? null,
+                ]);
+            });
+    }
+
+    private function resolveDeliveryNoteNo(?string $value, string $allocationType): string
+    {
+        $value = trim((string) $value);
+        if ($value !== '') {
+            return $value;
+        }
+
+        $prefix = match ($allocationType) {
+            'return_supplier' => 'SJ-DGA-RET',
+            'disposal' => 'SJ-DGA-DSP',
+            'rework' => 'SJ-DGA-RWK',
+            default => 'SJ-DGA',
+        };
+
+        return $this->generateCode($prefix);
     }
 
     private function assertDamagedWarehouseStockAvailable(Collection $sourceItems, int $damagedWarehouseId): void
@@ -596,6 +701,8 @@ class DamagedAllocationController extends Controller
             'supplier_id' => ['nullable', 'integer', 'exists:suppliers,id'],
             'target_warehouse_id' => ['nullable', 'integer', 'exists:warehouses,id'],
             'source_ref' => ['nullable', 'string', 'max:100'],
+            'surat_jalan_no' => ['nullable', 'string', 'max:100'],
+            'surat_jalan_at' => ['nullable', 'date'],
             'source_items' => ['required', 'array', 'min:1'],
             'source_items.*.damaged_good_item_id' => ['required', 'integer', 'exists:damaged_good_items,id'],
             'source_items.*.qty' => ['required', 'integer', 'min:1'],
@@ -771,6 +878,9 @@ class DamagedAllocationController extends Controller
         $validated['target_warehouse_id'] = $targetWarehouseId;
         $validated['transacted_at'] = !empty($validated['transacted_at'])
             ? Carbon::parse($validated['transacted_at'])
+            : null;
+        $validated['surat_jalan_at'] = !empty($validated['surat_jalan_at'])
+            ? Carbon::parse($validated['surat_jalan_at'])
             : null;
 
         return $validated;

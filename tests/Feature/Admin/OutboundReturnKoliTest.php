@@ -40,6 +40,7 @@ class OutboundReturnKoliTest extends TestCase
             ->postJson(route('admin.outbound.returns.store'), [
                 'supplier_id' => $supplier->id,
                 'ref_no' => 'RET-001',
+                'warehouse_id' => WarehouseService::displayWarehouseId(),
                 'transacted_at' => now()->format('Y-m-d H:i'),
                 'items' => [
                     [
@@ -80,6 +81,7 @@ class OutboundReturnKoliTest extends TestCase
             ->withoutMiddleware()
             ->postJson(route('admin.outbound.returns.store'), [
                 'supplier_id' => $supplier->id,
+                'warehouse_id' => WarehouseService::displayWarehouseId(),
                 'transacted_at' => now()->format('Y-m-d H:i'),
                 'items' => [
                     [
@@ -116,6 +118,7 @@ class OutboundReturnKoliTest extends TestCase
             ->withoutMiddleware()
             ->postJson(route('admin.outbound.returns.store'), [
                 'supplier_id' => $supplier->id,
+                'warehouse_id' => WarehouseService::displayWarehouseId(),
                 'transacted_at' => now()->format('Y-m-d H:i'),
                 'items' => [
                     [

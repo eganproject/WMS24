@@ -50,7 +50,9 @@ class OutboundManualQcController extends Controller
                 $q->where('code', 'like', $like)
                     ->orWhere('code', 'like', $loose)
                     ->orWhere('ref_no', 'like', $like)
-                    ->orWhere('ref_no', 'like', $loose);
+                    ->orWhere('ref_no', 'like', $loose)
+                    ->orWhere('surat_jalan_no', 'like', $like)
+                    ->orWhere('surat_jalan_no', 'like', $loose);
 
                 if (ctype_digit($query)) {
                     $q->orWhere('id', (int) $query);
@@ -430,6 +432,8 @@ class OutboundManualQcController extends Controller
             'id' => $transaction->id,
             'code' => $transaction->code,
             'ref_no' => $transaction->ref_no,
+            'surat_jalan_no' => $transaction->surat_jalan_no,
+            'surat_jalan_at' => $transaction->surat_jalan_at?->format('Y-m-d'),
             'warehouse' => $transaction->warehouse?->name ?? '-',
             'transacted_at' => $transaction->transacted_at?->format('Y-m-d H:i'),
             'status' => $transaction->status ?? OutboundManualQcStatus::PENDING,
@@ -457,6 +461,8 @@ class OutboundManualQcController extends Controller
             'id' => $transaction->id,
             'code' => $transaction->code,
             'ref_no' => $transaction->ref_no,
+            'surat_jalan_no' => $transaction->surat_jalan_no,
+            'surat_jalan_at' => $transaction->surat_jalan_at?->format('Y-m-d'),
             'warehouse' => $transaction->warehouse?->name ?? '-',
             'transacted_at' => $transaction->transacted_at?->format('Y-m-d H:i'),
             'status' => $transaction->status ?? OutboundManualQcStatus::PENDING,

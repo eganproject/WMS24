@@ -180,12 +180,15 @@ class OutboundController extends Controller
                         ]);
                     }
                 }
+                $suratJalanAt = $this->parseOptionalImportedDate($group['surat_jalan_at'] ?? null, 'surat_jalan_at');
 
                 $tx = OutboundTransaction::create([
                     'code' => $this->generateCode('OUT-MNL'),
                     'type' => 'manual',
                     'ref_no' => $group['ref_no'] ?? null,
                     'supplier_id' => null,
+                    'surat_jalan_no' => $this->resolveDeliveryNoteNo($group['surat_jalan_no'] ?? null, 'SJ-OUT-MNL'),
+                    'surat_jalan_at' => $suratJalanAt,
                     'note' => $group['note'] ?? null,
                     'warehouse_id' => $warehouseId,
                     'transacted_at' => $transactedAt,
@@ -259,12 +262,15 @@ class OutboundController extends Controller
                         ]);
                     }
                 }
+                $suratJalanAt = $this->parseOptionalImportedDate($group['surat_jalan_at'] ?? null, 'surat_jalan_at');
 
                 $tx = OutboundTransaction::create([
                     'code' => $this->generateCode('OUT-RET'),
                     'type' => 'return',
                     'ref_no' => $group['ref_no'] ?? null,
                     'supplier_id' => $group['supplier_id'] ?? null,
+                    'surat_jalan_no' => $this->resolveDeliveryNoteNo($group['surat_jalan_no'] ?? null, 'SJ-OUT-RET'),
+                    'surat_jalan_at' => $suratJalanAt,
                     'note' => $group['note'] ?? null,
                     'warehouse_id' => $warehouseId,
                     'transacted_at' => $transactedAt,
@@ -366,6 +372,12 @@ class OutboundController extends Controller
                 ? route('admin.masterdata.suppliers.index')
                 : null,
             'importRequiresSupplier' => $this->usesSupplier($type),
+            'showDeliveryNoteFields' => in_array($type, ['manual', 'return'], true),
+            'deliveryNotePrefixMap' => [
+                'picker' => 'SJ-OUT-PCK',
+                'manual' => 'SJ-OUT-MNL',
+                'return' => 'SJ-OUT-RET',
+            ],
             'typeOptions' => $typeOptions,
             'typeDefault' => $type,
             'routeMap' => $routeMap,
@@ -410,6 +422,8 @@ class OutboundController extends Controller
                 'outbound_transactions.type',
                 'outbound_transactions.ref_no',
                 'outbound_transactions.supplier_id',
+                'outbound_transactions.surat_jalan_no',
+                'outbound_transactions.surat_jalan_at',
                 'outbound_transactions.note',
                 'outbound_transactions.warehouse_id',
                 'outbound_transactions.status',
@@ -426,6 +440,7 @@ class OutboundController extends Controller
             $query->where(function ($q) use ($search, $exact) {
                 $this->applyTextSearch($q, 'outbound_transactions.code', $search, $exact);
                 $this->applyTextSearch($q, 'outbound_transactions.ref_no', $search, $exact, 'or');
+                $this->applyTextSearch($q, 'outbound_transactions.surat_jalan_no', $search, $exact, 'or');
                 $q->orWhereHas('supplier', function ($supplierQ) use ($search, $exact) {
                     $this->applyTextSearch($supplierQ, 'name', $search, $exact);
                 })->orWhereHas('items.item', function ($itemQ) use ($search, $exact) {
@@ -483,6 +498,8 @@ class OutboundController extends Controller
                 'id' => $row->id,
                 'code' => $row->code,
                 'transacted_at' => $ts,
+                'surat_jalan_no' => $row->surat_jalan_no ?? '',
+                'surat_jalan_at' => $row->surat_jalan_at?->format('Y-m-d') ?? '',
                 'submit_by' => $row->creator?->name ?? '-',
                 'warehouse' => $row->warehouse?->name ?? '-',
                 'warehouse_id' => $row->warehouse_id,
@@ -516,6 +533,8 @@ class OutboundController extends Controller
             'ref_no' => $tx->ref_no,
             'supplier_id' => $tx->supplier_id,
             'supplier' => $tx->supplier?->name,
+            'surat_jalan_no' => $tx->surat_jalan_no,
+            'surat_jalan_at' => $tx->surat_jalan_at?->format('Y-m-d'),
             'note' => $tx->note,
             'status' => $tx->status ?? 'pending',
             'warehouse_id' => $tx->warehouse_id,
@@ -553,6 +572,7 @@ class OutboundController extends Controller
             'transaction' => $tx,
             'totalQty' => $totalQty,
             'showSupplierField' => $this->usesSupplier($type),
+            'showDeliveryNoteFields' => in_array($type, ['manual', 'return'], true),
             'warehouseLabel' => $tx->warehouse?->name,
             'backUrl' => route("admin.outbound.{$routeBase}.index"),
         ]);
@@ -573,11 +593,7 @@ class OutboundController extends Controller
             $warehouseId = WarehouseService::displayWarehouseId();
         }
 
-        $prefix = match ($type) {
-            'picker' => 'OUT-PCK',
-            'return' => 'OUT-RET',
-            default => 'OUT-MNL',
-        };
+        $prefix = $this->prefixForType($type);
 
         StockService::assertSellableAvailable($validated['items'], $warehouseId);
 
@@ -591,6 +607,8 @@ class OutboundController extends Controller
                 'type' => $type,
                 'ref_no' => $validated['ref_no'] ?? null,
                 'supplier_id' => $validated['supplier_id'] ?? null,
+                'surat_jalan_no' => $this->resolveDeliveryNoteNo($validated['surat_jalan_no'] ?? null, 'SJ-'.$prefix),
+                'surat_jalan_at' => $validated['surat_jalan_at'] ?? null,
                 'note' => $validated['note'] ?? null,
                 'warehouse_id' => $warehouseId,
                 'transacted_at' => $transactedAt,
@@ -656,6 +674,8 @@ class OutboundController extends Controller
             $tx->update([
                 'ref_no' => $validated['ref_no'] ?? null,
                 'supplier_id' => $validated['supplier_id'] ?? null,
+                'surat_jalan_no' => $this->resolveDeliveryNoteNo($validated['surat_jalan_no'] ?? null, 'SJ-'.$this->prefixForType($type)),
+                'surat_jalan_at' => $validated['surat_jalan_at'] ?? null,
                 'note' => $validated['note'] ?? null,
                 'warehouse_id' => $warehouseId,
                 'transacted_at' => $validated['transacted_at'] ?? $tx->transacted_at,
@@ -805,6 +825,8 @@ class OutboundController extends Controller
             'items.*.koli' => ['nullable', 'integer', 'min:1'],
             'items.*.note' => ['nullable', 'string'],
             'ref_no' => ['nullable', 'string', 'max:100'],
+            'surat_jalan_no' => ['nullable', 'string', 'max:100'],
+            'surat_jalan_at' => ['nullable', 'date'],
             'supplier_id' => $usesSupplier
                 ? ['required', 'integer', 'exists:suppliers,id']
                 : ['nullable'],
@@ -909,6 +931,10 @@ class OutboundController extends Controller
             $validated['transacted_at'] = null;
         }
 
+        $validated['surat_jalan_at'] = !empty($validated['surat_jalan_at'])
+            ? Carbon::parse($validated['surat_jalan_at'])
+            : null;
+
         return $validated;
     }
 
@@ -954,8 +980,40 @@ class OutboundController extends Controller
         return $prefix.'-'.now()->format('YmdHis').'-'.Str::upper(Str::random(4));
     }
 
+    private function prefixForType(string $type): string
+    {
+        return match ($type) {
+            'picker' => 'OUT-PCK',
+            'return' => 'OUT-RET',
+            default => 'OUT-MNL',
+        };
+    }
+
+    private function resolveDeliveryNoteNo(?string $value, string $prefix): string
+    {
+        $value = trim((string) $value);
+
+        return $value !== '' ? $value : $this->generateCode($prefix);
+    }
+
     private function usesSupplier(string $type): bool
     {
         return $type === 'return';
+    }
+
+    private function parseOptionalImportedDate(?string $value, string $field): ?Carbon
+    {
+        $value = trim((string) $value);
+        if ($value === '') {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($value);
+        } catch (\Throwable) {
+            throw ValidationException::withMessages([
+                'file' => "Format {$field} tidak valid: {$value}",
+            ]);
+        }
     }
 }

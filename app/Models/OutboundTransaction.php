@@ -14,6 +14,8 @@ class OutboundTransaction extends Model
         'type',
         'ref_no',
         'supplier_id',
+        'surat_jalan_no',
+        'surat_jalan_at',
         'transacted_at',
         'note',
         'warehouse_id',
@@ -24,6 +26,7 @@ class OutboundTransaction extends Model
     ];
 
     protected $casts = [
+        'surat_jalan_at' => 'datetime',
         'transacted_at' => 'datetime',
         'approved_at' => 'datetime',
     ];

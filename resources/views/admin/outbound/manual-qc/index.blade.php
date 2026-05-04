@@ -321,6 +321,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="manual-qc-code">${escapeHtml(row.code)}</div>
                     <div class="manual-qc-meta">
                         <span>${escapeHtml(row.ref_no || '-')} | ${escapeHtml(row.warehouse || '-')}</span>
+                        ${row.surat_jalan_no ? `<span>SJ ${escapeHtml(row.surat_jalan_no)}${row.surat_jalan_at ? ` | ${escapeHtml(row.surat_jalan_at)}` : ''}</span>` : ''}
                         <span>${escapeHtml(row.transacted_at || '-')}</span>
                         <span>Qty ${row.summary?.scanned_qty ?? 0}/${row.summary?.expected_qty ?? 0}</span>
                     </div>
@@ -358,7 +359,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const renderTransaction = (transaction) => {
         emptyState.style.display = 'none';
         workbench.style.display = '';
-        detailTitle.textContent = `${transaction.code} | ${transaction.ref_no || '-'}`;
+        detailTitle.textContent = [
+            transaction.code,
+            transaction.ref_no || '-',
+            transaction.surat_jalan_no ? `SJ ${transaction.surat_jalan_no}` : null,
+        ].filter(Boolean).join(' | ');
         detailStatus.textContent = labels[transaction.status] || transaction.status || '-';
         detailStatus.className = `badge ${badgeClass(transaction.status)}`;
 

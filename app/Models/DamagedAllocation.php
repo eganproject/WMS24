@@ -16,7 +16,10 @@ class DamagedAllocation extends Model
         'recipe_multiplier',
         'supplier_id',
         'target_warehouse_id',
+        'outbound_transaction_id',
         'source_ref',
+        'surat_jalan_no',
+        'surat_jalan_at',
         'transacted_at',
         'note',
         'status',
@@ -26,6 +29,7 @@ class DamagedAllocation extends Model
     ];
 
     protected $casts = [
+        'surat_jalan_at' => 'datetime',
         'transacted_at' => 'datetime',
         'approved_at' => 'datetime',
         'recipe_multiplier' => 'integer',
@@ -61,6 +65,11 @@ class DamagedAllocation extends Model
     public function targetWarehouse()
     {
         return $this->belongsTo(Warehouse::class, 'target_warehouse_id');
+    }
+
+    public function outboundTransaction()
+    {
+        return $this->belongsTo(OutboundTransaction::class, 'outbound_transaction_id');
     }
 
     public function creator()

@@ -8,14 +8,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
-        $dbName = DB::getDatabaseName();
-        $exists = DB::table('information_schema.STATISTICS')
-            ->where('TABLE_SCHEMA', $dbName)
-            ->where('TABLE_NAME', 'item_stocks')
-            ->where('INDEX_NAME', 'item_stocks_item_id_warehouse_id_unique')
-            ->exists();
-
-        if ($exists) {
+        if (Schema::hasIndex('item_stocks', 'item_stocks_item_id_warehouse_id_unique')) {
             return;
         }
 

@@ -350,6 +350,7 @@
     const showApproveAction = {{ isset($showApproveAction) ? ($showApproveAction ? 'true' : 'false') : 'true' }};
     const deleteWarningText = @json($deleteWarningText ?? 'Data akan dihapus dan stok akan dikembalikan');
     const showScanProgressColumn = {{ !empty($showScanProgressColumn ?? false) ? 'true' : 'false' }};
+    const deliveryNotePrefixMap = @json($deliveryNotePrefixMap ?? []);
 
     document.addEventListener('DOMContentLoaded', () => {
         const tableEl = $('#stock_flow_table');
@@ -399,6 +400,15 @@
         const getJakartaNow = () => {
             const jkt = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
             return formatDateTime(jkt);
+        };
+
+        const generateDeliveryNoteNo = (flowType = '') => {
+            const prefix = deliveryNotePrefixMap?.[flowType] || 'SJ';
+            const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
+            const pad = (n) => String(n).padStart(2, '0');
+            const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+            const random = Math.random().toString(36).slice(2, 6).toUpperCase();
+            return `${prefix}-${stamp}-${random}`;
         };
 
         const resolveRoute = (type, key) => {
@@ -934,6 +944,9 @@
                 if (typeof $ !== 'undefined' && $(supplierSelect).data('select2')) {
                     $(supplierSelect).val('').trigger('change.select2');
                 }
+            }
+            if (suratJalanNoEl) {
+                suratJalanNoEl.value = generateDeliveryNoteNo(defaultTypeFilter || '');
             }
             if (fpSuratJalan) {
                 fpSuratJalan.clear();

@@ -7,6 +7,7 @@ use App\Models\InboundScanSession;
 use App\Models\InboundTransaction;
 use App\Models\Item;
 use App\Models\Role;
+use App\Models\Supplier;
 use App\Models\User;
 use App\Models\Warehouse;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -22,10 +23,11 @@ class InboundScanFlowTest extends TestCase
 
         $admin = User::factory()->create();
         $scanner = $this->createUserWithRole('inbound-scan');
-        $warehouse = Warehouse::create([
-            'code' => 'GUDANG_BESAR',
-            'name' => 'Gudang Besar',
-        ]);
+        $supplier = Supplier::create(['name' => 'Supplier Inbound 1']);
+        $warehouse = Warehouse::firstOrCreate(
+            ['code' => 'GUDANG_BESAR'],
+            ['name' => 'Gudang Besar', 'type' => 'main']
+        );
         $item = Item::create([
             'sku' => 'SKU-IN-001',
             'name' => 'Inbound Item',
@@ -36,6 +38,7 @@ class InboundScanFlowTest extends TestCase
         $this->actingAs($admin)
             ->postJson(route('admin.inbound.receipts.store'), [
                 'ref_no' => 'REF-IN-001',
+                'supplier_id' => $supplier->id,
                 'surat_jalan_no' => 'SJ-IN-001',
                 'surat_jalan_at' => now()->toDateString(),
                 'transacted_at' => now()->format('Y-m-d H:i:s'),
@@ -132,10 +135,11 @@ class InboundScanFlowTest extends TestCase
 
         $admin = User::factory()->create();
         $scanner = $this->createUserWithRole('inbound-scan');
-        Warehouse::create([
-            'code' => 'GUDANG_BESAR',
-            'name' => 'Gudang Besar',
-        ]);
+        $supplier = Supplier::create(['name' => 'Supplier Inbound 2']);
+        Warehouse::firstOrCreate(
+            ['code' => 'GUDANG_BESAR'],
+            ['name' => 'Gudang Besar', 'type' => 'main']
+        );
         $item = Item::create([
             'sku' => 'SKU-IN-002',
             'name' => 'Inbound Item 2',
@@ -146,6 +150,7 @@ class InboundScanFlowTest extends TestCase
         $this->actingAs($admin)
             ->postJson(route('admin.inbound.receipts.store'), [
                 'ref_no' => 'REF-IN-002',
+                'supplier_id' => $supplier->id,
                 'transacted_at' => now()->format('Y-m-d H:i:s'),
                 'items' => [
                     [
@@ -168,6 +173,7 @@ class InboundScanFlowTest extends TestCase
         $this->actingAs($admin)
             ->putJson(route('admin.inbound.receipts.update', $transaction->id), [
                 'ref_no' => 'REF-IN-002-EDIT',
+                'supplier_id' => $supplier->id,
                 'transacted_at' => now()->format('Y-m-d H:i:s'),
                 'items' => [
                     [
@@ -187,10 +193,11 @@ class InboundScanFlowTest extends TestCase
 
         $admin = User::factory()->create();
         $scanner = $this->createUserWithRole('inbound-scan');
-        $warehouse = Warehouse::create([
-            'code' => 'GUDANG_BESAR',
-            'name' => 'Gudang Besar',
-        ]);
+        $supplier = Supplier::create(['name' => 'Supplier Inbound 3']);
+        $warehouse = Warehouse::firstOrCreate(
+            ['code' => 'GUDANG_BESAR'],
+            ['name' => 'Gudang Besar', 'type' => 'main']
+        );
         $item = Item::create([
             'sku' => 'SKU-IN-003',
             'name' => 'Inbound Item 3',
@@ -201,6 +208,7 @@ class InboundScanFlowTest extends TestCase
         $this->actingAs($admin)
             ->postJson(route('admin.inbound.receipts.store'), [
                 'ref_no' => 'REF-IN-003',
+                'supplier_id' => $supplier->id,
                 'transacted_at' => now()->format('Y-m-d H:i:s'),
                 'items' => [
                     [

@@ -432,10 +432,11 @@ class DamagedGoodsController extends Controller
             }
 
             $approvedAt = now();
+            $isCustomerReturn = (string) $damage->source_type === DamagedGood::SOURCE_CUSTOMER_RETURN;
             $sourceWarehouseId = $this->resolveSourceWarehouseId($damage);
             $damagedWarehouseId = WarehouseService::damagedWarehouseId();
             $damagedWarehouse = $damagedWarehouseId > 0 ? Warehouse::find($damagedWarehouseId) : null;
-            if ($sourceWarehouseId <= 0) {
+            if (!$isCustomerReturn && $sourceWarehouseId <= 0) {
                 throw ValidationException::withMessages([
                     'source_warehouse_id' => 'Gudang asal barang rusak tidak valid.',
                 ]);
@@ -445,7 +446,7 @@ class DamagedGoodsController extends Controller
                     'source' => 'Gudang Rusak belum tersedia. Jalankan migrasi terbaru terlebih dahulu.',
                 ]);
             }
-            if ($sourceWarehouseId === $damagedWarehouseId) {
+            if (!$isCustomerReturn && $sourceWarehouseId === $damagedWarehouseId) {
                 throw ValidationException::withMessages([
                     'source_warehouse_id' => 'Gudang asal tidak boleh sama dengan Gudang Rusak.',
                 ]);
@@ -456,20 +457,26 @@ class DamagedGoodsController extends Controller
                 ->exists();
 
             if (!$hasMutations) {
+                if (!$isCustomerReturn) {
+                    StockService::assertSellableAvailable($damage->items, $sourceWarehouseId);
+                }
+
                 foreach ($damage->items as $row) {
-                    StockService::mutate([
-                        'item_id' => $row->item_id,
-                        'warehouse_id' => $sourceWarehouseId,
-                        'direction' => 'out',
-                        'qty' => (int) $row->qty,
-                        'source_type' => 'damaged',
-                        'source_subtype' => 'intake_out',
-                        'source_id' => $damage->id,
-                        'source_code' => $damage->code,
-                        'note' => $row->note,
-                        'occurred_at' => $approvedAt,
-                        'created_by' => auth()->id(),
-                    ]);
+                    if (!$isCustomerReturn) {
+                        StockService::mutate([
+                            'item_id' => $row->item_id,
+                            'warehouse_id' => $sourceWarehouseId,
+                            'direction' => 'out',
+                            'qty' => (int) $row->qty,
+                            'source_type' => 'damaged',
+                            'source_subtype' => 'intake_out',
+                            'source_id' => $damage->id,
+                            'source_code' => $damage->code,
+                            'note' => $row->note,
+                            'occurred_at' => $approvedAt,
+                            'created_by' => auth()->id(),
+                        ]);
+                    }
 
                     StockService::mutate([
                         'item_id' => $row->item_id,
@@ -477,7 +484,7 @@ class DamagedGoodsController extends Controller
                         'direction' => 'in',
                         'qty' => (int) $row->qty,
                         'source_type' => 'damaged',
-                        'source_subtype' => 'intake_in',
+                        'source_subtype' => $isCustomerReturn ? 'customer_return' : 'intake_in',
                         'source_id' => $damage->id,
                         'source_code' => $damage->code,
                         'note' => $row->note,
@@ -496,7 +503,11 @@ class DamagedGoodsController extends Controller
             DB::commit();
         } catch (ValidationException $e) {
             DB::rollBack();
-            throw $e;
+            $message = collect($e->errors())->flatten()->first() ?? $e->getMessage();
+            return response()->json([
+                'message' => $message,
+                'errors' => $e->errors(),
+            ], 422);
         } catch (\Throwable $e) {
             DB::rollBack();
 

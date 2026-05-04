@@ -231,7 +231,6 @@ class OutboundController extends Controller
         ]);
 
         $import = new OutboundReturnsImport(true);
-        $warehouseId = WarehouseService::displayWarehouseId();
         DB::beginTransaction();
         try {
             Excel::import($import, $request->file('file'));
@@ -245,6 +244,10 @@ class OutboundController extends Controller
             $createdTx = 0;
             $createdItems = 0;
             foreach ($groups as $group) {
+                $warehouseId = (int) ($group['warehouse_id'] ?? 0);
+                if ($warehouseId <= 0) {
+                    $warehouseId = WarehouseService::displayWarehouseId();
+                }
                 $transactedAt = now();
                 StockService::assertSellableAvailable($group['items'], $warehouseId);
                 if (!empty($group['transacted_at'])) {
@@ -353,9 +356,9 @@ class OutboundController extends Controller
             ])->values(),
             'defaultWarehouseId' => WarehouseService::defaultWarehouseId(),
             'displayWarehouseId' => WarehouseService::displayWarehouseId(),
-            'enableWarehouseSelect' => $type === 'manual',
-            'enableKoli' => $type === 'return',
-            'allowKoliImport' => $type === 'return',
+            'enableWarehouseSelect' => in_array($type, ['manual', 'return'], true),
+            'enableKoli' => in_array($type, ['manual', 'return'], true),
+            'allowKoliImport' => in_array($type, ['manual', 'return'], true),
             'suppliers' => $suppliers,
             'supplierFlowTypes' => $this->usesSupplier($type) ? [$type] : [],
             'showSupplierColumn' => $this->usesSupplier($type),
@@ -517,11 +520,13 @@ class OutboundController extends Controller
             'status' => $tx->status ?? 'pending',
             'warehouse_id' => $tx->warehouse_id,
             'transacted_at' => $tx->transacted_at?->format('Y-m-d\TH:i'),
-            'items' => $tx->items->map(function ($item) use ($type) {
+            'items' => $tx->items->map(function ($item) use ($type, $tx) {
                 $qty = (int) $item->qty;
                 $qtyPerKoli = (int) ($item->item?->koli_qty ?? 0);
                 $koli = null;
-                if ($type === 'return' && $qty > 0 && $qtyPerKoli > 0 && $qty % $qtyPerKoli === 0) {
+                $usesKoli = $type === 'return'
+                    || ($type === 'manual' && (int) $tx->warehouse_id === WarehouseService::defaultWarehouseId());
+                if ($usesKoli && $qty > 0 && $qtyPerKoli > 0 && $qty % $qtyPerKoli === 0) {
                     $koli = (int) ($qty / $qtyPerKoli);
                 }
 
@@ -558,7 +563,7 @@ class OutboundController extends Controller
         $validated = $this->validatePayload($request, $type);
 
         $warehouseId = (int) ($validated['warehouse_id'] ?? 0);
-        if ($type === 'manual') {
+        if (in_array($type, ['manual', 'return'], true)) {
             if ($warehouseId <= 0) {
                 throw ValidationException::withMessages([
                     'warehouse_id' => 'Gudang wajib dipilih',
@@ -624,7 +629,7 @@ class OutboundController extends Controller
         $validated = $this->validatePayload($request, $type);
 
         $warehouseId = (int) ($validated['warehouse_id'] ?? 0);
-        if ($type === 'manual') {
+        if (in_array($type, ['manual', 'return'], true)) {
             if ($warehouseId <= 0) {
                 throw ValidationException::withMessages([
                     'warehouse_id' => 'Gudang wajib dipilih',
@@ -741,6 +746,8 @@ class OutboundController extends Controller
                     return response()->json(['message' => 'Outbound manual sedang diproses QC.']);
                 }
 
+                StockService::assertSellableAvailable($tx->items, (int) $tx->warehouse_id);
+
                 $tx->status = OutboundManualQcStatus::PENDING_QC;
                 $tx->approved_at = null;
                 $tx->approved_by = null;
@@ -818,9 +825,13 @@ class OutboundController extends Controller
             ->get(['id', 'sku', 'item_type', 'koli_qty'])
             ->keyBy('id');
 
+        $warehouseId = (int) ($validated['warehouse_id'] ?? 0);
+        $usesKoli = $type === 'return'
+            || ($type === 'manual' && $warehouseId === WarehouseService::defaultWarehouseId());
+
         $items = $rawItems
             ->filter(fn ($row) => (int) ($row['qty'] ?? 0) > 0 && (int) ($row['item_id'] ?? 0) > 0)
-            ->map(function ($row, $index) use ($itemMap, $type) {
+            ->map(function ($row, $index) use ($itemMap, $usesKoli) {
                 $itemId = (int) ($row['item_id'] ?? 0);
                 $item = $itemMap->get($itemId);
 
@@ -831,7 +842,7 @@ class OutboundController extends Controller
                 }
 
                 $qty = (int) ($row['qty'] ?? 0);
-                if ($type === 'return') {
+                if ($usesKoli) {
                     try {
                         $qty = OutboundKoliExpectation::resolve($item, $qty, $row['koli'] ?? null)['qty'];
                     } catch (ValidationException $e) {

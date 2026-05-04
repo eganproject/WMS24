@@ -532,6 +532,16 @@
             return Number.isFinite(val) && val > 0 ? val : null;
         };
 
+        const isKoliActive = () => {
+            if (!enableKoli) return false;
+            const flowType = form?.dataset?.flowType || defaultTypeFilter || '';
+            if (flowType === 'return') return true;
+            if (flowType !== 'manual') return false;
+
+            const selectedWarehouseId = Number(warehouseSelect?.value || 0);
+            return !!defaultWarehouseId && selectedWarehouseId === Number(defaultWarehouseId);
+        };
+
         const setKoliInfo = (row, message, tone = 'muted') => {
             if (!enableKoli || !row) return;
             const infoEl = row.querySelector('[data-koli-info]');
@@ -556,8 +566,42 @@
             errEl.textContent = '';
         };
 
+        const updateKoliVisibility = (row) => {
+            if (!enableKoli || !row) return;
+            const active = isKoliActive();
+            const koliCol = row.querySelector('[data-koli-col]');
+            const koliEl = row.querySelector('input[data-name="koli"]');
+
+            if (koliCol) koliCol.style.display = active ? '' : 'none';
+            if (koliEl) {
+                koliEl.disabled = !active;
+                if (!active) {
+                    koliEl.value = '';
+                    koliEl.classList.remove('is-invalid');
+                }
+            }
+
+            if (!active) {
+                setKoliInfo(row, 'Isi/Koli: -');
+                setQtyValidation(row);
+            }
+        };
+
+        const updateAllKoliVisibility = () => {
+            if (!enableKoli || !itemsContainer) return;
+            itemsContainer.querySelectorAll('.flow-item-row').forEach((row) => {
+                updateKoliVisibility(row);
+                syncQtyKoliRow(row);
+            });
+        };
+
         const updateKoliInfo = (row) => {
             if (!enableKoli || !row) return;
+            if (!isKoliActive()) {
+                updateKoliVisibility(row);
+                return;
+            }
+
             const selectEl = row.querySelector('.flow-item-select');
             const qtyEl = row.querySelector('input[data-name="qty"]');
             const qtyVal = getPositiveIntValue(qtyEl);
@@ -594,6 +638,11 @@
 
         const syncQtyFromKoli = (row) => {
             if (!enableKoli || !row) return;
+            if (!isKoliActive()) {
+                updateKoliVisibility(row);
+                return;
+            }
+
             const koliEl = row.querySelector('input[data-name="koli"]');
             const qtyEl = row.querySelector('input[data-name="qty"]');
             const selectEl = row.querySelector('.flow-item-select');
@@ -620,6 +669,11 @@
 
         const syncKoliFromQty = (row) => {
             if (!enableKoli || !row) return;
+            if (!isKoliActive()) {
+                updateKoliVisibility(row);
+                return;
+            }
+
             const qtyEl = row.querySelector('input[data-name="qty"]');
             const koliEl = row.querySelector('input[data-name="koli"]');
             const selectEl = row.querySelector('.flow-item-select');
@@ -652,6 +706,8 @@
 
         const syncQtyKoliRow = (row, preferredSource = '') => {
             if (!enableKoli || !row) return;
+            updateKoliVisibility(row);
+            if (!isKoliActive()) return;
 
             const qtyEl = row.querySelector('input[data-name="qty"]');
             const koliEl = row.querySelector('input[data-name="koli"]');
@@ -734,7 +790,7 @@
 
         const applyWarehouseVisibility = (flowType) => {
             if (!warehouseRow || !warehouseSelect) return;
-            const shouldShow = enableWarehouseSelect && flowType === 'manual';
+            const shouldShow = enableWarehouseSelect && ['manual', 'return'].includes(flowType);
             warehouseRow.style.display = shouldShow ? '' : 'none';
             warehouseSelect.required = shouldShow;
             if (shouldShow) {
@@ -788,6 +844,8 @@
             });
         }
 
+        warehouseSelect?.addEventListener('change', updateAllKoliVisibility);
+
         const renumberRows = () => {
             const rows = itemsContainer.querySelectorAll('.flow-item-row');
             rows.forEach((row, idx) => {
@@ -803,8 +861,9 @@
             row.className = 'row g-3 align-items-end mb-4 flow-item-row';
             const itemColSize = enableKoli ? 'col-md-5' : 'col-md-6';
             const noteColSize = enableKoli ? 'col-md-2' : 'col-md-3';
+            const koliDisplay = isKoliActive() ? '' : ' style="display:none;"';
             const koliCol = enableKoli ? `
-                <div class="col-md-2">
+                <div class="col-md-2" data-koli-col${koliDisplay}>
                     <label class="fs-6 fw-bold form-label mb-2">Koli</label>
                     <input type="number" min="1" class="form-control form-control-solid" data-name="koli" />
                     <div class="invalid-feedback" data-error-for="koli"></div>
@@ -850,6 +909,7 @@
                 ? 'koli'
                 : (getPositiveIntValue(qtyEl) ? 'qty' : '');
 
+            updateKoliVisibility(row);
             initSelect2(selectEl);
             syncQtyKoliRow(row);
             renumberRows();

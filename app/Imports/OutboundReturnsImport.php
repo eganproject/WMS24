@@ -6,6 +6,7 @@ use App\Models\Item;
 use App\Models\Supplier;
 use App\Models\Warehouse;
 use App\Support\OutboundKoliExpectation;
+use App\Support\WarehouseService;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 use Maatwebsite\Excel\Concerns\SkipsEmptyRows;
@@ -76,6 +77,7 @@ class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
             $item = $items->get($sku);
             $qty = $qtyKey ? $this->parseQty($row, $qtyKey) : 0;
             $koli = $koliKey ? $this->parseQty($row, $koliKey) : 0;
+            $warehouseId = $this->parseWarehouseId($row, $warehouseMaps, $errors, $rowIndex);
 
             if (!$item) {
                 $missing[$sku] = true;
@@ -86,9 +88,15 @@ class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
                 'qty' => $qty,
             ];
 
-            if ($this->requireSupplier || $koli > 0) {
+            $usesKoli = (int) $warehouseId === WarehouseService::defaultWarehouseId();
+            if ($usesKoli) {
+                if ($koli <= 0) {
+                    $errors[] = "Baris {$rowIndex}: koli wajib diisi untuk outbound dari Gudang Besar";
+                    continue;
+                }
+
                 try {
-                    $resolved = OutboundKoliExpectation::resolve($item, $qty, $koli > 0 ? $koli : null);
+                    $resolved = OutboundKoliExpectation::resolve($item, $qty, $koli);
                 } catch (ValidationException $e) {
                     $errors[] = "Baris {$rowIndex}: ".(collect($e->errors())->flatten()->first() ?? $e->getMessage());
                     continue;
@@ -107,7 +115,6 @@ class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
             $transactedAt = trim((string) ($row['transacted_at'] ?? $row['tanggal'] ?? ''));
             $suratJalanNo = trim((string) ($row['surat_jalan_no'] ?? $row['sj_no'] ?? ''));
             $suratJalanAt = trim((string) ($row['surat_jalan_at'] ?? $row['tanggal_surat_jalan'] ?? ''));
-            $warehouseId = $this->parseWarehouseId($row, $warehouseMaps, $errors, $rowIndex);
 
             $groupKey = implode('::', [
                 $ref !== '' ? $ref : '__default__',

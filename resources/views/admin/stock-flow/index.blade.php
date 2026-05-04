@@ -538,15 +538,15 @@
             if (!inputEl) return null;
             const raw = String(inputEl.value || '').trim();
             if (raw === '') return null;
-            const val = parseInt(raw, 10);
+            if (!/^[1-9]\d*$/.test(raw)) return null;
+            const val = Number(raw);
             return Number.isFinite(val) && val > 0 ? val : null;
         };
 
         const isKoliActive = () => {
             if (!enableKoli) return false;
             const flowType = form?.dataset?.flowType || defaultTypeFilter || '';
-            if (flowType === 'return') return true;
-            if (flowType !== 'manual') return false;
+            if (!['manual', 'return'].includes(flowType)) return false;
 
             const selectedWarehouseId = Number(warehouseSelect?.value || 0);
             return !!defaultWarehouseId && selectedWarehouseId === Number(defaultWarehouseId);
@@ -875,7 +875,7 @@
             const koliCol = enableKoli ? `
                 <div class="col-md-2" data-koli-col${koliDisplay}>
                     <label class="fs-6 fw-bold form-label mb-2">Koli</label>
-                    <input type="number" min="1" class="form-control form-control-solid" data-name="koli" />
+                    <input type="number" min="1" step="1" class="form-control form-control-solid" data-name="koli" />
                     <div class="invalid-feedback" data-error-for="koli"></div>
                     <div class="form-text small text-muted" data-koli-info>Isi/Koli: -</div>
                 </div>
@@ -892,7 +892,7 @@
                 ${koliCol}
                 <div class="col-md-2">
                     <label class="required fs-6 fw-bold form-label mb-2">Qty</label>
-                    <input type="number" min="1" class="form-control form-control-solid" data-name="qty" required />
+                    <input type="number" min="1" step="1" class="form-control form-control-solid" data-name="qty" required />
                     <div class="invalid-feedback" data-error-for="qty"></div>
                 </div>
                 <div class="${noteColSize}">

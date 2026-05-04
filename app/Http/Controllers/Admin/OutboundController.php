@@ -549,8 +549,8 @@ class OutboundController extends Controller
                 $qty = (int) $item->qty;
                 $qtyPerKoli = (int) ($item->item?->koli_qty ?? 0);
                 $koli = null;
-                $usesKoli = $type === 'return'
-                    || ($type === 'manual' && (int) $tx->warehouse_id === WarehouseService::defaultWarehouseId());
+                $usesKoli = in_array($type, ['manual', 'return'], true)
+                    && (int) $tx->warehouse_id === WarehouseService::defaultWarehouseId();
                 if ($usesKoli && $qty > 0 && $qtyPerKoli > 0 && $qty % $qtyPerKoli === 0) {
                     $koli = (int) ($qty / $qtyPerKoli);
                 }
@@ -854,12 +854,15 @@ class OutboundController extends Controller
             ->keyBy('id');
 
         $warehouseId = (int) ($validated['warehouse_id'] ?? 0);
-        $usesKoli = $type === 'return'
-            || ($type === 'manual' && $warehouseId === WarehouseService::defaultWarehouseId());
+        $usesKoli = in_array($type, ['manual', 'return'], true)
+            && $warehouseId === WarehouseService::defaultWarehouseId();
+        $koliRequiredMessage = $type === 'return'
+            ? 'Koli wajib diisi untuk retur dari Gudang Besar.'
+            : 'Koli wajib diisi untuk outbound manual dari Gudang Besar.';
 
         $items = $rawItems
             ->filter(fn ($row) => (int) ($row['qty'] ?? 0) > 0 && (int) ($row['item_id'] ?? 0) > 0)
-            ->map(function ($row, $index) use ($itemMap, $usesKoli) {
+            ->map(function ($row, $index) use ($itemMap, $usesKoli, $koliRequiredMessage) {
                 $itemId = (int) ($row['item_id'] ?? 0);
                 $item = $itemMap->get($itemId);
 
@@ -871,6 +874,12 @@ class OutboundController extends Controller
 
                 $qty = (int) ($row['qty'] ?? 0);
                 if ($usesKoli) {
+                    if (!isset($row['koli']) || (int) $row['koli'] <= 0) {
+                        throw ValidationException::withMessages([
+                            "items.{$index}.koli" => $koliRequiredMessage,
+                        ]);
+                    }
+
                     try {
                         $qty = OutboundKoliExpectation::resolve($item, $qty, $row['koli'] ?? null)['qty'];
                     } catch (ValidationException $e) {

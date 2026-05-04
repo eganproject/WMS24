@@ -31,7 +31,7 @@ class OutboundReturnKoliTest extends TestCase
         ]);
         ItemStock::create([
             'item_id' => $item->id,
-            'warehouse_id' => WarehouseService::displayWarehouseId(),
+            'warehouse_id' => WarehouseService::defaultWarehouseId(),
             'stock' => 24,
         ]);
 
@@ -40,7 +40,7 @@ class OutboundReturnKoliTest extends TestCase
             ->postJson(route('admin.outbound.returns.store'), [
                 'supplier_id' => $supplier->id,
                 'ref_no' => 'RET-001',
-                'warehouse_id' => WarehouseService::displayWarehouseId(),
+                'warehouse_id' => WarehouseService::defaultWarehouseId(),
                 'transacted_at' => now()->format('Y-m-d H:i'),
                 'items' => [
                     [
@@ -57,7 +57,7 @@ class OutboundReturnKoliTest extends TestCase
 
         $transaction = OutboundTransaction::with('items')->firstOrFail();
         $this->assertSame('return', $transaction->type);
-        $this->assertSame(WarehouseService::displayWarehouseId(), (int) $transaction->warehouse_id);
+        $this->assertSame(WarehouseService::defaultWarehouseId(), (int) $transaction->warehouse_id);
         $this->assertSame($supplier->id, (int) $transaction->supplier_id);
 
         $this->assertCount(1, $transaction->items);
@@ -81,7 +81,7 @@ class OutboundReturnKoliTest extends TestCase
             ->withoutMiddleware()
             ->postJson(route('admin.outbound.returns.store'), [
                 'supplier_id' => $supplier->id,
-                'warehouse_id' => WarehouseService::displayWarehouseId(),
+                'warehouse_id' => WarehouseService::defaultWarehouseId(),
                 'transacted_at' => now()->format('Y-m-d H:i'),
                 'items' => [
                     [
@@ -110,7 +110,7 @@ class OutboundReturnKoliTest extends TestCase
         ]);
         ItemStock::create([
             'item_id' => $item->id,
-            'warehouse_id' => WarehouseService::displayWarehouseId(),
+            'warehouse_id' => WarehouseService::defaultWarehouseId(),
             'stock' => 11,
         ]);
 
@@ -118,7 +118,7 @@ class OutboundReturnKoliTest extends TestCase
             ->withoutMiddleware()
             ->postJson(route('admin.outbound.returns.store'), [
                 'supplier_id' => $supplier->id,
-                'warehouse_id' => WarehouseService::displayWarehouseId(),
+                'warehouse_id' => WarehouseService::defaultWarehouseId(),
                 'transacted_at' => now()->format('Y-m-d H:i'),
                 'items' => [
                     [
@@ -153,7 +153,7 @@ class OutboundReturnKoliTest extends TestCase
             'code' => 'OUT-RET-TEST',
             'type' => 'return',
             'supplier_id' => $supplier->id,
-            'warehouse_id' => WarehouseService::displayWarehouseId(),
+            'warehouse_id' => WarehouseService::defaultWarehouseId(),
             'transacted_at' => now(),
             'created_by' => $user->id,
             'status' => 'pending',
@@ -174,6 +174,117 @@ class OutboundReturnKoliTest extends TestCase
             ->assertJsonPath('items.0.item_id', $item->id)
             ->assertJsonPath('items.0.qty', 18)
             ->assertJsonPath('items.0.koli', 3);
+    }
+
+    public function test_store_return_from_main_warehouse_requires_koli(): void
+    {
+        $this->createWarehouseFixtures();
+        $user = User::factory()->create();
+        $supplier = Supplier::create(['name' => 'Supplier Retur']);
+        $item = Item::create([
+            'sku' => 'SKU-OUT-RET-REQ-KOLI',
+            'name' => 'Item Retur Wajib Koli',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+            'koli_qty' => 12,
+        ]);
+
+        $response = $this->actingAs($user)
+            ->withoutMiddleware()
+            ->postJson(route('admin.outbound.returns.store'), [
+                'supplier_id' => $supplier->id,
+                'warehouse_id' => WarehouseService::defaultWarehouseId(),
+                'transacted_at' => now()->format('Y-m-d H:i'),
+                'items' => [
+                    [
+                        'item_id' => $item->id,
+                        'qty' => 12,
+                    ],
+                ],
+            ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['items.0.koli'])
+            ->assertJsonFragment(['Koli wajib diisi untuk retur dari Gudang Besar.']);
+    }
+
+    public function test_store_return_from_display_warehouse_does_not_require_koli(): void
+    {
+        $this->createWarehouseFixtures();
+        $user = User::factory()->create();
+        $supplier = Supplier::create(['name' => 'Supplier Retur']);
+        $item = Item::create([
+            'sku' => 'SKU-OUT-RET-DISPLAY',
+            'name' => 'Item Retur Display',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+            'koli_qty' => 12,
+        ]);
+        ItemStock::create([
+            'item_id' => $item->id,
+            'warehouse_id' => WarehouseService::displayWarehouseId(),
+            'stock' => 5,
+        ]);
+
+        $response = $this->actingAs($user)
+            ->withoutMiddleware()
+            ->postJson(route('admin.outbound.returns.store'), [
+                'supplier_id' => $supplier->id,
+                'warehouse_id' => WarehouseService::displayWarehouseId(),
+                'transacted_at' => now()->format('Y-m-d H:i'),
+                'items' => [
+                    [
+                        'item_id' => $item->id,
+                        'qty' => 5,
+                    ],
+                ],
+            ]);
+
+        $response->assertOk();
+
+        $transaction = OutboundTransaction::with('items')->firstOrFail();
+        $this->assertSame(WarehouseService::displayWarehouseId(), (int) $transaction->warehouse_id);
+        $this->assertSame(5, (int) $transaction->items->first()->qty);
+    }
+
+    public function test_show_return_from_display_warehouse_does_not_include_koli(): void
+    {
+        $this->createWarehouseFixtures();
+        $user = User::factory()->create();
+        $supplier = Supplier::create(['name' => 'Supplier Retur']);
+        $item = Item::create([
+            'sku' => 'SKU-OUT-RET-DISPLAY-EDIT',
+            'name' => 'Item Retur Display Edit',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+            'koli_qty' => 6,
+        ]);
+
+        $transaction = OutboundTransaction::create([
+            'code' => 'OUT-RET-DISPLAY-TEST',
+            'type' => 'return',
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => WarehouseService::displayWarehouseId(),
+            'transacted_at' => now(),
+            'created_by' => $user->id,
+            'status' => 'pending',
+        ]);
+
+        OutboundItem::create([
+            'outbound_transaction_id' => $transaction->id,
+            'item_id' => $item->id,
+            'qty' => 18,
+            'note' => 'Retur display edit',
+        ]);
+
+        $response = $this->actingAs($user)
+            ->withoutMiddleware()
+            ->getJson(route('admin.outbound.returns.show', $transaction->id));
+
+        $response->assertOk()
+            ->assertJsonPath('items.0.item_id', $item->id)
+            ->assertJsonPath('items.0.qty', 18)
+            ->assertJsonPath('items.0.koli', null);
     }
 
     private function createWarehouseFixtures(): array

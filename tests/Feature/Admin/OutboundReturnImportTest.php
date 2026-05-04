@@ -36,13 +36,13 @@ class OutboundReturnImportTest extends TestCase
         ]);
         ItemStock::create([
             'item_id' => $item->id,
-            'warehouse_id' => WarehouseService::displayWarehouseId(),
+            'warehouse_id' => WarehouseService::defaultWarehouseId(),
             'stock' => 12,
         ]);
 
         $file = $this->makeExcelUpload([
-            ['sku', 'koli', 'supplier', 'ref_no', 'item_note', 'transacted_at'],
-            ['SKU-OUT-IMP-001', 2, $supplier->name, 'RET-IMP-01', 'batch retur', now()->format('Y-m-d H:i')],
+            ['sku', 'koli', 'supplier', 'warehouse', 'ref_no', 'item_note', 'transacted_at'],
+            ['SKU-OUT-IMP-001', 2, $supplier->name, 'GUDANG_BESAR', 'RET-IMP-01', 'batch retur', now()->format('Y-m-d H:i')],
         ]);
 
         $this->actingAs($user)
@@ -57,7 +57,7 @@ class OutboundReturnImportTest extends TestCase
         $transaction = OutboundTransaction::with('items')->firstOrFail();
         $this->assertSame('return', $transaction->type);
         $this->assertSame($supplier->id, (int) $transaction->supplier_id);
-        $this->assertSame(WarehouseService::displayWarehouseId(), (int) $transaction->warehouse_id);
+        $this->assertSame(WarehouseService::defaultWarehouseId(), (int) $transaction->warehouse_id);
         $this->assertSame('RET-IMP-01', $transaction->ref_no);
         $this->assertCount(1, $transaction->items);
         $this->assertSame($item->id, (int) $transaction->items->first()->item_id);
@@ -81,8 +81,8 @@ class OutboundReturnImportTest extends TestCase
         ]);
 
         $file = $this->makeExcelUpload([
-            ['sku', 'qty', 'supplier'],
-            ['SKU-OUT-IMP-002', 10, $supplier->name],
+            ['sku', 'qty', 'koli', 'supplier', 'warehouse'],
+            ['SKU-OUT-IMP-002', 10, 2, $supplier->name, 'GUDANG_BESAR'],
         ]);
 
         $this->actingAs($user)

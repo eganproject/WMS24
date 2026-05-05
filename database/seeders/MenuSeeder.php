@@ -67,6 +67,7 @@ class MenuSeeder extends Seeder
             ['name' => 'Cuti/Izin', 'slug' => 'attendance-leaves', 'route' => 'admin.attendance.leaves.index', 'icon' => 'fas fa-plane-departure', 'parent_slug' => 'attendance', 'sort_order' => 8],
             ['name' => 'Raw Log Fingerprint', 'slug' => 'attendance-raw-logs', 'route' => 'admin.attendance.raw-logs.index', 'icon' => 'fas fa-list', 'parent_slug' => 'attendance', 'sort_order' => 9],
             ['name' => 'Rekap Absensi', 'slug' => 'attendance-recap', 'route' => 'admin.attendance.attendances.index', 'icon' => 'fas fa-clipboard-check', 'parent_slug' => 'attendance', 'sort_order' => 10],
+            ['name' => 'Machine Log', 'slug' => 'attendance-machine-logs', 'route' => 'admin.attendance.machine-logs.index', 'icon' => 'fas fa-satellite-dish', 'parent_slug' => 'attendance', 'sort_order' => 11],
         ];
 
         foreach ($menuRows as $menu) {

@@ -17,7 +17,7 @@ return new class extends Migration
             $table->json('request_payload')->nullable();
             $table->smallInteger('http_status')->nullable();
             $table->json('response_payload')->nullable();
-            // success | unauthorized | device_not_found | validation_error | error
+            // success | heartbeat | command_poll | device_command | empty_payload | unsupported_table | unauthorized | device_not_found | validation_error | error
             $table->string('status', 30)->default('success');
             $table->foreignId('raw_log_id')->nullable()->constrained('attendance_raw_logs')->nullOnDelete();
             $table->timestamps();

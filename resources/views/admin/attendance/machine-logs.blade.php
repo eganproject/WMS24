@@ -54,8 +54,22 @@
     </div>
     <div class="card-body pt-2 pb-4">
         <div class="text-muted fs-7 mb-4">
-            Halaman ini mencatat setiap request yang dikirim oleh mesin absensi ke endpoint webhook
-            <code>POST /attendance/fingerprint/webhook</code> — termasuk yang berhasil maupun yang gagal.
+            Halaman ini mencatat request dari mesin absensi Solution X100C ke endpoint ADMS
+            <code>{{ url('/iclock/cdata') }}</code>, <code>{{ url('/iclock/getrequest') }}</code>,
+            <code>{{ url('/iclock/devicecmd') }}</code>, serta endpoint JSON
+            <code>{{ url('/attendance/fingerprint/webhook') }}</code>.
+            Buka detail untuk melihat query, raw body, baris ATTLOG, dan response server.
+        </div>
+
+        <div class="alert alert-info d-flex align-items-start gap-3 mb-6">
+            <i class="fas fa-network-wired fs-2 mt-1"></i>
+            <div>
+                <div class="fw-bold mb-1">Konfigurasi mesin Solution X100C</div>
+                <div class="fs-7">
+                    Arahkan server/ADMS mesin ke domain aplikasi ini dengan path <code>/iclock/cdata</code>.
+                    Nomor serial mesin harus sama dengan kolom <strong>serial_number</strong> di menu Device Absensi.
+                </div>
+            </div>
         </div>
 
         {{-- Section navigation --}}
@@ -212,6 +226,10 @@
     const statusConfig = {
         success:          { label: 'Berhasil',              cls: 'bg-success text-white' },
         heartbeat:        { label: 'Koneksi Mesin',         cls: 'bg-info text-white' },
+        command_poll:      { label: 'Mesin Polling',         cls: 'bg-info text-white' },
+        device_command:    { label: 'Hasil Command',         cls: 'bg-info text-white' },
+        empty_payload:     { label: 'Payload Kosong',        cls: 'bg-light text-dark' },
+        unsupported_table: { label: 'Tabel ADMS Lain',       cls: 'bg-light text-dark' },
         unauthorized:     { label: 'Unauthorized',          cls: 'bg-danger text-white' },
         device_not_found: { label: 'Device Tdk Ditemukan',  cls: 'bg-warning text-dark' },
         validation_error: { label: 'Validasi Gagal',        cls: 'bg-warning text-dark' },
@@ -243,7 +261,7 @@
         isLoading = true;
 
         const tbody = document.querySelector('#machine_logs_table tbody');
-        tbody.innerHTML = '<tr><td colspan="8" class="text-center py-6 text-muted">Memuat data...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center py-6 text-muted">Memuat data...</td></tr>';
 
         const params = new URLSearchParams({
             page: currentPage,
@@ -264,14 +282,14 @@
             })
             .catch(() => {
                 isLoading = false;
-                tbody.innerHTML = '<tr><td colspan="8" class="text-center py-6 text-danger">Gagal memuat data.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="9" class="text-center py-6 text-danger">Gagal memuat data.</td></tr>';
             });
     }
 
     function renderTable(rows) {
         const tbody = document.querySelector('#machine_logs_table tbody');
         if (!rows.length) {
-            tbody.innerHTML = '<tr><td colspan="8" class="text-center py-6 text-muted">Tidak ada data.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="text-center py-6 text-muted">Tidak ada data.</td></tr>';
             return;
         }
 

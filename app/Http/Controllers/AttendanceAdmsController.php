@@ -39,7 +39,7 @@ class AttendanceAdmsController extends Controller
 
         return match ($table) {
             'ATTLOG' => $this->handleAttLog($request, $sn, $processor, $lateNotifier),
-            default  => $this->plainOk(),
+            default  => $this->handleUnsupportedTable($request, $sn, $table),
         };
     }
 
@@ -49,6 +49,18 @@ class AttendanceAdmsController extends Controller
      */
     public function getrequest(Request $request): Response
     {
+        $sn = (string) $request->query('SN', '');
+        $device = AttendanceDevice::where('serial_number', $sn)->first();
+
+        $this->logAdms($request, $device, [
+            'source' => 'adms',
+            'type' => 'getrequest',
+            'method' => $request->method(),
+            'path' => $request->path(),
+            'sn' => $sn,
+            'query' => $request->query(),
+        ], 200, 'command_poll');
+
         return $this->plainOk();
     }
 
@@ -57,6 +69,19 @@ class AttendanceAdmsController extends Controller
      */
     public function devicecmd(Request $request): Response
     {
+        $sn = (string) $request->query('SN', '');
+        $device = AttendanceDevice::where('serial_number', $sn)->first();
+
+        $this->logAdms($request, $device, [
+            'source' => 'adms',
+            'type' => 'devicecmd',
+            'method' => $request->method(),
+            'path' => $request->path(),
+            'sn' => $sn,
+            'query' => $request->query(),
+            'raw_body' => $request->getContent(),
+        ], 200, 'device_command');
+
         return $this->plainOk();
     }
 
@@ -69,9 +94,12 @@ class AttendanceAdmsController extends Controller
         // Only log initialization (not every heartbeat poll) when device is identified
         // or when an unknown device tries to connect (for debugging).
         $this->logAdms($request, $device, [
-            'type'   => 'init',
-            'sn'     => $sn,
-            'query'  => $request->query(),
+            'source' => 'adms',
+            'type' => 'init',
+            'method' => $request->method(),
+            'path' => $request->path(),
+            'sn' => $sn,
+            'query' => $request->query(),
         ], 200, 'heartbeat');
 
         $config = implode("\r\n", [
@@ -104,9 +132,13 @@ class AttendanceAdmsController extends Controller
 
         if (!$device) {
             $this->logAdms($request, null, [
-                'type'   => 'attlog',
-                'sn'     => $sn,
-                'body'   => $request->getContent(),
+                'source' => 'adms',
+                'type' => 'attlog',
+                'method' => $request->method(),
+                'path' => $request->path(),
+                'sn' => $sn,
+                'query' => $request->query(),
+                'raw_body' => $request->getContent(),
             ], 200, 'device_not_found');
 
             // ADMS mesin mengharapkan HTTP 200 meskipun gagal; error di body
@@ -117,8 +149,27 @@ class AttendanceAdmsController extends Controller
         $body  = $request->getContent();
         $lines = array_filter(array_map('trim', explode("\n", $body)));
 
+        $basePayload = [
+            'source' => 'adms',
+            'type' => 'attlog',
+            'method' => $request->method(),
+            'path' => $request->path(),
+            'sn' => $sn,
+            'query' => $request->query(),
+            'raw_body' => $body,
+            'line_count' => count($lines),
+        ];
+
         $lastScanAt       = null;
         $processedCount   = 0;
+
+        if (!count($lines)) {
+            $this->logAdms($request, $device, $basePayload, 200, 'empty_payload', null, [
+                'message' => 'ATTLOG kosong',
+            ]);
+
+            return response("OK\r\n", 200)->header('Content-Type', 'text/plain');
+        }
 
         foreach ($lines as $line) {
             if ($line === '') {
@@ -133,23 +184,28 @@ class AttendanceAdmsController extends Controller
             $verify = (int) trim($parts[3] ?? '1');
 
             if ($pin === '' || $dt === '') {
+                $this->logAdms($request, $device, array_merge($basePayload, [
+                    'raw_line' => $line,
+                    'parsed_parts' => $parts,
+                ]), 200, 'validation_error', null, [
+                    'message' => 'Baris ATTLOG tidak lengkap',
+                ]);
                 continue;
             }
 
             $stateLabel  = $this->statusLabel($status);
             $verifyLabel = $this->verifyLabel($verify);
 
-            $reqPayload = [
-                'source'       => 'adms',
-                'sn'           => $sn,
-                'pin'          => $pin,
-                'datetime'     => $dt,
+            $reqPayload = array_merge($basePayload, [
+                'pin' => $pin,
+                'datetime' => $dt,
                 'status_code'  => $status,
                 'status_label' => $stateLabel,
                 'verify_code'  => $verify,
                 'verify_label' => $verifyLabel,
                 'raw_line'     => $line,
-            ];
+                'parsed_parts' => $parts,
+            ]);
 
             try {
                 $result = $processor->recordFingerprintScanWithResult(
@@ -191,6 +247,24 @@ class AttendanceAdmsController extends Controller
         $respBody = "ATTLOGStamp={$stamp}\r\nOPERLOGStamp=9999\r\n";
 
         return response($respBody, 200)->header('Content-Type', 'text/plain');
+    }
+
+    private function handleUnsupportedTable(Request $request, string $sn, string $table): Response
+    {
+        $device = AttendanceDevice::where('serial_number', $sn)->first();
+
+        $this->logAdms($request, $device, [
+            'source' => 'adms',
+            'type' => 'unsupported_table',
+            'method' => $request->method(),
+            'path' => $request->path(),
+            'sn' => $sn,
+            'table' => $table,
+            'query' => $request->query(),
+            'raw_body' => $request->getContent(),
+        ], 200, 'unsupported_table');
+
+        return $this->plainOk();
     }
 
     private function logAdms(

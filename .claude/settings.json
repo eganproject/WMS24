@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-NetTCPConnection -State Listen | Where-Object { $_.LocalPort -in @\\(80, 443, 8000, 8080, 8888, 8008\\) } | Select-Object LocalAddress, LocalPort, OwningProcess | Sort-Object LocalPort | Format-Table)",
+      "PowerShell(Get-Process -Id 23032 -ErrorAction SilentlyContinue)"
+    ]
+  }
+}

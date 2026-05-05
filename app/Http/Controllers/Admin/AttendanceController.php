@@ -1002,6 +1002,10 @@ class AttendanceController extends Controller
             'statusOptions' => [
                 'success'          => 'Berhasil',
                 'heartbeat'        => 'Koneksi Mesin',
+                'command_poll'      => 'Mesin Polling',
+                'device_command'    => 'Hasil Command Mesin',
+                'empty_payload'     => 'Payload Kosong',
+                'unsupported_table' => 'Tabel ADMS Lain',
                 'unauthorized'     => 'Unauthorized',
                 'device_not_found' => 'Device Tidak Ditemukan',
                 'validation_error' => 'Validasi Gagal',
@@ -1014,12 +1018,13 @@ class AttendanceController extends Controller
     {
         $today = now()->toDateString();
         $base  = AttendanceWebhookLog::query()->whereDate('created_at', $today);
+        $connectionStatuses = ['heartbeat', 'command_poll', 'device_command'];
 
         return response()->json([
-            'total'     => (clone $base)->whereNotIn('status', ['heartbeat'])->count(),
+            'total'     => (clone $base)->whereNotIn('status', $connectionStatuses)->count(),
             'success'   => (clone $base)->where('status', 'success')->count(),
-            'failed'    => (clone $base)->whereNotIn('status', ['success', 'heartbeat'])->count(),
-            'heartbeat' => (clone $base)->where('status', 'heartbeat')->count(),
+            'failed'    => (clone $base)->whereNotIn('status', array_merge(['success'], $connectionStatuses))->count(),
+            'heartbeat' => (clone $base)->whereIn('status', $connectionStatuses)->count(),
         ]);
     }
 
@@ -1033,7 +1038,7 @@ class AttendanceController extends Controller
             ->when($request->input('status'), fn ($q, $s) => $q->where('status', $s))
             ->latest('created_at');
 
-        return $this->datatable($query, $request, fn (AttendanceWebhookLog $log) => [
+        return $this->simplePaginatedResponse($query, $request, fn (AttendanceWebhookLog $log) => [
             'id' => $log->id,
             'created_at' => $log->created_at?->format('Y-m-d H:i:s'),
             'ip_address' => $log->ip_address,
@@ -1044,6 +1049,28 @@ class AttendanceController extends Controller
             'raw_log_id' => $log->raw_log_id,
             'request_payload' => $log->request_payload,
             'response_payload' => $log->response_payload,
+        ]);
+    }
+
+    private function simplePaginatedResponse($query, Request $request, callable $mapper)
+    {
+        $page = max(1, (int) $request->input('page', 1));
+        $perPage = min(100, max(1, (int) $request->input('per_page', 30)));
+        $total = (clone $query)->count();
+        $lastPage = max(1, (int) ceil($total / $perPage));
+        $page = min($page, $lastPage);
+        $offset = ($page - 1) * $perPage;
+
+        $rows = $query->skip($offset)->take($perPage)->get()->map($mapper)->values();
+
+        return response()->json([
+            'data' => $rows,
+            'total' => $total,
+            'per_page' => $perPage,
+            'current_page' => $page,
+            'last_page' => $lastPage,
+            'from' => $total ? $offset + 1 : 0,
+            'to' => $total ? $offset + $rows->count() : 0,
         ]);
     }
 

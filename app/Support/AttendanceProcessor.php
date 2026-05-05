@@ -59,7 +59,7 @@ class AttendanceProcessor
             $device->forceFill(['last_synced_at' => now()])->save();
 
             $attendance = null;
-            if ($employeeId) {
+            if ($employeeId && $rawLog->wasRecentlyCreated) {
                 $attendance = $this->rebuildAttendanceForScan(Employee::findOrFail($employeeId), $scanAt);
             }
 

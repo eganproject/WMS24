@@ -103,14 +103,20 @@ class AttendanceAdmsController extends Controller
             'query' => $request->query(),
         ], 200, 'heartbeat');
 
-        // Return last processed scan timestamp so machine only sends NEW data.
-        // ATTLOGStamp=None would cause machine to resend all stored logs on every heartbeat.
-        $lastScanAt = $device
-            ? AttendanceRawLog::where('attendance_device_id', $device->id)
-                ->latest('scan_at')
-                ->value('scan_at')
-            : null;
-        $attlogStamp = $lastScanAt ? Carbon::parse($lastScanAt)->timestamp : 'None';
+        // Honour the stamp the machine already carries; fall back to our DB stamp.
+        // Never return 'None' if we have a stamp — that resets the machine and causes it
+        // to re-send every stored log, which rebuilds all historical attendance records.
+        $machineStamp = $request->query('ATTLOGStamp');
+        if ($machineStamp && $machineStamp !== 'None' && is_numeric($machineStamp) && (int) $machineStamp > 0) {
+            $attlogStamp = (int) $machineStamp;
+        } else {
+            $lastScanAt = $device
+                ? AttendanceRawLog::where('attendance_device_id', $device->id)
+                    ->latest('scan_at')
+                    ->value('scan_at')
+                : null;
+            $attlogStamp = $lastScanAt ? Carbon::parse($lastScanAt)->timestamp : 'None';
+        }
 
         $config = implode("\r\n", [
             "GET OPTION FROM: {$sn}",

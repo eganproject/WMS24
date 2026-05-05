@@ -5,9 +5,10 @@
 
     RewriteEngine On
 
-    # Bypass HTTPS redirect for ADMS machine endpoints (machines only support HTTP)
-    RewriteCond %{REQUEST_URI} ^/iclock/
-    RewriteRule ^ - [L]
+    # Force HTTPS for all paths EXCEPT ADMS machine endpoints (machines only support HTTP)
+    RewriteCond %{HTTPS} !=on
+    RewriteCond %{REQUEST_URI} !^/iclock/
+    RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
     # Handle Authorization Header
     RewriteCond %{HTTP:Authorization} .

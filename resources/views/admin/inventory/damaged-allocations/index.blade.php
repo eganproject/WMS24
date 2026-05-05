@@ -20,6 +20,7 @@
     #damaged_source_summary_table tr.aging-8_30  td:first-child { border-left: 3px solid #ffc700; }
     #damaged_source_summary_table tr.aging-31_60 td:first-child { border-left: 3px solid #fd7e14; }
     #damaged_source_summary_table tr.aging-61_plus td:first-child { border-left: 3px solid #f1416c; }
+    .flatpickr-calendar.damaged-allocation-surat-jalan-picker { z-index: 1085; }
 </style>
 @endpush
 
@@ -196,12 +197,12 @@
                             <input type="text" class="form-control form-control-solid" name="source_ref" id="allocation_source_ref" placeholder="Contoh: BA retur, berita acara disposal, atau nomor pekerjaan rework" />
                             <div class="invalid-feedback d-block" id="error_source_ref"></div>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-4" id="surat_jalan_no_wrap" style="display:none;">
                             <label class="fs-6 fw-bold form-label mb-2">No Surat Jalan</label>
                             <input type="text" class="form-control form-control-solid" name="surat_jalan_no" id="allocation_surat_jalan_no" />
                             <div class="invalid-feedback d-block" id="error_surat_jalan_no"></div>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-4" id="surat_jalan_at_wrap" style="display:none;">
                             <label class="fs-6 fw-bold form-label mb-2">Tanggal Surat Jalan</label>
                             <input type="text" class="form-control form-control-solid" name="surat_jalan_at" id="allocation_surat_jalan_at" placeholder="YYYY-MM-DD" />
                             <div class="invalid-feedback d-block" id="error_surat_jalan_at"></div>
@@ -373,6 +374,8 @@
         const recipePreviewSection = document.getElementById('recipe_preview_section');
         const recipeSummaryContent = document.getElementById('recipe_summary_content');
         const transactedAtEl       = document.getElementById('allocation_transacted_at');
+        const suratJalanNoWrap     = document.getElementById('surat_jalan_no_wrap');
+        const suratJalanAtWrap     = document.getElementById('surat_jalan_at_wrap');
         const suratJalanNoEl       = document.getElementById('allocation_surat_jalan_no');
         const suratJalanAtEl       = document.getElementById('allocation_surat_jalan_at');
         let fpTransacted = null;
@@ -449,16 +452,46 @@
         })[key] || null;
 
         const generateDeliveryNoteNo = (allocationType = '') => {
+            if (allocationType !== 'return_supplier') {
+                return '';
+            }
+
             const prefix = {
                 return_supplier: 'SJ-DGA-RET',
-                disposal: 'SJ-DGA-DSP',
-                rework: 'SJ-DGA-RWK',
             }[allocationType] || 'SJ-DGA';
             const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
             const pad = (n) => String(n).padStart(2, '0');
             const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
             const random = Math.random().toString(36).slice(2, 6).toUpperCase();
             return `${prefix}-${stamp}-${random}`;
+        };
+
+        const initSuratJalanFlatpickr = () => {
+            if (fpSuratJalan || typeof flatpickr === 'undefined' || !suratJalanAtEl) {
+                return fpSuratJalan;
+            }
+
+            fpSuratJalan = flatpickr(suratJalanAtEl, {
+                dateFormat: 'Y-m-d',
+                allowInput: true,
+                disableMobile: true,
+                appendTo: document.body,
+                onReady: (_, __, instance) => {
+                    instance.calendarContainer?.classList.add('damaged-allocation-surat-jalan-picker');
+                },
+            });
+
+            return fpSuratJalan;
+        };
+
+        const refreshSuratJalanFlatpickr = () => {
+            const picker = initSuratJalanFlatpickr();
+            if (!picker) return;
+
+            window.setTimeout(() => {
+                picker.redraw?.();
+                picker._positionCalendar?.();
+            }, 0);
         };
 
         /* ── recipe helpers ──────────────────────────────── */
@@ -782,6 +815,8 @@
             const type      = typeEl?.value || '';
             const hasRecipe = type === 'rework' && !!(recipeEl?.value || '');
             if (supplierWrap)          supplierWrap.style.display         = type === 'return_supplier' ? '' : 'none';
+            if (suratJalanNoWrap)      suratJalanNoWrap.style.display     = type === 'return_supplier' ? '' : 'none';
+            if (suratJalanAtWrap)      suratJalanAtWrap.style.display     = type === 'return_supplier' ? '' : 'none';
             if (recipeWrap)            recipeWrap.style.display            = type === 'rework' ? '' : 'none';
             if (recipeMultiplierWrap)  recipeMultiplierWrap.style.display  = type === 'rework' ? '' : 'none';
             if (targetWarehouseWrap)   targetWarehouseWrap.style.display   = type === 'rework' ? '' : 'none';
@@ -791,6 +826,14 @@
                 supplierEl.value = '';
                 if (typeof $ !== 'undefined' && $(supplierEl).data('select2')) $(supplierEl).val(null).trigger('change.select2');
             }
+            if (type !== 'return_supplier') {
+                if (suratJalanNoEl) suratJalanNoEl.value = '';
+                if (fpSuratJalan) fpSuratJalan.clear();
+                else if (suratJalanAtEl) suratJalanAtEl.value = '';
+            } else if (!form?.dataset?.editId && suratJalanNoEl && !suratJalanNoEl.value) {
+                suratJalanNoEl.value = generateDeliveryNoteNo('return_supplier');
+            }
+            if (type === 'return_supplier') refreshSuratJalanFlatpickr();
             if (type !== 'rework') {
                 if (recipeEl) {
                     recipeEl.value = '';
@@ -850,18 +893,24 @@
 
         /* ── init select2 & flatpickr ─────────────────────── */
         if (typeof flatpickr !== 'undefined' && transactedAtEl) {
-            fpTransacted = flatpickr(transactedAtEl, { enableTime: true, dateFormat: 'Y-m-d H:i', allowInput: true });
-        }
-        if (typeof flatpickr !== 'undefined' && suratJalanAtEl) {
-            fpSuratJalan = flatpickr(suratJalanAtEl, { dateFormat: 'Y-m-d', allowInput: true });
+            fpTransacted = flatpickr(transactedAtEl, { enableTime: true, dateFormat: 'Y-m-d H:i', allowInput: true, appendTo: modalContentEl });
         }
         initSelect2(supplierEl,       'Pilih supplier');
         initSelect2(recipeEl,         'Pilih resep rework');
         initSelect2(targetWarehouseEl,'Pilih gudang hasil');
 
+        suratJalanAtEl?.addEventListener('focus', () => {
+            if ((typeEl?.value || '') !== 'return_supplier') return;
+            initSuratJalanFlatpickr()?.open();
+        });
+        suratJalanAtEl?.addEventListener('click', () => {
+            if ((typeEl?.value || '') !== 'return_supplier') return;
+            initSuratJalanFlatpickr()?.open();
+        });
+
         typeEl?.addEventListener('change', () => {
-            if (!form?.dataset?.editId && suratJalanNoEl && (!suratJalanNoEl.value || suratJalanNoEl.value.startsWith('SJ-DGA'))) {
-                suratJalanNoEl.value = generateDeliveryNoteNo(typeEl?.value || '');
+            if ((typeEl?.value || '') === 'return_supplier' && !form?.dataset?.editId && suratJalanNoEl && (!suratJalanNoEl.value || suratJalanNoEl.value.startsWith('SJ-DGA'))) {
+                suratJalanNoEl.value = generateDeliveryNoteNo('return_supplier');
             }
             toggleTypeFields();
         });

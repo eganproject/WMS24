@@ -292,7 +292,9 @@ class DamagedAllocationController extends Controller
                 'supplier_id' => $validated['supplier_id'],
                 'target_warehouse_id' => $validated['target_warehouse_id'],
                 'source_ref' => $validated['source_ref'] ?? null,
-                'surat_jalan_no' => $this->resolveDeliveryNoteNo($validated['surat_jalan_no'] ?? null, (string) $validated['type']),
+                'surat_jalan_no' => $validated['type'] === 'return_supplier'
+                    ? $this->resolveDeliveryNoteNo($validated['surat_jalan_no'] ?? null, (string) $validated['type'])
+                    : null,
                 'surat_jalan_at' => $validated['surat_jalan_at'] ?? null,
                 'note' => $validated['note'] ?? null,
                 'transacted_at' => $validated['transacted_at'] ?? now(),
@@ -345,7 +347,9 @@ class DamagedAllocationController extends Controller
                 'supplier_id' => $validated['supplier_id'],
                 'target_warehouse_id' => $validated['target_warehouse_id'],
                 'source_ref' => $validated['source_ref'] ?? null,
-                'surat_jalan_no' => $this->resolveDeliveryNoteNo($validated['surat_jalan_no'] ?? null, (string) $validated['type']),
+                'surat_jalan_no' => $validated['type'] === 'return_supplier'
+                    ? $this->resolveDeliveryNoteNo($validated['surat_jalan_no'] ?? null, (string) $validated['type'])
+                    : null,
                 'surat_jalan_at' => $validated['surat_jalan_at'] ?? null,
                 'note' => $validated['note'] ?? null,
                 'transacted_at' => $validated['transacted_at'] ?? now(),
@@ -1065,6 +1069,10 @@ class DamagedAllocationController extends Controller
         $validated['surat_jalan_at'] = !empty($validated['surat_jalan_at'])
             ? Carbon::parse($validated['surat_jalan_at'])
             : null;
+        if ($type !== 'return_supplier') {
+            $validated['surat_jalan_no'] = null;
+            $validated['surat_jalan_at'] = null;
+        }
 
         return $validated;
     }

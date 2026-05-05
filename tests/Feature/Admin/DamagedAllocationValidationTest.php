@@ -86,6 +86,87 @@ class DamagedAllocationValidationTest extends TestCase
         ]);
     }
 
+    public function test_store_clears_delivery_note_fields_for_disposal_allocation(): void
+    {
+        $this->createWarehouseFixtures();
+        $user = User::factory()->create();
+        $item = Item::create([
+            'sku' => 'SKU-DMG-DSP-SJ',
+            'name' => 'Item Rusak Disposal SJ',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+        ]);
+        $this->createApprovedDamagedItem($user, $item, 4, now()->subDay());
+
+        $this->actingAs($user)
+            ->withoutMiddleware()
+            ->postJson(route('admin.inventory.damaged-allocations.store'), [
+                'type' => 'disposal',
+                'surat_jalan_no' => 'SJ-TIDAK-RELEVAN',
+                'surat_jalan_at' => now()->format('Y-m-d'),
+                'transacted_at' => now()->format('Y-m-d H:i'),
+                'source_items' => [
+                    [
+                        'item_id' => $item->id,
+                        'qty' => 2,
+                    ],
+                ],
+            ])
+            ->assertOk();
+
+        $allocation = DamagedAllocation::firstOrFail();
+        $this->assertSame('disposal', $allocation->type);
+        $this->assertNull($allocation->surat_jalan_no);
+        $this->assertNull($allocation->surat_jalan_at);
+    }
+
+    public function test_store_clears_delivery_note_fields_for_rework_allocation(): void
+    {
+        [$mainWarehouse] = $this->createWarehouseFixtures();
+        $user = User::factory()->create();
+        $sourceItem = Item::create([
+            'sku' => 'SKU-DMG-RWK-SJ',
+            'name' => 'Item Rusak Rework SJ',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+        ]);
+        $outputItem = Item::create([
+            'sku' => 'SKU-DMG-RWK-OUT-SJ',
+            'name' => 'Output Rework SJ',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+        ]);
+        $this->createApprovedDamagedItem($user, $sourceItem, 3, now()->subDay());
+
+        $this->actingAs($user)
+            ->withoutMiddleware()
+            ->postJson(route('admin.inventory.damaged-allocations.store'), [
+                'type' => 'rework',
+                'target_warehouse_id' => $mainWarehouse->id,
+                'surat_jalan_no' => 'SJ-TIDAK-RELEVAN-RWK',
+                'surat_jalan_at' => now()->format('Y-m-d'),
+                'transacted_at' => now()->format('Y-m-d H:i'),
+                'source_items' => [
+                    [
+                        'item_id' => $sourceItem->id,
+                        'qty' => 1,
+                    ],
+                ],
+                'output_items' => [
+                    [
+                        'item_id' => $outputItem->id,
+                        'qty' => 1,
+                    ],
+                ],
+            ])
+            ->assertOk();
+
+        $allocation = DamagedAllocation::firstOrFail();
+        $this->assertSame('rework', $allocation->type);
+        $this->assertNull($allocation->surat_jalan_no);
+        $this->assertNull($allocation->surat_jalan_at);
+    }
+
     public function test_approve_refreshes_pending_source_breakdown_to_current_fifo_balance(): void
     {
         [, , $damagedWarehouse] = $this->createWarehouseFixtures();

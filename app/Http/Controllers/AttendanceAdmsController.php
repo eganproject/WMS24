@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\AttendanceDevice;
+use App\Models\AttendanceRawLog;
 use App\Models\AttendanceWebhookLog;
 use App\Support\AttendanceLateNotifier;
 use App\Support\AttendanceProcessor;
@@ -102,9 +103,18 @@ class AttendanceAdmsController extends Controller
             'query' => $request->query(),
         ], 200, 'heartbeat');
 
+        // Return last processed scan timestamp so machine only sends NEW data.
+        // ATTLOGStamp=None would cause machine to resend all stored logs on every heartbeat.
+        $lastScanAt = $device
+            ? AttendanceRawLog::where('attendance_device_id', $device->id)
+                ->latest('scan_at')
+                ->value('scan_at')
+            : null;
+        $attlogStamp = $lastScanAt ? Carbon::parse($lastScanAt)->timestamp : 'None';
+
         $config = implode("\r\n", [
             "GET OPTION FROM: {$sn}",
-            'ATTLOGStamp=None',
+            "ATTLOGStamp={$attlogStamp}",
             'OPERLOGStamp=9999',
             'ATTPHOTOStamp=None',
             'ErrorDelay=30',

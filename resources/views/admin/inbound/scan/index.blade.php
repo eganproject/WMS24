@@ -163,6 +163,25 @@
         display: grid;
         gap: 14px;
     }
+    .scan-panel.is-locked .scan-search-block,
+    .scan-panel.is-locked .scan-search-status,
+    .scan-panel.is-locked .scan-search-list {
+        display: none;
+    }
+    .scan-active-strip {
+        display: none;
+        border: 1px solid #bfdbfe;
+        background: #eff6ff;
+        color: #1e3a8a;
+        border-radius: 8px;
+        padding: 12px 14px;
+        font-size: 13px;
+        line-height: 1.5;
+        font-weight: 700;
+    }
+    .scan-panel.is-locked .scan-active-strip {
+        display: block;
+    }
     .scan-field-label {
         display: block;
         margin-bottom: 8px;
@@ -759,7 +778,9 @@
                 <div class="scan-panel-desc">Area kiri dipakai operator sepanjang shift untuk pilih inbound, scan SKU, dan kontrol aksi.</div>
             </div>
             <div class="scan-panel-body">
-                <div>
+                <div class="scan-active-strip" id="active_inbound_strip">Inbound aktif siap discan.</div>
+
+                <div class="scan-search-block">
                     <label class="scan-field-label" for="search_query">Cari Inbound</label>
                     <div class="scan-search-row">
                         <input type="text" class="scan-input" id="search_query" placeholder="Scan kode inbound / ref / surat jalan" autocomplete="off" />
@@ -767,7 +788,7 @@
                     </div>
                 </div>
 
-                <div class="scan-status-box" id="search_status">Menunggu pencarian inbound.</div>
+                <div class="scan-status-box scan-search-status" id="search_status">Menunggu pencarian inbound.</div>
 
                 <div class="scan-search-list" id="search_results">
                     <div class="scan-search-empty">Belum ada daftar inbound.</div>
@@ -786,6 +807,7 @@
                 <div class="scan-action-grid">
                     <button type="button" class="scan-btn-secondary" id="btn_reset">Reset Scan</button>
                     <button type="button" class="scan-btn" id="btn_complete">Complete Inbound</button>
+                    <button type="button" class="scan-btn-secondary" id="btn_change_inbound">Ganti Inbound</button>
                     <button type="button" class="scan-btn-danger" id="btn_refresh">Refresh Daftar</button>
                 </div>
 
@@ -863,8 +885,10 @@
         scanStatus: document.getElementById('scan_status'),
         btnReset: document.getElementById('btn_reset'),
         btnComplete: document.getElementById('btn_complete'),
+        btnChangeInbound: document.getElementById('btn_change_inbound'),
         btnRefresh: document.getElementById('btn_refresh'),
         workbenchStatus: document.getElementById('workbench_status'),
+        activeInboundStrip: document.getElementById('active_inbound_strip'),
         detailTitle: document.getElementById('detail_title'),
         detailMeta: document.getElementById('detail_meta'),
         detailBadge: document.getElementById('detail_badge'),
@@ -897,6 +921,7 @@
     let logEntries = [];
     let audioContext = null;
     let helpOpen = false;
+    let inboundLocked = false;
 
     const focusSearch = () => el.searchQuery?.focus();
     const focusSku = () => el.skuCode?.focus();
@@ -913,6 +938,7 @@
                 el.btnToggleHelp.textContent = helpOpen ? 'Sembunyikan Bantuan' : 'Bantuan Shortcut';
             }
         }
+        document.querySelector('.scan-panel')?.classList.toggle('is-locked', inboundLocked && !!state.transaction);
     };
 
     const nowLabel = () => new Date().toLocaleTimeString('id-ID', {
@@ -1203,6 +1229,8 @@
         state.transaction = transaction || null;
 
         if (!transaction) {
+            inboundLocked = false;
+            renderPanels();
             el.summaryCode.textContent = '-';
             el.summaryMeta.textContent = 'Belum ada inbound aktif.';
             el.summaryKoli.textContent = '0 / 0';
@@ -1224,6 +1252,7 @@
             el.btnScanSku.disabled = true;
             el.btnReset.disabled = true;
             el.btnComplete.disabled = true;
+            if (el.btnChangeInbound) el.btnChangeInbound.disabled = true;
             return;
         }
 
@@ -1270,6 +1299,9 @@
             : statusLabel(transaction.status);
         el.detailBadge.className = `scan-badge ${badgeClass(transaction.status)}`;
         el.detailStatus.textContent = `Koli ${scannedKoli}/${expectedKoli} | Qty ${scannedQty}/${expectedQty}`;
+        if (el.activeInboundStrip) {
+            el.activeInboundStrip.textContent = `${transaction.code || '-'} terkunci. Fokus scan SKU aktif.`;
+        }
 
         el.detailItems.innerHTML = items.map((item) => {
             const itemExpectedKoli = Number(item.expected_koli || 0);
@@ -1308,6 +1340,9 @@
         el.btnScanSku.disabled = isCompleted;
         el.btnReset.disabled = isCompleted;
         el.btnComplete.disabled = isCompleted;
+        if (el.btnChangeInbound) el.btnChangeInbound.disabled = false;
+        inboundLocked = true;
+        renderPanels();
     };
 
     const searchTransactions = async () => {
@@ -1504,6 +1539,8 @@
             setStatusBox(el.scanStatus, 'Inbound selesai. Pilih inbound berikutnya.', 'success');
             pushLog('Complete', payload.message || 'Inbound selesai.', 'success', payload.transaction?.code || '');
             await playTone('complete');
+            inboundLocked = false;
+            renderPanels();
             await searchTransactions();
             focusSearch();
         } catch (error) {
@@ -1558,6 +1595,8 @@
     document.addEventListener('keydown', (event) => {
         if (event.key === 'F1') {
             event.preventDefault();
+            inboundLocked = false;
+            renderPanels();
             focusSearch();
             return;
         }
@@ -1591,6 +1630,12 @@
     el.btnComplete.addEventListener('click', completeInbound);
     el.btnReset.addEventListener('click', resetInbound);
     el.btnRefresh.addEventListener('click', searchTransactions);
+    el.btnChangeInbound?.addEventListener('click', () => {
+        inboundLocked = false;
+        renderPanels();
+        searchTransactions();
+        focusSearch();
+    });
     el.searchResults.addEventListener('click', (event) => {
         const button = event.target.closest('.btn-open-transaction');
         if (!button) return;

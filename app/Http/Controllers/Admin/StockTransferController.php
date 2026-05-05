@@ -25,7 +25,7 @@ class StockTransferController extends Controller
         $items = Item::query()
             ->where('item_type', Item::TYPE_SINGLE)
             ->orderBy('name')
-            ->get(['id', 'sku', 'name']);
+            ->get(['id', 'sku', 'name', 'koli_qty']);
         $warehouses = Warehouse::orderBy('name')->get(['id', 'code', 'name']);
 
         return view('admin.inventory.stock-transfers.index', [
@@ -39,6 +39,8 @@ class StockTransferController extends Controller
             'cancelUrlTpl' => route('admin.inventory.stock-transfers.cancel', ':id'),
             'defaultFrom' => WarehouseService::defaultWarehouseId(),
             'defaultTo' => WarehouseService::displayWarehouseId(),
+            'defaultWarehouseId' => WarehouseService::defaultWarehouseId(),
+            'displayWarehouseId' => WarehouseService::displayWarehouseId(),
         ]);
     }
 
@@ -86,7 +88,10 @@ class StockTransferController extends Controller
                     return '';
                 }
                 $qty = (int) ($it->qty ?? 0);
-                return sprintf('%s (%d)', $sku, $qty);
+                $koliLabel = $this->formatKoliBreakdown($qty, (int) ($it->item?->koli_qty ?? 0));
+                return $koliLabel !== ''
+                    ? sprintf('%s (%d pcs | %s)', $sku, $qty, $koliLabel)
+                    : sprintf('%s (%d pcs)', $sku, $qty);
             })->filter()->values();
             $itemLabel = $labels->implode(', ');
             $ts = $row->transacted_at ? Carbon::parse($row->transacted_at)->format('Y-m-d H:i') : '';
@@ -132,6 +137,10 @@ class StockTransferController extends Controller
                     'qty' => (int) $row->qty,
                     'qty_ok' => (int) $row->qty_ok,
                     'qty_reject' => (int) $row->qty_reject,
+                    'koli_label' => $this->formatKoliBreakdown((int) $row->qty, (int) ($row->item?->koli_qty ?? 0)),
+                    'qty_ok_koli_label' => $this->formatKoliBreakdown((int) $row->qty_ok, (int) ($row->item?->koli_qty ?? 0)),
+                    'qty_reject_koli_label' => $this->formatKoliBreakdown((int) $row->qty_reject, (int) ($row->item?->koli_qty ?? 0)),
+                    'qty_per_koli' => (int) ($row->item?->koli_qty ?? 0),
                     'note' => $row->note ?? '',
                     'qc_note' => $row->qc_note ?? '',
                     'label' => trim(($row->item?->sku ?? '').' - '.($row->item?->name ?? '')),
@@ -402,17 +411,60 @@ class StockTransferController extends Controller
             'items' => ['required', 'array', 'min:1'],
             'items.*.item_id' => ['required', 'integer', 'exists:items,id'],
             'items.*.qty' => ['required', 'integer', 'min:1'],
+            'items.*.koli' => ['nullable', 'integer', 'min:1'],
             'items.*.note' => ['nullable', 'string'],
             'note' => ['nullable', 'string'],
             'transacted_at' => ['required', 'date'],
         ]);
 
+        $defaultWarehouseId = WarehouseService::defaultWarehouseId();
+        $displayWarehouseId = WarehouseService::displayWarehouseId();
+        if ((int) $validated['to_warehouse_id'] === $defaultWarehouseId) {
+            throw ValidationException::withMessages([
+                'to_warehouse_id' => 'Transfer stok ke Gudang Besar tidak diperbolehkan.',
+            ]);
+        }
+
+        $requiresKoli = (int) $validated['from_warehouse_id'] === $defaultWarehouseId
+            && (int) $validated['to_warehouse_id'] === $displayWarehouseId;
+        $itemDefinitions = collect();
+        if ($requiresKoli) {
+            $itemDefinitions = Item::query()
+                ->whereIn('id', collect($validated['items'] ?? [])->pluck('item_id')->filter()->unique()->all())
+                ->get(['id', 'sku', 'koli_qty'])
+                ->keyBy('id');
+        }
+
         $items = collect($validated['items'] ?? [])
             ->filter(fn ($row) => (int) ($row['qty'] ?? 0) > 0 && (int) ($row['item_id'] ?? 0) > 0)
-            ->map(function ($row) {
+            ->map(function ($row, $idx) use ($requiresKoli, $itemDefinitions) {
+                $itemId = (int) $row['item_id'];
+                $qty = (int) $row['qty'];
+                $koli = isset($row['koli']) && $row['koli'] !== '' ? (int) $row['koli'] : null;
+                if ($requiresKoli) {
+                    $item = $itemDefinitions->get($itemId);
+                    $qtyPerKoli = (int) ($item?->koli_qty ?? 0);
+                    if ($koli === null || $koli < 1) {
+                        throw ValidationException::withMessages([
+                            "items.{$idx}.koli" => 'Koli wajib diisi untuk transfer Gudang Besar ke Gudang Display.',
+                        ]);
+                    }
+                    if ($qtyPerKoli < 1) {
+                        throw ValidationException::withMessages([
+                            "items.{$idx}.koli" => 'Isi/koli item belum diset.',
+                        ]);
+                    }
+                    if ($qty !== $koli * $qtyPerKoli) {
+                        throw ValidationException::withMessages([
+                            "items.{$idx}.qty" => "Qty harus sama dengan koli x isi/koli ({$koli} x {$qtyPerKoli} = ".($koli * $qtyPerKoli).').',
+                        ]);
+                    }
+                }
+
                 return [
-                    'item_id' => (int) $row['item_id'],
-                    'qty' => (int) $row['qty'],
+                    'item_id' => $itemId,
+                    'qty' => $qty,
+                    'koli' => $koli,
                     'note' => $row['note'] ?? null,
                 ];
             })->values();
@@ -451,6 +503,22 @@ class StockTransferController extends Controller
             : null;
 
         return $validated;
+    }
+
+    private function formatKoliBreakdown(int $qty, int $qtyPerKoli): string
+    {
+        if ($qty <= 0 || $qtyPerKoli <= 0) {
+            return '';
+        }
+
+        $fullKoli = intdiv($qty, $qtyPerKoli);
+        $remainder = $qty % $qtyPerKoli;
+        $label = $fullKoli.' koli';
+        if ($remainder > 0) {
+            $label .= ' + '.$remainder.' pcs';
+        }
+
+        return $label.' x '.$qtyPerKoli;
     }
 
     private function applyDateFilter($query, Request $request): void

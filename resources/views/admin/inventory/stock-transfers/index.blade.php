@@ -90,7 +90,9 @@
                             <label class="required fs-6 fw-bold form-label mb-2">Ke Gudang</label>
                             <select class="form-select form-select-solid" name="to_warehouse_id" id="transfer_to" required>
                                 @foreach($warehouses as $wh)
-                                    <option value="{{ $wh->id }}" @selected($wh->id == $defaultTo)>{{ $wh->name }} ({{ $wh->code }})</option>
+                                    @if($wh->id != ($defaultWarehouseId ?? 0))
+                                        <option value="{{ $wh->id }}" @selected($wh->id == $defaultTo)>{{ $wh->name }} ({{ $wh->code }})</option>
+                                    @endif
                                 @endforeach
                             </select>
                             <div class="invalid-feedback" id="error_to_warehouse_id"></div>
@@ -169,7 +171,9 @@
     const cancelUrlTpl = '{{ $cancelUrlTpl }}';
     const csrfToken = '{{ csrf_token() }}';
     const canUpdate = {{ $canUpdate ? 'true' : 'false' }};
-    const itemOptionsHtml = `@foreach($items as $item)<option value="{{ $item->id }}">{{ $item->sku }} - {{ $item->name }}</option>@endforeach`;
+    const defaultWarehouseId = {{ (int) ($defaultWarehouseId ?? 0) }};
+    const displayWarehouseId = {{ (int) ($displayWarehouseId ?? 0) }};
+    const itemOptionsHtml = `@foreach($items as $item)<option value="{{ $item->id }}" data-koli-qty="{{ (int) ($item->koli_qty ?? 0) }}">{{ $item->sku }} - {{ $item->name }}</option>@endforeach`;
 
     document.addEventListener('DOMContentLoaded', () => {
         const tableEl = $('#stock_transfers_table');
@@ -254,9 +258,50 @@
             return !hasDuplicate;
         };
 
+        const requiresKoliTransfer = () => Number(fromWarehouseEl?.value || 0) === Number(defaultWarehouseId)
+            && Number(toWarehouseEl?.value || 0) === Number(displayWarehouseId);
+
+        const selectedKoliQty = (row) => {
+            const selectEl = row?.querySelector('.transfer-item-select');
+            const option = selectEl?.selectedOptions?.[0];
+            const koliQty = parseInt(option?.getAttribute('data-koli-qty') || '0', 10);
+            return Number.isFinite(koliQty) ? koliQty : 0;
+        };
+
+        const koliSubtext = (label) => label ? `<div class="text-muted fs-8">${label}</div>` : '<div class="text-muted fs-8">Isi/koli belum diset</div>';
+
+        const syncRowKoliMode = (row) => {
+            if (!row) return;
+            const showKoli = requiresKoliTransfer();
+            const koliWrap = row.querySelector('[data-role="koli-wrap"]');
+            const koliEl = row.querySelector('input[data-name="koli"]');
+            const qtyEl = row.querySelector('input[data-name="qty"]');
+            const hintEl = row.querySelector('[data-role="koli-hint"]');
+            const qtyPerKoli = selectedKoliQty(row);
+
+            if (koliWrap) koliWrap.style.display = showKoli ? '' : 'none';
+            if (qtyEl) qtyEl.readOnly = showKoli;
+            if (hintEl) {
+                hintEl.textContent = showKoli
+                    ? (qtyPerKoli > 0 ? `Isi/koli: ${qtyPerKoli}. Qty otomatis dihitung dari koli.` : 'Isi/koli item belum diset.')
+                    : '';
+            }
+            if (!showKoli) {
+                if (koliEl) koliEl.value = '';
+                return;
+            }
+            const koli = parseInt(koliEl?.value || '0', 10);
+            if (qtyEl) qtyEl.value = qtyPerKoli > 0 && Number.isFinite(koli) && koli > 0 ? String(koli * qtyPerKoli) : '';
+        };
+
+        const syncAllKoliMode = () => {
+            itemsContainer?.querySelectorAll('.transfer-item-row').forEach(syncRowKoliMode);
+        };
+
         const syncQcReject = (row) => {
             if (!row) return;
             const qtyTransfer = parseInt(row.getAttribute('data-qty-transfer') || '0', 10);
+            const qtyPerKoli = parseInt(row.getAttribute('data-qty-per-koli') || '0', 10);
             const okEl = row.querySelector('[data-qc="ok"]');
             const rejectEl = row.querySelector('[data-qc="reject"]');
             if (!okEl || !rejectEl) return;
@@ -267,6 +312,16 @@
             okEl.value = okVal;
             const rejectVal = Math.max(0, qtyTransfer - okVal);
             rejectEl.value = rejectVal;
+            const formatKoli = (qty) => {
+                if (!Number.isFinite(qtyPerKoli) || qtyPerKoli <= 0 || qty <= 0) return '';
+                const koli = Math.floor(qty / qtyPerKoli);
+                const sisa = qty % qtyPerKoli;
+                return `${koli} koli${sisa > 0 ? ` + ${sisa} pcs` : ''} x ${qtyPerKoli}`;
+            };
+            const okKoliEl = row.querySelector('[data-role="qc-ok-koli"]');
+            const rejectKoliEl = row.querySelector('[data-role="qc-reject-koli"]');
+            if (okKoliEl) okKoliEl.textContent = formatKoli(okVal);
+            if (rejectKoliEl) rejectKoliEl.textContent = formatKoli(rejectVal);
         };
 
         const initSelect2 = (selectEl) => {
@@ -308,13 +363,19 @@
             const row = document.createElement('div');
             row.className = 'row g-3 align-items-end mb-4 transfer-item-row';
             row.innerHTML = `
-                <div class="col-md-6">
+                <div class="col-md-5">
                     <label class="required fs-6 fw-bold form-label mb-2">Item</label>
                     <select class="form-select form-select-solid transfer-item-select" data-name="item_id" required>
                         <option value=""></option>
                         ${itemOptionsHtml}
                     </select>
                     <div class="invalid-feedback" data-error-for="item_id"></div>
+                </div>
+                <div class="col-md-2" data-role="koli-wrap" style="display:none;">
+                    <label class="required fs-6 fw-bold form-label mb-2">Koli</label>
+                    <input type="number" min="1" step="1" class="form-control form-control-solid" data-name="koli" />
+                    <div class="form-text text-muted" data-role="koli-hint"></div>
+                    <div class="invalid-feedback" data-error-for="koli"></div>
                 </div>
                 <div class="col-md-2">
                     <label class="required fs-6 fw-bold form-label mb-2">Qty</label>
@@ -334,6 +395,8 @@
             const selectEl = row.querySelector('.transfer-item-select');
             const qtyEl = row.querySelector('input[data-name="qty"]');
             if (qtyEl) qtyEl.value = data.qty ?? '';
+            const koliEl = row.querySelector('input[data-name="koli"]');
+            if (koliEl) koliEl.value = data.koli ?? '';
             const noteEl = row.querySelector('input[data-name="note"]');
             if (noteEl) noteEl.value = data.note ?? '';
 
@@ -346,6 +409,7 @@
                 }
             }
             renumberRows();
+            syncRowKoliMode(row);
             validateUniqueItems();
         };
 
@@ -362,6 +426,7 @@
             createItemRow();
             clearErrors();
             validateUniqueItems();
+            syncAllKoliMode();
         };
 
         const openPrefill = (prefill) => {
@@ -389,6 +454,7 @@
             });
             clearErrors();
             validateUniqueItems();
+            syncAllKoliMode();
             modal?.show();
         };
 
@@ -410,9 +476,17 @@
 
         itemsContainer?.addEventListener('change', (e) => {
             if (e.target.matches('.transfer-item-select')) {
+                syncRowKoliMode(e.target.closest('.transfer-item-row'));
                 validateUniqueItems();
             }
         });
+        itemsContainer?.addEventListener('input', (e) => {
+            if (e.target.matches('input[data-name="koli"]')) {
+                syncRowKoliMode(e.target.closest('.transfer-item-row'));
+            }
+        });
+        fromWarehouseEl?.addEventListener('change', syncAllKoliMode);
+        toWarehouseEl?.addEventListener('change', syncAllKoliMode);
 
         itemsContainer?.addEventListener('click', (e) => {
             const btn = e.target.closest('.btn-remove-item');
@@ -574,6 +648,7 @@
                     const row = document.createElement('div');
                     row.className = 'row g-3 align-items-end mb-4';
                     row.setAttribute('data-qty-transfer', String(item.qty ?? 0));
+                    row.setAttribute('data-qty-per-koli', String(item.qty_per_koli ?? 0));
                     row.innerHTML = `
                         <div class="col-md-4">
                             <label class="fs-6 fw-bold form-label mb-2">Item</label>
@@ -582,15 +657,17 @@
                         </div>
                         <div class="col-md-2">
                             <label class="fs-6 fw-bold form-label mb-2">Qty Transfer</label>
-                            <div class="form-control form-control-solid">${item.qty}</div>
+                            <div class="form-control form-control-solid">${item.qty}${koliSubtext(item.koli_label)}</div>
                         </div>
                         <div class="col-md-2">
                             <label class="required fs-6 fw-bold form-label mb-2">Qty OK</label>
                             <input type="number" min="0" class="form-control form-control-solid" data-qc="ok" name="items[${idx}][qty_ok]" value="${(item.qty_ok && item.qty_ok > 0) ? item.qty_ok : item.qty}" />
+                            <div class="form-text text-muted" data-role="qc-ok-koli">${item.qty_ok_koli_label || item.koli_label || ''}</div>
                         </div>
                         <div class="col-md-2">
                             <label class="required fs-6 fw-bold form-label mb-2">Qty Reject</label>
                             <input type="number" min="0" class="form-control form-control-solid" data-qc="reject" name="items[${idx}][qty_reject]" value="${item.qty_reject ?? 0}" readonly />
+                            <div class="form-text text-muted" data-role="qc-reject-koli">${item.qty_reject_koli_label || ''}</div>
                         </div>
                         <div class="col-md-2">
                             <label class="fs-6 fw-bold form-label mb-2">Catatan</label>

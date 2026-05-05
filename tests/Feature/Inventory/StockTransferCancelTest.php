@@ -33,6 +33,7 @@ class StockTransferCancelTest extends TestCase
             'name' => 'Transfer Cancel Item',
             'item_type' => Item::TYPE_SINGLE,
             'category_id' => 0,
+            'koli_qty' => 1,
         ]);
 
         ItemStock::create([
@@ -51,6 +52,7 @@ class StockTransferCancelTest extends TestCase
                 'items' => [
                     [
                         'item_id' => $item->id,
+                        'koli' => 5,
                         'qty' => 5,
                     ],
                 ],
@@ -83,6 +85,112 @@ class StockTransferCancelTest extends TestCase
         ]);
     }
 
+    public function test_transfer_to_main_warehouse_is_rejected(): void
+    {
+        $user = User::factory()->create();
+        $displayWarehouse = Warehouse::firstOrCreate(
+            ['code' => 'GUDANG_DISPLAY'],
+            ['name' => 'Gudang Display', 'type' => 'display']
+        );
+        $mainWarehouse = Warehouse::firstOrCreate(
+            ['code' => 'GUDANG_BESAR'],
+            ['name' => 'Gudang Besar', 'type' => 'main']
+        );
+        $item = Item::create([
+            'sku' => 'TRF-MAIN-REJECT',
+            'name' => 'Transfer Main Reject',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+        ]);
+
+        ItemStock::create([
+            'item_id' => $item->id,
+            'warehouse_id' => $displayWarehouse->id,
+            'stock' => 8,
+        ]);
+
+        $this->withoutMiddleware();
+
+        $this->actingAs($user)
+            ->postJson(route('admin.inventory.stock-transfers.store'), [
+                'from_warehouse_id' => $displayWarehouse->id,
+                'to_warehouse_id' => $mainWarehouse->id,
+                'transacted_at' => now()->format('Y-m-d H:i'),
+                'items' => [
+                    [
+                        'item_id' => $item->id,
+                        'qty' => 2,
+                    ],
+                ],
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['to_warehouse_id'])
+            ->assertJsonPath('errors.to_warehouse_id.0', 'Transfer stok ke Gudang Besar tidak diperbolehkan.');
+    }
+
+    public function test_transfer_from_main_to_display_requires_matching_koli(): void
+    {
+        $user = User::factory()->create();
+        $fromWarehouse = Warehouse::firstOrCreate(
+            ['code' => 'GUDANG_BESAR'],
+            ['name' => 'Gudang Besar', 'type' => 'main']
+        );
+        $toWarehouse = Warehouse::firstOrCreate(
+            ['code' => 'GUDANG_DISPLAY'],
+            ['name' => 'Gudang Display', 'type' => 'display']
+        );
+        $item = Item::create([
+            'sku' => 'TRF-KOLI-001',
+            'name' => 'Transfer Koli Item',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+            'koli_qty' => 12,
+        ]);
+
+        ItemStock::create([
+            'item_id' => $item->id,
+            'warehouse_id' => $fromWarehouse->id,
+            'stock' => 30,
+        ]);
+
+        $this->withoutMiddleware();
+
+        $this->actingAs($user)
+            ->postJson(route('admin.inventory.stock-transfers.store'), [
+                'from_warehouse_id' => $fromWarehouse->id,
+                'to_warehouse_id' => $toWarehouse->id,
+                'transacted_at' => now()->format('Y-m-d H:i'),
+                'items' => [
+                    [
+                        'item_id' => $item->id,
+                        'qty' => 12,
+                    ],
+                ],
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['items.0.koli']);
+
+        $this->actingAs($user)
+            ->postJson(route('admin.inventory.stock-transfers.store'), [
+                'from_warehouse_id' => $fromWarehouse->id,
+                'to_warehouse_id' => $toWarehouse->id,
+                'transacted_at' => now()->format('Y-m-d H:i'),
+                'items' => [
+                    [
+                        'item_id' => $item->id,
+                        'koli' => 2,
+                        'qty' => 24,
+                    ],
+                ],
+            ])
+            ->assertOk();
+
+        $this->assertDatabaseHas('stock_transfer_items', [
+            'item_id' => $item->id,
+            'qty' => 24,
+        ]);
+    }
+
     public function test_canceled_transfer_cannot_be_processed_by_qc(): void
     {
         $user = User::factory()->create();
@@ -99,6 +207,7 @@ class StockTransferCancelTest extends TestCase
             'name' => 'Transfer Cancel Item 2',
             'item_type' => Item::TYPE_SINGLE,
             'category_id' => 0,
+            'koli_qty' => 1,
         ]);
 
         ItemStock::create([
@@ -117,6 +226,7 @@ class StockTransferCancelTest extends TestCase
                 'items' => [
                     [
                         'item_id' => $item->id,
+                        'koli' => 4,
                         'qty' => 4,
                     ],
                 ],
@@ -163,6 +273,7 @@ class StockTransferCancelTest extends TestCase
             'name' => 'Transfer Reject Item',
             'item_type' => Item::TYPE_SINGLE,
             'category_id' => 0,
+            'koli_qty' => 1,
         ]);
 
         ItemStock::create([
@@ -181,6 +292,7 @@ class StockTransferCancelTest extends TestCase
                 'items' => [
                     [
                         'item_id' => $item->id,
+                        'koli' => 5,
                         'qty' => 5,
                     ],
                 ],

@@ -34,6 +34,16 @@
             } elseif ($toId == $defaultWarehouseId) {
                 $toBadge = 'badge-light-primary';
             }
+            $formatKoli = function ($qty, $qtyPerKoli) {
+                $qty = (int) $qty;
+                $qtyPerKoli = (int) $qtyPerKoli;
+                if ($qty <= 0 || $qtyPerKoli <= 0) {
+                    return '';
+                }
+                $koli = intdiv($qty, $qtyPerKoli);
+                $sisa = $qty % $qtyPerKoli;
+                return $koli.' koli'.($sisa > 0 ? ' + '.$sisa.' pcs' : '').' x '.$qtyPerKoli;
+            };
         @endphp
         <div class="row mb-6">
             <div class="col-md-4">
@@ -85,8 +95,11 @@
                     <tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0">
                         <th>Item</th>
                         <th>Qty</th>
+                        <th>Koli</th>
                         <th>Qty OK</th>
+                        <th>Koli OK</th>
                         <th>Qty Reject</th>
+                        <th>Koli Reject</th>
                         <th>Catatan</th>
                         <th>Catatan QC</th>
                     </tr>
@@ -96,8 +109,11 @@
                         <tr>
                             <td>{{ $row->item?->sku }} - {{ $row->item?->name }}</td>
                             <td>{{ $row->qty }}</td>
+                            <td>{{ $formatKoli($row->qty, $row->item?->koli_qty) ?: '-' }}</td>
                             <td>{{ $row->qty_ok }}</td>
+                            <td>{{ $formatKoli($row->qty_ok, $row->item?->koli_qty) ?: '-' }}</td>
                             <td>{{ $row->qty_reject }}</td>
+                            <td>{{ $formatKoli($row->qty_reject, $row->item?->koli_qty) ?: '-' }}</td>
                             <td>{{ $row->note ?? '-' }}</td>
                             <td>{{ $row->qc_note ?? '-' }}</td>
                         </tr>

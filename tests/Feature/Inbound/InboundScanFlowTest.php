@@ -31,6 +31,49 @@ class InboundScanFlowTest extends TestCase
             ->assertSee('const koliRequiresDefaultWarehouse = false;', false);
     }
 
+    public function test_inbound_receipt_detail_renders_document_layout(): void
+    {
+        $this->withoutMiddleware(AuthorizeMenuPermission::class);
+
+        $admin = User::factory()->create();
+        $supplier = Supplier::create(['name' => 'Supplier Dokumen Inbound']);
+        $item = Item::create([
+            'sku' => 'SKU-DOC-IN-001',
+            'name' => 'Item Dokumen Inbound',
+            'category_id' => 0,
+            'koli_qty' => 12,
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson(route('admin.inbound.receipts.store'), [
+                'ref_no' => 'REF-DOC-IN-001',
+                'supplier_id' => $supplier->id,
+                'surat_jalan_no' => 'SJ-DOC-IN-001',
+                'surat_jalan_at' => now()->format('Y-m-d'),
+                'transacted_at' => now()->format('Y-m-d H:i:s'),
+                'items' => [
+                    [
+                        'item_id' => $item->id,
+                        'qty' => 24,
+                        'koli' => 2,
+                    ],
+                ],
+            ])
+            ->assertOk();
+
+        $transaction = InboundTransaction::firstOrFail();
+
+        $this->actingAs($admin)
+            ->get(route('admin.inbound.receipts.detail', $transaction->id))
+            ->assertOk()
+            ->assertSee('Dokumen Penerimaan Barang')
+            ->assertSee('No. Penerimaan')
+            ->assertSee('Daftar Barang')
+            ->assertSee('SKU-DOC-IN-001')
+            ->assertSee('Item Dokumen Inbound')
+            ->assertSee('Dibuat Oleh');
+    }
+
     public function test_inbound_receipt_accepts_explicit_koli_and_keeps_qty_consistent(): void
     {
         $this->withoutMiddleware(AuthorizeMenuPermission::class);

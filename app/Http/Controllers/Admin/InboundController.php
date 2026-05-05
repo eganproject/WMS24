@@ -495,6 +495,7 @@ class InboundController extends Controller
             'items.item',
             'warehouse',
             'supplier',
+            'creator:id,name',
             'scanSession.items',
             'scanSession.starter:id,name',
             'scanSession.lastScanner:id,name',
@@ -529,6 +530,19 @@ class InboundController extends Controller
             'scanSession' => $transaction->scanSession,
             'scanSummary' => $scanSummary,
             'statusLabel' => InboundScanStatus::label($transaction->status),
+            'documentMode' => true,
+            'documentTitle' => match ($type) {
+                'receipt' => 'Dokumen Penerimaan Barang',
+                'return' => 'Dokumen Retur Inbound',
+                'manual' => 'Dokumen Inbound Manual',
+                default => 'Dokumen Inbound',
+            },
+            'documentCodeLabel' => match ($type) {
+                'receipt' => 'No. Penerimaan',
+                'return' => 'No. Retur Inbound',
+                'manual' => 'No. Inbound Manual',
+                default => 'No. Inbound',
+            },
         ]);
     }
 

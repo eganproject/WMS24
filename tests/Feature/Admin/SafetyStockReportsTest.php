@@ -94,6 +94,21 @@ class SafetyStockReportsTest extends TestCase
         $this->assertTrue($damagedRows->has('SKU-LOW-MAIN'));
         $this->assertFalse($damagedRows->has('SKU-LOW-DISPLAY'));
         $this->assertSame(8, $damagedRows->get('SKU-LOW-MAIN')['stock']);
+
+        $allResponse = $this->withoutMiddleware()->getJson(route('admin.reports.low-stock.data', [
+            'draw' => 1,
+            'start' => 0,
+            'length' => 25,
+            'warehouse_id' => 'all',
+        ]));
+
+        $allResponse->assertOk();
+
+        $allRows = Collection::make($allResponse->json('data'))
+            ->keyBy(fn ($row) => $row['sku'].'|'.$row['warehouse']);
+        $this->assertTrue($allRows->has('SKU-LOW-MAIN|Gudang Besar'));
+        $this->assertTrue($allRows->has('SKU-LOW-DISPLAY|Gudang Display'));
+        $this->assertSame(6, $allRows->get('SKU-LOW-DISPLAY|Gudang Display')['safety_stock']);
     }
 
     public function test_replenishment_report_reserves_main_safety_stock_and_skips_bundles(): void

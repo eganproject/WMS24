@@ -71,7 +71,10 @@ class ReplenishmentReportController extends Controller
                     ->where('sm.warehouse_id', '=', $defaultId);
             })
             ->leftJoin('categories as c', 'c.id', '=', 'i.category_id')
-            ->where('i.item_type', '!=', 'bundle')
+            ->where(function ($query) {
+                $query->whereNull('i.item_type')
+                    ->orWhere('i.item_type', '!=', 'bundle');
+            })
             ->whereRaw("{$displaySafetyExpr} > 0")
             ->whereRaw("{$displayStockExpr} < {$displaySafetyExpr}");
 

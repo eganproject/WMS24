@@ -19,24 +19,16 @@
         </div>
         <div class="card-toolbar">
             @if(!empty($warehouseLabel ?? null))
-                @php
-                    $currentWarehouseId = $defaultWarehouseId ?? null;
-                    $warehouseBadge = 'badge-light-secondary';
-                    if (!empty($displayWarehouseId) && $currentWarehouseId == $displayWarehouseId) {
-                        $warehouseBadge = 'badge-light-success';
-                    } elseif (!empty($defaultWarehouseId) && $currentWarehouseId == $defaultWarehouseId) {
-                        $warehouseBadge = 'badge-light-primary';
-                    }
-                @endphp
-                <span class="badge {{ $warehouseBadge }} me-4" id="warehouse_badge">Gudang: {{ $warehouseLabel }}</span>
+                <span class="badge badge-light-secondary me-4" id="warehouse_badge">Gudang: Semua Gudang</span>
             @endif
             <div class="d-flex align-items-end gap-3 flex-wrap">
                 @if(!empty($warehouses ?? []))
                     <div class="min-w-200px">
                         <label class="text-muted fs-7 mb-1">Gudang</label>
                         <select id="filter_warehouse" class="form-select form-select-solid w-200px">
+                            <option value="all" selected>Semua Gudang</option>
                             @foreach($warehouses as $wh)
-                                <option value="{{ $wh->id }}" @if(!empty($defaultWarehouseId) && $defaultWarehouseId === $wh->id) selected @endif>{{ $wh->name }}</option>
+                                <option value="{{ $wh->id }}">{{ $wh->name }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -119,6 +111,7 @@
                         <th width="5%">No</th>
                         <th>SKU</th>
                         <th>Nama</th>
+                        <th>Gudang</th>
                         <th>Kategori</th>
                         <th class="text-end">Stok</th>
                         <th class="text-end">Stok Pengaman</th>
@@ -191,6 +184,7 @@
                 { data: null, orderable: false, searchable: false, render: (data, type, row, meta) => meta.row + meta.settings._iDisplayStart + 1 },
                 { data: 'sku' },
                 { data: 'name' },
+                { data: 'warehouse' },
                 { data: 'category' },
                 { data: 'stock', className: 'text-end', render: (data, type, row) => {
                     const value = Number.isFinite(Number(data)) ? Number(data) : 0;
@@ -265,10 +259,10 @@
                     $(statusFilter).val('').trigger('change.select2');
                 }
             }
-            if (warehouseFilter && defaultWarehouseId) {
-                warehouseFilter.value = String(defaultWarehouseId);
+            if (warehouseFilter) {
+                warehouseFilter.value = 'all';
                 if (typeof $ !== 'undefined' && $(warehouseFilter).data('select2')) {
-                    $(warehouseFilter).val(String(defaultWarehouseId)).trigger('change.select2');
+                    $(warehouseFilter).val('all').trigger('change.select2');
                 }
             }
             if (limitFilter) {

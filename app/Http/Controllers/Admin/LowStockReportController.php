@@ -33,22 +33,37 @@ class LowStockReportController extends Controller
     public function data(Request $request)
     {
         $warehouseFilter = $request->input('warehouse_id');
-        $warehouseId = is_numeric($warehouseFilter)
+        $isAllWarehouses = $warehouseFilter === null || $warehouseFilter === '' || $warehouseFilter === 'all';
+        $warehouseId = !$isAllWarehouses && is_numeric($warehouseFilter)
             ? (int) $warehouseFilter
             : WarehouseService::defaultWarehouseId();
         $allowedWarehouseIds = $this->safetyReportWarehouses()->pluck('id');
-        if (!$allowedWarehouseIds->contains($warehouseId)) {
+        if (!$isAllWarehouses && !$allowedWarehouseIds->contains($warehouseId)) {
             $warehouseId = WarehouseService::defaultWarehouseId();
         }
         $safetyExpr = 'COALESCE(s.safety_stock, i.safety_stock, 0)';
         $stockExpr = 'COALESCE(s.stock, 0)';
+
         $baseQuery = DB::table('items as i')
-            ->leftJoin('item_stocks as s', function ($join) use ($warehouseId) {
+            ->join('warehouses as w', function ($join) use ($warehouseId, $isAllWarehouses) {
+                $join->where(function ($query) {
+                    $query->whereNull('w.type')
+                        ->orWhere('w.type', '!=', 'damaged');
+                });
+
+                if (!$isAllWarehouses) {
+                    $join->where('w.id', '=', $warehouseId);
+                }
+            })
+            ->leftJoin('item_stocks as s', function ($join) {
                 $join->on('s.item_id', '=', 'i.id')
-                    ->where('s.warehouse_id', '=', $warehouseId);
+                    ->on('s.warehouse_id', '=', 'w.id');
             })
             ->leftJoin('categories as c', 'c.id', '=', 'i.category_id')
-            ->where('i.item_type', '!=', 'bundle')
+            ->where(function ($query) {
+                $query->whereNull('i.item_type')
+                    ->orWhere('i.item_type', '!=', 'bundle');
+            })
             ->whereRaw("{$safetyExpr} > 0")
             ->whereRaw("{$stockExpr} < {$safetyExpr}");
 
@@ -102,12 +117,15 @@ class LowStockReportController extends Controller
             'i.sku',
             'i.name',
             'i.address',
+            'w.id as warehouse_id',
+            'w.name as warehouse',
             DB::raw("{$safetyExpr} as safety_stock"),
             DB::raw("{$stockExpr} as stock"),
             DB::raw("CASE WHEN s.safety_stock IS NOT NULL THEN 'Per gudang' ELSE 'Default item' END as safety_source"),
             DB::raw("CASE WHEN i.category_id = 0 THEN 'Tanpa Kategori' ELSE COALESCE(c.name, '-') END as category"),
         ])
         ->orderByRaw("({$safetyExpr} - {$stockExpr}) desc")
+        ->orderBy('w.name')
         ->orderBy('i.sku');
 
         if ($length > 0) {
@@ -123,6 +141,8 @@ class LowStockReportController extends Controller
                 'id' => $row->id,
                 'sku' => $row->sku ?? '-',
                 'name' => $row->name ?? '-',
+                'warehouse_id' => (int) $row->warehouse_id,
+                'warehouse' => $row->warehouse ?? '-',
                 'category' => $row->category ?? '-',
                 'address' => $row->address ?? '-',
                 'stock' => $stock,

@@ -7,6 +7,7 @@ use App\Models\Area;
 use App\Models\Attendance;
 use App\Models\AttendanceDevice;
 use App\Models\AttendanceRawLog;
+use App\Models\AttendanceWebhookLog;
 use App\Models\Employee;
 use App\Models\EmployeeFingerprint;
 use App\Models\EmployeeLeave;
@@ -73,6 +74,7 @@ class AttendanceController extends Controller
             'leaves' => ['label' => 'Cuti/Izin', 'route' => 'admin.attendance.leaves.index', 'icon' => 'fas fa-plane-departure'],
             'raw_logs' => ['label' => 'Raw Log', 'route' => 'admin.attendance.raw-logs.index', 'icon' => 'fas fa-list'],
             'attendances' => ['label' => 'Rekap', 'route' => 'admin.attendance.attendances.index', 'icon' => 'fas fa-clipboard-check'],
+            'machine_logs' => ['label' => 'Machine Log', 'route' => 'admin.attendance.machine-logs.index', 'icon' => 'fas fa-satellite-dish'],
         ];
     }
 
@@ -990,6 +992,59 @@ class AttendanceController extends Controller
         $attendance->delete();
 
         return response()->json(['message' => 'Rekap absensi berhasil dihapus']);
+    }
+
+    public function machineLogsIndex()
+    {
+        return view('admin.attendance.machine-logs', [
+            'sectionLinks' => $this->sectionLinks(),
+            'devices' => AttendanceDevice::query()->orderBy('name')->get(['id', 'name', 'serial_number']),
+            'statusOptions' => [
+                'success'          => 'Berhasil',
+                'heartbeat'        => 'Koneksi Mesin',
+                'unauthorized'     => 'Unauthorized',
+                'device_not_found' => 'Device Tidak Ditemukan',
+                'validation_error' => 'Validasi Gagal',
+                'error'            => 'Error Server',
+            ],
+        ]);
+    }
+
+    public function machineLogsSummary(Request $request)
+    {
+        $today = now()->toDateString();
+        $base  = AttendanceWebhookLog::query()->whereDate('created_at', $today);
+
+        return response()->json([
+            'total'     => (clone $base)->whereNotIn('status', ['heartbeat'])->count(),
+            'success'   => (clone $base)->where('status', 'success')->count(),
+            'failed'    => (clone $base)->whereNotIn('status', ['success', 'heartbeat'])->count(),
+            'heartbeat' => (clone $base)->where('status', 'heartbeat')->count(),
+        ]);
+    }
+
+    public function machineLogsData(Request $request)
+    {
+        $query = AttendanceWebhookLog::query()
+            ->with(['device:id,name,serial_number'])
+            ->when($request->input('date_from'), fn ($q, $date) => $q->whereDate('created_at', '>=', $date))
+            ->when($request->input('date_to'), fn ($q, $date) => $q->whereDate('created_at', '<=', $date))
+            ->when($request->input('device_id'), fn ($q, $id) => $q->where('attendance_device_id', $id))
+            ->when($request->input('status'), fn ($q, $s) => $q->where('status', $s))
+            ->latest('created_at');
+
+        return $this->datatable($query, $request, fn (AttendanceWebhookLog $log) => [
+            'id' => $log->id,
+            'created_at' => $log->created_at?->format('Y-m-d H:i:s'),
+            'ip_address' => $log->ip_address,
+            'device' => $log->device ? "{$log->device->name}" : ($log->serial_number ? "SN: {$log->serial_number}" : '-'),
+            'device_user_id' => $log->device_user_id ?? '-',
+            'http_status' => $log->http_status,
+            'status' => $log->status,
+            'raw_log_id' => $log->raw_log_id,
+            'request_payload' => $log->request_payload,
+            'response_payload' => $log->response_payload,
+        ]);
     }
 
     private function validateEmployee(Request $request, ?Employee $employee = null): array

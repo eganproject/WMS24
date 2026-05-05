@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\AttendanceFingerprintWebhookController;
+use App\Http\Controllers\AttendanceAdmsController;
 use App\Http\Controllers\TelegramWebhookController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
@@ -65,6 +66,16 @@ Route::post('/telegram/webhook', TelegramWebhookController::class)
 Route::post('/attendance/fingerprint/webhook', AttendanceFingerprintWebhookController::class)
     ->withoutMiddleware([ValidateCsrfToken::class])
     ->name('attendance.fingerprint.webhook');
+
+// ADMS (ZKTeco/Solution push protocol) endpoints — called directly by the attendance machine
+Route::withoutMiddleware([ValidateCsrfToken::class])->group(function () {
+    Route::match(['GET', 'POST'], '/iclock/cdata', [AttendanceAdmsController::class, 'cdata'])
+        ->name('adms.cdata');
+    Route::get('/iclock/getrequest', [AttendanceAdmsController::class, 'getrequest'])
+        ->name('adms.getrequest');
+    Route::post('/iclock/devicecmd', [AttendanceAdmsController::class, 'devicecmd'])
+        ->name('adms.devicecmd');
+});
 
 Route::get('/dashboard', [DashboardController::class, 'index'])
     ->middleware(['auth', 'verified'])
@@ -458,5 +469,8 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/attendances/data', [AttendanceController::class, 'attendancesData'])->name('attendances.data');
         Route::put('/attendances/{attendance}', [AttendanceController::class, 'updateAttendance'])->name('attendances.update');
         Route::delete('/attendances/{attendance}', [AttendanceController::class, 'destroyAttendance'])->name('attendances.destroy');
+        Route::get('/machine-logs', [AttendanceController::class, 'machineLogsIndex'])->name('machine-logs.index');
+        Route::get('/machine-logs/summary', [AttendanceController::class, 'machineLogsSummary'])->name('machine-logs.summary');
+        Route::get('/machine-logs/data', [AttendanceController::class, 'machineLogsData'])->name('machine-logs.data');
     });
 });

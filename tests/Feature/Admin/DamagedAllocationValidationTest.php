@@ -36,7 +36,167 @@ class DamagedAllocationValidationTest extends TestCase
             ]);
 
         $response->assertStatus(422)
-            ->assertJsonValidationErrors(['source_items.0.damaged_good_item_id']);
+            ->assertJsonValidationErrors(['source_items.0.item_id']);
+    }
+
+    public function test_store_allocates_selected_damaged_sku_to_fifo_source_lines(): void
+    {
+        $this->createWarehouseFixtures();
+        $user = User::factory()->create();
+        $item = Item::create([
+            'sku' => 'SKU-DMG-ALLOC-FIFO',
+            'name' => 'Item Rusak FIFO',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+        ]);
+
+        $older = $this->createApprovedDamagedItem($user, $item, 3, now()->subDays(2));
+        $newer = $this->createApprovedDamagedItem($user, $item, 7, now()->subDay());
+
+        $response = $this->actingAs($user)
+            ->withoutMiddleware()
+            ->postJson(route('admin.inventory.damaged-allocations.store'), [
+                'type' => 'disposal',
+                'transacted_at' => now()->format('Y-m-d H:i'),
+                'source_items' => [
+                    [
+                        'item_id' => $item->id,
+                        'qty' => 8,
+                        'note' => 'alokasi sku fifo',
+                    ],
+                ],
+            ]);
+
+        $response->assertOk();
+
+        $allocation = DamagedAllocation::firstOrFail();
+        $this->assertDatabaseHas('damaged_allocation_items', [
+            'damaged_allocation_id' => $allocation->id,
+            'line_type' => 'source',
+            'damaged_good_item_id' => $older->id,
+            'item_id' => $item->id,
+            'qty' => 3,
+        ]);
+        $this->assertDatabaseHas('damaged_allocation_items', [
+            'damaged_allocation_id' => $allocation->id,
+            'line_type' => 'source',
+            'damaged_good_item_id' => $newer->id,
+            'item_id' => $item->id,
+            'qty' => 5,
+        ]);
+    }
+
+    public function test_approve_refreshes_pending_source_breakdown_to_current_fifo_balance(): void
+    {
+        [, , $damagedWarehouse] = $this->createWarehouseFixtures();
+        $user = User::factory()->create();
+        $item = Item::create([
+            'sku' => 'SKU-DMG-ALLOC-REFRESH',
+            'name' => 'Item Rusak Refresh FIFO',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+        ]);
+
+        $oldest = $this->createApprovedDamagedItem($user, $item, 3, now()->subDays(3));
+        $middle = $this->createApprovedDamagedItem($user, $item, 7, now()->subDays(2));
+        $newest = $this->createApprovedDamagedItem($user, $item, 5, now()->subDay());
+        ItemStock::create([
+            'item_id' => $item->id,
+            'warehouse_id' => $damagedWarehouse->id,
+            'stock' => 15,
+        ]);
+
+        $this->actingAs($user)
+            ->withoutMiddleware()
+            ->postJson(route('admin.inventory.damaged-allocations.store'), [
+                'type' => 'disposal',
+                'transacted_at' => now()->format('Y-m-d H:i'),
+                'source_items' => [
+                    [
+                        'item_id' => $item->id,
+                        'qty' => 8,
+                    ],
+                ],
+            ])
+            ->assertOk();
+
+        $pending = DamagedAllocation::query()->where('status', 'pending')->firstOrFail();
+        $this->assertDatabaseHas('damaged_allocation_items', [
+            'damaged_allocation_id' => $pending->id,
+            'damaged_good_item_id' => $oldest->id,
+            'qty' => 3,
+        ]);
+        $this->assertDatabaseHas('damaged_allocation_items', [
+            'damaged_allocation_id' => $pending->id,
+            'damaged_good_item_id' => $middle->id,
+            'qty' => 5,
+        ]);
+
+        $approved = DamagedAllocation::create([
+            'code' => 'DGA-REFRESH-USED',
+            'type' => 'disposal',
+            'transacted_at' => now(),
+            'status' => 'approved',
+            'created_by' => $user->id,
+            'approved_by' => $user->id,
+            'approved_at' => now(),
+        ]);
+        DamagedAllocationItem::create([
+            'damaged_allocation_id' => $approved->id,
+            'line_type' => 'source',
+            'damaged_good_item_id' => $oldest->id,
+            'item_id' => $item->id,
+            'qty' => 3,
+        ]);
+
+        $this->actingAs($user)
+            ->withoutMiddleware()
+            ->postJson(route('admin.inventory.damaged-allocations.approve', $pending->id))
+            ->assertOk();
+
+        $this->assertDatabaseMissing('damaged_allocation_items', [
+            'damaged_allocation_id' => $pending->id,
+            'damaged_good_item_id' => $oldest->id,
+        ]);
+        $this->assertDatabaseHas('damaged_allocation_items', [
+            'damaged_allocation_id' => $pending->id,
+            'damaged_good_item_id' => $middle->id,
+            'qty' => 7,
+        ]);
+        $this->assertDatabaseHas('damaged_allocation_items', [
+            'damaged_allocation_id' => $pending->id,
+            'damaged_good_item_id' => $newest->id,
+            'qty' => 1,
+        ]);
+    }
+
+    public function test_store_rejects_ambiguous_source_row_with_sku_and_source_id(): void
+    {
+        $this->createWarehouseFixtures();
+        $user = User::factory()->create();
+        $item = Item::create([
+            'sku' => 'SKU-DMG-ALLOC-AMBIG',
+            'name' => 'Item Rusak Ambigu',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+        ]);
+        $damagedItem = $this->createApprovedDamagedItem($user, $item, 5);
+
+        $this->actingAs($user)
+            ->withoutMiddleware()
+            ->postJson(route('admin.inventory.damaged-allocations.store'), [
+                'type' => 'disposal',
+                'transacted_at' => now()->format('Y-m-d H:i'),
+                'source_items' => [
+                    [
+                        'item_id' => $item->id,
+                        'damaged_good_item_id' => $damagedItem->id,
+                        'qty' => 1,
+                    ],
+                ],
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['source_items.0.item_id']);
     }
 
     public function test_store_returns_top_level_validation_error_for_missing_supplier(): void
@@ -193,14 +353,14 @@ class DamagedAllocationValidationTest extends TestCase
         ]);
     }
 
-    private function createApprovedDamagedItem(User $user, Item $item, int $qty): DamagedGoodItem
+    private function createApprovedDamagedItem(User $user, Item $item, int $qty, $transactedAt = null): DamagedGoodItem
     {
         $damagedGood = DamagedGood::create([
-            'code' => 'DMG-ALLOC-'.strtoupper(substr(md5($item->id.$qty), 0, 8)),
+            'code' => 'DMG-ALLOC-'.strtoupper(substr(md5($item->id.$qty.($transactedAt?->timestamp ?? microtime(true))), 0, 8)),
             'source_type' => DamagedGood::SOURCE_MANUAL,
             'source_warehouse_id' => null,
             'source_ref' => 'TEST',
-            'transacted_at' => now(),
+            'transacted_at' => $transactedAt ?? now(),
             'status' => 'approved',
             'approved_at' => now(),
             'created_by' => $user->id,

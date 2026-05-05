@@ -43,9 +43,15 @@ class ItemStockController extends Controller
         $defaultId = WarehouseService::defaultWarehouseId();
         $displayId = WarehouseService::displayWarehouseId();
         $damagedId = WarehouseService::damagedWarehouseId();
-        $query = Item::with(['stocks' => function ($q) use ($defaultId, $displayId, $damagedId) {
-            $q->whereIn('warehouse_id', [$defaultId, $displayId, $damagedId]);
-        }])->orderBy('name');
+        $query = Item::with([
+            'category',
+            'location.area',
+            'area',
+            'bundleComponents.component',
+            'stocks' => function ($q) use ($defaultId, $displayId, $damagedId) {
+                $q->whereIn('warehouse_id', [$defaultId, $displayId, $damagedId]);
+            },
+        ])->orderBy('name');
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
@@ -81,12 +87,34 @@ class ItemStockController extends Controller
             $virtualMain = $isBundle ? BundleService::virtualAvailableQty($i, $defaultId) : null;
             $virtualDisplay = $isBundle ? BundleService::virtualAvailableQty($i, $displayId) : null;
             $stockGoodTotal = $isBundle ? null : ($stockMain + $stockDisplay);
+            $koliQty = $isBundle ? 0 : max(0, (int) ($i->koli_qty ?? 0));
+            $mainKoliFull = $koliQty > 0 ? intdiv($stockMain, $koliQty) : null;
+            $mainKoliRemainder = $koliQty > 0 ? ($stockMain % $koliQty) : null;
+            $location = $i->location;
+            $area = $i->resolvedArea();
+
             return [
                 'id' => $i->id,
                 'sku' => $i->sku,
                 'name' => $i->name,
                 'item_type' => $i->item_type,
+                'category' => $i->category?->name ?? '-',
+                'address' => $i->resolvedAddress(),
+                'area_code' => $area?->code ?? '',
+                'rack_code' => $location?->rack_code ?? '',
+                'column_no' => $location?->column_no ?? '',
+                'row_no' => $location?->row_no ?? '',
+                'description' => $i->description ?? '',
+                'bundle_summary' => $isBundle ? BundleService::summarize($i) : '',
+                'bundle_components' => $isBundle ? $i->bundleComponents->map(fn ($row) => [
+                    'component_sku' => $row->component?->sku,
+                    'component_name' => $row->component?->name,
+                    'required_qty' => (int) $row->required_qty,
+                ])->values()->all() : [],
+                'koli_qty' => $koliQty,
                 'stock_main' => $stockMain,
+                'stock_main_koli' => $mainKoliFull,
+                'stock_main_koli_remainder' => $mainKoliRemainder,
                 'stock_display' => $stockDisplay,
                 'stock_damaged' => $stockDamaged,
                 'stock_good_total' => $stockGoodTotal,

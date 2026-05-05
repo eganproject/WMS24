@@ -370,6 +370,8 @@ class OutboundController extends Controller
             'displayWarehouseId' => WarehouseService::displayWarehouseId(),
             'enableWarehouseSelect' => in_array($type, ['manual', 'return'], true),
             'enableKoli' => in_array($type, ['manual', 'return'], true),
+            'koliFlowTypes' => ['manual', 'return'],
+            'koliRequiresDefaultWarehouse' => true,
             'allowKoliImport' => in_array($type, ['manual', 'return'], true),
             'suppliers' => $suppliers,
             'supplierFlowTypes' => $this->usesSupplier($type) ? [$type] : [],

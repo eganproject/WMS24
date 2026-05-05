@@ -58,7 +58,7 @@ class DamagedAllocationController extends Controller
     public function sourceItems(Request $request)
     {
         $search = trim((string) $request->input('q', ''));
-        $items = DamagedStockService::availableSourceLines($search, null, $this->isExactSearch($request));
+        $items = DamagedStockService::availableSkuBalances($search, null, $this->isExactSearch($request));
 
         return response()->json([
             'data' => $items->all(),
@@ -215,31 +215,56 @@ class DamagedAllocationController extends Controller
             'note' => $allocation->note,
             'status' => $allocation->status ?? 'pending',
             'transacted_at' => $allocation->transacted_at?->format('Y-m-d H:i'),
-            'source_items' => $allocation->sourceItems->map(function ($row) use ($remainingMap) {
-                $state = $remainingMap[(int) ($row->damaged_good_item_id ?? 0)] ?? [
-                    'received_qty' => (int) $row->qty,
-                    'allocated_qty' => 0,
-                    'remaining_qty' => (int) $row->qty,
-                ];
-                $damage = $row->damagedGoodItem?->damagedGood;
-                $sourceWarehouse = $damage?->sourceWarehouse?->name ?? '-';
+            'source_items' => $allocation->sourceItems
+                ->groupBy('item_id')
+                ->map(function (Collection $rows) use ($remainingMap) {
+                $first = $rows->first();
+                $item = $first?->item;
+                $qty = (int) $rows->sum('qty');
+                $availableRows = DamagedStockService::remainingSourceLines(null, null, false)
+                    ->where('item_id', (int) ($first?->item_id ?? 0));
+                $remainingQty = (int) $availableRows->sum('remaining_qty');
+                $receivedQty = (int) $availableRows->sum('received_qty');
+                $allocatedQty = (int) $availableRows->sum('allocated_qty');
+                $sourceCount = max($rows->count(), $availableRows->count());
+                $oldest = $availableRows->sortBy([
+                    ['damage_transacted_at', 'asc'],
+                    ['id', 'asc'],
+                ])->first();
+                $breakdown = $rows->map(function ($row) use ($remainingMap) {
+                    $state = $remainingMap[(int) ($row->damaged_good_item_id ?? 0)] ?? [
+                        'received_qty' => (int) $row->qty,
+                        'allocated_qty' => 0,
+                        'remaining_qty' => (int) $row->qty,
+                    ];
+                    $damage = $row->damagedGoodItem?->damagedGood;
+
+                    return [
+                        'damaged_good_item_id' => $row->damaged_good_item_id,
+                        'damage_code' => $damage?->code,
+                        'source_warehouse' => $damage?->sourceWarehouse?->name ?? '-',
+                        'qty' => (int) $row->qty,
+                        'remaining_qty' => (int) ($state['remaining_qty'] ?? 0),
+                    ];
+                })->values();
 
                 return [
-                    'damaged_good_item_id' => $row->damaged_good_item_id,
-                    'item_id' => $row->item_id,
-                    'item_label' => trim(($row->item?->sku ?? '').' - '.($row->item?->name ?? '')),
-                    'qty' => (int) $row->qty,
-                    'note' => $row->note ?? '',
-                    'damage_code' => $damage?->code,
-                    'source_warehouse' => $sourceWarehouse,
-                    'received_qty' => (int) ($state['received_qty'] ?? 0),
-                    'allocated_qty' => (int) ($state['allocated_qty'] ?? 0),
-                    'remaining_qty' => (int) ($state['remaining_qty'] ?? 0),
+                    'item_id' => $first?->item_id,
+                    'item_label' => trim(($item?->sku ?? '').' - '.($item?->name ?? '')),
+                    'qty' => $qty,
+                    'note' => $rows->pluck('note')->first(fn ($note) => $note !== null && $note !== '') ?? '',
+                    'damage_code' => $oldest['damage_code'] ?? null,
+                    'source_warehouse' => $sourceCount > 1 ? $sourceCount.' sumber' : ($oldest['source_warehouse_name'] ?? '-'),
+                    'received_qty' => $receivedQty,
+                    'allocated_qty' => $allocatedQty,
+                    'remaining_qty' => $remainingQty,
+                    'source_count' => $sourceCount,
+                    'source_breakdown' => $breakdown,
                     'option_label' => sprintf(
-                        '%s | Intake %s | Sisa %d',
-                        trim(($row->item?->sku ?? '').' - '.($row->item?->name ?? '')),
-                        $damage?->code ?? '-',
-                        (int) ($state['remaining_qty'] ?? 0)
+                        '%s | Total sisa %d | %d sumber',
+                        trim(($item?->sku ?? '').' - '.($item?->name ?? '')),
+                        $remainingQty,
+                        $sourceCount
                     ),
                 ];
             })->values(),
@@ -411,6 +436,8 @@ class DamagedAllocationController extends Controller
                     'source_items' => 'Minimal 1 item sumber barang rusak diperlukan.',
                 ]);
             }
+            $sourceItems = $this->refreshSourceItemsForApproval($allocation, $sourceItems);
+            $allocation->setRelation('sourceItems', $sourceItems);
 
             $remainingMap = DamagedStockService::remainingQtyMap($sourceItems->pluck('damaged_good_item_id')->all());
             foreach ($sourceItems as $row) {
@@ -689,6 +716,171 @@ class DamagedAllocationController extends Controller
         }
     }
 
+    private function refreshSourceItemsForApproval(DamagedAllocation $allocation, Collection $currentSourceItems): Collection
+    {
+        $requestedRows = $currentSourceItems
+            ->groupBy('item_id')
+            ->map(function (Collection $rows, $itemId) {
+                return [
+                    'item_id' => (int) $itemId,
+                    'qty' => (int) $rows->sum('qty'),
+                    'note' => $rows->pluck('note')->first(fn ($note) => $note !== null && $note !== '') ?? null,
+                ];
+            })
+            ->filter(fn ($row) => (int) ($row['item_id'] ?? 0) > 0 && (int) ($row['qty'] ?? 0) > 0)
+            ->values();
+
+        if ($requestedRows->isEmpty()) {
+            throw ValidationException::withMessages([
+                'source_items' => 'Minimal 1 item sumber barang rusak diperlukan.',
+            ]);
+        }
+
+        $itemIds = $requestedRows->pluck('item_id')->unique()->values()->all();
+        DamagedGoodItem::query()
+            ->whereIn('item_id', $itemIds)
+            ->whereHas('damagedGood', fn ($query) => $query->where('status', 'approved'))
+            ->lockForUpdate()
+            ->get(['id']);
+
+        $resolvedRows = $this->resolveSourceItemsByStockBalance($requestedRows);
+
+        DamagedAllocationItem::query()
+            ->where('damaged_allocation_id', $allocation->id)
+            ->where('line_type', 'source')
+            ->delete();
+
+        foreach ($resolvedRows as $row) {
+            DamagedAllocationItem::create([
+                'damaged_allocation_id' => $allocation->id,
+                'line_type' => 'source',
+                'damaged_good_item_id' => $row['damaged_good_item_id'],
+                'item_id' => $row['item_id'],
+                'qty' => $row['qty'],
+                'note' => $row['note'] ?? null,
+            ]);
+        }
+
+        return DamagedAllocationItem::with(['item', 'damagedGoodItem.damagedGood'])
+            ->where('damaged_allocation_id', $allocation->id)
+            ->where('line_type', 'source')
+            ->get();
+    }
+
+    private function resolveSourceItemsByStockBalance(Collection $requestedRows): Collection
+    {
+        $resolved = collect();
+
+        $legacySourceIds = $requestedRows
+            ->filter(fn ($row) => (int) ($row['damaged_good_item_id'] ?? 0) > 0 && (int) ($row['item_id'] ?? 0) <= 0)
+            ->pluck('damaged_good_item_id')
+            ->map(fn ($id) => (int) $id)
+            ->values();
+
+        $legacyDamagedItems = collect();
+        $legacyRemainingMap = [];
+        if ($legacySourceIds->isNotEmpty()) {
+            $legacyDamagedItems = DamagedGoodItem::with(['damagedGood', 'item'])
+                ->whereIn('id', $legacySourceIds->all())
+                ->get()
+                ->keyBy('id');
+            if ($legacyDamagedItems->count() !== $legacySourceIds->count()) {
+                throw ValidationException::withMessages([
+                    'source_items' => 'Ada sumber barang rusak yang tidak valid.',
+                ]);
+            }
+            $legacyRemainingMap = DamagedStockService::remainingQtyMap($legacySourceIds->all());
+        }
+
+        foreach ($requestedRows as $row) {
+            $itemId = (int) ($row['item_id'] ?? 0);
+            $legacySourceId = (int) ($row['damaged_good_item_id'] ?? 0);
+            $qtyNeeded = (int) ($row['qty'] ?? 0);
+            $note = $row['note'] ?? null;
+
+            if ($qtyNeeded <= 0) {
+                continue;
+            }
+
+            if ($itemId <= 0 && $legacySourceId > 0) {
+                $damagedItem = $legacyDamagedItems->get($legacySourceId);
+                if (!$damagedItem || ($damagedItem->damagedGood?->status ?? null) !== 'approved') {
+                    throw ValidationException::withMessages([
+                        'source_items' => 'Sumber barang rusak harus berasal dari intake yang sudah disetujui.',
+                    ]);
+                }
+
+                $remainingQty = (int) ($legacyRemainingMap[$damagedItem->id]['remaining_qty'] ?? 0);
+                if ($qtyNeeded > $remainingQty) {
+                    throw ValidationException::withMessages([
+                        'source_items' => sprintf(
+                            'Sisa stok rusak untuk %s tidak mencukupi. Sisa saat ini %d.',
+                            $damagedItem->item?->sku ?? 'item',
+                            $remainingQty
+                        ),
+                    ]);
+                }
+
+                $resolved->push([
+                    'damaged_good_item_id' => (int) $damagedItem->id,
+                    'item_id' => (int) $damagedItem->item_id,
+                    'qty' => $qtyNeeded,
+                    'note' => $note,
+                ]);
+                continue;
+            }
+
+            if ($itemId <= 0) {
+                throw ValidationException::withMessages([
+                    'source_items' => 'SKU sumber barang rusak wajib dipilih.',
+                ]);
+            }
+
+            $sourceLines = DamagedStockService::remainingSourceLines(null, null, false)
+                ->where('item_id', $itemId)
+                ->sortBy([
+                    ['damage_transacted_at', 'asc'],
+                    ['id', 'asc'],
+                ])
+                ->values();
+
+            $availableQty = (int) $sourceLines->sum('remaining_qty');
+            if ($availableQty < $qtyNeeded) {
+                $label = $sourceLines->first()
+                    ? trim(($sourceLines->first()['item_sku'] ?? '').' - '.($sourceLines->first()['item_name'] ?? ''))
+                    : (Item::query()->where('id', $itemId)->value('sku') ?? 'item');
+                throw ValidationException::withMessages([
+                    'source_items' => sprintf(
+                        'Saldo stok rusak untuk %s tidak mencukupi. Sisa saat ini %d.',
+                        $label,
+                        $availableQty
+                    ),
+                ]);
+            }
+
+            foreach ($sourceLines as $sourceLine) {
+                if ($qtyNeeded <= 0) {
+                    break;
+                }
+
+                $takeQty = min($qtyNeeded, (int) ($sourceLine['remaining_qty'] ?? 0));
+                if ($takeQty <= 0) {
+                    continue;
+                }
+
+                $resolved->push([
+                    'damaged_good_item_id' => (int) $sourceLine['id'],
+                    'item_id' => $itemId,
+                    'qty' => $takeQty,
+                    'note' => $note,
+                ]);
+                $qtyNeeded -= $takeQty;
+            }
+        }
+
+        return $resolved->values();
+    }
+
     private function validatePayload(Request $request): array
     {
         $typeLabels = array_keys($this->typeLabels());
@@ -704,7 +896,8 @@ class DamagedAllocationController extends Controller
             'surat_jalan_no' => ['nullable', 'string', 'max:100'],
             'surat_jalan_at' => ['nullable', 'date'],
             'source_items' => ['required', 'array', 'min:1'],
-            'source_items.*.damaged_good_item_id' => ['required', 'integer', 'exists:damaged_good_items,id'],
+            'source_items.*.item_id' => ['nullable', 'integer', 'exists:items,id'],
+            'source_items.*.damaged_good_item_id' => ['nullable', 'integer', 'exists:damaged_good_items,id'],
             'source_items.*.qty' => ['required', 'integer', 'min:1'],
             'source_items.*.note' => ['nullable', 'string'],
             'output_items' => ['nullable', 'array'],
@@ -715,10 +908,28 @@ class DamagedAllocationController extends Controller
             'transacted_at' => ['required', 'date'],
         ]);
 
+        collect($validated['source_items'] ?? [])->each(function ($row, $index) {
+            $hasQty = (int) ($row['qty'] ?? 0) > 0;
+            $hasSkuItem = (int) ($row['item_id'] ?? 0) > 0;
+            $hasLegacySource = (int) ($row['damaged_good_item_id'] ?? 0) > 0;
+            if ($hasSkuItem && $hasLegacySource) {
+                throw ValidationException::withMessages([
+                    "source_items.{$index}.item_id" => 'Pilih SKU rusak saja. Sumber intake akan ditentukan otomatis FIFO.',
+                ]);
+            }
+            $hasItem = $hasSkuItem || $hasLegacySource;
+            if ($hasQty && !$hasItem) {
+                throw ValidationException::withMessages([
+                    "source_items.{$index}.item_id" => 'SKU sumber barang rusak wajib dipilih.',
+                ]);
+            }
+        });
+
         $sourceItems = collect($validated['source_items'] ?? [])
-            ->filter(fn ($row) => (int) ($row['damaged_good_item_id'] ?? 0) > 0 && (int) ($row['qty'] ?? 0) > 0)
+            ->filter(fn ($row) => ((int) ($row['item_id'] ?? 0) > 0 || (int) ($row['damaged_good_item_id'] ?? 0) > 0) && (int) ($row['qty'] ?? 0) > 0)
             ->map(fn ($row) => [
-                'damaged_good_item_id' => (int) $row['damaged_good_item_id'],
+                'item_id' => (int) ($row['item_id'] ?? 0),
+                'damaged_good_item_id' => (int) ($row['damaged_good_item_id'] ?? 0),
                 'qty' => (int) $row['qty'],
                 'note' => $row['note'] ?? null,
             ])->values();
@@ -729,49 +940,21 @@ class DamagedAllocationController extends Controller
             ]);
         }
 
-        if ($sourceItems->groupBy('damaged_good_item_id')->filter(fn ($rows) => $rows->count() > 1)->isNotEmpty()) {
+        $duplicateSkuRows = $sourceItems
+            ->filter(fn ($row) => (int) ($row['item_id'] ?? 0) > 0)
+            ->groupBy('item_id')
+            ->filter(fn ($rows) => $rows->count() > 1);
+        $duplicateSourceRows = $sourceItems
+            ->filter(fn ($row) => (int) ($row['damaged_good_item_id'] ?? 0) > 0 && (int) ($row['item_id'] ?? 0) <= 0)
+            ->groupBy('damaged_good_item_id')
+            ->filter(fn ($rows) => $rows->count() > 1);
+        if ($duplicateSkuRows->isNotEmpty() || $duplicateSourceRows->isNotEmpty()) {
             throw ValidationException::withMessages([
-                'source_items' => 'Sumber barang rusak tidak boleh duplikat.',
+                'source_items' => 'SKU sumber barang rusak tidak boleh duplikat.',
             ]);
         }
 
-        $damagedItems = DamagedGoodItem::with(['damagedGood', 'item'])
-            ->whereIn('id', $sourceItems->pluck('damaged_good_item_id')->all())
-            ->get()
-            ->keyBy('id');
-        if ($damagedItems->count() !== $sourceItems->count()) {
-            throw ValidationException::withMessages([
-                'source_items' => 'Ada sumber barang rusak yang tidak valid.',
-            ]);
-        }
-
-        $remainingMap = DamagedStockService::remainingQtyMap($sourceItems->pluck('damaged_good_item_id')->all());
-        $sourceItems = $sourceItems->map(function ($row) use ($damagedItems, $remainingMap) {
-            $damagedItem = $damagedItems->get($row['damaged_good_item_id']);
-            if (!$damagedItem || ($damagedItem->damagedGood?->status ?? null) !== 'approved') {
-                throw ValidationException::withMessages([
-                    'source_items' => 'Sumber barang rusak harus berasal dari intake yang sudah disetujui.',
-                ]);
-            }
-
-            $remainingQty = (int) ($remainingMap[$damagedItem->id]['remaining_qty'] ?? 0);
-            if ((int) $row['qty'] > $remainingQty) {
-                throw ValidationException::withMessages([
-                    'source_items' => sprintf(
-                        'Sisa stok rusak untuk %s tidak mencukupi. Sisa saat ini %d.',
-                        $damagedItem->item?->sku ?? 'item',
-                        $remainingQty
-                    ),
-                ]);
-            }
-
-            return [
-                'damaged_good_item_id' => (int) $damagedItem->id,
-                'item_id' => (int) $damagedItem->item_id,
-                'qty' => (int) $row['qty'],
-                'note' => $row['note'] ?? null,
-            ];
-        })->values();
+        $sourceItems = $this->resolveSourceItemsByStockBalance($sourceItems);
 
         $outputItems = collect($validated['output_items'] ?? [])
             ->filter(fn ($row) => (int) ($row['item_id'] ?? 0) > 0 && (int) ($row['qty'] ?? 0) > 0)

@@ -307,18 +307,20 @@
             </div>
             <div class="modal-body scroll-y px-10 py-10">
                 <div class="mb-7">
-                    <p class="fw-semibold mb-3">Import ini digunakan untuk mengatur komponen (BOM) dari item bundle yang sudah ada.</p>
+                    <p class="fw-semibold mb-3">Import ini digunakan untuk membuat SKU bundle dan mengatur komponen (BOM) dalam satu file.</p>
                     <div class="alert alert-light-warning border border-warning border-dashed mb-5">
                         <strong>Perhatian:</strong> Import ini akan <strong>mengganti seluruh komponen</strong> bundle yang ada di file. Komponen lama akan dihapus dan diganti dengan data dari file.<br>
-                        Bundle harus sudah dibuat terlebih dahulu melalui form master item.
+                        Jika <code>bundle_sku</code> belum ada di master item, sistem akan otomatis membuatnya sebagai item bundle.
                     </div>
                     <ul class="ms-5 mb-4">
-                        <li><strong>bundle_sku</strong> (wajib) — SKU item bundle yang sudah ada (item_type = bundle)</li>
+                        <li><strong>bundle_sku</strong> (wajib) — SKU item bundle; akan dibuat otomatis jika belum ada</li>
+                        <li><strong>bundle_name</strong> (opsional) — nama item bundle baru; jika kosong akan memakai nilai <code>bundle_sku</code></li>
                         <li><strong>component_sku</strong> (wajib) — SKU item komponen (item_type = single)</li>
-                        <li><strong>required_qty</strong> (wajib) — jumlah komponen yang dibutuhkan per satu bundle</li>
+                        <li><strong>required_qty</strong> (wajib) — jumlah komponen yang dibutuhkan per satu bundle, harus angka bulat minimal 1</li>
                     </ul>
                     <p class="text-muted small mb-1">Satu bundle bisa memiliki banyak baris komponen. Kelompokkan semua komponen bundle di bawah <code>bundle_sku</code> yang sama.</p>
-                    <p class="text-muted small mb-1">Alias yang didukung: <code>sku_bundle</code> / <code>bundle</code> untuk bundle; <code>sku_komponen</code> / <code>komponen</code> untuk komponen; <code>qty</code> / <code>jumlah</code> untuk jumlah.</p>
+                    <p class="text-muted small mb-1">Jika SKU sudah ada sebagai item single, import akan ditolak supaya SKU tidak berubah makna.</p>
+                    <p class="text-muted small mb-1">Alias yang didukung: <code>sku_bundle</code> / <code>bundle</code> untuk bundle; <code>nama_bundle</code> / <code>name</code> / <code>nama</code> untuk nama bundle; <code>sku_komponen</code> / <code>komponen</code> untuk komponen; <code>qty</code> / <code>jumlah</code> untuk jumlah.</p>
                     <p class="text-muted small mb-0">Gunakan format Excel (.xlsx/.xls) dengan header di baris pertama.</p>
                     <div class="mt-4">
                         <a href="{{ route('admin.masterdata.items.bundle-template') }}" class="btn btn-light-primary">

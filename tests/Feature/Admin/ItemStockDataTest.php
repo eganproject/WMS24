@@ -34,6 +34,7 @@ class ItemStockDataTest extends TestCase
             'item_type' => Item::TYPE_SINGLE,
             'category_id' => 0,
             'safety_stock' => 10,
+            'koli_qty' => 6,
         ]);
         ItemStock::create([
             'item_id' => $lowItem->id,
@@ -90,6 +91,9 @@ class ItemStockDataTest extends TestCase
         $this->assertNotNull($lowRow);
         $this->assertSame(10, $lowRow['safety_main']);
         $this->assertSame(6, $lowRow['safety_display']);
+        $this->assertSame(6, $lowRow['koli_qty']);
+        $this->assertSame(1, $lowRow['stock_main_koli']);
+        $this->assertSame(2, $lowRow['stock_main_koli_remainder']);
         $this->assertTrue($lowRow['is_main_below_safety']);
         $this->assertTrue($lowRow['is_display_below_safety']);
 
@@ -100,6 +104,9 @@ class ItemStockDataTest extends TestCase
 
         $bundleRow = $rows->get('SKU-BUNDLE-001');
         $this->assertNotNull($bundleRow);
+        $this->assertSame(0, $bundleRow['koli_qty']);
+        $this->assertNull($bundleRow['stock_main_koli']);
+        $this->assertNull($bundleRow['stock_main_koli_remainder']);
         $this->assertFalse($bundleRow['is_main_below_safety']);
         $this->assertFalse($bundleRow['is_display_below_safety']);
     }

@@ -341,6 +341,8 @@
     const permMap = @json($permMap ?? []);
     const canCreateDefault = {{ $canCreateDefault ? 'true' : 'false' }};
     const enableKoli = {{ !empty($enableKoli ?? false) ? 'true' : 'false' }};
+    const koliFlowTypes = @json($koliFlowTypes ?? []);
+    const koliRequiresDefaultWarehouse = {{ !empty($koliRequiresDefaultWarehouse ?? false) ? 'true' : 'false' }};
     const enableWarehouseSelect = {{ !empty($enableWarehouseSelect ?? false) ? 'true' : 'false' }};
     const supplierFlowTypes = @json($supplierFlowTypes ?? []);
     const displayWarehouseId = {{ isset($displayWarehouseId) ? (int) $displayWarehouseId : 'null' }};
@@ -546,7 +548,12 @@
         const isKoliActive = () => {
             if (!enableKoli) return false;
             const flowType = form?.dataset?.flowType || defaultTypeFilter || '';
-            if (!['manual', 'return'].includes(flowType)) return false;
+            const activeFlowTypes = Array.isArray(koliFlowTypes) && koliFlowTypes.length
+                ? koliFlowTypes
+                : ['manual', 'return'];
+            if (!activeFlowTypes.includes(flowType)) return false;
+
+            if (!koliRequiresDefaultWarehouse) return true;
 
             const selectedWarehouseId = Number(warehouseSelect?.value || 0);
             return !!defaultWarehouseId && selectedWarehouseId === Number(defaultWarehouseId);

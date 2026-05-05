@@ -17,6 +17,7 @@ class ItemBundleImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
     public array $groups = [];
 
     private static array $bundleSkuKeys = ['bundle_sku', 'sku_bundle', 'bundle'];
+    private static array $bundleNameKeys = ['bundle_name', 'nama_bundle', 'name', 'nama'];
     private static array $componentSkuKeys = ['component_sku', 'sku_komponen', 'komponen', 'sku_component', 'component'];
     private static array $qtyKeys = ['required_qty', 'qty', 'jumlah', 'quantity'];
 
@@ -29,8 +30,9 @@ class ItemBundleImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             $row = $row->toArray();
 
             $bundleSku = $this->detect($row, self::$bundleSkuKeys);
+            $bundleName = $this->detectRawString($row, self::$bundleNameKeys);
             $componentSku = $this->detect($row, self::$componentSkuKeys);
-            $qty = max(1, (int) ($this->detectRaw($row, self::$qtyKeys) ?? 1));
+            $qty = $this->detectQty($row);
 
             if ($bundleSku === '' || $componentSku === '') {
                 continue;
@@ -42,9 +44,13 @@ class ItemBundleImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             $bundle = $bundleCache[$bundleSku];
 
             if (!$bundle) {
-                throw ValidationException::withMessages([
-                    'bundle_sku' => "Bundle SKU '{$bundleSku}' tidak ditemukan di master item.",
+                $bundle = Item::create([
+                    'sku' => $bundleSku,
+                    'name' => $bundleName !== '' ? $bundleName : $bundleSku,
+                    'item_type' => Item::TYPE_BUNDLE,
+                    'category_id' => 0,
                 ]);
+                $bundleCache[$bundleSku] = $bundle;
             }
             if (!$bundle->isBundle()) {
                 throw ValidationException::withMessages([
@@ -95,5 +101,30 @@ class ItemBundleImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             }
         }
         return null;
+    }
+
+    private function detectRawString(array $row, array $keys): string
+    {
+        $value = $this->detectRaw($row, $keys);
+
+        return $value === null ? '' : trim((string) $value);
+    }
+
+    private function detectQty(array $row): int
+    {
+        $raw = $this->detectRaw($row, self::$qtyKeys);
+        if ($raw === null || trim((string) $raw) === '') {
+            throw ValidationException::withMessages([
+                'required_qty' => 'required_qty wajib diisi untuk setiap komponen bundle.',
+            ]);
+        }
+
+        if (!is_numeric($raw) || (float) $raw !== (float) ((int) $raw) || (int) $raw < 1) {
+            throw ValidationException::withMessages([
+                'required_qty' => 'required_qty harus berupa angka bulat minimal 1.',
+            ]);
+        }
+
+        return (int) $raw;
     }
 }

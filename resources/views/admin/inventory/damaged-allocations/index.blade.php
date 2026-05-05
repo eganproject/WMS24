@@ -30,7 +30,7 @@
         <div class="card-title">
             <div class="d-flex flex-column">
                 <div class="fw-bolder fs-5">Saldo Rusak Tersedia</div>
-                <div class="text-muted fs-7">Ringkasan item intake yang masih bisa dialokasikan dari {{ $damagedWarehouseLabel ?? 'Gudang Rusak' }}. Diurutkan dari tertua (FIFO).</div>
+                <div class="text-muted fs-7">Ringkasan saldo SKU yang masih bisa dialokasikan dari {{ $damagedWarehouseLabel ?? 'Gudang Rusak' }}. Pemakaian sumber intake tetap otomatis FIFO.</div>
             </div>
         </div>
         <div class="card-toolbar">
@@ -42,10 +42,10 @@
             <table class="table align-middle table-row-dashed fs-6 gy-5" id="damaged_source_summary_table">
                 <thead>
                     <tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0">
-                        <th>Intake / Aging</th>
-                        <th>Gudang Asal</th>
-                        <th>Item</th>
-                        <th class="text-end">Qty Intake</th>
+                        <th>SKU / Aging</th>
+                        <th>Sumber</th>
+                        <th>FIFO Tertua</th>
+                        <th class="text-end">Qty Total</th>
                         <th class="text-end">Dialokasikan</th>
                         <th class="text-end">Sisa</th>
                         <th>Tanggal Intake</th>
@@ -237,8 +237,8 @@
 
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <div>
-                            <div class="fw-bolder fs-5">Item Sumber Barang Rusak</div>
-                            <div class="text-muted fs-7">Pilih item dari intake rusak yang sudah approved. Jika memakai resep, total sumber per SKU harus tepat sama dengan kebutuhan BOM.</div>
+                            <div class="fw-bolder fs-5">SKU Sumber Barang Rusak</div>
+                            <div class="text-muted fs-7">Pilih SKU berdasarkan total saldo rusak. Sistem otomatis mengambil dari sumber intake tertua lebih dulu.</div>
                         </div>
                         <button type="button" class="btn btn-light" id="btn_add_source_item">Tambah Sumber</button>
                     </div>
@@ -419,6 +419,25 @@
             }
         };
 
+        const closeProcessingAlert = () => {
+            if (typeof Swal !== 'undefined' && Swal.isVisible() && Swal.isLoading()) {
+                Swal.close();
+            }
+        };
+
+        const notifyValidationError = (message = 'Periksa kembali data yang terkena validasi.') => {
+            closeProcessingAlert();
+            if (typeof Swal !== 'undefined') {
+                Swal.fire('Validasi gagal', message, 'error');
+                return;
+            }
+            if (typeof toastr !== 'undefined') {
+                toastr.error(message, 'Validasi gagal');
+                return;
+            }
+            alert(message);
+        };
+
         const getTopLevelField = (key) => ({
             type: typeEl, supplier_id: supplierEl, recipe_id: recipeEl,
             recipe_multiplier: recipeMultiplierEl, target_warehouse_id: targetWarehouseEl,
@@ -512,7 +531,7 @@
             if (!option?.id) return;
             if (!sourceLineOptions.some(r => Number(r.id) === Number(option.id))) sourceLineOptions = [...sourceLineOptions, option];
         };
-        const getSourceOption = (id) => sourceLineOptions.find(r => Number(r.id) === Number(id));
+        const getSourceOption = (id) => sourceLineOptions.find(r => Number(r.item_id || r.id) === Number(id));
 
         /* H: render summary dengan aging + sort FIFO (L) ── */
         const renderSummary = () => {
@@ -535,12 +554,14 @@
                     : '-';
                 return `<tr${trClass}>
                     <td>
-                        <div class="fw-semibold">${esc(row.damage_code || '-')}</div>
+                        <div class="fw-semibold">${esc(row.item_sku || '')}</div>
+                        <div class="text-muted fs-8">${esc(row.item_name || '')}</div>
                         ${agingChip(days, bucket)}
                     </td>
                     <td>${esc(row.source_warehouse_name || '-')}</td>
                     <td>
-                        <div class="fw-semibold">${esc(row.item_sku || '')}${row.item_sku && row.item_name ? ' - ' : ''}${esc(row.item_name || '')}</div>
+                        <div class="fw-semibold">${esc(row.oldest_damage_code || row.damage_code || '-')}</div>
+                        <div class="text-muted fs-8">${row.source_count || 1} sumber FIFO</div>
                     </td>
                     <td class="text-end">${row.received_qty ?? 0}</td>
                     <td class="text-end text-muted">${row.allocated_qty ?? 0}</td>
@@ -557,7 +578,7 @@
                 if (!res.ok) throw new Error(json.message || 'Gagal memuat saldo rusak');
                 sourceLineOptions = Array.isArray(json.data) ? json.data : [];
                 renderSummary();
-                sourceItemsContainer?.querySelectorAll('.allocation-source-select').forEach(sel => populateSourceSelect(sel, sel.value));
+            sourceItemsContainer?.querySelectorAll('.allocation-source-select').forEach(sel => populateSourceSelect(sel, sel.value));
             } catch (err) {
                 if (summaryBody) summaryBody.innerHTML = `<tr><td colspan="7" class="text-danger">${err.message}</td></tr>`;
             }
@@ -569,7 +590,7 @@
             let html = '<option value=""></option>';
             sourceLineOptions.forEach(row => {
                 const sel = currentValue && Number(currentValue) === Number(row.id) ? 'selected' : '';
-                html += `<option value="${row.id}" ${sel}>${row.label}</option>`;
+                html += `<option value="${row.item_id || row.id}" ${sel}>${row.label}</option>`;
             });
             selectEl.innerHTML = html;
             updateSourceInfo(selectEl.closest('.allocation-source-row'));
@@ -584,13 +605,13 @@
             if (!selectEl || !infoEl) return;
             const option = getSourceOption(selectEl.value);
             if (!option) {
-                infoEl.innerHTML = '<span class="text-muted fs-8">Pilih sumber item rusak.</span>';
+                infoEl.innerHTML = '<span class="text-muted fs-8">Pilih SKU rusak dari saldo tersedia.</span>';
                 return;
             }
             const { days, bucket } = calcAge(option.damage_transacted_at);
             infoEl.innerHTML = `
-                <span class="badge badge-light-primary me-1">${esc(option.damage_code || '-')}</span>
-                <span class="badge badge-light-secondary me-1">${esc(option.source_warehouse_name || '-')}</span>
+                <span class="badge badge-light-primary me-1">FIFO ${esc(option.oldest_damage_code || option.damage_code || '-')}</span>
+                <span class="badge badge-light-secondary me-1">${option.source_count || 1} sumber</span>
                 <span class="badge badge-light-${(option.remaining_qty ?? 0) > 0 ? 'danger' : 'success'} me-1">Sisa ${option.remaining_qty ?? 0}</span>
                 ${agingChip(days, bucket)}`;
         };
@@ -606,15 +627,15 @@
             let hasDuplicate = false;
             rows.forEach(row => {
                 const selectEl = row.querySelector('.allocation-source-select');
-                const errEl    = row.querySelector('[data-error-for="damaged_good_item_id"]');
+                const errEl    = row.querySelector('[data-error-for="item_id"]');
                 const val      = selectEl?.value;
                 if (selectEl && val && counts[val] > 1) {
                     hasDuplicate = true;
                     setFieldInvalid(selectEl);
-                    if (errEl) errEl.textContent = 'Sumber item rusak tidak boleh duplikat';
+                    if (errEl) errEl.textContent = 'SKU sumber barang rusak tidak boleh duplikat';
                 } else {
                     clearFieldInvalid(selectEl);
-                    if (errEl && errEl.textContent === 'Sumber item rusak tidak boleh duplikat') errEl.textContent = '';
+                    if (errEl && errEl.textContent === 'SKU sumber barang rusak tidak boleh duplikat') errEl.textContent = '';
                 }
             });
             return !hasDuplicate;
@@ -667,10 +688,10 @@
                 <div class="card-body py-4">
                     <div class="row g-3 align-items-end">
                         <div class="col-md-6">
-                            <label class="required fs-6 fw-bold form-label mb-2">Sumber Item Rusak</label>
-                            <select class="form-select form-select-solid allocation-source-select" data-name="damaged_good_item_id" required></select>
-                            <div class="mt-2" data-role="source-info"><span class="text-muted fs-8">Pilih sumber item rusak.</span></div>
-                            <div class="invalid-feedback d-block" data-error-for="damaged_good_item_id"></div>
+                            <label class="required fs-6 fw-bold form-label mb-2">SKU Rusak</label>
+                            <select class="form-select form-select-solid allocation-source-select" data-name="item_id" required></select>
+                            <div class="mt-2" data-role="source-info"><span class="text-muted fs-8">Pilih SKU rusak dari saldo tersedia.</span></div>
+                            <div class="invalid-feedback d-block" data-error-for="item_id"></div>
                         </div>
                         <div class="col-md-2">
                             <label class="required fs-6 fw-bold form-label mb-2">Qty</label>
@@ -688,26 +709,28 @@
                 </div>`;
             sourceItemsContainer.appendChild(row);
             const selectEl = row.querySelector('.allocation-source-select');
-            if (data.damaged_good_item_id && data.option_label) {
+            if (data.item_id && data.option_label) {
                 ensureSourceOption({
-                    id: Number(data.damaged_good_item_id),
+                    id: Number(data.item_id),
                     item_id: Number(data.item_id || 0),
                     remaining_qty: Number(data.remaining_qty || data.qty || 0),
                     allocated_qty: Number(data.allocated_qty || 0),
                     received_qty:  Number(data.received_qty || data.qty || 0),
                     damage_code: data.damage_code || '-',
+                    oldest_damage_code: data.damage_code || '-',
+                    source_count: Number(data.source_count || 1),
                     source_warehouse_name: data.source_warehouse || '-',
                     item_sku: '', item_name: data.item_label || '',
                     label: data.option_label,
                     damage_transacted_at: null,
                 });
             }
-            populateSourceSelect(selectEl, data.damaged_good_item_id || null);
+            populateSourceSelect(selectEl, data.item_id || null);
             const qtyEl  = row.querySelector('input[data-name="qty"]');
             if (qtyEl)   qtyEl.value  = data.qty  ?? '';
             const noteEl = row.querySelector('input[data-name="note"]');
             if (noteEl)  noteEl.value = data.note ?? '';
-            initSelect2(selectEl, 'Pilih sumber item rusak');
+            initSelect2(selectEl, 'Pilih SKU rusak');
             renumberRows();
             updateSourceInfo(row);
             validateUniqueSources();
@@ -851,7 +874,7 @@
         sourceItemsContainer?.addEventListener('change', (e) => {
             if (!e.target.matches('.allocation-source-select')) return;
             clearFieldInvalid(e.target);
-            const errEl = e.target.closest('.allocation-source-row')?.querySelector('[data-error-for="damaged_good_item_id"]');
+            const errEl = e.target.closest('.allocation-source-row')?.querySelector('[data-error-for="item_id"]');
             if (errEl) errEl.textContent = '';
             updateSourceInfo(e.target.closest('.allocation-source-row'));
             validateUniqueSources();
@@ -1136,7 +1159,7 @@
             e.preventDefault();
             clearErrors();
             if (!validateUniqueSources()) {
-                if (typeof Swal !== 'undefined') Swal.fire('Error', 'Sumber item rusak tidak boleh duplikat', 'error');
+                if (typeof Swal !== 'undefined') Swal.fire('Error', 'SKU sumber barang rusak tidak boleh duplikat', 'error');
                 return;
             }
             if ((typeEl?.value || '') === 'rework' && !validateUniqueOutputs()) {
@@ -1150,46 +1173,67 @@
             try {
                 const res  = await fetch(url, { method: 'POST', headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' }, body: formData });
                 const text = await res.text();
-                let json; try { json = JSON.parse(text); } catch { if (typeof Swal !== 'undefined') Swal.fire('Error', 'Respons server tidak valid', 'error'); return; }
+                let json; try { json = JSON.parse(text); } catch {
+                    closeProcessingAlert();
+                    if (typeof Swal !== 'undefined') Swal.fire('Error', 'Respons server tidak valid', 'error');
+                    return;
+                }
                 if (!res.ok) {
+                    closeProcessingAlert();
                     if (json?.errors) {
                         const unhandled = [];
+                        const handled = [];
                         Object.entries(json.errors).forEach(([key, msgs]) => {
+                            const message = msgs.join(', ');
                             if (key.startsWith('source_items.')) {
                                 const parts = key.split('.');
                                 const row   = sourceItemsContainer.querySelectorAll('.allocation-source-row')[parseInt(parts[1], 10)];
                                 const fieldEl = row?.querySelector(`[data-name="${parts[2]}"]`) || null;
                                 const errEl   = row?.querySelector(`[data-error-for="${parts[2]}"]`) || null;
                                 if (fieldEl) setFieldInvalid(fieldEl);
-                                if (errEl) errEl.textContent = msgs.join(', ');
-                                else unhandled.push(msgs.join(', '));
+                                if (errEl) {
+                                    errEl.textContent = message;
+                                    handled.push(message);
+                                } else {
+                                    unhandled.push(message);
+                                }
                             } else if (key.startsWith('output_items.')) {
                                 const parts = key.split('.');
                                 const row   = outputItemsContainer.querySelectorAll('.allocation-output-row')[parseInt(parts[1], 10)];
                                 const fieldEl = row?.querySelector(`[data-name="${parts[2]}"]`) || null;
                                 const errEl   = row?.querySelector(`[data-error-for="${parts[2]}"]`) || null;
                                 if (fieldEl) setFieldInvalid(fieldEl);
-                                if (errEl) errEl.textContent = msgs.join(', ');
-                                else unhandled.push(msgs.join(', '));
+                                if (errEl) {
+                                    errEl.textContent = message;
+                                    handled.push(message);
+                                } else {
+                                    unhandled.push(message);
+                                }
                             } else {
                                 const fieldEl = getTopLevelField(key);
                                 const errEl   = document.getElementById(`error_${key}`);
                                 if (fieldEl) setFieldInvalid(fieldEl);
-                                if (errEl) errEl.textContent = msgs.join(', ');
-                                else unhandled.push(msgs.join(', '));
+                                if (errEl) {
+                                    errEl.textContent = message;
+                                    handled.push(message);
+                                } else {
+                                    unhandled.push(message);
+                                }
                             }
                         });
-                        if (unhandled.length && typeof Swal !== 'undefined') Swal.fire('Error', unhandled.join(', '), 'error');
-                    } else if (typeof Swal !== 'undefined') {
-                        Swal.fire('Error', json.message || 'Gagal menyimpan', 'error');
+                        notifyValidationError(unhandled[0] || handled[0] || json.message || 'Periksa kembali data alokasi barang rusak.');
+                    } else {
+                        notifyValidationError(json.message || 'Gagal menyimpan alokasi barang rusak.');
                     }
                     return;
                 }
+                closeProcessingAlert();
                 if (typeof Swal !== 'undefined') Swal.fire('Berhasil', json.message || 'Berhasil', 'success');
                 modal?.hide();
                 await loadSourceLines();
                 reloadTable();
             } catch (err) {
+                closeProcessingAlert();
                 if (typeof Swal !== 'undefined') Swal.fire('Error', 'Gagal menyimpan', 'error');
             }
         });

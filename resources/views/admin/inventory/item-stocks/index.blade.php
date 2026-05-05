@@ -46,6 +46,124 @@
     </div>
 </div>
 
+<div class="modal fade" id="modal_item_detail" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h2 class="fw-bolder mb-1">Detail Item</h2>
+                    <div class="text-muted fs-7" id="item_detail_subtitle">-</div>
+                </div>
+                <div class="btn btn-icon btn-sm btn-active-icon-primary" data-bs-dismiss="modal">
+                    <span class="svg-icon svg-icon-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+                            <rect opacity="0.5" x="6" y="17.3137" width="16" height="2" rx="1" transform="rotate(-45 6 17.3137)" fill="black" />
+                            <rect x="7.41422" y="6" width="16" height="2" rx="1" transform="rotate(45 7.41422 6)" fill="black" />
+                        </svg>
+                    </span>
+                </div>
+            </div>
+            <div class="modal-body py-6">
+                <div class="row g-6 mb-6">
+                    <div class="col-md-3">
+                        <div class="text-muted fs-7">SKU</div>
+                        <div class="fw-bold fs-6" id="item_detail_sku">-</div>
+                    </div>
+                    <div class="col-md-5">
+                        <div class="text-muted fs-7">Nama Item</div>
+                        <div class="fw-bold fs-6" id="item_detail_name">-</div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="text-muted fs-7">Tipe</div>
+                        <div id="item_detail_type">-</div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="text-muted fs-7">Kategori</div>
+                        <div class="fw-bold" id="item_detail_category">-</div>
+                    </div>
+                </div>
+
+                <div class="row g-6 mb-6">
+                    <div class="col-md-4">
+                        <div class="text-muted fs-7">Alamat</div>
+                        <div class="fw-bold" id="item_detail_address">-</div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="text-muted fs-7">Area</div>
+                        <div class="fw-bold" id="item_detail_area">-</div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="text-muted fs-7">Rack</div>
+                        <div class="fw-bold" id="item_detail_rack">-</div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="text-muted fs-7">Column</div>
+                        <div class="fw-bold" id="item_detail_column">-</div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="text-muted fs-7">Row</div>
+                        <div class="fw-bold" id="item_detail_row">-</div>
+                    </div>
+                </div>
+
+                <div class="separator my-6"></div>
+
+                <div class="row g-6 mb-6">
+                    <div class="col-md-3">
+                        <div class="text-muted fs-7">{{ $defaultWarehouseLabel ?? 'Gudang Besar' }}</div>
+                        <div class="fw-bolder fs-5" id="item_detail_stock_main">0 pcs</div>
+                        <div id="item_detail_koli_info" class="mt-1"></div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-muted fs-7">Safety {{ $defaultWarehouseLabel ?? 'Gudang Besar' }}</div>
+                        <div class="fw-bold" id="item_detail_safety_main">0</div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-muted fs-7">{{ $displayWarehouseLabel ?? 'Gudang Display' }}</div>
+                        <div class="fw-bolder fs-5" id="item_detail_stock_display">0 pcs</div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-muted fs-7">{{ $damagedWarehouseLabel ?? 'Gudang Rusak' }}</div>
+                        <div class="fw-bolder fs-5" id="item_detail_stock_damaged">0 pcs</div>
+                    </div>
+                </div>
+
+                <div class="row g-6 mb-6">
+                    <div class="col-md-3">
+                        <div class="text-muted fs-7">Total Stok Baik</div>
+                        <div class="fw-bold" id="item_detail_stock_good_total">0 pcs</div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-muted fs-7">Total Fisik</div>
+                        <div class="fw-bold" id="item_detail_stock_total">0 pcs</div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="text-muted fs-7">Deskripsi</div>
+                        <div class="fw-bold" id="item_detail_description">-</div>
+                    </div>
+                </div>
+
+                <div id="item_detail_bundle_section" class="mt-6" style="display:none;">
+                    <div class="separator my-6"></div>
+                    <div class="fw-bolder fs-5 mb-3">Komponen Bundle</div>
+                    <div class="table-responsive">
+                        <table class="table align-middle table-row-dashed fs-6 gy-4 mb-0">
+                            <thead>
+                                <tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0">
+                                    <th>SKU Komponen</th>
+                                    <th>Nama Komponen</th>
+                                    <th class="text-end">Qty Dibutuhkan</th>
+                                </tr>
+                            </thead>
+                            <tbody id="item_detail_bundle_components"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="modal_safety_stock" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered mw-550px">
         <div class="modal-content">
@@ -229,13 +347,48 @@
         const safetyItemLabel = document.getElementById('safety_item_label');
         const safetyMain = document.getElementById('safety_main');
         const safetyDisplay = document.getElementById('safety_display');
+        const itemDetailModalEl = document.getElementById('modal_item_detail');
+        const itemDetailModal = itemDetailModalEl ? new bootstrap.Modal(itemDetailModalEl) : null;
 
         if (!tableEl.length || !$.fn.DataTable) {
             console.error('DataTables unavailable');
             return;
         }
 
-        const renderWarehouseStock = (value, type, row, virtualKey, lowFlagKey) => {
+        const formatStockNumber = (value) => {
+            const numeric = Number(value);
+            return Number.isFinite(numeric) ? numeric.toLocaleString('id-ID') : '0';
+        };
+
+        const escapeHtml = (value) => String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+
+        const renderMainWarehouseKoli = (row, align = 'end') => {
+            const koliQty = Number(row.koli_qty || 0);
+            if (!Number.isFinite(koliQty) || koliQty <= 0) {
+                return '<div class="text-muted fs-8 mt-1">Isi/koli belum diset</div>';
+            }
+
+            const fullKoli = Number.isFinite(Number(row.stock_main_koli)) ? Number(row.stock_main_koli) : 0;
+            const remainder = Number.isFinite(Number(row.stock_main_koli_remainder)) ? Number(row.stock_main_koli_remainder) : 0;
+            const remainderBadge = remainder > 0
+                ? `<span class="badge badge-light-warning">+ ${formatStockNumber(remainder)} pcs</span>`
+                : '';
+
+            return `
+                <div class="d-flex justify-content-${align} gap-1 flex-wrap mt-1">
+                    <span class="badge badge-light-primary">${formatStockNumber(fullKoli)} koli</span>
+                    ${remainderBadge}
+                    <span class="badge badge-light-secondary">isi ${formatStockNumber(koliQty)}/koli</span>
+                </div>
+            `;
+        };
+
+        const renderWarehouseStock = (value, type, row, virtualKey, lowFlagKey, options = {}) => {
             if (row.item_type === 'bundle') {
                 const virtualValue = Number.isFinite(Number(row[virtualKey])) ? Number(row[virtualKey]) : 0;
                 if (type !== 'display') return virtualValue;
@@ -246,10 +399,86 @@
             if (type !== 'display') return stockValue;
 
             if (row[lowFlagKey]) {
-                return `<span class="fw-bold text-danger">${stockValue}</span>`;
+                const stockHtml = `<span class="fw-bold text-danger">${formatStockNumber(stockValue)}</span>`;
+                return options.showKoli ? stockHtml + renderMainWarehouseKoli(row) : stockHtml;
             }
 
-            return stockValue;
+            const stockHtml = `<span class="fw-bold">${formatStockNumber(stockValue)}</span>`;
+            return options.showKoli ? stockHtml + renderMainWarehouseKoli(row) : stockHtml;
+        };
+
+        const renderItemTypeBadge = (type) => type === 'bundle'
+            ? '<span class="badge badge-light-primary">Bundle</span>'
+            : '<span class="badge badge-light-success">Single</span>';
+
+        const detailText = (id, value) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = value === null || value === undefined || value === '' ? '-' : value;
+        };
+
+        const detailHtml = (id, value) => {
+            const el = document.getElementById(id);
+            if (el) el.innerHTML = value || '-';
+        };
+
+        const stockLabel = (value) => `${formatStockNumber(value)} pcs`;
+
+        const findTableRow = (trigger) => {
+            const id = String(trigger?.getAttribute('data-id') || '');
+            const rows = dt.rows().data().toArray();
+            return rows.find((row) => String(row.id) === id) || null;
+        };
+
+        const showItemDetail = (row) => {
+            if (!row) return;
+
+            detailText('item_detail_subtitle', `${row.sku || '-'} - ${row.name || '-'}`);
+            detailText('item_detail_sku', row.sku);
+            detailText('item_detail_name', row.name);
+            detailHtml('item_detail_type', renderItemTypeBadge(row.item_type));
+            detailText('item_detail_category', row.category);
+            detailText('item_detail_address', row.address);
+            detailText('item_detail_area', row.area_code);
+            detailText('item_detail_rack', row.rack_code);
+            detailText('item_detail_column', row.column_no);
+            detailText('item_detail_row', row.row_no);
+            detailText('item_detail_description', row.description);
+
+            if (row.item_type === 'bundle') {
+                detailText('item_detail_stock_main', stockLabel(row.virtual_main || 0));
+                detailHtml('item_detail_koli_info', '<span class="badge badge-light-primary">virtual</span>');
+                detailText('item_detail_safety_main', '-');
+                detailText('item_detail_stock_display', stockLabel(row.virtual_display || 0));
+                detailText('item_detail_stock_damaged', '-');
+                detailText('item_detail_stock_good_total', stockLabel(row.virtual_total || 0));
+                detailText('item_detail_stock_total', '-');
+            } else {
+                detailText('item_detail_stock_main', stockLabel(row.stock_main || 0));
+                detailHtml('item_detail_koli_info', renderMainWarehouseKoli(row, 'start'));
+                detailText('item_detail_safety_main', formatStockNumber(row.safety_main || 0));
+                detailText('item_detail_stock_display', stockLabel(row.stock_display || 0));
+                detailText('item_detail_stock_damaged', stockLabel(row.stock_damaged || 0));
+                detailText('item_detail_stock_good_total', stockLabel(row.stock_good_total || 0));
+                detailText('item_detail_stock_total', stockLabel(row.stock_total || 0));
+            }
+
+            const bundleSection = document.getElementById('item_detail_bundle_section');
+            const bundleRows = document.getElementById('item_detail_bundle_components');
+            if (row.item_type === 'bundle' && bundleSection && bundleRows) {
+                bundleSection.style.display = '';
+                bundleRows.innerHTML = (row.bundle_components || []).map((component) => `
+                    <tr>
+                        <td>${escapeHtml(component.component_sku || '-')}</td>
+                        <td>${escapeHtml(component.component_name || '-')}</td>
+                        <td class="text-end">${formatStockNumber(component.required_qty || 0)}</td>
+                    </tr>
+                `).join('') || '<tr><td colspan="3" class="text-muted">Komponen belum diset.</td></tr>';
+            } else if (bundleSection && bundleRows) {
+                bundleSection.style.display = 'none';
+                bundleRows.innerHTML = '';
+            }
+
+            itemDetailModal?.show();
         };
 
         const dt = tableEl.DataTable({
@@ -268,8 +497,8 @@
                 { data: 'id' },
                 { data: 'sku' },
                 { data: 'name' },
-                { data: 'item_type', render: (data) => data === 'bundle' ? '<span class="badge badge-light-primary">Bundle</span>' : '<span class="badge badge-light-success">Single</span>' },
-                { data: 'stock_main', className: 'text-end', render: (data, type, row) => renderWarehouseStock(data, type, row, 'virtual_main', 'is_main_below_safety') },
+                { data: 'item_type', render: (data) => renderItemTypeBadge(data) },
+                { data: 'stock_main', className: 'text-end', render: (data, type, row) => renderWarehouseStock(data, type, row, 'virtual_main', 'is_main_below_safety', { showKoli: true }) },
                 { data: 'safety_main', className: 'text-end', render: (data, type, row) => row.item_type === 'bundle' ? '-' : (data ?? 0) },
                 { data: 'stock_display', className: 'text-end', render: (data, type, row) => renderWarehouseStock(data, type, row, 'virtual_display', 'is_display_below_safety') },
                 { data: 'safety_display', className: 'text-end', render: (data, type, row) => row.item_type === 'bundle' ? '-' : (data ?? 0) },
@@ -277,15 +506,33 @@
                 { data: 'stock_good_total', className: 'text-end', render: (data, type, row) => row.item_type === 'bundle' ? `<span class="fw-bold text-primary">${row.virtual_total ?? 0}</span><div class="text-muted fs-8">virtual total</div>` : (data ?? 0) },
                 { data: 'stock_total', className: 'text-end', render: (data, type, row) => row.item_type === 'bundle' ? '-' : (data ?? 0) },
                 { data: 'id', orderable:false, searchable:false, className: 'text-end', render: (data, type, row) => {
-                    const mutBtn = `<button type="button" class="btn btn-light-info btn-sm btn-mutations me-1" data-id="${data}" data-sku="${row.sku || ''}" data-name="${row.name || ''}">Mutasi</button>`;
-                    if (row.item_type === 'bundle') {
-                        return mutBtn;
-                    }
-                    const safetyBtn = `<button type="button" class="btn btn-light-primary btn-sm btn-safety" data-id="${data}" data-sku="${row.sku}" data-name="${row.name}" data-safety-main="${row.safety_main_raw ?? ''}" data-safety-display="${row.safety_display_raw ?? ''}" data-safety-base="${row.safety_base ?? 0}">Set Safety</button>`;
-                    return mutBtn + safetyBtn;
+                    const safeSku = escapeHtml(row.sku || '');
+                    const safeName = escapeHtml(row.name || '');
+                    const detailItem = `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-item-detail" data-id="${data}">Detail Item</a></div>`;
+                    const mutItem = `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-mutations" data-id="${data}" data-sku="${safeSku}" data-name="${safeName}">Mutasi</a></div>`;
+                    const safetyItem = row.item_type === 'bundle' ? '' : `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-safety" data-id="${data}" data-sku="${safeSku}" data-name="${safeName}" data-safety-main="${row.safety_main_raw ?? ''}" data-safety-display="${row.safety_display_raw ?? ''}" data-safety-base="${row.safety_base ?? 0}">Set Safety</a></div>`;
+                    const actions = `${detailItem}${mutItem}${safetyItem}`;
+                    return `
+                        <div class="text-end">
+                            <a href="#" class="btn btn-sm btn-light btn-active-light-primary" data-kt-menu-trigger="click" data-kt-menu-placement="bottom-end">
+                                Actions
+                                <span class="svg-icon svg-icon-5 m-0">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+                                        <path d="M11.4343 12.7344L7.25 8.55005C6.83579 8.13583 6.16421 8.13584 5.75 8.55005C5.33579 8.96426 5.33579 9.63583 5.75 10.05L11.2929 15.5929C11.6834 15.9835 12.3166 15.9835 12.7071 15.5929L18.25 10.05C18.6642 9.63584 18.6642 8.96426 18.25 8.55005C17.8358 8.13584 17.1642 8.13584 16.75 8.55005L12.5657 12.7344C12.2533 13.0468 11.7467 13.0468 11.4343 12.7344Z" fill="black"></path>
+                                    </svg>
+                                </span>
+                            </a>
+                            <div class="menu menu-sub menu-sub-dropdown menu-column menu-rounded menu-gray-600 menu-state-bg-light-primary fw-bold fs-7 w-175px py-3" data-kt-menu="true">
+                                ${actions}
+                            </div>
+                        </div>
+                    `;
                 }},
             ]
         });
+        const refreshMenus = () => { if (window.KTMenu) KTMenu.createInstances(); };
+        refreshMenus();
+        dt.on('draw', refreshMenus);
 
         const reloadTable = () => dt.ajax.reload();
         searchInput?.addEventListener('keyup', reloadTable);
@@ -295,7 +542,13 @@
             window.location.href = url;
         });
 
-        tableEl.on('click', '.btn-safety', function() {
+        tableEl.on('click', '.btn-item-detail', function(e) {
+            e.preventDefault();
+            showItemDetail(findTableRow(this));
+        });
+
+        tableEl.on('click', '.btn-safety', function(e) {
+            e.preventDefault();
             const id = this.getAttribute('data-id');
             const sku = this.getAttribute('data-sku') || '';
             const name = this.getAttribute('data-name') || '';
@@ -372,7 +625,8 @@
             });
         };
 
-        tableEl.on('click', '.btn-mutations', function () {
+        tableEl.on('click', '.btn-mutations', function (e) {
+            e.preventDefault();
             const id   = this.getAttribute('data-id');
             const sku  = this.getAttribute('data-sku') || '';
             const name = this.getAttribute('data-name') || '';
@@ -403,7 +657,8 @@
         const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val ?? '-'; };
         const setHtml = (id, val) => { const el = document.getElementById(id); if (el) el.innerHTML = val ?? '-'; };
 
-        $(document).on('click', '.btn-mut-detail', async function () {
+        $(document).on('click', '.btn-mut-detail', async function (e) {
+            e.preventDefault();
             const id = this.getAttribute('data-id');
             if (!id) return;
             try {

@@ -90,6 +90,50 @@ class DamagedStockService
             ->values();
     }
 
+    public static function availableSkuBalances(?string $search = null, ?int $excludeAllocationId = null, bool $exact = false): Collection
+    {
+        return self::remainingSourceLines($search, $excludeAllocationId, $exact)
+            ->groupBy('item_id')
+            ->map(function (Collection $rows) {
+                $first = $rows->sortBy([
+                    ['damage_transacted_at', 'asc'],
+                    ['id', 'asc'],
+                ])->first();
+
+                $remainingQty = (int) $rows->sum('remaining_qty');
+                $receivedQty = (int) $rows->sum('received_qty');
+                $allocatedQty = (int) $rows->sum('allocated_qty');
+                $sourceCount = $rows->count();
+
+                return [
+                    'id' => (int) ($first['item_id'] ?? 0),
+                    'item_id' => (int) ($first['item_id'] ?? 0),
+                    'received_qty' => $receivedQty,
+                    'allocated_qty' => $allocatedQty,
+                    'remaining_qty' => $remainingQty,
+                    'source_count' => $sourceCount,
+                    'oldest_damage_code' => (string) ($first['damage_code'] ?? ''),
+                    'damage_code' => (string) ($first['damage_code'] ?? ''),
+                    'damage_transacted_at' => $first['damage_transacted_at'] ?? null,
+                    'item_sku' => (string) ($first['item_sku'] ?? ''),
+                    'item_name' => (string) ($first['item_name'] ?? ''),
+                    'source_warehouse_name' => $sourceCount > 1
+                        ? $sourceCount.' sumber'
+                        : (string) ($first['source_warehouse_name'] ?? '-'),
+                    'label' => sprintf(
+                        '%s - %s | Total sisa %d | %d sumber',
+                        (string) ($first['item_sku'] ?? ''),
+                        (string) ($first['item_name'] ?? ''),
+                        $remainingQty,
+                        $sourceCount
+                    ),
+                ];
+            })
+            ->filter(fn (array $row) => (int) ($row['item_id'] ?? 0) > 0 && (int) ($row['remaining_qty'] ?? 0) > 0)
+            ->sortBy('item_sku')
+            ->values();
+    }
+
     public static function remainingSourceLines(
         ?string $search = null,
         ?int $excludeAllocationId = null,

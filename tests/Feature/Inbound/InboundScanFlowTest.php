@@ -17,6 +17,86 @@ class InboundScanFlowTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_inbound_receipt_form_page_enables_koli_input_without_warehouse_dependency(): void
+    {
+        $this->withoutMiddleware(AuthorizeMenuPermission::class);
+
+        $admin = User::factory()->create();
+
+        $this->actingAs($admin)
+            ->get(route('admin.inbound.receipts.index'))
+            ->assertOk()
+            ->assertSee('const enableKoli = true;', false)
+            ->assertSee('const koliFlowTypes = ["receipt"];', false)
+            ->assertSee('const koliRequiresDefaultWarehouse = false;', false);
+    }
+
+    public function test_inbound_receipt_accepts_explicit_koli_and_keeps_qty_consistent(): void
+    {
+        $this->withoutMiddleware(AuthorizeMenuPermission::class);
+
+        $admin = User::factory()->create();
+        $supplier = Supplier::create(['name' => 'Supplier Inbound Koli']);
+        $item = Item::create([
+            'sku' => 'SKU-IN-KOLI-001',
+            'name' => 'Inbound Item Koli',
+            'category_id' => 0,
+            'koli_qty' => 12,
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson(route('admin.inbound.receipts.store'), [
+                'ref_no' => 'REF-IN-KOLI-001',
+                'supplier_id' => $supplier->id,
+                'transacted_at' => now()->format('Y-m-d H:i:s'),
+                'items' => [
+                    [
+                        'item_id' => $item->id,
+                        'qty' => 24,
+                        'koli' => 2,
+                    ],
+                ],
+            ])
+            ->assertOk();
+
+        $this->assertDatabaseHas('inbound_items', [
+            'item_id' => $item->id,
+            'qty' => 24,
+            'koli' => 2,
+        ]);
+    }
+
+    public function test_inbound_receipt_rejects_koli_when_qty_does_not_match_item_koli_qty(): void
+    {
+        $this->withoutMiddleware(AuthorizeMenuPermission::class);
+
+        $admin = User::factory()->create();
+        $supplier = Supplier::create(['name' => 'Supplier Inbound Koli Invalid']);
+        $item = Item::create([
+            'sku' => 'SKU-IN-KOLI-002',
+            'name' => 'Inbound Item Koli Invalid',
+            'category_id' => 0,
+            'koli_qty' => 12,
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson(route('admin.inbound.receipts.store'), [
+                'ref_no' => 'REF-IN-KOLI-002',
+                'supplier_id' => $supplier->id,
+                'transacted_at' => now()->format('Y-m-d H:i:s'),
+                'items' => [
+                    [
+                        'item_id' => $item->id,
+                        'qty' => 25,
+                        'koli' => 2,
+                    ],
+                ],
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['items.0.qty', 'items.0.koli'])
+            ->assertJsonFragment(['Qty SKU SKU-IN-KOLI-002 harus sama dengan koli x isi/koli (2 x 12 = 24).']);
+    }
+
     public function test_inbound_receipt_posts_stock_only_after_scan_complete(): void
     {
         $this->withoutMiddleware(AuthorizeMenuPermission::class);

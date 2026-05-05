@@ -292,6 +292,8 @@ class InboundController extends Controller
             'typeDefault' => $type,
             'routeMap' => $routeMap,
             'enableKoli' => true,
+            'koliFlowTypes' => [$type],
+            'koliRequiresDefaultWarehouse' => false,
             'showApproveAction' => false,
             'showScanProgressColumn' => true,
             'statusLabels' => $statusLabels,
@@ -743,15 +745,23 @@ class InboundController extends Controller
             ->get(['id', 'sku', 'name', 'koli_qty', 'item_type'])
             ->keyBy('id');
 
-        $normalized = $items->map(function ($row) use ($itemMap) {
+        $normalized = $items->map(function ($row, $index) use ($itemMap) {
             $item = $itemMap->get($row['item_id']);
             if (!$item) {
                 throw ValidationException::withMessages([
-                    'items' => 'Item inbound tidak ditemukan.',
+                    "items.{$index}.item_id" => 'Item inbound tidak ditemukan.',
                 ]);
             }
 
-            $resolved = InboundScanExpectation::resolve($item, (int) $row['qty'], $row['koli']);
+            try {
+                $resolved = InboundScanExpectation::resolve($item, (int) $row['qty'], $row['koli']);
+            } catch (ValidationException $e) {
+                $message = collect($e->errors())->flatten()->first() ?? $e->getMessage();
+                throw ValidationException::withMessages([
+                    "items.{$index}.qty" => $message,
+                    "items.{$index}.koli" => $message,
+                ]);
+            }
 
             return [
                 'item_id' => (int) $row['item_id'],

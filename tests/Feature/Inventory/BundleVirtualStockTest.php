@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Inventory;
 
+use App\Imports\ItemBundleImport;
 use App\Models\DamagedGoodItem;
 use App\Models\Item;
 use App\Models\ItemBundleComponent;
@@ -13,6 +14,7 @@ use App\Models\User;
 use App\Models\Warehouse;
 use App\Support\BundleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 class BundleVirtualStockTest extends TestCase
@@ -318,6 +320,94 @@ class BundleVirtualStockTest extends TestCase
             ->assertOk()
             ->assertSee('Bundle / Virtual Stock')
             ->assertSee('Komponen Bundle');
+    }
+
+    public function test_bundle_import_creates_missing_bundle_sku(): void
+    {
+        $componentA = Item::create([
+            'sku' => 'CMP-IMP-A',
+            'name' => 'Komponen Import A',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+        ]);
+        $componentB = Item::create([
+            'sku' => 'CMP-IMP-B',
+            'name' => 'Komponen Import B',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+        ]);
+
+        $import = new ItemBundleImport();
+        $import->collection(collect([
+            collect([
+                'bundle_sku' => 'BDL-IMP-01',
+                'bundle_name' => 'Bundle Import Baru',
+                'component_sku' => $componentA->sku,
+                'required_qty' => 2,
+            ]),
+            collect([
+                'bundle_sku' => 'BDL-IMP-01',
+                'bundle_name' => 'Bundle Import Baru',
+                'component_sku' => $componentB->sku,
+                'required_qty' => 1,
+            ]),
+        ]));
+
+        $bundle = Item::query()->where('sku', 'BDL-IMP-01')->first();
+        $this->assertNotNull($bundle);
+        $this->assertSame(Item::TYPE_BUNDLE, $bundle->item_type);
+        $this->assertSame('Bundle Import Baru', $bundle->name);
+
+        foreach ($import->groups as $group) {
+            BundleService::syncComponents($group['bundle'], $group['components']);
+        }
+
+        $this->assertDatabaseHas('item_bundle_components', [
+            'bundle_item_id' => $bundle->id,
+            'component_item_id' => $componentA->id,
+            'required_qty' => 2,
+        ]);
+        $this->assertDatabaseHas('item_bundle_components', [
+            'bundle_item_id' => $bundle->id,
+            'component_item_id' => $componentB->id,
+            'required_qty' => 1,
+        ]);
+        $this->assertDatabaseMissing('item_stocks', [
+            'item_id' => $bundle->id,
+        ]);
+    }
+
+    public function test_bundle_import_rejects_decimal_required_qty(): void
+    {
+        Item::create([
+            'sku' => 'CMP-IMP-QTY',
+            'name' => 'Komponen Qty',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+        ]);
+
+        $import = new ItemBundleImport();
+
+        try {
+            $import->collection(collect([
+                collect([
+                    'bundle_sku' => 'BDL-IMP-QTY',
+                    'bundle_name' => 'Bundle Qty Invalid',
+                    'component_sku' => 'CMP-IMP-QTY',
+                    'required_qty' => 1.5,
+                ]),
+            ]));
+            $this->fail('Import bundle seharusnya menolak required_qty desimal.');
+        } catch (ValidationException $e) {
+            $this->assertSame(
+                'required_qty harus berupa angka bulat minimal 1.',
+                $e->errors()['required_qty'][0] ?? ''
+            );
+        }
+
+        $this->assertDatabaseMissing('items', [
+            'sku' => 'BDL-IMP-QTY',
+        ]);
     }
 
     public function test_damaged_goods_store_rejects_bundle_item(): void

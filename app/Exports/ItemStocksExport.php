@@ -50,6 +50,9 @@ class ItemStocksExport implements FromCollection, WithHeadings, WithMapping, Sho
             'Nama',
             'Tipe',
             "Stok {$defaultLabel}",
+            "Koli {$defaultLabel}",
+            "Sisa Pcs {$defaultLabel}",
+            'Isi/Koli',
             "Safety {$defaultLabel}",
             "Stok {$displayLabel}",
             "Safety {$displayLabel}",
@@ -75,12 +78,19 @@ class ItemStocksExport implements FromCollection, WithHeadings, WithMapping, Sho
         $safetyMain = $safetyMainRaw !== null ? (int) $safetyMainRaw : $baseSafety;
         $safetyDisplay = $safetyDisplayRaw !== null ? (int) $safetyDisplayRaw : $baseSafety;
         $stockGoodTotal = $stockMain + $stockDisplay;
+        $koliQty = $isBundle ? 0 : max(0, (int) ($row->koli_qty ?? 0));
+        $mainKoli = (!$isBundle && $koliQty > 0) ? intdiv((int) $stockMain, $koliQty) : null;
+        $mainKoliRemainder = (!$isBundle && $koliQty > 0) ? ((int) $stockMain % $koliQty) : null;
+
         return [
             $row->id,
             $row->sku,
             $row->name,
             $isBundle ? 'bundle (virtual)' : 'single',
             $stockMain,
+            $mainKoli ?? '-',
+            $mainKoliRemainder ?? '-',
+            $koliQty > 0 ? $koliQty : '-',
             $safetyMain,
             $stockDisplay,
             $safetyDisplay,

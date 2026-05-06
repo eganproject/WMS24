@@ -561,9 +561,15 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    Object.entries(tableConfigs).forEach(([id, config]) => {
+    const initAttendanceTable = (id) => {
+        if (tables[id]) return tables[id];
+
+        const config = tableConfigs[id];
+        if (!config) return null;
+
         const tableEl = $('#' + id);
-        if (!tableEl.length || !$.fn.DataTable) return;
+        if (!tableEl.length || !$.fn.DataTable) return null;
+
         tables[id] = tableEl.DataTable({
             processing: true,
             serverSide: true,
@@ -598,10 +604,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
             }),
         });
-    });
+
+        return tables[id];
+    };
+
+    const initTablesForTab = (tabId) => {
+        (tabTableMap[tabId] || []).forEach(initAttendanceTable);
+    };
+
+    const activeTabId = document.querySelector('.tab-pane.active')?.id;
+    if (activeTabId) {
+        initTablesForTab(activeTabId);
+    }
 
     searchInput?.addEventListener('keyup', () => {
-        Object.values(tables).forEach((table) => table.ajax.reload());
+        const activeTabId = document.querySelector('.tab-pane.active')?.id;
+        (tabTableMap[activeTabId] || []).forEach((tableId) => {
+            initAttendanceTable(tableId)?.ajax.reload();
+        });
     });
 
     const resetFormsInTab = (tabId) => {
@@ -626,7 +646,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         (tabTableMap[tabId] || []).forEach((tableId) => {
-            tables[tableId]?.ajax.reload(null, false);
+            initAttendanceTable(tableId)?.ajax.reload(null, false);
         });
 
         if (tabId === 'tab_schedules') {
@@ -711,9 +731,13 @@ document.addEventListener('DOMContentLoaded', () => {
         tabLink.addEventListener('shown.bs.tab', (event) => {
             const tabId = event.target.getAttribute('href')?.replace('#', '');
             if (tabId) {
+                initTablesForTab(tabId);
                 refreshAttendanceTab(tabId);
             }
         });
+    });
+    document.getElementById('modal_positions')?.addEventListener('shown.bs.modal', () => {
+        initAttendanceTable('positions_table')?.ajax.reload(null, false);
     });
     if (document.getElementById('tab_schedules')?.classList.contains('show')) {
         initScheduleCalendar();

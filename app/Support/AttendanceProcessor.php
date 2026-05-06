@@ -116,10 +116,9 @@ class AttendanceProcessor
             ->where('employee_id', $employee->id)
             ->whereBetween('scan_at', [$windowStart, $windowEnd])
             ->orderBy('scan_at')
-            ->pluck('scan_at');
+            ->get(['scan_at', 'state']);
 
-        $checkInAt = $scans->first();
-        $checkOutAt = $scans->count() > 1 ? $scans->last() : null;
+        [$checkInAt, $checkOutAt] = $this->resolveCheckInOut($scans);
         $plannedStart = $this->shiftDateTime($date, $shift->start_time);
         $plannedEnd = $this->shiftDateTime($date, $shift->end_time, $shift->crosses_midnight);
         $lateCutoff = $plannedStart->copy()->addMinutes((int) $shift->late_tolerance_minutes);
@@ -187,6 +186,27 @@ class AttendanceProcessor
         }
 
         return $this->rebuildDailyAttendance($employee, $scanAt->toDateString());
+    }
+
+    private function resolveCheckInOut($scans): array
+    {
+        $checkInStates = ['check_in', 'break_in', 'overtime_in', '0', 0];
+        $checkOutStates = ['check_out', 'break_out', 'overtime_out', '1', 1];
+
+        $checkIn = $scans->first(fn (AttendanceRawLog $scan) => in_array($scan->state, $checkInStates, true));
+        $checkOut = $scans->reverse()->first(fn (AttendanceRawLog $scan) => in_array($scan->state, $checkOutStates, true));
+
+        if ($checkIn) {
+            return [
+                $checkIn->scan_at,
+                $checkOut && $checkOut->scan_at->greaterThan($checkIn->scan_at) ? $checkOut->scan_at : null,
+            ];
+        }
+
+        return [
+            $scans->first()?->scan_at,
+            $scans->count() > 1 ? $scans->last()?->scan_at : null,
+        ];
     }
 
     private function hasAttendanceNearScan(Employee $employee, Carbon $scanAt): bool

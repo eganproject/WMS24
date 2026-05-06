@@ -192,12 +192,11 @@ class AttendanceAdmsController extends Controller
                 continue;
             }
 
-            // Format: PIN \t DateTime \t Status \t Verify \t WorkCode \t Reserved
+            // Format ADMS bisa berbeda antar firmware:
+            // PIN \t DateTime \t Status \t Verify... atau PIN \t DateTime \t Verify \t Status...
             $parts  = explode("\t", $line);
             $pin    = trim($parts[0] ?? '');
             $dt     = trim($parts[1] ?? '');
-            $status = (int) trim($parts[2] ?? '0');
-            $verify = (int) trim($parts[3] ?? '1');
 
             if ($pin === '' || $dt === '') {
                 $this->logAdms($request, $device, array_merge($basePayload, [
@@ -209,8 +208,11 @@ class AttendanceAdmsController extends Controller
                 continue;
             }
 
-            $stateLabel  = $this->statusLabel($status);
-            $verifyLabel = $this->verifyLabel($verify);
+            $meta = $this->parseAttLogMeta($parts);
+            $status = $meta['status_code'];
+            $verify = $meta['verify_code'];
+            $stateLabel  = $meta['status_label'];
+            $verifyLabel = $meta['verify_label'];
 
             $reqPayload = array_merge($basePayload, [
                 'pin' => $pin,
@@ -219,6 +221,7 @@ class AttendanceAdmsController extends Controller
                 'status_label' => $stateLabel,
                 'verify_code'  => $verify,
                 'verify_label' => $verifyLabel,
+                'field_order'   => $meta['field_order'],
                 'raw_line'     => $line,
                 'parsed_parts' => $parts,
             ]);
@@ -328,6 +331,47 @@ class AttendanceAdmsController extends Controller
             5 => 'overtime_out',
             default => 'unknown',
         };
+    }
+
+    private function parseAttLogMeta(array $parts): array
+    {
+        $third = (int) trim($parts[2] ?? '0');
+        $fourth = (int) trim($parts[3] ?? '1');
+
+        $statusFirst = $this->attLogCandidate($third, $fourth, 'status_verify');
+        $verifyFirst = $this->attLogCandidate($fourth, $third, 'verify_status');
+
+        return $this->attLogCandidateScore($verifyFirst) > $this->attLogCandidateScore($statusFirst)
+            ? $verifyFirst
+            : $statusFirst;
+    }
+
+    private function attLogCandidate(int $statusCode, int $verifyCode, string $fieldOrder): array
+    {
+        return [
+            'status_code' => $statusCode,
+            'status_label' => $this->statusLabel($statusCode),
+            'verify_code' => $verifyCode,
+            'verify_label' => $this->verifyLabel($verifyCode),
+            'field_order' => $fieldOrder,
+        ];
+    }
+
+    private function attLogCandidateScore(array $candidate): int
+    {
+        $score = 0;
+
+        if ($candidate['status_label'] !== 'unknown') {
+            $score += 2;
+        }
+
+        if (!in_array($candidate['verify_label'], ['other', 'password'], true)) {
+            $score += 3;
+        } elseif ($candidate['verify_label'] === 'password') {
+            $score += 1;
+        }
+
+        return $score;
     }
 
     private function verifyLabel(int $code): string

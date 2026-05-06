@@ -161,6 +161,66 @@ class AttendanceProcessorTest extends TestCase
         ]);
     }
 
+    public function test_adms_attlog_accepts_solution_verify_status_field_order(): void
+    {
+        $employee = Employee::create([
+            'employee_code' => 'EMP008',
+            'name' => 'Dedi',
+            'employment_status' => 'active',
+        ]);
+        $device = AttendanceDevice::create([
+            'name' => 'Solution X100C',
+            'serial_number' => 'X100C008',
+            'port' => 4370,
+            'is_active' => true,
+        ]);
+        EmployeeFingerprint::create([
+            'employee_id' => $employee->id,
+            'attendance_device_id' => $device->id,
+            'device_user_id' => '8001',
+            'is_active' => true,
+        ]);
+        $shift = WorkShift::create([
+            'name' => 'Pagi',
+            'start_time' => '08:00',
+            'end_time' => '17:00',
+            'is_active' => true,
+        ]);
+        EmployeeSchedule::create([
+            'employee_id' => $employee->id,
+            'work_shift_id' => $shift->id,
+            'schedule_date' => '2026-04-27',
+            'schedule_type' => 'work',
+        ]);
+
+        $this->call(
+            'POST',
+            '/iclock/cdata?SN=X100C008&table=ATTLOG',
+            [],
+            [],
+            [],
+            ['CONTENT_TYPE' => 'text/plain'],
+            "8001\t2026-04-27 08:00:00\t1\t0\t0\t0\r\n"
+        )->assertOk();
+
+        $this->assertDatabaseHas('attendance_raw_logs', [
+            'attendance_device_id' => $device->id,
+            'device_user_id' => '8001',
+            'scan_at' => '2026-04-27 08:00:00',
+            'verify_type' => 'fingerprint',
+            'state' => 'check_in',
+        ]);
+
+        $attendance = Attendance::query()
+            ->where('employee_id', $employee->id)
+            ->whereDate('attendance_date', '2026-04-27')
+            ->firstOrFail();
+
+        $this->assertEquals('2026-04-27 08:00:00', $attendance->check_in_at->format('Y-m-d H:i:s'));
+        $this->assertNull($attendance->check_out_at);
+        $this->assertSame(Attendance::STATUS_INCOMPLETE, $attendance->status);
+    }
+
     public function test_replayed_raw_log_rebuilds_attendance_after_employee_mapping_is_added(): void
     {
         $employee = Employee::create([

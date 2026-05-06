@@ -71,7 +71,7 @@ Route::post('/attendance/fingerprint/webhook', AttendanceFingerprintWebhookContr
 Route::withoutMiddleware([ValidateCsrfToken::class])->group(function () {
     Route::match(['GET', 'POST'], '/iclock/cdata', [AttendanceAdmsController::class, 'cdata'])
         ->name('adms.cdata');
-    Route::get('/iclock/getrequest', [AttendanceAdmsController::class, 'getrequest'])
+    Route::match(['GET', 'POST'], '/iclock/getrequest', [AttendanceAdmsController::class, 'getrequest'])
         ->name('adms.getrequest');
     Route::post('/iclock/devicecmd', [AttendanceAdmsController::class, 'devicecmd'])
         ->name('adms.devicecmd');

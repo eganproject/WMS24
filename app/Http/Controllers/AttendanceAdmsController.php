@@ -258,11 +258,18 @@ class AttendanceAdmsController extends Controller
             }
         }
 
-        // Balas dengan stamp terbaru agar mesin tidak kirim ulang data yang sama
-        $stamp    = $lastScanAt ? Carbon::parse($lastScanAt)->timestamp : now()->timestamp;
-        $respBody = "ATTLOGStamp={$stamp}\r\nOPERLOGStamp=9999\r\n";
+        $stamp = $lastScanAt ? Carbon::parse($lastScanAt)->timestamp : now()->timestamp;
 
-        return response($respBody, 200)->header('Content-Type', 'text/plain');
+        $this->logAdms($request, $device, $basePayload, 200, 'attlog_ack', null, [
+            'processed_count' => $processedCount,
+            'attlog_stamp' => $stamp,
+        ]);
+
+        // Mesin ADMS/ZKTeco/Solution butuh ACK singkat. Jika body balasan tidak
+        // dikenali, mesin akan menganggap push gagal dan mengirim ulang ATTLOG.
+        return response("OK: {$processedCount}\r\n", 200)
+            ->header('Content-Type', 'text/plain')
+            ->header('Connection', 'close');
     }
 
     private function handleUnsupportedTable(Request $request, string $sn, string $table): Response

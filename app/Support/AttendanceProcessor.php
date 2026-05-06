@@ -41,26 +41,42 @@ class AttendanceProcessor
         $employeeId = $this->employeeIdForDeviceUser($device, $deviceUserId);
 
         return DB::transaction(function () use ($device, $deviceUserId, $scanAt, $verifyType, $state, $rawPayload, $employeeId) {
-            $rawLog = AttendanceRawLog::query()->updateOrCreate(
-                [
-                    'attendance_device_id' => $device->id,
-                    'device_user_id' => $deviceUserId,
-                    'scan_at' => $scanAt->toDateTimeString(),
-                ],
-                [
-                    'employee_id' => $employeeId,
-                    'verify_type' => $verifyType,
-                    'state' => $state,
-                    'raw_payload' => $rawPayload,
-                    'synced_at' => now(),
-                ]
-            );
+            $rawLog = AttendanceRawLog::query()->firstOrNew([
+                'attendance_device_id' => $device->id,
+                'device_user_id' => $deviceUserId,
+                'scan_at' => $scanAt->toDateTimeString(),
+            ]);
+
+            $previousEmployeeId = $rawLog->exists ? $rawLog->employee_id : null;
+            $isNewRawLog = !$rawLog->exists;
+            $employeeChanged = $previousEmployeeId !== $employeeId;
+
+            $rawLog->fill([
+                'employee_id' => $employeeId,
+                'verify_type' => $verifyType,
+                'state' => $state,
+                'raw_payload' => $rawPayload,
+                'synced_at' => now(),
+            ]);
+            $rawLog->save();
 
             $device->forceFill(['last_synced_at' => now()])->save();
 
             $attendance = null;
-            if ($employeeId && $rawLog->wasRecentlyCreated) {
-                $attendance = $this->rebuildAttendanceForScan(Employee::findOrFail($employeeId), $scanAt);
+            if ($previousEmployeeId && $employeeChanged) {
+                $this->rebuildAttendanceForScan(Employee::findOrFail($previousEmployeeId), $scanAt);
+            }
+
+            if ($employeeId) {
+                $employee = Employee::findOrFail($employeeId);
+
+                if (
+                    $isNewRawLog
+                    || $employeeChanged
+                    || !$this->hasAttendanceNearScan($employee, $scanAt)
+                ) {
+                    $attendance = $this->rebuildAttendanceForScan($employee, $scanAt);
+                }
             }
 
             return [
@@ -171,6 +187,17 @@ class AttendanceProcessor
         }
 
         return $this->rebuildDailyAttendance($employee, $scanAt->toDateString());
+    }
+
+    private function hasAttendanceNearScan(Employee $employee, Carbon $scanAt): bool
+    {
+        return Attendance::query()
+            ->where('employee_id', $employee->id)
+            ->whereBetween('attendance_date', [
+                $scanAt->copy()->subDay()->toDateString(),
+                $scanAt->toDateString(),
+            ])
+            ->exists();
     }
 
     public function resolveSchedule(Employee $employee, Carbon $date): array

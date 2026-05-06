@@ -110,6 +110,108 @@ class AttendanceProcessorTest extends TestCase
             ->assertJsonPath('employee_id', $employee->id);
     }
 
+    public function test_adms_attlog_acknowledges_machine_push(): void
+    {
+        $employee = Employee::create([
+            'employee_code' => 'EMP006',
+            'name' => 'Joko',
+            'employment_status' => 'active',
+        ]);
+        $device = AttendanceDevice::create([
+            'name' => 'Solution X100C',
+            'serial_number' => 'X100C001',
+            'port' => 4370,
+            'is_active' => true,
+        ]);
+        EmployeeFingerprint::create([
+            'employee_id' => $employee->id,
+            'attendance_device_id' => $device->id,
+            'device_user_id' => '6001',
+            'is_active' => true,
+        ]);
+        $shift = WorkShift::create([
+            'name' => 'Pagi',
+            'start_time' => '08:00',
+            'end_time' => '17:00',
+            'is_active' => true,
+        ]);
+        EmployeeSchedule::create([
+            'employee_id' => $employee->id,
+            'work_shift_id' => $shift->id,
+            'schedule_date' => '2026-04-27',
+            'schedule_type' => 'work',
+        ]);
+
+        $response = $this->call(
+            'POST',
+            '/iclock/cdata?SN=X100C001&table=ATTLOG',
+            [],
+            [],
+            [],
+            ['CONTENT_TYPE' => 'text/plain'],
+            "6001\t2026-04-27 08:00:00\t0\t1\t0\t0\r\n"
+        );
+
+        $response->assertOk();
+        $this->assertSame("OK: 1\r\n", $response->getContent());
+        $this->assertDatabaseHas('attendance_raw_logs', [
+            'attendance_device_id' => $device->id,
+            'device_user_id' => '6001',
+            'scan_at' => '2026-04-27 08:00:00',
+        ]);
+    }
+
+    public function test_replayed_raw_log_rebuilds_attendance_after_employee_mapping_is_added(): void
+    {
+        $employee = Employee::create([
+            'employee_code' => 'EMP007',
+            'name' => 'Tono',
+            'employment_status' => 'active',
+        ]);
+        $device = AttendanceDevice::create([
+            'name' => 'Fingerprint Belakang',
+            'serial_number' => 'SN007',
+            'port' => 4370,
+            'is_active' => true,
+        ]);
+        $shift = WorkShift::create([
+            'name' => 'Pagi',
+            'start_time' => '08:00',
+            'end_time' => '17:00',
+            'is_active' => true,
+        ]);
+        EmployeeSchedule::create([
+            'employee_id' => $employee->id,
+            'work_shift_id' => $shift->id,
+            'schedule_date' => '2026-04-27',
+            'schedule_type' => 'work',
+        ]);
+
+        AttendanceRawLog::create([
+            'attendance_device_id' => $device->id,
+            'device_user_id' => '7001',
+            'scan_at' => '2026-04-27 08:00:00',
+            'synced_at' => now(),
+        ]);
+        EmployeeFingerprint::create([
+            'employee_id' => $employee->id,
+            'attendance_device_id' => $device->id,
+            'device_user_id' => '7001',
+            'is_active' => true,
+        ]);
+
+        $result = app(AttendanceProcessor::class)
+            ->recordFingerprintScanWithResult($device, '7001', '2026-04-27 08:00:00');
+
+        $this->assertSame($employee->id, $result['raw_log']->employee_id);
+        $this->assertNotNull($result['attendance']);
+        $this->assertTrue(Attendance::query()
+            ->where('employee_id', $employee->id)
+            ->whereDate('attendance_date', '2026-04-27')
+            ->where('source', 'fingerprint')
+            ->exists());
+    }
+
     public function test_attendance_datatable_endpoints_return_json(): void
     {
         $user = User::factory()->create();

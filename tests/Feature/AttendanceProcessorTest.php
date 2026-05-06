@@ -221,6 +221,106 @@ class AttendanceProcessorTest extends TestCase
         $this->assertSame(Attendance::STATUS_INCOMPLETE, $attendance->status);
     }
 
+    public function test_very_early_stale_scan_is_ignored_for_day_shift_check_in(): void
+    {
+        $employee = Employee::create([
+            'employee_code' => 'EMP009',
+            'name' => 'Rudi',
+            'employment_status' => 'active',
+        ]);
+        $device = AttendanceDevice::create([
+            'name' => 'Solution X100C',
+            'serial_number' => 'X100C009',
+            'port' => 4370,
+            'is_active' => true,
+        ]);
+        EmployeeFingerprint::create([
+            'employee_id' => $employee->id,
+            'attendance_device_id' => $device->id,
+            'device_user_id' => '9001',
+            'is_active' => true,
+        ]);
+        $shift = WorkShift::create([
+            'name' => 'Pagi',
+            'start_time' => '08:00',
+            'end_time' => '17:00',
+            'is_active' => true,
+        ]);
+        EmployeeSchedule::create([
+            'employee_id' => $employee->id,
+            'work_shift_id' => $shift->id,
+            'schedule_date' => '2026-04-27',
+            'schedule_type' => 'work',
+        ]);
+        AttendanceRawLog::create([
+            'attendance_device_id' => $device->id,
+            'employee_id' => $employee->id,
+            'device_user_id' => '9001',
+            'scan_at' => '2026-04-27 02:28:32',
+            'verify_type' => 'fingerprint',
+            'state' => 'check_in',
+            'synced_at' => now(),
+        ]);
+
+        app(AttendanceProcessor::class)
+            ->recordFingerprintScanWithResult($device, '9001', '2026-04-27 14:01:00', 'fingerprint', 'check_in');
+
+        $attendance = Attendance::query()
+            ->where('employee_id', $employee->id)
+            ->whereDate('attendance_date', '2026-04-27')
+            ->firstOrFail();
+
+        $this->assertEquals('2026-04-27 14:01:00', $attendance->check_in_at->format('Y-m-d H:i:s'));
+        $this->assertNull($attendance->check_out_at);
+    }
+
+    public function test_duplicate_check_in_and_check_out_use_latest_scan(): void
+    {
+        $employee = Employee::create([
+            'employee_code' => 'EMP010',
+            'name' => 'Yanto',
+            'employment_status' => 'active',
+        ]);
+        $device = AttendanceDevice::create([
+            'name' => 'Solution X100C',
+            'serial_number' => 'X100C010',
+            'port' => 4370,
+            'is_active' => true,
+        ]);
+        EmployeeFingerprint::create([
+            'employee_id' => $employee->id,
+            'attendance_device_id' => $device->id,
+            'device_user_id' => '10010',
+            'is_active' => true,
+        ]);
+        $shift = WorkShift::create([
+            'name' => 'Pagi',
+            'start_time' => '08:00',
+            'end_time' => '17:00',
+            'is_active' => true,
+        ]);
+        EmployeeSchedule::create([
+            'employee_id' => $employee->id,
+            'work_shift_id' => $shift->id,
+            'schedule_date' => '2026-04-27',
+            'schedule_type' => 'work',
+        ]);
+
+        $processor = app(AttendanceProcessor::class);
+        $processor->recordFingerprintScanWithResult($device, '10010', '2026-04-27 08:00:00', 'fingerprint', 'check_in');
+        $processor->recordFingerprintScanWithResult($device, '10010', '2026-04-27 08:05:00', 'fingerprint', 'check_in');
+        $processor->recordFingerprintScanWithResult($device, '10010', '2026-04-27 17:00:00', 'fingerprint', 'check_out');
+        $processor->recordFingerprintScanWithResult($device, '10010', '2026-04-27 17:10:00', 'fingerprint', 'check_out');
+
+        $attendance = Attendance::query()
+            ->where('employee_id', $employee->id)
+            ->whereDate('attendance_date', '2026-04-27')
+            ->firstOrFail();
+
+        $this->assertEquals('2026-04-27 08:05:00', $attendance->check_in_at->format('Y-m-d H:i:s'));
+        $this->assertEquals('2026-04-27 17:10:00', $attendance->check_out_at->format('Y-m-d H:i:s'));
+    }
+
     public function test_replayed_raw_log_rebuilds_attendance_after_employee_mapping_is_added(): void
     {
         $employee = Employee::create([

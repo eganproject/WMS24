@@ -193,7 +193,7 @@ class AttendanceProcessor
         $checkInStates = ['check_in', 'break_in', 'overtime_in', '0', 0];
         $checkOutStates = ['check_out', 'break_out', 'overtime_out', '1', 1];
 
-        $checkIn = $scans->first(fn (AttendanceRawLog $scan) => in_array($scan->state, $checkInStates, true));
+        $checkIn = $scans->reverse()->first(fn (AttendanceRawLog $scan) => in_array($scan->state, $checkInStates, true));
         $checkOut = $scans->reverse()->first(fn (AttendanceRawLog $scan) => in_array($scan->state, $checkOutStates, true));
 
         if ($checkIn) {
@@ -415,7 +415,7 @@ class AttendanceProcessor
 
     private function scanWindow(Carbon $date, WorkShift $shift): array
     {
-        $start = $this->shiftDateTime($date, $shift->start_time)->subHours(6);
+        $start = $this->shiftDateTime($date, $shift->start_time)->subHours(2);
         $end = $this->shiftDateTime($date, $shift->end_time, $shift->crosses_midnight)->addHours(6);
 
         return [$start, $end];

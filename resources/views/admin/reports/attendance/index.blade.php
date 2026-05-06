@@ -5,19 +5,96 @@
 
 @push('styles')
 <style>
+    /* ===== Hero ===== */
+    .ar-hero {
+        background: linear-gradient(135deg, #f8faff 0%, #fff 60%);
+        border: 1px solid #eef0f8;
+        border-radius: 1rem;
+        padding: 1.25rem 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    .ar-hero-eyebrow {
+        font-size: .72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .08em;
+        color: #1b84ff;
+        margin-bottom: .35rem;
+    }
+    .ar-hero h1 { font-size: 1.5rem; font-weight: 800; color: #1e1e2d; margin: 0; }
+    .ar-hero p  { color: #7e8299; font-size: .875rem; margin-top: .25rem; }
+
+    /* ===== Filter ===== */
+    .ar-filter-head {
+        display: flex;
+        align-items: center;
+        gap: .65rem;
+        margin-bottom: .85rem;
+        font-weight: 700;
+        color: #3f4254;
+    }
+    .ar-filter-head i { color: #1b84ff; }
+
     .attendance-report-filter {
         display: grid;
         grid-template-columns: minmax(220px, 1.2fr) repeat(6, minmax(150px, 1fr)) auto;
         gap: 12px;
         align-items: end;
     }
-    .attendance-report-kpi {
-        border: 1px solid #e4e6ef;
-        border-radius: 14px;
-        background: #fff;
-        padding: 18px 20px;
-        height: 100%;
+
+    .attendance-report-note {
+        border-radius: 12px;
+        background: linear-gradient(135deg, #eff8ff, #f8fbff);
+        color: #3f4254;
+        padding: 12px 16px;
+        font-size: 13px;
+        line-height: 1.6;
+        border: 1px solid #d8eaff;
     }
+    .attendance-report-note i { color: #1b84ff; }
+
+    /* ===== KPI cards ===== */
+    .attendance-report-kpi {
+        position: relative;
+        border: 1px solid #eef0f8;
+        border-radius: 1rem;
+        background: #fff;
+        padding: 1.25rem;
+        height: 100%;
+        overflow: hidden;
+        transition: transform .15s ease, box-shadow .15s ease;
+    }
+    .attendance-report-kpi:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 22px rgba(31, 41, 55, .06);
+    }
+    .attendance-report-kpi::before {
+        content: "";
+        position: absolute;
+        top: 0; left: 0;
+        height: 4px;
+        width: 100%;
+    }
+    .attendance-report-kpi.kpi-employees::before { background: #1b84ff; }
+    .attendance-report-kpi.kpi-rate::before      { background: #50cd89; }
+    .attendance-report-kpi.kpi-problem::before   { background: #f1416c; }
+    .attendance-report-kpi.kpi-overtime::before  { background: #7239ea; }
+
+    .attendance-report-kpi-icon {
+        width: 42px;
+        height: 42px;
+        border-radius: .65rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1rem;
+        margin-bottom: .65rem;
+    }
+    .kpi-employees .attendance-report-kpi-icon { background: #eaf3ff; color: #1b84ff; }
+    .kpi-rate .attendance-report-kpi-icon      { background: #e8fbf1; color: #1aae6f; }
+    .kpi-problem .attendance-report-kpi-icon   { background: #fde8ef; color: #d33269; }
+    .kpi-overtime .attendance-report-kpi-icon  { background: #f0eafc; color: #6f37df; }
+
     .attendance-report-kpi-label {
         color: #7e8299;
         font-size: 12px;
@@ -28,63 +105,86 @@
     }
     .attendance-report-kpi-value {
         color: #181c32;
-        font-size: 28px;
+        font-size: 1.85rem;
         line-height: 1;
         font-weight: 800;
     }
     .attendance-report-kpi-note {
         margin-top: 8px;
-        color: #7e8299;
+        color: #a1a5b7;
         font-size: 12px;
     }
-    .attendance-report-note {
-        border-radius: 12px;
-        background: #f1faff;
-        color: #3f4254;
-        padding: 14px 16px;
-        font-size: 13px;
-        line-height: 1.6;
-    }
+
+    /* ===== Detail modal table ===== */
     .attendance-detail-table {
         max-height: 520px;
         overflow: auto;
     }
+
+    /* ===== Table polish ===== */
+    #attendance_report_table thead th {
+        font-size: .72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        color: #7e8299;
+        background: #f9fafc;
+    }
+
+    /* ===== Responsive ===== */
     @media (max-width: 1400px) {
         .attendance-report-filter {
             grid-template-columns: repeat(3, minmax(0, 1fr));
         }
     }
-    @media (max-width: 767.98px) {
+    @media (max-width: 991.98px) {
+        .attendance-report-filter {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+    @media (max-width: 575.98px) {
         .attendance-report-filter {
             grid-template-columns: 1fr;
         }
+        .ar-hero { padding: 1rem; }
+        .ar-hero h1 { font-size: 1.2rem; }
+        .attendance-report-kpi-value { font-size: 1.5rem; }
     }
 </style>
 @endpush
 
 @section('content')
-<div class="card mb-6">
-    <div class="card-header border-0 pt-6">
-        <div class="card-title">
-            <h3 class="fw-bolder mb-0">Filter Laporan</h3>
+
+{{-- ===== Hero ===== --}}
+<div class="ar-hero">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+        <div>
+            <div class="ar-hero-eyebrow"><i class="fas fa-chart-line me-1"></i>Laporan</div>
+            <h1><i class="fas fa-clipboard-list me-2 text-primary"></i>Laporan Absensi</h1>
+            <p class="mb-0">Rekap kehadiran, keterlambatan, alpha, dan jam lembur per karyawan dalam satu periode.</p>
         </div>
     </div>
-    <div class="card-body pt-0">
+</div>
+
+{{-- ===== Filter ===== --}}
+<div class="card mb-6 shadow-sm">
+    <div class="card-body pt-5 pb-5">
+        <div class="ar-filter-head"><i class="fas fa-filter"></i> Filter Laporan</div>
         <div class="attendance-report-filter">
             <div>
-                <label class="form-label text-muted fs-7">Cari</label>
+                <label class="form-label fw-bold fs-8">Cari</label>
                 <input type="text" id="filter_search" class="form-control form-control-solid" placeholder="Kode/nama karyawan, area, jabatan">
             </div>
             <div>
-                <label class="form-label text-muted fs-7">Dari</label>
+                <label class="form-label fw-bold fs-8">Dari</label>
                 <input type="text" id="filter_date_from" class="form-control form-control-solid" placeholder="YYYY-MM-DD">
             </div>
             <div>
-                <label class="form-label text-muted fs-7">Sampai</label>
+                <label class="form-label fw-bold fs-8">Sampai</label>
                 <input type="text" id="filter_date_to" class="form-control form-control-solid" placeholder="YYYY-MM-DD">
             </div>
             <div>
-                <label class="form-label text-muted fs-7">Karyawan</label>
+                <label class="form-label fw-bold fs-8">Karyawan</label>
                 <select id="filter_employee" class="form-select form-select-solid">
                     <option value="">Semua karyawan</option>
                     @foreach($employees as $employee)
@@ -93,7 +193,7 @@
                 </select>
             </div>
             <div>
-                <label class="form-label text-muted fs-7">Area</label>
+                <label class="form-label fw-bold fs-8">Area</label>
                 <select id="filter_area" class="form-select form-select-solid">
                     <option value="">Semua area</option>
                     @foreach($areas as $area)
@@ -102,7 +202,7 @@
                 </select>
             </div>
             <div>
-                <label class="form-label text-muted fs-7">Jabatan</label>
+                <label class="form-label fw-bold fs-8">Jabatan</label>
                 <select id="filter_position" class="form-select form-select-solid">
                     <option value="">Semua jabatan</option>
                     @foreach($positions as $position)
@@ -111,7 +211,7 @@
                 </select>
             </div>
             <div>
-                <label class="form-label text-muted fs-7">Status Laporan</label>
+                <label class="form-label fw-bold fs-8">Status Laporan</label>
                 <select id="filter_report_status" class="form-select form-select-solid">
                     <option value="">Semua</option>
                     <option value="has_absent">Ada Alpha</option>
@@ -122,58 +222,69 @@
                 </select>
             </div>
             <div class="d-flex gap-2">
-                <button type="button" class="btn btn-primary" id="filter_apply">Terapkan</button>
-                <button type="button" class="btn btn-light" id="filter_reset">Reset</button>
+                <button type="button" class="btn btn-primary" id="filter_apply">
+                    <i class="fas fa-search me-1"></i>Terapkan
+                </button>
+                <button type="button" class="btn btn-light" id="filter_reset" title="Reset filter">
+                    <i class="fas fa-undo"></i>
+                </button>
             </div>
         </div>
         <div class="attendance-report-note mt-5">
+            <i class="fas fa-info-circle me-1"></i>
             Persentase hadir dihitung dari <strong>hari kerja terjadwal</strong>. Status hadir mencakup Hadir dan Terlambat. Alpha dan scan tidak lengkap ditampilkan terpisah agar evaluasi HR tidak bercampur dengan hari libur/cuti.
         </div>
     </div>
 </div>
 
+{{-- ===== KPI Cards ===== --}}
 <div class="row g-4 mb-6">
-    <div class="col-md-6 col-xl-3">
-        <div class="attendance-report-kpi">
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="attendance-report-kpi kpi-employees">
+            <span class="attendance-report-kpi-icon"><i class="fas fa-users"></i></span>
             <div class="attendance-report-kpi-label">Karyawan</div>
             <div class="attendance-report-kpi-value" id="summary_employees">0</div>
             <div class="attendance-report-kpi-note" id="summary_period">Periode -</div>
         </div>
     </div>
-    <div class="col-md-6 col-xl-3">
-        <div class="attendance-report-kpi">
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="attendance-report-kpi kpi-rate">
+            <span class="attendance-report-kpi-icon"><i class="fas fa-percentage"></i></span>
             <div class="attendance-report-kpi-label">Persentase Hadir</div>
             <div class="attendance-report-kpi-value text-success" id="summary_attendance_rate">0%</div>
             <div class="attendance-report-kpi-note" id="summary_scheduled">0 hari kerja terjadwal</div>
         </div>
     </div>
-    <div class="col-md-6 col-xl-3">
-        <div class="attendance-report-kpi">
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="attendance-report-kpi kpi-problem">
+            <span class="attendance-report-kpi-icon"><i class="fas fa-exclamation-triangle"></i></span>
             <div class="attendance-report-kpi-label">Masalah Absensi</div>
             <div class="attendance-report-kpi-value text-danger" id="summary_problem_days">0</div>
             <div class="attendance-report-kpi-note" id="summary_problem_meta">Alpha 0 | Tidak lengkap 0</div>
         </div>
     </div>
-    <div class="col-md-6 col-xl-3">
-        <div class="attendance-report-kpi">
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="attendance-report-kpi kpi-overtime">
+            <span class="attendance-report-kpi-icon"><i class="fas fa-business-time"></i></span>
             <div class="attendance-report-kpi-label">Lembur</div>
-            <div class="attendance-report-kpi-value text-primary" id="summary_overtime">0 jam</div>
+            <div class="attendance-report-kpi-value" id="summary_overtime" style="color:#6f37df">0 jam</div>
             <div class="attendance-report-kpi-note" id="summary_overtime_meta">Pending 0 jam</div>
         </div>
     </div>
 </div>
 
-<div class="card">
+{{-- ===== Table ===== --}}
+<div class="card shadow-sm">
     <div class="card-header border-0 pt-6">
         <div class="card-title">
-            <h3 class="card-label fw-bolder">Ringkasan Per Karyawan</h3>
+            <h3 class="card-label fw-bolder mb-0"><i class="fas fa-table text-primary me-2"></i>Ringkasan Per Karyawan</h3>
         </div>
     </div>
     <div class="card-body py-6">
         <div class="table-responsive">
             <table class="table align-middle table-row-dashed fs-6 gy-4" id="attendance_report_table">
                 <thead>
-                    <tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0">
+                    <tr>
                         <th>Karyawan</th>
                         <th>Area / Jabatan</th>
                         <th class="text-end">Hari Kerja</th>
@@ -194,12 +305,13 @@
     </div>
 </div>
 
+{{-- ===== Detail Modal ===== --}}
 <div class="modal fade" id="attendance_detail_modal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-xl">
+    <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <div>
-                    <h2 class="fw-bolder mb-1" id="attendance_detail_title">Detail Absensi</h2>
+                    <h2 class="fw-bolder mb-1" id="attendance_detail_title"><i class="fas fa-user-clock text-primary me-2"></i>Detail Absensi</h2>
                     <div class="text-muted" id="attendance_detail_subtitle">-</div>
                 </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -320,6 +432,15 @@ document.addEventListener('DOMContentLoaded', () => {
         processing: true,
         serverSide: true,
         dom: 'rtip',
+        language: {
+            processing: '<div class="text-muted py-4"><span class="spinner-border spinner-border-sm me-2"></span>Memuat data...</div>',
+            emptyTable: '<div class="text-center py-8 text-muted"><i class="fas fa-inbox fs-2 d-block mb-2"></i>Belum ada data</div>',
+            zeroRecords: '<div class="text-center py-8 text-muted"><i class="fas fa-search fs-2 d-block mb-2"></i>Tidak ada data yang cocok</div>',
+            info: 'Menampilkan _START_–_END_ dari _TOTAL_ data',
+            infoEmpty: '0 data',
+            infoFiltered: '(difilter dari _MAX_ data)',
+            paginate: { first: '«', last: '»', next: '›', previous: '‹' },
+        },
         ajax: {
             url: dataUrl,
             dataSrc: (json) => {
@@ -364,7 +485,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 data: null,
                 className: 'text-end',
                 orderable: false,
-                render: (row) => `<button type="button" class="btn btn-sm btn-light-primary btn-detail-attendance" data-id="${row.employee_id}">Detail</button>`,
+                render: (row) => `<button type="button" class="btn btn-sm btn-light-primary btn-detail-attendance" data-id="${row.employee_id}"><i class="fas fa-eye me-1"></i>Detail</button>`,
             },
         ],
         order: [],
@@ -391,12 +512,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const row = currentRows.find((item) => String(item.employee_id) === String(this.dataset.id));
         if (!row) return;
 
-        document.getElementById('attendance_detail_title').textContent = row.employee_label;
+        document.getElementById('attendance_detail_title').innerHTML =
+            `<i class="fas fa-user-clock text-primary me-2"></i>${escapeHtml(row.employee_label)}`;
         document.getElementById('attendance_detail_subtitle').textContent = `${row.area} | ${row.position}`;
         const detailRows = Array.isArray(row.detail_rows) && row.detail_rows.length
             ? row.detail_rows.map((detail) => `
                 <tr>
-                    <td>${escapeHtml(detail.date)}</td>
+                    <td class="fw-semibold">${escapeHtml(detail.date)}</td>
                     <td>${escapeHtml(statusLabel(detail.schedule_type))}</td>
                     <td>${escapeHtml(detail.shift)}</td>
                     <td>${escapeHtml(detail.check_in_at)}</td>
@@ -410,7 +532,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td>${escapeHtml(detail.note || '-')}</td>
                 </tr>
             `).join('')
-            : '<tr><td colspan="12" class="text-center text-muted py-8">Tidak ada jadwal atau rekap absensi pada periode ini.</td></tr>';
+            : '<tr><td colspan="12" class="text-center text-muted py-8"><i class="fas fa-inbox fs-2 d-block mb-2 opacity-50"></i>Tidak ada jadwal atau rekap absensi pada periode ini.</td></tr>';
         document.getElementById('attendance_detail_rows').innerHTML = detailRows;
         detailModal?.show();
     });

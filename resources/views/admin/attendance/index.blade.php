@@ -6,13 +6,148 @@
 @push('styles')
 <link href="{{ asset('metronic/plugins/custom/fullcalendar/fullcalendar.bundle.css') }}" rel="stylesheet" type="text/css" />
 <style>
-    #attendance_schedule_calendar {
-        min-height: 680px;
+    /* ===== Section Navigation ===== */
+    .att-nav {
+        display: flex;
+        flex-wrap: nowrap;
+        gap: .5rem;
+        overflow-x: auto;
+        padding: .5rem .25rem;
+        margin: 0 -.25rem;
+        scrollbar-width: thin;
+    }
+    .att-nav::-webkit-scrollbar { height: 6px; }
+    .att-nav::-webkit-scrollbar-thumb { background: #e4e6ef; border-radius: 4px; }
+
+    .att-nav-item {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        gap: .5rem;
+        padding: .65rem 1rem;
+        border-radius: .65rem;
+        background: #f5f8fa;
+        color: #5e6278;
+        font-weight: 600;
+        font-size: .875rem;
+        text-decoration: none;
+        white-space: nowrap;
+        border: 1px solid transparent;
+        transition: all .15s ease;
+    }
+    .att-nav-item:hover {
+        background: #eef3f7;
+        color: #1b84ff;
+    }
+    .att-nav-item i {
+        font-size: .9rem;
+        opacity: .8;
+    }
+    .att-nav-item.active {
+        background: #1b84ff;
+        color: #fff;
+        box-shadow: 0 6px 14px rgba(27, 132, 255, .25);
+    }
+    .att-nav-item.active:hover { color: #fff; }
+    .att-nav-item.active i { opacity: 1; }
+
+    /* ===== Page Hero ===== */
+    .att-hero {
+        background: linear-gradient(135deg, #f8faff 0%, #fff 60%);
+        border: 1px solid #eef0f8;
+        border-radius: 1rem;
+        padding: 1.25rem 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    .att-hero-eyebrow {
+        font-size: .72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .08em;
+        color: #1b84ff;
+        margin-bottom: .35rem;
+    }
+    .att-hero-title { font-size: 1.5rem; font-weight: 800; color: #1e1e2d; margin: 0; }
+    .att-hero-desc  { color: #7e8299; font-size: .875rem; margin-top: .25rem; }
+
+    /* ===== Form Card ===== */
+    .att-form-card {
+        background: #fff;
+        border: 1px solid #eef0f8;
+        border-radius: .85rem;
+        padding: 1.25rem;
+        margin-bottom: 1.5rem;
+    }
+    .att-form-head {
+        display: flex;
+        align-items: center;
+        gap: .75rem;
+        padding-bottom: .85rem;
+        margin-bottom: 1rem;
+        border-bottom: 1px dashed #e4e6ef;
+    }
+    .att-form-head .icon {
+        width: 38px;
+        height: 38px;
+        background: #f0f7ff;
+        color: #1b84ff;
+        border-radius: .55rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: .95rem;
+        flex: 0 0 38px;
+    }
+    .att-form-head h3 { font-size: 1rem; margin: 0; font-weight: 700; color: #1e1e2d; }
+    .att-form-head p  { margin: .15rem 0 0; color: #7e8299; font-size: .8rem; }
+
+    /* ===== Sub-section inside form (e.g., attendance & overtime) ===== */
+    .attendance-form-section {
+        border: 1px solid #e4e6ef;
+        border-radius: 0.75rem;
+        padding: 1rem 1.1rem 1.1rem;
+        background: #f9fafc;
+    }
+    .attendance-form-section + .attendance-form-section { margin-top: 1rem; }
+    .attendance-form-section-title {
+        color: #3f4254;
+        font-size: 0.78rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin-bottom: 0.85rem;
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+    }
+    .attendance-form-section-title::before {
+        content: "";
+        width: 4px;
+        height: 14px;
+        background: #1b84ff;
+        border-radius: 2px;
     }
 
+    /* ===== Calendar ===== */
+    #attendance_schedule_calendar { min-height: 680px; }
     #attendance_schedule_calendar .fc-event {
         border-radius: 0.475rem;
         padding: 0.125rem 0.25rem;
+    }
+    .att-legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .9rem;
+        font-size: .78rem;
+        color: #5e6278;
+    }
+    .att-legend .dot {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        margin-right: .35rem;
+        vertical-align: middle;
     }
 
     .attendance-calendar-detail {
@@ -20,26 +155,54 @@
         overflow-y: auto;
         text-align: left;
     }
-
     .attendance-calendar-detail ol {
         padding-left: 1.25rem;
         margin-bottom: 0;
     }
 
-    .attendance-form-section {
+    /* ===== Toolbar ===== */
+    .att-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .75rem;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 1.25rem;
+    }
+    .att-toolbar .search-wrap {
+        position: relative;
+        flex: 1 1 280px;
+        max-width: 360px;
+    }
+    .att-toolbar .search-wrap i {
+        position: absolute;
+        top: 50%;
+        left: .9rem;
+        transform: translateY(-50%);
+        color: #a1a5b7;
+    }
+    .att-toolbar .search-wrap input { padding-left: 2.4rem; }
+
+    /* ===== Form helpers ===== */
+    .form-label.fw-bold { color: #3f4254; font-size: .8rem; }
+    .att-checkbox-row {
+        display: flex;
+        align-items: center;
+        gap: 1.25rem;
+        flex-wrap: wrap;
+        padding: .65rem .9rem;
+        background: #f9fafc;
         border: 1px solid #e4e6ef;
-        border-radius: 0.75rem;
-        padding: 1rem;
-        background: #f9fafb;
+        border-radius: .55rem;
     }
 
-    .attendance-form-section-title {
-        color: #3f4254;
-        font-size: 0.85rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-        margin-bottom: 0.85rem;
+    /* ===== Responsive tweaks ===== */
+    @media (max-width: 768px) {
+        .att-hero { padding: 1rem; }
+        .att-hero-title { font-size: 1.2rem; }
+        .att-form-card { padding: 1rem; }
+        .att-toolbar { flex-direction: column; align-items: stretch; }
+        .att-toolbar .search-wrap { max-width: 100%; }
     }
 </style>
 @endpush
@@ -49,345 +212,557 @@
     $activeSection = $activeSection ?? 'employees';
     $sectionLinks = $sectionLinks ?? [];
     $activeSectionLabel = $sectionLinks[$activeSection]['label'] ?? 'Absensi';
+    $activeSectionIcon  = $sectionLinks[$activeSection]['icon']  ?? 'fas fa-user-clock';
+
+    $sectionDescriptions = [
+        'employees'    => 'Kelola data karyawan, jabatan, area kerja, dan akun login yang terhubung.',
+        'devices'      => 'Daftar mesin absensi (fingerprint/face) yang terhubung ke sistem.',
+        'fingerprints' => 'Pemetaan ID karyawan ke User ID di mesin absensi.',
+        'shifts'       => 'Definisi shift kerja, jam istirahat, toleransi, dan aturan lembur.',
+        'schedules'    => 'Atur jadwal harian per karyawan dan lihat kalender keseluruhan.',
+        'holidays'     => 'Daftar hari libur perusahaan dan nasional.',
+        'templates'    => 'Pola jadwal mingguan yang dapat di-assign ke banyak karyawan sekaligus.',
+        'leaves'       => 'Pengajuan & approval cuti, sakit, dan izin karyawan.',
+        'raw_logs'     => 'Log mentah scan dari mesin absensi sebelum diolah jadi rekap.',
+        'attendances'  => 'Rekap final absensi harian, termasuk approval lembur.',
+    ];
+    $activeDescription = $sectionDescriptions[$activeSection] ?? 'Modul absensi terintegrasi.';
 @endphp
-<div class="card">
-    <div class="card-header border-0 pt-6">
-        <div class="card-title">
-            <div class="d-flex align-items-center position-relative my-1">
-                <input type="text" class="form-control form-control-solid w-250px" placeholder="Cari data aktif" id="attendance_search" />
-            </div>
+
+{{-- ===== Hero ===== --}}
+<div class="att-hero">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+        <div>
+            <div class="att-hero-eyebrow"><i class="fas fa-user-clock me-1"></i>Modul Absensi</div>
+            <h1 class="att-hero-title">
+                <i class="{{ $activeSectionIcon }} me-2 text-primary"></i>{{ $activeSectionLabel }}
+            </h1>
+            <div class="att-hero-desc">{{ $activeDescription }}</div>
         </div>
-        <div class="card-toolbar">
-            <button type="button" class="btn btn-light-primary" id="attendance_refresh_tab" data-active-section="{{ $activeSection }}">
-                Refresh Halaman
-            </button>
-        </div>
+        <button type="button" class="btn btn-light-primary btn-sm" id="attendance_refresh_tab" data-active-section="{{ $activeSection }}">
+            <i class="fas fa-sync-alt me-1"></i>Refresh Halaman
+        </button>
     </div>
+</div>
+
+{{-- ===== Section Navigation ===== --}}
+<div class="card mb-6 shadow-sm">
+    <div class="card-body py-3">
+        <nav class="att-nav">
+            @foreach($sectionLinks as $sectionKey => $section)
+                <a href="{{ route($section['route']) }}" class="att-nav-item {{ $activeSection === $sectionKey ? 'active' : '' }}">
+                    <i class="{{ $section['icon'] }}"></i>
+                    <span>{{ $section['label'] }}</span>
+                </a>
+            @endforeach
+        </nav>
+    </div>
+</div>
+
+<div class="card shadow-sm">
     <div class="card-body py-6">
-        <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-8">
-            <div>
-                <div class="text-muted fs-7 fw-bold text-uppercase">Modul Absensi</div>
-                <h2 class="fw-bolder mb-0">{{ $activeSectionLabel }}</h2>
+
+        {{-- ===== Toolbar (search) ===== --}}
+        <div class="att-toolbar">
+            <div class="search-wrap">
+                <i class="fas fa-search"></i>
+                <input type="text" class="form-control form-control-solid" placeholder="Cari data pada tab aktif..." id="attendance_search" />
             </div>
-            <div class="d-flex flex-wrap gap-2">
-                @foreach($sectionLinks as $sectionKey => $section)
-                    <a href="{{ route($section['route']) }}" class="btn btn-sm {{ $activeSection === $sectionKey ? 'btn-primary' : 'btn-light' }}">
-                        <i class="{{ $section['icon'] }} me-1"></i>{{ $section['label'] }}
-                    </a>
-                @endforeach
+            <div class="text-muted fs-7">
+                <i class="fas fa-info-circle me-1 text-primary"></i>
+                Pencarian berlaku untuk data tabel pada tab yang sedang aktif.
             </div>
         </div>
 
         <div class="tab-content">
+            {{-- ===== EMPLOYEES ===== --}}
             <div class="tab-pane fade {{ $activeSection === 'employees' ? 'show active' : '' }}" id="tab_employees">
-                <form class="row g-3 mb-6 ajax-form" data-table="employees_table" action="{{ route('admin.attendance.employees.store') }}">
-                    @csrf
-                    <div class="col-md-2"><label class="form-label fw-bold">Kode Karyawan</label><input name="employee_code" class="form-control form-control-solid" placeholder="EMP001" required></div>
-                    <div class="col-md-2"><label class="form-label fw-bold">Nama</label><input name="name" class="form-control form-control-solid" placeholder="Nama karyawan" required></div>
-                    <div class="col-md-2"><label class="form-label fw-bold">Telepon</label><input name="phone" class="form-control form-control-solid" placeholder="Nomor telepon"></div>
-                    <div class="col-md-2">
-                        <label class="form-label fw-bold">Jabatan</label>
-                        <select name="position_id" id="employee_position_id" class="form-select form-select-solid">
-                            <option value="">Tanpa jabatan</option>
-                            @foreach($positions as $position)
-                                <option value="{{ $position->id }}">{{ $position->name }}</option>
-                            @endforeach
-                        </select>
+                <div class="att-form-card">
+                    <div class="att-form-head">
+                        <span class="icon"><i class="fas fa-user-plus"></i></span>
+                        <div>
+                            <h3>Tambah Karyawan</h3>
+                            <p>Isi data karyawan baru. Klik <em>Edit</em> di tabel untuk mengubah data.</p>
+                        </div>
                     </div>
-                    <div class="col-md-2"><label class="form-label fw-bold">Tanggal Masuk</label><input type="text" name="join_date" class="form-control form-control-solid js-date" placeholder="YYYY-MM-DD"></div>
-                    <div class="col-md-2">
-                        <label class="form-label fw-bold">Status Kerja</label>
-                        <select name="employment_status" class="form-select form-select-solid">
-                            <option value="active">Aktif</option>
-                            <option value="inactive">Nonaktif</option>
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label fw-bold">Area</label>
-                        <select name="area_id" class="form-select form-select-solid">
-                            <option value="">Area kosong</option>
-                            @foreach($areas as $area)
-                                <option value="{{ $area->id }}">{{ $area->code }} - {{ $area->name }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label fw-bold">User Login</label>
-                        <select name="user_id" class="form-select form-select-solid">
-                            <option value="">Tidak terhubung user login</option>
-                            @foreach($users as $user)
-                                <option value="{{ $user->id }}">{{ $user->name }} - {{ $user->email }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="col-md-2 d-flex align-items-end gap-2">
-                        <button class="btn btn-primary flex-grow-1">Tambah</button>
-                        <button type="button" class="btn btn-light-primary" data-bs-toggle="modal" data-bs-target="#modal_positions">Jabatan</button>
-                    </div>
-                </form>
+                    <form class="row g-3 ajax-form" data-table="employees_table" action="{{ route('admin.attendance.employees.store') }}">
+                        @csrf
+                        <div class="col-12 col-md-6 col-lg-3"><label class="form-label fw-bold">Kode Karyawan</label><input name="employee_code" class="form-control form-control-solid" placeholder="EMP001" required></div>
+                        <div class="col-12 col-md-6 col-lg-4"><label class="form-label fw-bold">Nama</label><input name="name" class="form-control form-control-solid" placeholder="Nama lengkap karyawan" required></div>
+                        <div class="col-12 col-md-6 col-lg-3"><label class="form-label fw-bold">Telepon</label><input name="phone" class="form-control form-control-solid" placeholder="08xxxxxxxxxx"></div>
+                        <div class="col-12 col-md-6 col-lg-2">
+                            <label class="form-label fw-bold">Status Kerja</label>
+                            <select name="employment_status" class="form-select form-select-solid">
+                                <option value="active">Aktif</option>
+                                <option value="inactive">Nonaktif</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-6 col-lg-3">
+                            <label class="form-label fw-bold">Jabatan</label>
+                            <select name="position_id" id="employee_position_id" class="form-select form-select-solid">
+                                <option value="">Tanpa jabatan</option>
+                                @foreach($positions as $position)
+                                    <option value="{{ $position->id }}">{{ $position->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-6 col-lg-3"><label class="form-label fw-bold">Tanggal Masuk</label><input type="text" name="join_date" class="form-control form-control-solid js-date" placeholder="YYYY-MM-DD"></div>
+                        <div class="col-12 col-md-6 col-lg-3">
+                            <label class="form-label fw-bold">Area</label>
+                            <select name="area_id" class="form-select form-select-solid">
+                                <option value="">Area kosong</option>
+                                @foreach($areas as $area)
+                                    <option value="{{ $area->id }}">{{ $area->code }} - {{ $area->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-6 col-lg-3">
+                            <label class="form-label fw-bold">User Login</label>
+                            <select name="user_id" class="form-select form-select-solid">
+                                <option value="">Tidak terhubung user login</option>
+                                @foreach($users as $user)
+                                    <option value="{{ $user->id }}">{{ $user->name }} - {{ $user->email }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="col-12 d-flex flex-wrap gap-2 justify-content-end pt-2">
+                            <button type="button" class="btn btn-light-primary" data-bs-toggle="modal" data-bs-target="#modal_positions">
+                                <i class="fas fa-briefcase me-1"></i>Kelola Jabatan
+                            </button>
+                            <button class="btn btn-primary"><i class="fas fa-plus me-1"></i>Tambah Karyawan</button>
+                        </div>
+                    </form>
+                </div>
                 <x-attendance-table id="employees_table" :headers="['Kode','Nama','Area','User','Telepon','Jabatan','Status','Aksi']" />
             </div>
 
+            {{-- ===== DEVICES ===== --}}
             <div class="tab-pane fade {{ $activeSection === 'devices' ? 'show active' : '' }}" id="tab_devices">
-                <form class="row g-3 mb-6 ajax-form" data-table="devices_table" action="{{ route('admin.attendance.devices.store') }}">
-                    @csrf
-                    <div class="col-md-2"><label class="form-label fw-bold">Nama Device</label><input name="name" class="form-control form-control-solid" placeholder="Fingerprint Gudang" required></div>
-                    <div class="col-md-2"><label class="form-label fw-bold">Serial Number</label><input name="serial_number" class="form-control form-control-solid" placeholder="SN001"></div>
-                    <div class="col-md-2"><label class="form-label fw-bold">IP Address</label><input name="ip_address" class="form-control form-control-solid" placeholder="192.168.1.201"></div>
-                    <div class="col-md-1"><label class="form-label fw-bold">Port</label><input type="number" name="port" value="4370" class="form-control form-control-solid" placeholder="Port" required></div>
-                    <div class="col-md-2"><label class="form-label fw-bold">Lokasi</label><input name="location" class="form-control form-control-solid" placeholder="Pintu masuk"></div>
-                    <div class="col-md-2"><label class="form-label fw-bold">Tipe Device</label><input name="device_type" class="form-control form-control-solid" placeholder="ZKTeco"></div>
-                    <div class="col-md-1 d-flex align-items-end"><input type="hidden" name="is_active" value="0"><label class="form-check form-check-custom form-check-solid mb-3"><input type="checkbox" name="is_active" value="1" class="form-check-input" checked><span class="form-check-label">Aktif</span></label></div>
-                    <div class="col-md-1 d-flex align-items-end"><button class="btn btn-primary w-100">Tambah</button></div>
-                </form>
+                <div class="att-form-card">
+                    <div class="att-form-head">
+                        <span class="icon"><i class="fas fa-fingerprint"></i></span>
+                        <div>
+                            <h3>Tambah Device</h3>
+                            <p>Daftarkan mesin absensi (fingerprint/face) yang terhubung ke sistem.</p>
+                        </div>
+                    </div>
+                    <form class="row g-3 ajax-form" data-table="devices_table" action="{{ route('admin.attendance.devices.store') }}">
+                        @csrf
+                        <div class="col-12 col-md-6 col-lg-4"><label class="form-label fw-bold">Nama Device</label><input name="name" class="form-control form-control-solid" placeholder="Fingerprint Gudang" required></div>
+                        <div class="col-12 col-md-6 col-lg-4"><label class="form-label fw-bold">Serial Number</label><input name="serial_number" class="form-control form-control-solid" placeholder="SN001"></div>
+                        <div class="col-12 col-md-6 col-lg-4"><label class="form-label fw-bold">Tipe Device</label><input name="device_type" class="form-control form-control-solid" placeholder="ZKTeco / Solution X100C"></div>
+                        <div class="col-12 col-md-6 col-lg-4"><label class="form-label fw-bold">IP Address</label><input name="ip_address" class="form-control form-control-solid" placeholder="192.168.1.201"></div>
+                        <div class="col-12 col-md-6 col-lg-2"><label class="form-label fw-bold">Port</label><input type="number" name="port" value="4370" class="form-control form-control-solid" placeholder="4370" required></div>
+                        <div class="col-12 col-md-6 col-lg-6"><label class="form-label fw-bold">Lokasi</label><input name="location" class="form-control form-control-solid" placeholder="Pintu masuk / Gudang utama"></div>
+                        <div class="col-12 d-flex flex-wrap align-items-center justify-content-between gap-2 pt-2">
+                            <div class="att-checkbox-row">
+                                <input type="hidden" name="is_active" value="0">
+                                <label class="form-check form-check-custom form-check-solid mb-0">
+                                    <input type="checkbox" name="is_active" value="1" class="form-check-input" checked>
+                                    <span class="form-check-label fw-semibold">Device aktif</span>
+                                </label>
+                            </div>
+                            <button class="btn btn-primary"><i class="fas fa-plus me-1"></i>Tambah Device</button>
+                        </div>
+                    </form>
+                </div>
                 <x-attendance-table id="devices_table" :headers="['Nama','Serial','IP','Port','Lokasi','Tipe','Aktif','Sync Terakhir','Aksi']" />
             </div>
 
+            {{-- ===== FINGERPRINTS ===== --}}
             <div class="tab-pane fade {{ $activeSection === 'fingerprints' ? 'show active' : '' }}" id="tab_fingerprints">
-                <form class="row g-3 mb-6 ajax-form" data-table="fingerprints_table" action="{{ route('admin.attendance.fingerprints.store') }}">
-                    @csrf
-                    <div class="col-md-3"><label class="form-label fw-bold">Karyawan</label><select name="employee_id" class="form-select form-select-solid" required>@foreach($employees as $employee)<option value="{{ $employee->id }}">{{ $employee->employee_code }} - {{ $employee->name }}</option>@endforeach</select></div>
-                    <div class="col-md-3"><label class="form-label fw-bold">Device</label><select name="attendance_device_id" class="form-select form-select-solid"><option value="">Semua device</option>@foreach($devices as $device)<option value="{{ $device->id }}">{{ $device->name }}</option>@endforeach</select></div>
-                    <div class="col-md-2"><label class="form-label fw-bold">User ID Mesin</label><input name="device_user_id" class="form-control form-control-solid" placeholder="1001" required></div>
-                    <div class="col-md-2"><label class="form-label fw-bold">UID</label><input name="fingerprint_uid" class="form-control form-control-solid" placeholder="Opsional"></div>
-                    <div class="col-md-1 d-flex align-items-end"><input type="hidden" name="is_active" value="0"><label class="form-check form-check-custom form-check-solid mb-3"><input type="checkbox" name="is_active" value="1" class="form-check-input" checked><span class="form-check-label">Aktif</span></label></div>
-                    <div class="col-md-1 d-flex align-items-end"><button class="btn btn-primary w-100">Tambah</button></div>
-                </form>
+                <div class="att-form-card">
+                    <div class="att-form-head">
+                        <span class="icon"><i class="fas fa-id-badge"></i></span>
+                        <div>
+                            <h3>Daftarkan Fingerprint</h3>
+                            <p>Hubungkan ID karyawan dengan User ID yang ada di mesin absensi.</p>
+                        </div>
+                    </div>
+                    <form class="row g-3 ajax-form" data-table="fingerprints_table" action="{{ route('admin.attendance.fingerprints.store') }}">
+                        @csrf
+                        <div class="col-12 col-md-6 col-lg-4"><label class="form-label fw-bold">Karyawan</label><select name="employee_id" class="form-select form-select-solid" required>@foreach($employees as $employee)<option value="{{ $employee->id }}">{{ $employee->employee_code }} - {{ $employee->name }}</option>@endforeach</select></div>
+                        <div class="col-12 col-md-6 col-lg-4"><label class="form-label fw-bold">Device</label><select name="attendance_device_id" class="form-select form-select-solid"><option value="">Semua device</option>@foreach($devices as $device)<option value="{{ $device->id }}">{{ $device->name }}</option>@endforeach</select></div>
+                        <div class="col-12 col-md-6 col-lg-2"><label class="form-label fw-bold">User ID Mesin</label><input name="device_user_id" class="form-control form-control-solid" placeholder="1001" required></div>
+                        <div class="col-12 col-md-6 col-lg-2"><label class="form-label fw-bold">UID</label><input name="fingerprint_uid" class="form-control form-control-solid" placeholder="Opsional"></div>
+                        <div class="col-12 d-flex flex-wrap align-items-center justify-content-between gap-2 pt-2">
+                            <div class="att-checkbox-row">
+                                <input type="hidden" name="is_active" value="0">
+                                <label class="form-check form-check-custom form-check-solid mb-0">
+                                    <input type="checkbox" name="is_active" value="1" class="form-check-input" checked>
+                                    <span class="form-check-label fw-semibold">Fingerprint aktif</span>
+                                </label>
+                            </div>
+                            <button class="btn btn-primary"><i class="fas fa-plus me-1"></i>Tambah</button>
+                        </div>
+                    </form>
+                </div>
                 <x-attendance-table id="fingerprints_table" :headers="['Karyawan','Device','Device User ID','UID','Aktif','Enrolled','Aksi']" />
             </div>
 
+            {{-- ===== SHIFTS ===== --}}
             <div class="tab-pane fade {{ $activeSection === 'shifts' ? 'show active' : '' }}" id="tab_shifts">
-                <form class="row g-3 mb-6 ajax-form" data-table="shifts_table" action="{{ route('admin.attendance.shifts.store') }}">
-                    @csrf
-                    <div class="col-md-2"><label class="form-label fw-bold">Nama Shift</label><input name="name" class="form-control form-control-solid" placeholder="Shift Pagi" required></div>
-                    <div class="col-md-1"><label class="form-label fw-bold">Masuk</label><input type="text" name="start_time" class="form-control form-control-solid js-time" placeholder="08:00" required></div>
-                    <div class="col-md-1"><label class="form-label fw-bold">Pulang</label><input type="text" name="end_time" class="form-control form-control-solid js-time" placeholder="17:00" required></div>
-                    <div class="col-md-1"><label class="form-label fw-bold">Istirahat Mulai</label><input type="text" name="break_start_time" class="form-control form-control-solid js-time" placeholder="12:00"></div>
-                    <div class="col-md-1"><label class="form-label fw-bold">Istirahat Selesai</label><input type="text" name="break_end_time" class="form-control form-control-solid js-time" placeholder="13:00"></div>
-                    <div class="col-md-2"><label class="form-label fw-bold">Toleransi Telat</label><input type="number" name="late_tolerance_minutes" value="0" min="0" class="form-control form-control-solid" placeholder="Menit"></div>
-                    <div class="col-md-2"><label class="form-label fw-bold">Toleransi Pulang</label><input type="number" name="checkout_tolerance_minutes" value="0" min="0" class="form-control form-control-solid" placeholder="Menit"></div>
-                    <div class="col-md-2"><label class="form-label fw-bold">Lembur Mulai Setelah</label><input type="number" name="overtime_start_after_minutes" value="0" min="0" class="form-control form-control-solid" placeholder="Menit setelah pulang"></div>
-                    <div class="col-md-2"><label class="form-label fw-bold">Minimal Lembur</label><input type="number" name="minimum_overtime_minutes" value="0" min="0" class="form-control form-control-solid" placeholder="Menit"></div>
-                    <div class="col-md-1 d-flex align-items-end"><label class="form-check form-check-custom form-check-solid mb-3"><input type="checkbox" name="crosses_midnight" value="1" class="form-check-input"><span class="form-check-label">Malam</span></label></div>
-                    <div class="col-md-1 d-flex align-items-end"><input type="hidden" name="is_active" value="0"><label class="form-check form-check-custom form-check-solid mb-3"><input type="checkbox" name="is_active" value="1" class="form-check-input" checked><span class="form-check-label">Aktif</span></label></div>
-                    <div class="col-md-1 d-flex align-items-end"><button class="btn btn-primary w-100">Tambah</button></div>
-                </form>
+                <div class="att-form-card">
+                    <div class="att-form-head">
+                        <span class="icon"><i class="fas fa-clock"></i></span>
+                        <div>
+                            <h3>Tambah Shift Kerja</h3>
+                            <p>Atur jam kerja, istirahat, toleransi keterlambatan, dan aturan lembur.</p>
+                        </div>
+                    </div>
+                    <form class="ajax-form" data-table="shifts_table" action="{{ route('admin.attendance.shifts.store') }}">
+                        @csrf
+                        <div class="attendance-form-section">
+                            <div class="attendance-form-section-title">Identitas & Jam Kerja</div>
+                            <div class="row g-3">
+                                <div class="col-12 col-md-6 col-lg-4"><label class="form-label fw-bold">Nama Shift</label><input name="name" class="form-control form-control-solid" placeholder="Shift Pagi" required></div>
+                                <div class="col-6 col-md-3 col-lg-2"><label class="form-label fw-bold">Jam Masuk</label><input type="text" name="start_time" class="form-control form-control-solid js-time" placeholder="08:00" required></div>
+                                <div class="col-6 col-md-3 col-lg-2"><label class="form-label fw-bold">Jam Pulang</label><input type="text" name="end_time" class="form-control form-control-solid js-time" placeholder="17:00" required></div>
+                                <div class="col-6 col-md-3 col-lg-2"><label class="form-label fw-bold">Istirahat Mulai</label><input type="text" name="break_start_time" class="form-control form-control-solid js-time" placeholder="12:00"></div>
+                                <div class="col-6 col-md-3 col-lg-2"><label class="form-label fw-bold">Istirahat Selesai</label><input type="text" name="break_end_time" class="form-control form-control-solid js-time" placeholder="13:00"></div>
+                            </div>
+                        </div>
+                        <div class="attendance-form-section">
+                            <div class="attendance-form-section-title">Toleransi & Lembur (Menit)</div>
+                            <div class="row g-3">
+                                <div class="col-6 col-md-6 col-lg-3"><label class="form-label fw-bold">Toleransi Telat</label><input type="number" name="late_tolerance_minutes" value="0" min="0" class="form-control form-control-solid" placeholder="0"></div>
+                                <div class="col-6 col-md-6 col-lg-3"><label class="form-label fw-bold">Toleransi Pulang Cepat</label><input type="number" name="checkout_tolerance_minutes" value="0" min="0" class="form-control form-control-solid" placeholder="0"></div>
+                                <div class="col-6 col-md-6 col-lg-3"><label class="form-label fw-bold">Lembur Mulai Setelah</label><input type="number" name="overtime_start_after_minutes" value="0" min="0" class="form-control form-control-solid" placeholder="Menit setelah pulang"></div>
+                                <div class="col-6 col-md-6 col-lg-3"><label class="form-label fw-bold">Minimal Lembur</label><input type="number" name="minimum_overtime_minutes" value="0" min="0" class="form-control form-control-solid" placeholder="Menit"></div>
+                            </div>
+                        </div>
+                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mt-4">
+                            <div class="att-checkbox-row">
+                                <label class="form-check form-check-custom form-check-solid mb-0">
+                                    <input type="checkbox" name="crosses_midnight" value="1" class="form-check-input">
+                                    <span class="form-check-label fw-semibold">Shift malam (lewat tengah malam)</span>
+                                </label>
+                                <input type="hidden" name="is_active" value="0">
+                                <label class="form-check form-check-custom form-check-solid mb-0">
+                                    <input type="checkbox" name="is_active" value="1" class="form-check-input" checked>
+                                    <span class="form-check-label fw-semibold">Aktif</span>
+                                </label>
+                            </div>
+                            <button class="btn btn-primary"><i class="fas fa-plus me-1"></i>Tambah Shift</button>
+                        </div>
+                    </form>
+                </div>
                 <x-attendance-table id="shifts_table" :headers="['Nama','Masuk','Pulang','Istirahat','Telat','Pulang Cepat','Lembur Setelah','Minimal Lembur','Malam','Aktif','Aksi']" />
             </div>
 
+            {{-- ===== SCHEDULES ===== --}}
             <div class="tab-pane fade {{ $activeSection === 'schedules' ? 'show active' : '' }}" id="tab_schedules">
-                <div class="d-flex justify-content-end mb-4">
-                    <a href="{{ route('admin.attendance.employee-schedule.index') }}" class="btn btn-light-info btn-sm">
-                        &#128197; Lihat Jadwal Per Karyawan
-                    </a>
+                <div class="att-form-card">
+                    <div class="att-form-head flex-wrap" style="gap:.75rem;">
+                        <span class="icon"><i class="fas fa-calendar-plus"></i></span>
+                        <div class="flex-grow-1">
+                            <h3>Tambah Jadwal Karyawan</h3>
+                            <p>Atur jadwal harian masuk, libur, atau cuti per karyawan.</p>
+                        </div>
+                        <a href="{{ route('admin.attendance.employee-schedule.index') }}" class="btn btn-sm btn-light-info">
+                            <i class="fas fa-user-clock me-1"></i>Lihat Jadwal Per Karyawan
+                        </a>
+                    </div>
+                    <form class="row g-3 ajax-form" data-table="schedules_table" action="{{ route('admin.attendance.schedules.store') }}">
+                        @csrf
+                        <div class="col-12 col-md-6 col-lg-4"><label class="form-label fw-bold">Karyawan</label><select name="employee_id" class="form-select form-select-solid" required>@foreach($employees as $employee)<option value="{{ $employee->id }}">{{ $employee->employee_code }} - {{ $employee->name }}</option>@endforeach</select></div>
+                        <div class="col-6 col-md-6 col-lg-2"><label class="form-label fw-bold">Tanggal Jadwal</label><input type="text" name="schedule_date" class="form-control form-control-solid js-date" placeholder="YYYY-MM-DD" required></div>
+                        <div class="col-6 col-md-6 col-lg-2"><label class="form-label fw-bold">Tipe</label><select name="schedule_type" class="form-select form-select-solid"><option value="work">Masuk</option><option value="day_off">Libur</option><option value="holiday">Libur Perusahaan</option><option value="leave">Cuti/Izin</option></select></div>
+                        <div class="col-12 col-md-6 col-lg-4"><label class="form-label fw-bold">Shift</label><select name="work_shift_id" class="form-select form-select-solid"><option value="">Tanpa shift</option>@foreach($shifts as $shift)<option value="{{ $shift->id }}">{{ $shift->name }} ({{ substr($shift->start_time,0,5) }}-{{ substr($shift->end_time,0,5) }})</option>@endforeach</select></div>
+                        <div class="col-12 col-md-9"><label class="form-label fw-bold">Catatan</label><input name="note" class="form-control form-control-solid" placeholder="Opsional"></div>
+                        <div class="col-12 col-md-3 d-flex align-items-end">
+                            <button class="btn btn-primary w-100"><i class="fas fa-save me-1"></i>Simpan Jadwal</button>
+                        </div>
+                    </form>
                 </div>
-                <form class="row g-3 mb-6 ajax-form" data-table="schedules_table" action="{{ route('admin.attendance.schedules.store') }}">
-                    @csrf
-                    <div class="col-md-3"><label class="form-label fw-bold">Karyawan</label><select name="employee_id" class="form-select form-select-solid" required>@foreach($employees as $employee)<option value="{{ $employee->id }}">{{ $employee->employee_code }} - {{ $employee->name }}</option>@endforeach</select></div>
-                    <div class="col-md-2"><label class="form-label fw-bold">Tanggal Jadwal</label><input type="text" name="schedule_date" class="form-control form-control-solid js-date" placeholder="YYYY-MM-DD" required></div>
-                    <div class="col-md-2"><label class="form-label fw-bold">Tipe Jadwal</label><select name="schedule_type" class="form-select form-select-solid"><option value="work">Masuk</option><option value="day_off">Libur</option><option value="holiday">Libur perusahaan</option><option value="leave">Cuti/Izin</option></select></div>
-                    <div class="col-md-2"><label class="form-label fw-bold">Shift</label><select name="work_shift_id" class="form-select form-select-solid"><option value="">Tanpa shift</option>@foreach($shifts as $shift)<option value="{{ $shift->id }}">{{ $shift->name }} ({{ substr($shift->start_time,0,5) }}-{{ substr($shift->end_time,0,5) }})</option>@endforeach</select></div>
-                    <div class="col-md-2"><label class="form-label fw-bold">Catatan</label><input name="note" class="form-control form-control-solid" placeholder="Opsional"></div>
-                    <div class="col-md-1 d-flex align-items-end"><button class="btn btn-primary w-100">Simpan</button></div>
-                </form>
 
-                <div class="card bg-light mb-6">
-                    <div class="card-header border-0 py-4">
-                        <div class="card-title">
-                            <h3 class="fw-bold mb-0">Kalender Jadwal</h3>
+                <div class="att-form-card">
+                    <div class="att-form-head flex-wrap" style="gap:.75rem;">
+                        <span class="icon"><i class="fas fa-calendar-alt"></i></span>
+                        <div class="flex-grow-1">
+                            <h3>Kalender Jadwal</h3>
+                            <p>Klik event untuk melihat detail. Filter karyawan untuk fokus pada satu orang.</p>
                         </div>
-                        <div class="card-toolbar">
-                            <div class="d-flex gap-3 align-items-center flex-wrap">
-                                <select id="calendar_employee_filter" class="form-select form-select-solid w-250px">
-                                    <option value="">Semua karyawan</option>
-                                    @foreach($employees as $employee)
-                                        <option value="{{ $employee->id }}">{{ $employee->employee_code }} - {{ $employee->name }}</option>
-                                    @endforeach
-                                </select>
-                                <button type="button" class="btn btn-light-primary" id="calendar_refresh">Refresh</button>
-                            </div>
+                        <div class="d-flex flex-wrap gap-2 align-items-center">
+                            <select id="calendar_employee_filter" class="form-select form-select-solid form-select-sm" style="min-width:230px;">
+                                <option value="">Semua karyawan</option>
+                                @foreach($employees as $employee)
+                                    <option value="{{ $employee->id }}">{{ $employee->employee_code }} - {{ $employee->name }}</option>
+                                @endforeach
+                            </select>
+                            <button type="button" class="btn btn-sm btn-light-primary" id="calendar_refresh">
+                                <i class="fas fa-sync-alt me-1"></i>Refresh
+                            </button>
                         </div>
                     </div>
-                    <div class="card-body bg-white rounded">
-                        <div class="d-flex flex-wrap gap-3 mb-5 fs-7">
-                            <span><span class="badge me-1" style="background:#009ef7">&nbsp;</span> Jadwal masuk</span>
-                            <span><span class="badge me-1" style="background:#50cd89">&nbsp;</span> Hadir</span>
-                            <span><span class="badge me-1" style="background:#ffc700">&nbsp;</span> Telat/Cuti</span>
-                            <span><span class="badge me-1" style="background:#f1416c">&nbsp;</span> Libur/Absen</span>
-                            <span><span class="badge me-1" style="background:#7239ea">&nbsp;</span> Tidak lengkap</span>
-                        </div>
-                        <div id="attendance_schedule_calendar"></div>
+                    <div class="att-legend mb-4">
+                        <span><span class="dot" style="background:#009ef7"></span>Jadwal masuk</span>
+                        <span><span class="dot" style="background:#50cd89"></span>Hadir</span>
+                        <span><span class="dot" style="background:#ffc700"></span>Telat / Cuti</span>
+                        <span><span class="dot" style="background:#f1416c"></span>Libur / Absen</span>
+                        <span><span class="dot" style="background:#7239ea"></span>Tidak lengkap</span>
                     </div>
+                    <div id="attendance_schedule_calendar"></div>
                 </div>
 
                 <x-attendance-table id="schedules_table" :headers="['Karyawan','Tanggal','Tipe','Shift','Catatan','Aksi']" />
             </div>
 
+            {{-- ===== HOLIDAYS ===== --}}
             <div class="tab-pane fade {{ $activeSection === 'holidays' ? 'show active' : '' }}" id="tab_holidays">
-                <form class="row g-3 mb-6 ajax-form" data-table="holidays_table" action="{{ route('admin.attendance.holidays.store') }}">
-                    @csrf
-                    <div class="col-md-2"><label class="form-label fw-bold">Tanggal Libur</label><input type="text" name="holiday_date" class="form-control form-control-solid js-date" placeholder="YYYY-MM-DD" required></div>
-                    <div class="col-md-4"><label class="form-label fw-bold">Nama Hari Libur</label><input name="name" class="form-control form-control-solid" placeholder="Contoh: Libur nasional" required></div>
-                    <div class="col-md-2"><label class="form-label fw-bold">Tipe</label><select name="type" class="form-select form-select-solid"><option value="company">Perusahaan</option><option value="national">Nasional</option></select></div>
-                    <div class="col-md-2 d-flex align-items-end"><label class="form-check form-check-custom form-check-solid mb-3"><input type="checkbox" name="is_paid" value="1" class="form-check-input" checked><span class="form-check-label">Dibayar</span></label></div>
-                    <div class="col-md-2 d-flex align-items-end"><button class="btn btn-primary w-100">Tambah Libur</button></div>
-                </form>
+                <div class="att-form-card">
+                    <div class="att-form-head">
+                        <span class="icon"><i class="fas fa-calendar-day"></i></span>
+                        <div>
+                            <h3>Tambah Hari Libur</h3>
+                            <p>Tetapkan hari libur perusahaan dan nasional yang diakui sistem.</p>
+                        </div>
+                    </div>
+                    <form class="row g-3 ajax-form" data-table="holidays_table" action="{{ route('admin.attendance.holidays.store') }}">
+                        @csrf
+                        <div class="col-12 col-md-4"><label class="form-label fw-bold">Tanggal Libur</label><input type="text" name="holiday_date" class="form-control form-control-solid js-date" placeholder="YYYY-MM-DD" required></div>
+                        <div class="col-12 col-md-8"><label class="form-label fw-bold">Nama Hari Libur</label><input name="name" class="form-control form-control-solid" placeholder="Contoh: Hari Kemerdekaan" required></div>
+                        <div class="col-12 col-md-4"><label class="form-label fw-bold">Tipe</label><select name="type" class="form-select form-select-solid"><option value="company">Perusahaan</option><option value="national">Nasional</option></select></div>
+                        <div class="col-12 col-md-4 d-flex align-items-end">
+                            <div class="att-checkbox-row w-100">
+                                <label class="form-check form-check-custom form-check-solid mb-0">
+                                    <input type="checkbox" name="is_paid" value="1" class="form-check-input" checked>
+                                    <span class="form-check-label fw-semibold">Hari libur dibayar</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-4 d-flex align-items-end">
+                            <button class="btn btn-primary w-100"><i class="fas fa-plus me-1"></i>Tambah Libur</button>
+                        </div>
+                    </form>
+                </div>
                 <x-attendance-table id="holidays_table" :headers="['Tanggal','Nama','Tipe','Dibayar','Aksi']" />
             </div>
 
+            {{-- ===== TEMPLATES ===== --}}
             <div class="tab-pane fade {{ $activeSection === 'templates' ? 'show active' : '' }}" id="tab_templates">
-                <form class="mb-6 ajax-form template-days-form" data-table="templates_table" action="{{ route('admin.attendance.templates.store') }}">
-                    @csrf
-                    <div class="row g-3 align-items-end mb-4">
-                        <div class="col-md-4">
-                            <label class="form-label fw-bold">Nama Template</label>
-                            <input name="name" class="form-control form-control-solid" placeholder="Template kerja fleksibel" required>
-                            <div class="form-text">Atur Masuk atau Libur per hari sesuai pola kerja karyawan.</div>
-                        </div>
-                        <div class="col-md-2">
-                            <input type="hidden" name="is_active" value="0">
-                            <label class="form-check form-check-custom form-check-solid mb-3"><input type="checkbox" name="is_active" value="1" class="form-check-input" checked><span class="form-check-label">Aktif</span></label>
-                        </div>
-                        <div class="col-md-2">
-                            <button class="btn btn-primary w-100">Tambah Template</button>
+                <div class="att-form-card">
+                    <div class="att-form-head">
+                        <span class="icon"><i class="fas fa-calendar-week"></i></span>
+                        <div>
+                            <h3>Buat Template Mingguan</h3>
+                            <p>Tentukan pola masuk/libur per hari, lalu assign ke banyak karyawan sekaligus.</p>
                         </div>
                     </div>
-                    <div class="table-responsive">
-                        <table class="table align-middle table-row-dashed fs-6 gy-4 mb-0">
-                            <thead>
-                                <tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0">
-                                    <th class="min-w-125px">Hari</th>
-                                    <th class="min-w-175px">Tipe Jadwal</th>
-                                    <th class="min-w-250px">Shift</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach([1 => 'Senin', 2 => 'Selasa', 3 => 'Rabu', 4 => 'Kamis', 5 => 'Jumat', 6 => 'Sabtu', 7 => 'Minggu'] as $dayNumber => $dayName)
-                                    <tr class="template-day-row" data-day="{{ $dayNumber }}">
-                                        <td class="fw-bold">{{ $dayName }}</td>
-                                        <td>
-                                            <select class="form-select form-select-solid template-day-type">
-                                                <option value="work" selected>Masuk</option>
-                                                <option value="day_off">Libur</option>
-                                            </select>
-                                        </td>
-                                        <td>
-                                            <select class="form-select form-select-solid template-day-shift">
-                                                <option value="">Tanpa shift</option>
-                                                @foreach($shifts as $shift)
-                                                    <option value="{{ $shift->id }}">{{ $shift->name }} ({{ substr($shift->start_time,0,5) }}-{{ substr($shift->end_time,0,5) }})</option>
-                                                @endforeach
-                                            </select>
-                                        </td>
-                                    </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
+                    <form class="ajax-form template-days-form" data-table="templates_table" action="{{ route('admin.attendance.templates.store') }}">
+                        @csrf
+                        <div class="row g-3 mb-4">
+                            <div class="col-12 col-md-6 col-lg-5">
+                                <label class="form-label fw-bold">Nama Template</label>
+                                <input name="name" class="form-control form-control-solid" placeholder="Contoh: Pola Kerja 6 Hari" required>
+                                <div class="form-text">Atur tipe Masuk/Libur per hari sesuai pola kerja.</div>
+                            </div>
+                            <div class="col-12 col-md-6 col-lg-4 d-flex align-items-end">
+                                <div class="att-checkbox-row w-100">
+                                    <input type="hidden" name="is_active" value="0">
+                                    <label class="form-check form-check-custom form-check-solid mb-0">
+                                        <input type="checkbox" name="is_active" value="1" class="form-check-input" checked>
+                                        <span class="form-check-label fw-semibold">Template aktif</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-12 col-lg-3 d-flex align-items-end">
+                                <button class="btn btn-primary w-100"><i class="fas fa-plus me-1"></i>Tambah Template</button>
+                            </div>
+                        </div>
+                        <div class="attendance-form-section">
+                            <div class="attendance-form-section-title">Pola Hari</div>
+                            <div class="table-responsive">
+                                <table class="table align-middle table-row-dashed fs-6 gy-3 mb-0">
+                                    <thead>
+                                        <tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0">
+                                            <th class="min-w-110px">Hari</th>
+                                            <th class="min-w-150px">Tipe Jadwal</th>
+                                            <th class="min-w-250px">Shift</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach([1 => 'Senin', 2 => 'Selasa', 3 => 'Rabu', 4 => 'Kamis', 5 => 'Jumat', 6 => 'Sabtu', 7 => 'Minggu'] as $dayNumber => $dayName)
+                                            <tr class="template-day-row" data-day="{{ $dayNumber }}">
+                                                <td class="fw-bold">{{ $dayName }}</td>
+                                                <td>
+                                                    <select class="form-select form-select-solid template-day-type">
+                                                        <option value="work" selected>Masuk</option>
+                                                        <option value="day_off">Libur</option>
+                                                    </select>
+                                                </td>
+                                                <td>
+                                                    <select class="form-select form-select-solid template-day-shift">
+                                                        <option value="">Tanpa shift</option>
+                                                        @foreach($shifts as $shift)
+                                                            <option value="{{ $shift->id }}">{{ $shift->name }} ({{ substr($shift->start_time,0,5) }}-{{ substr($shift->end_time,0,5) }})</option>
+                                                        @endforeach
+                                                    </select>
+                                                </td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="att-form-card">
+                    <div class="att-form-head">
+                        <span class="icon"><i class="fas fa-link"></i></span>
+                        <div>
+                            <h3>Assign Template ke Karyawan</h3>
+                            <p>Tetapkan template mingguan ke karyawan tertentu untuk periode tertentu.</p>
+                        </div>
                     </div>
-                </form>
-                <form class="row g-3 mb-6 ajax-form" data-table="templates_table" action="{{ route('admin.attendance.templates.assign') }}">
-                    @csrf
-                    <div class="col-md-3"><label class="form-label fw-bold">Karyawan</label><select name="employee_id" class="form-select form-select-solid" required>@foreach($employees as $employee)<option value="{{ $employee->id }}">{{ $employee->employee_code }} - {{ $employee->name }}</option>@endforeach</select></div>
-                    <div class="col-md-3"><label class="form-label fw-bold">Template</label><select name="weekly_schedule_template_id" class="form-select form-select-solid" required>@foreach($templates as $template)<option value="{{ $template->id }}">{{ $template->name }}</option>@endforeach</select></div>
-                    <div class="col-md-2"><label class="form-label fw-bold">Berlaku Dari</label><input type="text" name="effective_from" class="form-control form-control-solid js-date" placeholder="YYYY-MM-DD" required></div>
-                    <div class="col-md-2"><label class="form-label fw-bold">Berlaku Sampai</label><input type="text" name="effective_until" class="form-control form-control-solid js-date" placeholder="Opsional"></div>
-                    <div class="col-md-2 d-flex align-items-end"><button class="btn btn-light-primary w-100">Assign Template</button></div>
-                </form>
+                    <form class="row g-3 ajax-form" data-table="templates_table" action="{{ route('admin.attendance.templates.assign') }}">
+                        @csrf
+                        <div class="col-12 col-md-6 col-lg-4"><label class="form-label fw-bold">Karyawan</label><select name="employee_id" class="form-select form-select-solid" required>@foreach($employees as $employee)<option value="{{ $employee->id }}">{{ $employee->employee_code }} - {{ $employee->name }}</option>@endforeach</select></div>
+                        <div class="col-12 col-md-6 col-lg-4"><label class="form-label fw-bold">Template</label><select name="weekly_schedule_template_id" class="form-select form-select-solid" required>@foreach($templates as $template)<option value="{{ $template->id }}">{{ $template->name }}</option>@endforeach</select></div>
+                        <div class="col-6 col-md-6 col-lg-2"><label class="form-label fw-bold">Berlaku Dari</label><input type="text" name="effective_from" class="form-control form-control-solid js-date" placeholder="YYYY-MM-DD" required></div>
+                        <div class="col-6 col-md-6 col-lg-2"><label class="form-label fw-bold">Berlaku Sampai</label><input type="text" name="effective_until" class="form-control form-control-solid js-date" placeholder="Opsional"></div>
+                        <div class="col-12 d-flex justify-content-end pt-2">
+                            <button class="btn btn-light-primary"><i class="fas fa-link me-1"></i>Assign Template</button>
+                        </div>
+                    </form>
+                </div>
+
                 <x-attendance-table id="templates_table" :headers="['Nama','Aktif','Isi Hari','Aksi']" />
             </div>
 
+            {{-- ===== LEAVES ===== --}}
             <div class="tab-pane fade {{ $activeSection === 'leaves' ? 'show active' : '' }}" id="tab_leaves">
-                <form class="row g-3 mb-6 ajax-form" data-table="leaves_table" action="{{ route('admin.attendance.leaves.store') }}">
-                    @csrf
-                    <div class="col-md-3"><label class="form-label fw-bold">Karyawan</label><select name="employee_id" class="form-select form-select-solid" required>@foreach($employees as $employee)<option value="{{ $employee->id }}">{{ $employee->employee_code }} - {{ $employee->name }}</option>@endforeach</select></div>
-                    <div class="col-md-2"><label class="form-label fw-bold">Tipe</label><select name="leave_type" class="form-select form-select-solid"><option value="annual">Cuti tahunan</option><option value="sick">Sakit</option><option value="permission">Izin</option><option value="unpaid">Unpaid</option></select></div>
-                    <div class="col-md-2"><label class="form-label fw-bold">Mulai</label><input type="text" name="start_date" class="form-control form-control-solid js-date" placeholder="YYYY-MM-DD" required></div>
-                    <div class="col-md-2"><label class="form-label fw-bold">Selesai</label><input type="text" name="end_date" class="form-control form-control-solid js-date" placeholder="YYYY-MM-DD" required></div>
-                    <div class="col-md-2"><label class="form-label fw-bold">Status</label><select name="status" class="form-select form-select-solid"><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option></select></div>
-                    <div class="col-md-1 d-flex align-items-end"><button class="btn btn-primary w-100">Tambah</button></div>
-                    <div class="col-md-12"><label class="form-label fw-bold">Alasan</label><input name="reason" class="form-control form-control-solid" placeholder="Alasan cuti/izin"></div>
-                </form>
+                <div class="att-form-card">
+                    <div class="att-form-head">
+                        <span class="icon"><i class="fas fa-plane-departure"></i></span>
+                        <div>
+                            <h3>Pengajuan Cuti / Izin</h3>
+                            <p>Catat pengajuan cuti, sakit, atau izin karyawan beserta status approval-nya.</p>
+                        </div>
+                    </div>
+                    <form class="row g-3 ajax-form" data-table="leaves_table" action="{{ route('admin.attendance.leaves.store') }}">
+                        @csrf
+                        <div class="col-12 col-md-6 col-lg-4"><label class="form-label fw-bold">Karyawan</label><select name="employee_id" class="form-select form-select-solid" required>@foreach($employees as $employee)<option value="{{ $employee->id }}">{{ $employee->employee_code }} - {{ $employee->name }}</option>@endforeach</select></div>
+                        <div class="col-6 col-md-6 col-lg-2"><label class="form-label fw-bold">Tipe</label><select name="leave_type" class="form-select form-select-solid"><option value="annual">Cuti tahunan</option><option value="sick">Sakit</option><option value="permission">Izin</option><option value="unpaid">Unpaid</option></select></div>
+                        <div class="col-6 col-md-6 col-lg-2"><label class="form-label fw-bold">Status</label><select name="status" class="form-select form-select-solid"><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option></select></div>
+                        <div class="col-6 col-md-6 col-lg-2"><label class="form-label fw-bold">Tanggal Mulai</label><input type="text" name="start_date" class="form-control form-control-solid js-date" placeholder="YYYY-MM-DD" required></div>
+                        <div class="col-6 col-md-6 col-lg-2"><label class="form-label fw-bold">Tanggal Selesai</label><input type="text" name="end_date" class="form-control form-control-solid js-date" placeholder="YYYY-MM-DD" required></div>
+                        <div class="col-12"><label class="form-label fw-bold">Alasan</label><input name="reason" class="form-control form-control-solid" placeholder="Alasan cuti / izin"></div>
+                        <div class="col-12 d-flex justify-content-end pt-2">
+                            <button class="btn btn-primary"><i class="fas fa-plus me-1"></i>Tambah Pengajuan</button>
+                        </div>
+                    </form>
+                </div>
                 <x-attendance-table id="leaves_table" :headers="['Karyawan','Tipe','Mulai','Selesai','Status','Alasan','Aksi']" />
             </div>
 
+            {{-- ===== RAW LOGS ===== --}}
             <div class="tab-pane fade {{ $activeSection === 'raw_logs' ? 'show active' : '' }}" id="tab_raw_logs">
-                <form class="row g-3 mb-6 ajax-form" data-table="raw_logs_table" action="{{ route('admin.attendance.raw-logs.store') }}">
-                    @csrf
-                    <div class="col-md-3"><label class="form-label fw-bold">Device</label><select name="attendance_device_id" class="form-select form-select-solid" required>@foreach($devices as $device)<option value="{{ $device->id }}">{{ $device->name }}</option>@endforeach</select></div>
-                    <div class="col-md-2"><label class="form-label fw-bold">User ID Mesin</label><input name="device_user_id" class="form-control form-control-solid" placeholder="1001" required></div>
-                    <div class="col-md-3"><label class="form-label fw-bold">Waktu Scan</label><input type="text" name="scan_at" class="form-control form-control-solid js-datetime" placeholder="YYYY-MM-DD HH:mm" required></div>
-                    <div class="col-md-2"><label class="form-label fw-bold">Verify</label><input name="verify_type" class="form-control form-control-solid" placeholder="fingerprint"></div>
-                    <div class="col-md-1"><label class="form-label fw-bold">State</label><input name="state" class="form-control form-control-solid" placeholder="0"></div>
-                    <div class="col-md-1 d-flex align-items-end"><button class="btn btn-primary w-100">Scan</button></div>
-                </form>
+                <div class="att-form-card">
+                    <div class="att-form-head">
+                        <span class="icon"><i class="fas fa-list"></i></span>
+                        <div>
+                            <h3>Input Manual Raw Log</h3>
+                            <p>Tambahkan log scan manual jika ada data yang tidak terkirim dari mesin.</p>
+                        </div>
+                    </div>
+                    <form class="row g-3 ajax-form" data-table="raw_logs_table" action="{{ route('admin.attendance.raw-logs.store') }}">
+                        @csrf
+                        <div class="col-12 col-md-6 col-lg-4"><label class="form-label fw-bold">Device</label><select name="attendance_device_id" class="form-select form-select-solid" required>@foreach($devices as $device)<option value="{{ $device->id }}">{{ $device->name }}</option>@endforeach</select></div>
+                        <div class="col-6 col-md-6 col-lg-2"><label class="form-label fw-bold">User ID Mesin</label><input name="device_user_id" class="form-control form-control-solid" placeholder="1001" required></div>
+                        <div class="col-12 col-md-6 col-lg-3"><label class="form-label fw-bold">Waktu Scan</label><input type="text" name="scan_at" class="form-control form-control-solid js-datetime" placeholder="YYYY-MM-DD HH:mm" required></div>
+                        <div class="col-6 col-md-6 col-lg-2"><label class="form-label fw-bold">Verify Type</label><input name="verify_type" class="form-control form-control-solid" placeholder="fingerprint"></div>
+                        <div class="col-6 col-md-6 col-lg-1"><label class="form-label fw-bold">State</label><input name="state" class="form-control form-control-solid" placeholder="0"></div>
+                        <div class="col-12 d-flex justify-content-end pt-2">
+                            <button class="btn btn-primary"><i class="fas fa-plus me-1"></i>Tambah Scan</button>
+                        </div>
+                    </form>
+                </div>
                 <x-attendance-table id="raw_logs_table" :headers="['Device','Karyawan','Device User ID','Waktu Scan','Verify','State','Aksi']" />
             </div>
 
+            {{-- ===== ATTENDANCES (Rekap) ===== --}}
             <div class="tab-pane fade {{ $activeSection === 'attendances' ? 'show active' : '' }}" id="tab_attendances">
-                <form class="row g-3 mb-6 ajax-form" data-table="attendances_table" action="#">
-                    @csrf
-                    <div class="col-12 attendance-form-section">
-                        <div class="attendance-form-section-title">Data Kehadiran</div>
-                        <div class="row g-3">
-                            <div class="col-md-3"><label class="form-label fw-bold">Karyawan</label><select name="employee_id" class="form-select form-select-solid" required>@foreach($employees as $employee)<option value="{{ $employee->id }}">{{ $employee->employee_code }} - {{ $employee->name }}</option>@endforeach</select></div>
-                            <div class="col-md-2"><label class="form-label fw-bold">Tanggal</label><input type="text" name="attendance_date" class="form-control form-control-solid js-date" placeholder="YYYY-MM-DD" required></div>
-                            <div class="col-md-2"><label class="form-label fw-bold">Shift</label><select name="work_shift_id" class="form-select form-select-solid"><option value="">Tanpa shift</option>@foreach($shifts as $shift)<option value="{{ $shift->id }}">{{ $shift->name }}</option>@endforeach</select></div>
-                            <div class="col-md-2"><label class="form-label fw-bold">Masuk</label><input type="text" name="check_in_at" class="form-control form-control-solid js-datetime" placeholder="YYYY-MM-DD HH:mm"></div>
-                            <div class="col-md-2"><label class="form-label fw-bold">Pulang</label><input type="text" name="check_out_at" class="form-control form-control-solid js-datetime" placeholder="YYYY-MM-DD HH:mm"></div>
-                            <div class="col-md-1"><label class="form-label fw-bold">Telat</label><input type="number" name="late_minutes" min="0" value="0" class="form-control form-control-solid"></div>
-                            <div class="col-md-2"><label class="form-label fw-bold">Pulang Cepat</label><input type="number" name="early_leave_minutes" min="0" value="0" class="form-control form-control-solid"></div>
-                            <div class="col-md-2"><label class="form-label fw-bold">Menit Kerja</label><input type="number" name="work_minutes" min="0" value="0" class="form-control form-control-solid"></div>
-                            <div class="col-md-2"><label class="form-label fw-bold">Status Absensi</label><select name="status" class="form-select form-select-solid"><option value="present">Hadir</option><option value="late">Terlambat</option><option value="absent">Alpha</option><option value="incomplete">Belum Lengkap</option><option value="leave">Cuti/Izin</option><option value="holiday">Libur Perusahaan</option><option value="day_off">Libur</option></select></div>
-                            <div class="col-md-2"><label class="form-label fw-bold">Source</label><input name="source" class="form-control form-control-solid" value="manual"></div>
-                            <div class="col-md-4"><label class="form-label fw-bold">Catatan Absensi</label><input name="note" class="form-control form-control-solid" placeholder="Opsional"></div>
+                <div class="att-form-card">
+                    <div class="att-form-head">
+                        <span class="icon"><i class="fas fa-clipboard-check"></i></span>
+                        <div>
+                            <h3>Update Rekap Absensi</h3>
+                            <p>Pilih baris di tabel lalu klik <em>Edit</em> untuk mengubah data rekap & approval lembur.</p>
                         </div>
                     </div>
-                    <div class="col-12 attendance-form-section">
-                        <div class="attendance-form-section-title">Approval Lembur</div>
-                        <div class="row g-3">
-                            <div class="col-md-2"><label class="form-label fw-bold">Lembur Terhitung</label><input type="number" name="calculated_overtime_minutes" min="0" value="0" class="form-control form-control-solid"></div>
-                            <div class="col-md-2"><label class="form-label fw-bold">Lembur Disetujui</label><input type="number" name="approved_overtime_minutes" min="0" class="form-control form-control-solid" placeholder="Menit final"></div>
-                            <div class="col-md-2"><label class="form-label fw-bold">Status Lembur</label><select name="overtime_status" class="form-select form-select-solid"><option value="none">Tidak Ada</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option></select></div>
-                            <div class="col-md-4"><label class="form-label fw-bold">Catatan Lembur</label><input name="overtime_note" class="form-control form-control-solid" placeholder="Alasan approve/reject/koreksi"></div>
-                            <div class="col-md-2 d-flex align-items-end"><button class="btn btn-primary w-100">Update Rekap</button></div>
+                    <form class="ajax-form" data-table="attendances_table" action="#">
+                        @csrf
+                        <div class="attendance-form-section">
+                            <div class="attendance-form-section-title">Data Kehadiran</div>
+                            <div class="row g-3">
+                                <div class="col-12 col-md-6 col-lg-4"><label class="form-label fw-bold">Karyawan</label><select name="employee_id" class="form-select form-select-solid" required>@foreach($employees as $employee)<option value="{{ $employee->id }}">{{ $employee->employee_code }} - {{ $employee->name }}</option>@endforeach</select></div>
+                                <div class="col-6 col-md-6 col-lg-2"><label class="form-label fw-bold">Tanggal</label><input type="text" name="attendance_date" class="form-control form-control-solid js-date" placeholder="YYYY-MM-DD" required></div>
+                                <div class="col-6 col-md-6 col-lg-3"><label class="form-label fw-bold">Shift</label><select name="work_shift_id" class="form-select form-select-solid"><option value="">Tanpa shift</option>@foreach($shifts as $shift)<option value="{{ $shift->id }}">{{ $shift->name }}</option>@endforeach</select></div>
+                                <div class="col-6 col-md-6 col-lg-3"><label class="form-label fw-bold">Status Absensi</label><select name="status" class="form-select form-select-solid"><option value="present">Hadir</option><option value="late">Terlambat</option><option value="absent">Alpha</option><option value="incomplete">Belum Lengkap</option><option value="leave">Cuti/Izin</option><option value="holiday">Libur Perusahaan</option><option value="day_off">Libur</option></select></div>
+                                <div class="col-12 col-md-6 col-lg-3"><label class="form-label fw-bold">Waktu Masuk</label><input type="text" name="check_in_at" class="form-control form-control-solid js-datetime" placeholder="YYYY-MM-DD HH:mm"></div>
+                                <div class="col-12 col-md-6 col-lg-3"><label class="form-label fw-bold">Waktu Pulang</label><input type="text" name="check_out_at" class="form-control form-control-solid js-datetime" placeholder="YYYY-MM-DD HH:mm"></div>
+                                <div class="col-4 col-md-3 col-lg-2"><label class="form-label fw-bold">Telat (Menit)</label><input type="number" name="late_minutes" min="0" value="0" class="form-control form-control-solid"></div>
+                                <div class="col-4 col-md-3 col-lg-2"><label class="form-label fw-bold">Pulang Cepat</label><input type="number" name="early_leave_minutes" min="0" value="0" class="form-control form-control-solid"></div>
+                                <div class="col-4 col-md-3 col-lg-2"><label class="form-label fw-bold">Menit Kerja</label><input type="number" name="work_minutes" min="0" value="0" class="form-control form-control-solid"></div>
+                                <div class="col-12 col-md-6 col-lg-4"><label class="form-label fw-bold">Source</label><input name="source" class="form-control form-control-solid" value="manual"></div>
+                                <div class="col-12 col-md-6 col-lg-8"><label class="form-label fw-bold">Catatan Absensi</label><input name="note" class="form-control form-control-solid" placeholder="Opsional"></div>
+                            </div>
                         </div>
-                    </div>
-                </form>
+                        <div class="attendance-form-section">
+                            <div class="attendance-form-section-title">Approval Lembur</div>
+                            <div class="row g-3">
+                                <div class="col-6 col-md-4 col-lg-3"><label class="form-label fw-bold">Lembur Terhitung</label><input type="number" name="calculated_overtime_minutes" min="0" value="0" class="form-control form-control-solid"></div>
+                                <div class="col-6 col-md-4 col-lg-3"><label class="form-label fw-bold">Lembur Disetujui</label><input type="number" name="approved_overtime_minutes" min="0" class="form-control form-control-solid" placeholder="Menit final"></div>
+                                <div class="col-12 col-md-4 col-lg-3"><label class="form-label fw-bold">Status Lembur</label><select name="overtime_status" class="form-select form-select-solid"><option value="none">Tidak Ada</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option></select></div>
+                                <div class="col-12"><label class="form-label fw-bold">Catatan Lembur</label><input name="overtime_note" class="form-control form-control-solid" placeholder="Alasan approve / reject / koreksi"></div>
+                            </div>
+                            <div class="d-flex justify-content-end mt-3">
+                                <button class="btn btn-primary"><i class="fas fa-save me-1"></i>Update Rekap</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
                 <x-attendance-table id="attendances_table" :headers="['Karyawan','Tanggal','Shift','Masuk','Pulang','Telat','Pulang Cepat','Menit Kerja','Lembur Hitung','Lembur Approved','Status Lembur','Status','Source','Catatan','Aksi']" />
             </div>
         </div>
     </div>
 </div>
 
+{{-- ===== Modal Jabatan ===== --}}
 <div class="modal fade" id="modal_positions" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-xl">
         <div class="modal-content">
             <div class="modal-header">
-                <h2 class="fw-bolder">Kelola Jabatan</h2>
+                <div>
+                    <h2 class="fw-bolder mb-1"><i class="fas fa-briefcase text-primary me-2"></i>Kelola Jabatan</h2>
+                    <div class="text-muted fs-7">Tambah, edit, atau nonaktifkan daftar jabatan karyawan.</div>
+                </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <form id="position_form" class="row g-3 mb-6" action="{{ route('admin.attendance.positions.store') }}" data-update-template="{{ route('admin.attendance.positions.update', ':id') }}">
                     @csrf
                     <input type="hidden" id="position_id" name="position_id">
-                    <div class="col-md-3">
+                    <div class="col-12 col-md-4">
                         <label class="form-label fw-bold">Nama Jabatan</label>
                         <input name="name" id="position_name" class="form-control form-control-solid" placeholder="Contoh: Picker" required>
                     </div>
-                    <div class="col-md-5">
+                    <div class="col-12 col-md-5">
                         <label class="form-label fw-bold">Deskripsi</label>
                         <input name="description" id="position_description" class="form-control form-control-solid" placeholder="Opsional">
                     </div>
-                    <div class="col-md-2">
+                    <div class="col-12 col-md-3">
                         <label class="form-label fw-bold">Status</label>
                         <select name="is_active" id="position_is_active" class="form-select form-select-solid">
                             <option value="1">Aktif</option>
                             <option value="0">Nonaktif</option>
                         </select>
                     </div>
-                    <div class="col-md-2 d-flex align-items-end gap-2">
-                        <button class="btn btn-primary flex-grow-1" id="position_submit">Tambah</button>
-                        <button type="button" class="btn btn-light" id="position_reset">Reset</button>
+                    <div class="col-12 d-flex flex-wrap gap-2 justify-content-end">
+                        <button type="button" class="btn btn-light" id="position_reset"><i class="fas fa-undo me-1"></i>Reset</button>
+                        <button class="btn btn-primary" id="position_submit"><i class="fas fa-plus me-1"></i>Tambah</button>
                     </div>
                 </form>
                 <x-attendance-table id="positions_table" :headers="['Nama','Deskripsi','Aktif','Aksi']" />
@@ -505,8 +880,8 @@ const renderCrudActions = (tableId, row) => {
 
     return `
         <div class="d-flex gap-2">
-            <button type="button" class="btn btn-sm btn-light-primary btn-crud-edit" data-table="${tableId}" data-row="${payload}">Edit</button>
-            <button type="button" class="btn btn-sm btn-light-danger btn-crud-delete" data-table="${tableId}" data-id="${row.id}">Hapus</button>
+            <button type="button" class="btn btn-sm btn-light-primary btn-crud-edit" data-table="${tableId}" data-row="${payload}"><i class="fas fa-pen me-1"></i>Edit</button>
+            <button type="button" class="btn btn-sm btn-light-danger btn-crud-delete" data-table="${tableId}" data-id="${row.id}"><i class="fas fa-trash me-1"></i>Hapus</button>
         </div>
     `;
 };
@@ -515,8 +890,8 @@ const renderValue = (value) => {
     if (Array.isArray(value)) {
         return value.map((day) => `${day.day_of_week}: ${day.schedule_type}${day.shift ? ' - ' + day.shift : ''}`).join('<br>');
     }
-    if (value === true || value === 1) return 'Ya';
-    if (value === false || value === 0) return 'Tidak';
+    if (value === true || value === 1) return '<span class="badge badge-light-success">Ya</span>';
+    if (value === false || value === 0) return '<span class="badge badge-light-secondary">Tidak</span>';
     return value ?? '-';
 };
 
@@ -574,6 +949,15 @@ document.addEventListener('DOMContentLoaded', () => {
             processing: true,
             serverSide: true,
             dom: 'rtip',
+            language: {
+                processing: '<div class="text-muted py-4"><span class="spinner-border spinner-border-sm me-2"></span>Memuat data...</div>',
+                emptyTable: '<div class="text-center py-8 text-muted"><i class="fas fa-inbox fs-2 d-block mb-2"></i>Belum ada data</div>',
+                zeroRecords: '<div class="text-center py-8 text-muted"><i class="fas fa-search fs-2 d-block mb-2"></i>Tidak ada data yang cocok</div>',
+                info: 'Menampilkan _START_–_END_ dari _TOTAL_ data',
+                infoEmpty: '0 data',
+                infoFiltered: '(difilter dari _MAX_ data)',
+                paginate: { first: '«', last: '»', next: '›', previous: '‹' },
+            },
             ajax: {
                 url: config.url,
                 dataSrc: 'data',
@@ -775,7 +1159,7 @@ document.addEventListener('DOMContentLoaded', () => {
         delete form.dataset.editingId;
         const submit = form.querySelector('button[type="submit"], button:not([type])');
         if (submit && submit.dataset.createText) {
-            submit.textContent = submit.dataset.createText;
+            submit.innerHTML = submit.dataset.createText;
         }
     };
     const setEditState = (form, tableId, row) => {
@@ -783,8 +1167,8 @@ document.addEventListener('DOMContentLoaded', () => {
         form.dataset.editingId = row.id;
         const submit = form.querySelector('button[type="submit"], button:not([type])');
         if (submit) {
-            submit.dataset.createText ||= submit.textContent;
-            submit.textContent = 'Update';
+            submit.dataset.createText ||= submit.innerHTML;
+            submit.innerHTML = '<i class="fas fa-save me-1"></i>Update';
         }
     };
     const fillTemplateForm = (form, row) => {
@@ -957,7 +1341,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const resetPositionForm = () => {
         positionForm?.reset();
         if (positionId) positionId.value = '';
-        if (positionSubmit) positionSubmit.textContent = 'Tambah';
+        if (positionSubmit) positionSubmit.innerHTML = '<i class="fas fa-plus me-1"></i>Tambah';
         if (positionActive && typeof $ !== 'undefined' && $(positionActive).data('select2')) {
             $(positionActive).val('1').trigger('change.select2');
         }
@@ -1020,7 +1404,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 $(positionActive).trigger('change.select2');
             }
         }
-        if (positionSubmit) positionSubmit.textContent = 'Update';
+        if (positionSubmit) positionSubmit.innerHTML = '<i class="fas fa-save me-1"></i>Update';
         positionName?.focus();
     });
 

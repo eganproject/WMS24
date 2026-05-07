@@ -14,6 +14,7 @@ class StockAdjustmentItem extends Model
         'item_id',
         'direction',
         'qty',
+        'koli',
         'note',
     ];
 

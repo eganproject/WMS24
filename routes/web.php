@@ -211,6 +211,7 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/stock-opname/data', [StockOpnameController::class, 'data'])->name('stock-opname.data');
         Route::get('/stock-opname/items', [StockOpnameController::class, 'items'])->name('stock-opname.items');
         Route::post('/stock-opname', [StockOpnameController::class, 'store'])->name('stock-opname.store');
+        Route::get('/stock-opname/{id}/detail', [StockOpnameController::class, 'detail'])->name('stock-opname.detail');
         Route::get('/stock-opname/{id}', [StockOpnameController::class, 'show'])->name('stock-opname.show');
         Route::get('/stock-opname/{id}/export', [StockOpnameController::class, 'export'])->name('stock-opname.export');
         Route::post('/stock-opname/{id}/approve', [StockOpnameController::class, 'approve'])->name('stock-opname.approve');
@@ -221,6 +222,7 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/stock-adjustments/data', [StockAdjustmentController::class, 'data'])->name('stock-adjustments.data');
         Route::post('/stock-adjustments', [StockAdjustmentController::class, 'store'])->name('stock-adjustments.store');
         Route::post('/stock-adjustments/import', [StockAdjustmentController::class, 'import'])->name('stock-adjustments.import');
+        Route::get('/stock-adjustments/{id}/detail', [StockAdjustmentController::class, 'detail'])->name('stock-adjustments.detail');
         Route::get('/stock-adjustments/{id}', [StockAdjustmentController::class, 'show'])->name('stock-adjustments.show');
         Route::put('/stock-adjustments/{id}', [StockAdjustmentController::class, 'update'])->name('stock-adjustments.update');
         Route::delete('/stock-adjustments/{id}', [StockAdjustmentController::class, 'destroy'])->name('stock-adjustments.destroy');

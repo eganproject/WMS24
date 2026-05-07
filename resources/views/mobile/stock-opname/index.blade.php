@@ -245,10 +245,14 @@
         el.batchChip.textContent = state.batch.code || '-';
         el.batchInfo.style.display = 'block';
         const note = state.batch.note ? `<br>Catatan: ${state.batch.note}` : '';
+        const warehouseLine = state.batch.warehouse_name
+            ? `<div><strong>Gudang:</strong> ${state.batch.warehouse_name}${state.batch.requires_koli ? ' <span class="chip">Mode Kolian</span>' : ''}</div>`
+            : '';
         el.batchInfo.innerHTML = `
             <div><strong>Kode:</strong> ${state.batch.code}</div>
             <div><strong>Tanggal:</strong> ${state.batch.transacted_at || '-'}</div>
             <div><strong>Dibuat oleh:</strong> ${state.batch.creator || '-'}</div>
+            ${warehouseLine}
             ${note}
         `;
         const isCompleted = state.batch.status === 'completed';
@@ -258,6 +262,7 @@
     const renderItems = () => {
         const items = state.items || [];
         const isCompleted = state.batch?.status === 'completed';
+        const requiresKoli = !!state.batch?.requires_koli;
         const totalCounted = items.reduce((sum, row) => sum + (row.counted_qty || 0), 0);
         el.totalItems.textContent = `${items.length} item`;
         el.totalCounted.textContent = `${totalCounted}`;
@@ -270,16 +275,24 @@
 
         el.itemsEmpty.style.display = 'none';
         el.itemsList.innerHTML = items.map((row) => {
+            const koliQty = Number(row.koli_qty || 0);
+            const inputValue = requiresKoli ? (row.koli ?? 0) : row.counted_qty;
+            const inputLabel = requiresKoli ? 'Kolian' : 'Qty';
+            const subInfo = requiresKoli
+                ? `<span>Isi/koli: ${koliQty || '-'} • Qty: ${row.counted_qty}</span>`
+                : '';
             return `
-                <div class="item-row" data-id="${row.id}">
+                <div class="item-row" data-id="${row.id}" data-koli-qty="${koliQty}">
                     <div class="item-meta">
                         <strong>${row.sku} • ${row.name}</strong>
                         <div class="item-sub">
                             <span>Input: ${row.created_by || '-'}</span>
+                            ${subInfo}
                         </div>
                     </div>
                     <div class="item-actions">
-                        <input type="number" min="0" class="qty-input" value="${row.counted_qty}" ${isCompleted ? 'disabled' : ''} />
+                        <div class="qty-label" style="font-size:11px; color: var(--muted);">${inputLabel}</div>
+                        <input type="number" min="0" class="qty-input" value="${inputValue}" ${isCompleted ? 'disabled' : ''} />
                         <button class="tiny-btn btn-save" ${isCompleted ? 'disabled' : ''}>Simpan</button>
                         <button class="remove-btn" data-action="remove" ${isCompleted ? 'disabled' : ''}>×</button>
                     </div>
@@ -306,15 +319,22 @@
             el.searchResults.innerHTML = '';
             return;
         }
+        const requiresKoli = !!state.batch?.requires_koli;
         el.searchResults.innerHTML = items.map((item) => {
+            const koliQty = Number(item.koli_qty || 0);
+            const subInfo = requiresKoli && koliQty > 0
+                ? `<small style="color: var(--muted); font-size: 11px;">Isi/koli: ${koliQty}</small>`
+                : '';
+            const placeholder = requiresKoli ? 'Kolian' : 'Qty';
             return `
-                <div class="result-item">
+                <div class="result-item" data-koli-qty="${koliQty}">
                     <div class="result-info">
                         <strong>${item.sku}</strong>
                         <span>${item.name}</span>
+                        ${subInfo}
                     </div>
                     <div class="result-actions">
-                        <input type="number" min="0" class="result-qty" value="0" />
+                        <input type="number" min="0" class="result-qty" placeholder="${placeholder}" value="0" />
                         <button class="add-btn" data-id="${item.id}">Tambah</button>
                     </div>
                 </div>
@@ -327,7 +347,11 @@
         const url = routes.itemsStore.replace('__CODE__', encodeURIComponent(state.batch.code));
         const payload = new FormData();
         payload.append('item_id', itemId);
-        payload.append('counted_qty', qty);
+        if (state.batch.requires_koli) {
+            payload.append('koli', qty);
+        } else {
+            payload.append('counted_qty', qty);
+        }
         const json = await fetchJson(url, { method: 'POST', body: payload });
         setBatch(json);
         el.itemSearch.value = '';
@@ -341,7 +365,11 @@
             .replace('__ID__', rowId);
         const payload = new FormData();
         payload.append('_method', 'PUT');
-        payload.append('counted_qty', qty);
+        if (state.batch.requires_koli) {
+            payload.append('koli', qty);
+        } else {
+            payload.append('counted_qty', qty);
+        }
         const json = await fetchJson(url, { method: 'POST', body: payload });
         setBatch(json);
         if (!silent && typeof Swal !== 'undefined') {

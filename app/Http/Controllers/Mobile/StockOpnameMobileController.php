@@ -84,7 +84,7 @@ class StockOpnameMobileController extends Controller
             }
         }
 
-        $items = $query->get(['id', 'sku', 'name']);
+        $items = $query->get(['id', 'sku', 'name', 'koli_qty']);
 
         return response()->json([
             'items' => $items,
@@ -105,7 +105,8 @@ class StockOpnameMobileController extends Controller
 
         $validated = $request->validate([
             'item_id' => ['required', 'integer', 'exists:items,id'],
-            'counted_qty' => ['required', 'integer', 'min:0'],
+            'counted_qty' => ['nullable', 'integer', 'min:0'],
+            'koli' => ['nullable', 'integer', 'min:0'],
             'note' => ['nullable', 'string'],
         ]);
 
@@ -130,6 +131,35 @@ class StockOpnameMobileController extends Controller
             if ($warehouseId <= 0) {
                 $warehouseId = WarehouseService::defaultWarehouseId();
             }
+            $requiresKoli = $warehouseId === WarehouseService::defaultWarehouseId();
+            $itemModel = Item::find($validated['item_id']);
+            $qtyPerKoli = (int) ($itemModel?->koli_qty ?? 0);
+            $koli = isset($validated['koli']) && $validated['koli'] !== '' && $validated['koli'] !== null
+                ? (int) $validated['koli']
+                : null;
+
+            if ($requiresKoli) {
+                if ($koli === null) {
+                    throw ValidationException::withMessages([
+                        'koli' => 'Kolian wajib diisi untuk Gudang Besar.',
+                    ]);
+                }
+                if ($qtyPerKoli < 1) {
+                    throw ValidationException::withMessages([
+                        'koli' => 'Isi/koli item belum diset.',
+                    ]);
+                }
+                $countedQty = $koli * $qtyPerKoli;
+            } else {
+                if (!isset($validated['counted_qty']) || $validated['counted_qty'] === null || $validated['counted_qty'] === '') {
+                    throw ValidationException::withMessages([
+                        'counted_qty' => 'Qty wajib diisi.',
+                    ]);
+                }
+                $countedQty = (int) $validated['counted_qty'];
+                $koli = null;
+            }
+
             $stock = ItemStock::where('item_id', $validated['item_id'])
                 ->where('warehouse_id', $warehouseId)
                 ->lockForUpdate()
@@ -147,7 +177,6 @@ class StockOpnameMobileController extends Controller
             }
 
             $systemQty = (int) ($stock?->stock ?? 0);
-            $countedQty = (int) $validated['counted_qty'];
             $adjustment = $countedQty - $systemQty;
 
             StockOpnameItem::create([
@@ -155,6 +184,7 @@ class StockOpnameMobileController extends Controller
                 'item_id' => $validated['item_id'],
                 'system_qty' => $systemQty,
                 'counted_qty' => $countedQty,
+                'koli' => $koli,
                 'adjustment' => $adjustment,
                 'note' => $validated['note'] ?? null,
                 'created_by' => auth()->id(),
@@ -188,7 +218,8 @@ class StockOpnameMobileController extends Controller
         }
 
         $validated = $request->validate([
-            'counted_qty' => ['required', 'integer', 'min:0'],
+            'counted_qty' => ['nullable', 'integer', 'min:0'],
+            'koli' => ['nullable', 'integer', 'min:0'],
             'note' => ['nullable', 'string'],
         ]);
 
@@ -199,10 +230,43 @@ class StockOpnameMobileController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            $newCounted = (int) $validated['counted_qty'];
+            $warehouseId = (int) ($opname->warehouse_id ?? 0);
+            if ($warehouseId <= 0) {
+                $warehouseId = WarehouseService::defaultWarehouseId();
+            }
+            $requiresKoli = $warehouseId === WarehouseService::defaultWarehouseId();
+            $itemModel = Item::find($item->item_id);
+            $qtyPerKoli = (int) ($itemModel?->koli_qty ?? 0);
+            $koli = isset($validated['koli']) && $validated['koli'] !== '' && $validated['koli'] !== null
+                ? (int) $validated['koli']
+                : null;
+
+            if ($requiresKoli) {
+                if ($koli === null) {
+                    throw ValidationException::withMessages([
+                        'koli' => 'Kolian wajib diisi untuk Gudang Besar.',
+                    ]);
+                }
+                if ($qtyPerKoli < 1) {
+                    throw ValidationException::withMessages([
+                        'koli' => 'Isi/koli item belum diset.',
+                    ]);
+                }
+                $newCounted = $koli * $qtyPerKoli;
+            } else {
+                if (!isset($validated['counted_qty']) || $validated['counted_qty'] === null || $validated['counted_qty'] === '') {
+                    throw ValidationException::withMessages([
+                        'counted_qty' => 'Qty wajib diisi.',
+                    ]);
+                }
+                $newCounted = (int) $validated['counted_qty'];
+                $koli = null;
+            }
+
             $newAdjustment = $newCounted - (int) $item->system_qty;
 
             $item->counted_qty = $newCounted;
+            $item->koli = $koli;
             $item->adjustment = $newAdjustment;
             $item->note = $validated['note'] ?? $item->note;
             $item->save();
@@ -262,9 +326,16 @@ class StockOpnameMobileController extends Controller
         $opname->load([
             'creator:id,name',
             'completer:id,name',
-            'items.item:id,sku,name',
+            'warehouse:id,name,code',
+            'items.item:id,sku,name,koli_qty',
             'items.creator:id,name',
         ]);
+
+        $warehouseId = (int) ($opname->warehouse_id ?? 0);
+        if ($warehouseId <= 0) {
+            $warehouseId = WarehouseService::defaultWarehouseId();
+        }
+        $isDefaultWarehouse = $warehouseId === WarehouseService::defaultWarehouseId();
 
         return [
             'batch' => [
@@ -276,6 +347,9 @@ class StockOpnameMobileController extends Controller
                 'status' => $opname->status ?? 'open',
                 'completed_at' => $opname->completed_at?->format('Y-m-d H:i'),
                 'completed_by' => $opname->completer?->name,
+                'warehouse_id' => $warehouseId,
+                'warehouse_name' => $opname->warehouse?->name,
+                'requires_koli' => $isDefaultWarehouse,
             ],
             'items' => $opname->items->sortByDesc('id')->values()->map(function ($row) {
                 return [
@@ -283,8 +357,10 @@ class StockOpnameMobileController extends Controller
                     'item_id' => $row->item_id,
                     'sku' => $row->item?->sku ?? '-',
                     'name' => $row->item?->name ?? '-',
+                    'koli_qty' => (int) ($row->item?->koli_qty ?? 0),
                     'system_qty' => (int) $row->system_qty,
                     'counted_qty' => (int) $row->counted_qty,
+                    'koli' => $row->koli !== null ? (int) $row->koli : null,
                     'adjustment' => (int) $row->adjustment,
                     'note' => $row->note,
                     'created_by' => $row->creator?->name ?? '-',

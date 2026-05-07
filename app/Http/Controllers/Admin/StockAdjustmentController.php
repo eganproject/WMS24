@@ -27,7 +27,7 @@ class StockAdjustmentController extends Controller
         $items = Item::query()
             ->where('item_type', Item::TYPE_SINGLE)
             ->orderBy('name')
-            ->get(['id', 'sku', 'name']);
+            ->get(['id', 'sku', 'name', 'koli_qty']);
         $warehouseId = WarehouseService::defaultWarehouseId();
         $warehouseLabel = Warehouse::where('id', $warehouseId)->value('name') ?? 'Gudang Besar';
         $warehouses = Warehouse::orderBy('name')->get(['id', 'name', 'code']);
@@ -153,6 +153,7 @@ class StockAdjustmentController extends Controller
                     'item_id' => $row['item_id'],
                     'direction' => $row['direction'],
                     'qty' => $row['qty'],
+                    'koli' => $row['koli'] ?? null,
                     'note' => $row['note'] ?? null,
                 ]);
             }
@@ -224,6 +225,7 @@ class StockAdjustmentController extends Controller
                     'item_id' => $row['item_id'],
                     'direction' => $row['direction'],
                     'qty' => $row['qty'],
+                    'koli' => $row['koli'] ?? null,
                     'note' => $row['note'] ?? null,
                 ]);
                 $createdItems++;
@@ -264,9 +266,21 @@ class StockAdjustmentController extends Controller
                     'item_id' => $row->item_id,
                     'direction' => $row->direction,
                     'qty' => (int) $row->qty,
+                    'koli' => $row->koli !== null ? (int) $row->koli : null,
                     'note' => $row->note ?? '',
                 ];
             })->values(),
+        ]);
+    }
+
+    public function detail(int $id)
+    {
+        $adjustment = StockAdjustment::with(['items.item', 'warehouse', 'creator', 'approver'])
+            ->findOrFail($id);
+
+        return view('admin.inventory.stock-adjustments.detail', [
+            'adjustment' => $adjustment,
+            'backUrl' => route('admin.inventory.stock-adjustments.index'),
         ]);
     }
 
@@ -304,6 +318,7 @@ class StockAdjustmentController extends Controller
                     'item_id' => $row['item_id'],
                     'direction' => $row['direction'],
                     'qty' => $row['qty'],
+                    'koli' => $row['koli'] ?? null,
                     'note' => $row['note'] ?? null,
                 ]);
             }
@@ -419,19 +434,57 @@ class StockAdjustmentController extends Controller
             'items.*.item_id' => ['required', 'integer', 'exists:items,id'],
             'items.*.direction' => ['required', 'string', Rule::in(['in', 'out'])],
             'items.*.qty' => ['required', 'integer', 'min:1'],
+            'items.*.koli' => ['nullable', 'integer', 'min:1'],
             'items.*.note' => ['nullable', 'string'],
             'note' => ['nullable', 'string'],
             'transacted_at' => ['required', 'date'],
             'warehouse_id' => ['nullable', 'integer', 'exists:warehouses,id'],
         ]);
 
+        $warehouseId = (int) ($validated['warehouse_id'] ?? 0);
+        if ($warehouseId <= 0) {
+            $warehouseId = WarehouseService::defaultWarehouseId();
+        }
+        $requiresKoli = $warehouseId === WarehouseService::defaultWarehouseId();
+
+        $itemDefinitions = collect();
+        if ($requiresKoli) {
+            $itemDefinitions = Item::query()
+                ->whereIn('id', collect($validated['items'] ?? [])->pluck('item_id')->filter()->unique()->all())
+                ->get(['id', 'sku', 'koli_qty'])
+                ->keyBy('id');
+        }
+
         $items = collect($validated['items'] ?? [])
             ->filter(fn ($row) => (int) ($row['qty'] ?? 0) > 0 && (int) ($row['item_id'] ?? 0) > 0)
-            ->map(function ($row) {
+            ->map(function ($row, $idx) use ($requiresKoli, $itemDefinitions) {
+                $itemId = (int) $row['item_id'];
+                $qty = (int) $row['qty'];
+                $koli = isset($row['koli']) && $row['koli'] !== '' ? (int) $row['koli'] : null;
+                if ($requiresKoli) {
+                    $item = $itemDefinitions->get($itemId);
+                    $qtyPerKoli = (int) ($item?->koli_qty ?? 0);
+                    if ($koli === null || $koli < 1) {
+                        throw ValidationException::withMessages([
+                            "items.{$idx}.koli" => 'Kolian wajib diisi untuk Gudang Besar.',
+                        ]);
+                    }
+                    if ($qtyPerKoli < 1) {
+                        throw ValidationException::withMessages([
+                            "items.{$idx}.koli" => 'Isi/koli item belum diset.',
+                        ]);
+                    }
+                    if ($qty !== $koli * $qtyPerKoli) {
+                        throw ValidationException::withMessages([
+                            "items.{$idx}.qty" => "Qty harus sama dengan kolian x isi/koli ({$koli} x {$qtyPerKoli} = ".($koli * $qtyPerKoli).').',
+                        ]);
+                    }
+                }
                 return [
-                    'item_id' => (int) $row['item_id'],
+                    'item_id' => $itemId,
                     'direction' => $row['direction'] === 'out' ? 'out' : 'in',
-                    'qty' => (int) $row['qty'],
+                    'qty' => $qty,
+                    'koli' => $requiresKoli ? $koli : null,
                     'note' => $row['note'] ?? null,
                 ];
             })->values();

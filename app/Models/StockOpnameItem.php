@@ -14,6 +14,7 @@ class StockOpnameItem extends Model
         'item_id',
         'system_qty',
         'counted_qty',
+        'koli',
         'adjustment',
         'note',
         'created_by',

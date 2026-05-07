@@ -38,6 +38,7 @@ class StockOpnameController extends Controller
                 'items.id',
                 'items.sku',
                 'items.name',
+                'items.koli_qty',
                 DB::raw('COALESCE(item_stocks.stock, 0) as stock'),
             ]);
 
@@ -149,6 +150,7 @@ class StockOpnameController extends Controller
                 'items.id',
                 'items.sku',
                 'items.name',
+                'items.koli_qty',
                 DB::raw('COALESCE(item_stocks.stock, 0) as stock'),
             ]);
 
@@ -159,7 +161,7 @@ class StockOpnameController extends Controller
 
     public function show(int $id)
     {
-        $opname = StockOpname::with(['creator:id,name', 'items.item:id,sku,name', 'items.creator:id,name'])
+        $opname = StockOpname::with(['creator:id,name', 'items.item:id,sku,name,koli_qty', 'items.creator:id,name'])
             ->find($id);
         if (!$opname) {
             return response()->json(['message' => 'Data tidak ditemukan'], 404);
@@ -181,11 +183,29 @@ class StockOpnameController extends Controller
                     'item' => trim(($row->item?->sku ?? '').' - '.($row->item?->name ?? '')),
                     'system_qty' => (int) $row->system_qty,
                     'counted_qty' => (int) $row->counted_qty,
+                    'koli' => $row->koli !== null ? (int) $row->koli : null,
+                    'koli_qty' => (int) ($row->item?->koli_qty ?? 0),
                     'adjustment' => (int) $row->adjustment,
                     'note' => $row->note ?? '-',
                     'created_by' => $row->creator?->name ?? '-',
                 ];
             })->values(),
+        ]);
+    }
+
+    public function detail(int $id)
+    {
+        $opname = StockOpname::with([
+            'items.item:id,sku,name,koli_qty',
+            'items.creator:id,name',
+            'warehouse',
+            'creator',
+            'completer',
+        ])->findOrFail($id);
+
+        return view('admin.inventory.stock-opname.detail', [
+            'opname' => $opname,
+            'backUrl' => route('admin.inventory.stock-opname.index'),
         ]);
     }
 
@@ -348,6 +368,7 @@ class StockOpnameController extends Controller
                     'item_id' => $row['item_id'],
                     'system_qty' => $systemQty,
                     'counted_qty' => $countedQty,
+                    'koli' => $row['koli'] ?? null,
                     'adjustment' => $adjustment,
                     'note' => $row['note'] ?? null,
                     'created_by' => auth()->id(),
@@ -376,19 +397,62 @@ class StockOpnameController extends Controller
         $validated = $request->validate([
             'items' => ['required', 'array', 'min:1'],
             'items.*.item_id' => ['required', 'integer', 'exists:items,id'],
-            'items.*.counted_qty' => ['required', 'integer', 'min:0'],
+            'items.*.counted_qty' => ['nullable', 'integer', 'min:0'],
+            'items.*.koli' => ['nullable', 'integer', 'min:0'],
             'items.*.note' => ['nullable', 'string'],
             'note' => ['nullable', 'string'],
             'transacted_at' => ['required', 'date'],
             'warehouse_id' => ['nullable', 'integer', 'exists:warehouses,id'],
         ]);
 
+        $warehouseId = (int) ($validated['warehouse_id'] ?? 0);
+        if ($warehouseId <= 0) {
+            $warehouseId = WarehouseService::defaultWarehouseId();
+        }
+        $requiresKoli = $warehouseId === WarehouseService::defaultWarehouseId();
+
+        $itemDefinitions = collect();
+        if ($requiresKoli) {
+            $itemDefinitions = Item::query()
+                ->whereIn('id', collect($validated['items'] ?? [])->pluck('item_id')->filter()->unique()->all())
+                ->get(['id', 'sku', 'koli_qty'])
+                ->keyBy('id');
+        }
+
         $items = collect($validated['items'] ?? [])
             ->filter(fn ($row) => (int) ($row['item_id'] ?? 0) > 0)
-            ->map(function ($row) {
+            ->map(function ($row, $idx) use ($requiresKoli, $itemDefinitions) {
+                $itemId = (int) $row['item_id'];
+                $koli = isset($row['koli']) && $row['koli'] !== '' ? (int) $row['koli'] : null;
+
+                if ($requiresKoli) {
+                    $item = $itemDefinitions->get($itemId);
+                    $qtyPerKoli = (int) ($item?->koli_qty ?? 0);
+                    if ($koli === null) {
+                        throw ValidationException::withMessages([
+                            "items.{$idx}.koli" => 'Kolian wajib diisi untuk Gudang Besar.',
+                        ]);
+                    }
+                    if ($qtyPerKoli < 1) {
+                        throw ValidationException::withMessages([
+                            "items.{$idx}.koli" => 'Isi/koli item belum diset.',
+                        ]);
+                    }
+                    $countedQty = $koli * $qtyPerKoli;
+                } else {
+                    if (!isset($row['counted_qty']) || $row['counted_qty'] === '' || $row['counted_qty'] === null) {
+                        throw ValidationException::withMessages([
+                            "items.{$idx}.counted_qty" => 'Qty wajib diisi.',
+                        ]);
+                    }
+                    $countedQty = (int) $row['counted_qty'];
+                    $koli = null;
+                }
+
                 return [
-                    'item_id' => (int) $row['item_id'],
-                    'counted_qty' => (int) $row['counted_qty'],
+                    'item_id' => $itemId,
+                    'counted_qty' => $countedQty,
+                    'koli' => $koli,
                     'note' => $row['note'] ?? null,
                 ];
             })->values();

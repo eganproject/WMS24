@@ -187,6 +187,7 @@
     const dataUrl = '{{ $dataUrl }}';
     const storeUrl = '{{ $storeUrl }}';
     const showUrlTpl = '{{ route('admin.inventory.stock-adjustments.show', ':id') }}';
+    const detailUrlTpl = '{{ route('admin.inventory.stock-adjustments.detail', ':id') }}';
     const updateUrlTpl = '{{ route('admin.inventory.stock-adjustments.update', ':id') }}';
     const deleteUrlTpl = '{{ route('admin.inventory.stock-adjustments.destroy', ':id') }}';
     const approveUrlTpl = '{{ route('admin.inventory.stock-adjustments.approve', ':id') }}';
@@ -196,7 +197,7 @@
     const canDelete = {{ $canDelete ? 'true' : 'false' }};
     const defaultWarehouseId = {{ !empty($defaultWarehouseId) ? (int) $defaultWarehouseId : 'null' }};
     const displayWarehouseId = {{ !empty($displayWarehouseId) ? (int) $displayWarehouseId : 'null' }};
-    const itemOptionsHtml = `@foreach($items as $item)<option value="{{ $item->id }}">{{ $item->sku }} - {{ $item->name }}</option>@endforeach`;
+    const itemOptionsHtml = `@foreach($items as $item)<option value="{{ $item->id }}" data-koli-qty="{{ (int) ($item->koli_qty ?? 0) }}">{{ $item->sku }} - {{ $item->name }}</option>@endforeach`;
 
     document.addEventListener('DOMContentLoaded', () => {
         const tableEl = $('#stock_adjustments_table');
@@ -280,6 +281,48 @@
             return !hasDuplicate;
         };
 
+        const requiresKoliAdjustment = () => {
+            const wid = Number(warehouseSelect?.value || 0);
+            return defaultWarehouseId && wid === Number(defaultWarehouseId);
+        };
+
+        const selectedKoliQty = (row) => {
+            const selectEl = row?.querySelector('.adjustment-item-select');
+            const option = selectEl?.selectedOptions?.[0];
+            const koliQty = parseInt(option?.getAttribute('data-koli-qty') || '0', 10);
+            return Number.isFinite(koliQty) ? koliQty : 0;
+        };
+
+        const syncRowKoliMode = (row) => {
+            if (!row) return;
+            const showKoli = requiresKoliAdjustment();
+            const koliWrap = row.querySelector('[data-role="koli-wrap"]');
+            const koliEl = row.querySelector('input[data-name="koli"]');
+            const qtyEl = row.querySelector('input[data-name="qty"]');
+            const hintEl = row.querySelector('[data-role="koli-hint"]');
+            const qtyPerKoli = selectedKoliQty(row);
+
+            if (koliWrap) koliWrap.style.display = showKoli ? '' : 'none';
+            if (qtyEl) qtyEl.readOnly = showKoli;
+            if (hintEl) {
+                hintEl.textContent = showKoli
+                    ? (qtyPerKoli > 0 ? `Isi/koli: ${qtyPerKoli}. Qty otomatis dihitung dari kolian.` : 'Isi/koli item belum diset.')
+                    : '';
+            }
+            if (!showKoli) {
+                if (koliEl) koliEl.value = '';
+                return;
+            }
+            const koli = parseInt(koliEl?.value || '0', 10);
+            if (qtyPerKoli > 0 && Number.isFinite(koli) && koli > 0) {
+                if (qtyEl) qtyEl.value = String(koli * qtyPerKoli);
+            }
+        };
+
+        const syncAllKoliMode = () => {
+            itemsContainer?.querySelectorAll('.adjustment-item-row').forEach(syncRowKoliMode);
+        };
+
         const initSelect2 = (selectEl) => {
             if (selectEl && typeof $ !== 'undefined' && $.fn.select2) {
                 $(selectEl).select2({
@@ -351,7 +394,7 @@
             const row = document.createElement('div');
             row.className = 'row g-3 align-items-end mb-4 adjustment-item-row';
             row.innerHTML = `
-                <div class="col-md-5">
+                <div class="col-md-3">
                     <label class="required fs-6 fw-bold form-label mb-2">Item</label>
                     <select class="form-select form-select-solid adjustment-item-select" data-name="item_id" required>
                         <option value=""></option>
@@ -366,6 +409,12 @@
                         <option value="out">Kurangi (Out)</option>
                     </select>
                     <div class="invalid-feedback" data-error-for="direction"></div>
+                </div>
+                <div class="col-md-2" data-role="koli-wrap" style="display:none;">
+                    <label class="required fs-6 fw-bold form-label mb-2">Kolian</label>
+                    <input type="number" min="1" step="1" class="form-control form-control-solid" data-name="koli" />
+                    <div class="form-text text-muted" data-role="koli-hint"></div>
+                    <div class="invalid-feedback" data-error-for="koli"></div>
                 </div>
                 <div class="col-md-2">
                     <label class="required fs-6 fw-bold form-label mb-2">Qty</label>
@@ -390,11 +439,14 @@
             if (dirEl && data.direction) dirEl.value = data.direction;
             const qtyEl = row.querySelector('input[data-name="qty"]');
             if (qtyEl) qtyEl.value = data.qty ?? '';
+            const koliEl = row.querySelector('input[data-name="koli"]');
+            if (koliEl) koliEl.value = data.koli ?? '';
             const noteEl = row.querySelector('input[data-name="note"]');
             if (noteEl) noteEl.value = data.note ?? '';
 
             initSelect2(selectEl);
             renumberRows();
+            syncRowKoliMode(row);
             validateUniqueItems();
         };
 
@@ -415,13 +467,23 @@
             createItemRow();
             clearErrors();
             validateUniqueItems();
+            syncAllKoliMode();
         };
 
         itemsContainer?.addEventListener('change', (e) => {
             if (e.target.matches('.adjustment-item-select')) {
+                syncRowKoliMode(e.target.closest('.adjustment-item-row'));
                 validateUniqueItems();
             }
         });
+
+        itemsContainer?.addEventListener('input', (e) => {
+            if (e.target.matches('input[data-name="koli"]')) {
+                syncRowKoliMode(e.target.closest('.adjustment-item-row'));
+            }
+        });
+
+        warehouseSelect?.addEventListener('change', syncAllKoliMode);
 
         itemsContainer?.addEventListener('click', (e) => {
             const btn = e.target.closest('.btn-remove-item');
@@ -472,12 +534,13 @@
                 { data: 'note' },
                 { data: 'id', orderable: false, searchable: false, className: 'text-end', render: (data, type, row) => {
                     const isApproved = row?.status === 'approved';
+                    const detailItem = `<div class="menu-item px-3"><a href="${detailUrlTpl.replace(':id', data)}" class="menu-link px-3">Detail</a></div>`;
                     const approveItem = (!isApproved && canUpdate)
                         ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 text-success btn-approve" data-id="${data}">Approve</a></div>`
                         : '';
                     const editItem = (!isApproved && canUpdate) ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-edit" data-id="${data}">Edit</a></div>` : '';
                     const delItem = (!isApproved && canDelete) ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 text-danger btn-delete" data-id="${data}">Hapus</a></div>` : '';
-                    const actions = `${approveItem}${editItem}${delItem}`;
+                    const actions = `${detailItem}${approveItem}${editItem}${delItem}`;
                     if (!actions) return '';
                     return `
                         <div class="text-end">
@@ -603,6 +666,7 @@
                 }
                 clearErrors();
                 validateUniqueItems();
+                syncAllKoliMode();
                 modal?.show();
             } catch (err) {
                 console.error(err);

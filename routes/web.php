@@ -34,6 +34,7 @@ use App\Http\Controllers\Admin\AttendanceController;
 use App\Http\Controllers\Admin\AttendanceReportController;
 use App\Http\Controllers\Admin\StockOpnameReportController;
 use App\Http\Controllers\Admin\ReplenishmentReportController;
+use App\Http\Controllers\Admin\StockTransferReportController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\MenuController;
 use App\Http\Controllers\Admin\PermissionController;
@@ -201,6 +202,7 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::post('/stock-transfers', [\App\Http\Controllers\Admin\StockTransferController::class, 'store'])->name('stock-transfers.store');
         Route::get('/stock-transfers/{id}', [\App\Http\Controllers\Admin\StockTransferController::class, 'show'])->name('stock-transfers.show');
         Route::get('/stock-transfers/{id}/detail', [\App\Http\Controllers\Admin\StockTransferController::class, 'detail'])->name('stock-transfers.detail');
+        Route::post('/stock-transfers/{id}/scan-koli', [\App\Http\Controllers\Admin\StockTransferController::class, 'scanKoli'])->name('stock-transfers.scan-koli');
         Route::post('/stock-transfers/{id}/qc', [\App\Http\Controllers\Admin\StockTransferController::class, 'qc'])->name('stock-transfers.qc');
         Route::post('/stock-transfers/{id}/cancel', [\App\Http\Controllers\Admin\StockTransferController::class, 'cancel'])->name('stock-transfers.cancel');
 
@@ -405,6 +407,8 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/attendance/data', [AttendanceReportController::class, 'data'])->name('attendance.data');
         Route::get('/replenishment', [ReplenishmentReportController::class, 'index'])->name('replenishment.index');
         Route::get('/replenishment/data', [ReplenishmentReportController::class, 'data'])->name('replenishment.data');
+        Route::get('/stock-transfers', [StockTransferReportController::class, 'index'])->name('stock-transfers.index');
+        Route::get('/stock-transfers/data', [StockTransferReportController::class, 'data'])->name('stock-transfers.data');
         Route::get('/stock-opname', [StockOpnameReportController::class, 'index'])->name('stock-opname.index');
         Route::get('/stock-opname/data', [StockOpnameReportController::class, 'data'])->name('stock-opname.data');
         Route::get('/stock-opname/sku-diff', [StockOpnameReportController::class, 'diffSku'])->name('stock-opname.diff-sku');

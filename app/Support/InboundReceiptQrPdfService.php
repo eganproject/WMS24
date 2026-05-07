@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\InboundItem;
+use App\Models\InboundKoliUnit;
 use App\Models\InboundTransaction;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -18,6 +19,7 @@ class InboundReceiptQrPdfService
 
     public function __construct(
         private readonly ItemQrCodeService $itemQrCodeService,
+        private readonly InboundKoliUnitService $koliUnitService,
         private readonly SimpleImagePdfBuilder $pdfBuilder,
     ) {
     }
@@ -33,14 +35,15 @@ class InboundReceiptQrPdfService
 
     public function pdfForTransaction(InboundTransaction $transaction): string
     {
-        $items = $this->validItems($transaction);
-        if ($items->isEmpty()) {
+        $units = $this->koliUnitService->syncForTransaction($transaction);
+        $units->each->load(['item', 'transaction']);
+        if ($units->isEmpty()) {
             throw new \RuntimeException('Penerimaan barang tidak memiliki SKU yang bisa dibuat QR.');
         }
 
         $pages = [];
-        foreach ($items->values() as $itemRow) {
-            $pages[] = $this->renderPage($transaction, $itemRow);
+        foreach ($units->values() as $unit) {
+            $pages[] = $this->renderPage($transaction, $unit);
         }
 
         return $this->pdfBuilder->buildFromJpegs($pages, self::PAGE_WIDTH_PT, self::PAGE_HEIGHT_PT);
@@ -56,7 +59,7 @@ class InboundReceiptQrPdfService
             ->values();
     }
 
-    private function renderPage(InboundTransaction $transaction, InboundItem $row): string
+    private function renderPage(InboundTransaction $transaction, InboundKoliUnit $unit): string
     {
         $image = imagecreatetruecolor(self::PAGE_WIDTH, self::PAGE_HEIGHT);
         if ($image === false) {
@@ -79,7 +82,7 @@ class InboundReceiptQrPdfService
         $boldFont    = $this->resolveFontPath(true);
         $regularFont = $this->resolveFontPath(false);
 
-        $item = $row->item;
+        $item = $unit->item;
         if ($item === null) {
             imagedestroy($image);
             throw new \RuntimeException('Item penerimaan tidak ditemukan untuk QR.');
@@ -87,7 +90,7 @@ class InboundReceiptQrPdfService
 
         $sku      = trim((string) $item->sku);
         $name     = trim((string) $item->name);
-        $qty      = number_format((float) ($row->koli ?? 0), 0, ',', '.');
+        $qty      = number_format((float) ($unit->qty ?? 0), 0, ',', '.');
         $centerX  = (int) floor(self::PAGE_WIDTH / 2);
 
         $cx = self::OUTER_MARGIN;
@@ -126,7 +129,7 @@ class InboundReceiptQrPdfService
         imagefilledrectangle($image, $qrPanelX, $qrPanelY, $qrPanelX + $qrPanelW, $qrPanelY + $qrPanelH, $panelColor);
         imagerectangle($image, $qrPanelX, $qrPanelY, $qrPanelX + $qrPanelW, $qrPanelY + $qrPanelH, $borderColor);
 
-        $qrBinary = $this->itemQrCodeService->rawPngForItem($item, 720);
+        $qrBinary = $this->itemQrCodeService->rawPngForSku($unit->code, 720);
         $this->pastePngCentered($image, $qrBinary, $qrPanelX, $qrPanelY, $qrPanelW, $qrPanelH, 46);
 
         // ── ITEM NAME ─────────────────────────────────────────────────
@@ -150,23 +153,27 @@ class InboundReceiptQrPdfService
         $qtyY = $footerY;
         imagefilledrectangle($image, $qtyX, $qtyY, $qtyX + $qtyW, $qtyY + $qtyH, $panelColor);
         imagerectangle($image, $qtyX, $qtyY, $qtyX + $qtyW, $qtyY + $qtyH, $borderColor);
-        $this->drawCenteredText($image, 'QTY', $qtyX + (int) floor($qtyW / 2), $qtyY + 44, 20, $textMuted, true, $boldFont);
+        $this->drawCenteredText($image, 'PCS', $qtyX + (int) floor($qtyW / 2), $qtyY + 44, 20, $textMuted, true, $boldFont);
         $this->drawCenteredText($image, $qty, $qtyX + (int) floor($qtyW / 2), $qtyY + 114, 56, $textDark, true, $boldFont);
 
-        $rcqSize = 140;
-        $rcqX    = $cx + $cw - 80 - $rcqSize;
-        $rcqY    = $footerY;
-        imagefilledrectangle($image, $rcqX, $rcqY, $rcqX + $rcqSize, $rcqY + $rcqSize, $panelColor);
-        imagerectangle($image, $rcqX, $rcqY, $rcqX + $rcqSize, $rcqY + $rcqSize, $borderColor);
-        $inboundQrBinary = $this->itemQrCodeService->rawPngForSku((string) $transaction->code, 130);
-        $this->pastePngCentered($image, $inboundQrBinary, $rcqX, $rcqY, $rcqSize, $rcqSize, 10);
+        $koliW = 260;
+        $koliH = 140;
+        $koliX = $cx + $cw - 80 - $koliW;
+        $koliY = $footerY;
+        imagefilledrectangle($image, $koliX, $koliY, $koliX + $koliW, $koliY + $koliH, $panelColor);
+        imagerectangle($image, $koliX, $koliY, $koliX + $koliW, $koliY + $koliH, $borderColor);
+        $this->drawCenteredText($image, 'KOLI', $koliX + (int) floor($koliW / 2), $koliY + 44, 20, $textMuted, true, $boldFont);
+        $this->drawCenteredText($image, (string) $unit->koli_no, $koliX + (int) floor($koliW / 2), $koliY + 114, 56, $textDark, true, $boldFont);
 
-        // Month.year label centered between QTY box and receipt QR
-        $midX       = (int) round(($qtyX + $qtyW + $rcqX) / 2);
+        $midX       = (int) round(($qtyX + $qtyW + $koliX) / 2);
         $midY       = $footerY + (int) round($qtyH * 0.62);
         $dateSource = $transaction->transacted_at ?? $transaction->created_at ?? now();
         $monthYear  = $dateSource->format('m.y');
-        $this->drawCenteredText($image, $monthYear, $midX, $midY, 42, $textDark, true, $boldFont);
+        $codeFontSize = $boldFont !== null
+            ? $this->fitFontSize((string) $transaction->code, $boldFont, 28, max(120, $koliX - ($qtyX + $qtyW) - 36), 14)
+            : 20;
+        $this->drawCenteredText($image, (string) $transaction->code, $midX, $midY - 28, $codeFontSize, $textDark, true, $boldFont);
+        $this->drawCenteredText($image, $monthYear, $midX, $midY + 28, 34, $textMuted, true, $boldFont);
 
         ob_start();
         imagejpeg($image, null, 96);

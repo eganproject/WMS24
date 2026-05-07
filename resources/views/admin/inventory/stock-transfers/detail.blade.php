@@ -88,6 +88,22 @@
                 <div>{{ $transfer->qc_at?->format('Y-m-d H:i') ?? '-' }}</div>
             </div>
         </div>
+        @if($transfer->traceability_mode)
+            <div class="row mb-6">
+                <div class="col-md-4">
+                    <div class="fw-bold text-gray-600">Traceability</div>
+                    @if($transfer->traceability_mode === 'legacy')
+                        <span class="badge badge-light-warning">Legacy No QR</span>
+                    @else
+                        <span class="badge badge-light-success">QR Inbound</span>
+                    @endif
+                </div>
+                <div class="col-md-8">
+                    <div class="fw-bold text-gray-600">Alasan Legacy</div>
+                    <div>{{ $transfer->legacy_reason ?: '-' }}</div>
+                </div>
+            </div>
+        @endif
 
         <div class="table-responsive">
             <table class="table align-middle table-row-dashed fs-6 gy-5">
@@ -100,6 +116,8 @@
                         <th>Koli OK</th>
                         <th>Qty Reject</th>
                         <th>Koli Reject</th>
+                        <th>Qty Kurang</th>
+                        <th>Koli Kurang</th>
                         <th>Catatan</th>
                         <th>Catatan QC</th>
                     </tr>
@@ -114,6 +132,8 @@
                             <td>{{ $formatKoli($row->qty_ok, $row->item?->koli_qty) ?: '-' }}</td>
                             <td>{{ $row->qty_reject }}</td>
                             <td>{{ $formatKoli($row->qty_reject, $row->item?->koli_qty) ?: '-' }}</td>
+                            <td>{{ (int) ($row->qty_short ?? 0) }}</td>
+                            <td>{{ $formatKoli($row->qty_short ?? 0, $row->item?->koli_qty) ?: '-' }}</td>
                             <td>{{ $row->note ?? '-' }}</td>
                             <td>{{ $row->qc_note ?? '-' }}</td>
                         </tr>
@@ -121,6 +141,47 @@
                 </tbody>
             </table>
         </div>
+
+        @php
+            $koliScans = $transfer->items->flatMap(fn ($item) => $item->koliScans ?? collect());
+        @endphp
+        @if($koliScans->isNotEmpty())
+            <div class="separator my-8"></div>
+            <div class="fw-bolder fs-5 mb-4">Jejak QR Dus Inbound</div>
+            <div class="table-responsive">
+                <table class="table align-middle table-row-dashed fs-7 gy-4">
+                    <thead>
+                        <tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0">
+                            <th>Item</th>
+                            <th>QR Dus</th>
+                            <th>Inbound Asal</th>
+                            <th class="text-end">Qty Dus</th>
+                            <th class="text-end">OK</th>
+                            <th class="text-end">Reject</th>
+                            <th class="text-end">Kurang</th>
+                            <th>Catatan</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($koliScans as $scan)
+                            <tr>
+                                <td>{{ $scan->koliUnit?->sku ?? $scan->item?->sku ?? '-' }}</td>
+                                <td>
+                                    <div class="fw-semibold">{{ $scan->koliUnit?->code ?? '-' }}</div>
+                                    <div class="text-muted">Koli {{ $scan->koliUnit?->koli_no ?? '-' }}</div>
+                                </td>
+                                <td>{{ $scan->koliUnit?->transaction?->code ?? '-' }}</td>
+                                <td class="text-end">{{ (int) $scan->qty }}</td>
+                                <td class="text-end">{{ (int) $scan->qty_ok }}</td>
+                                <td class="text-end">{{ (int) $scan->qty_reject }}</td>
+                                <td class="text-end">{{ (int) $scan->qty_short }}</td>
+                                <td>{{ $scan->qc_note ?: '-' }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        @endif
     </div>
 </div>
 @endsection

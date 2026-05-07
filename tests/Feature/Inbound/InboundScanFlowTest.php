@@ -177,6 +177,9 @@ class InboundScanFlowTest extends TestCase
         $transaction = InboundTransaction::firstOrFail();
 
         $this->assertSame('pending_scan', $transaction->status);
+        $this->assertMatchesRegularExpression('/^RCV-\d{12}-[A-Z0-9]{3}$/', $transaction->code);
+        $this->assertStringNotContainsString('~', $transaction->code);
+        $this->assertStringNotContainsString('INB-RCV', $transaction->code);
         $this->assertSame('SJ-IN-001', $transaction->surat_jalan_no);
         $this->assertDatabaseMissing('stock_mutations', [
             'source_type' => 'inbound',
@@ -201,7 +204,7 @@ class InboundScanFlowTest extends TestCase
         $this->actingAs($scanner)
             ->postJson(route('mobile.inbound-scan.scan-sku'), [
                 'session_id' => $session->id,
-                'code' => 'SKU-IN-001',
+                'code' => 'INB~'.$transaction->code.'~SKU-IN-001~1',
             ])
             ->assertOk()
             ->assertJsonPath('transaction.summary.scanned_koli', 1)
@@ -219,10 +222,18 @@ class InboundScanFlowTest extends TestCase
         $this->actingAs($scanner)
             ->postJson(route('mobile.inbound-scan.scan-sku'), [
                 'session_id' => $session->id,
+                'code' => 'INB~RCV-WRONG~SKU-IN-001~1',
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'QR inbound tidak sesuai dengan inbound yang sedang dibuka.');
+
+        $this->actingAs($scanner)
+            ->postJson(route('mobile.inbound-scan.scan-sku'), [
+                'session_id' => $session->id,
                 'code' => 'SKU-IN-001',
             ])
-            ->assertStatus(409)
-            ->assertJsonPath('action', 'confirm_over_scan');
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Scan inbound tidak boleh melebihi jumlah penerimaan barang.');
 
         $this->actingAs($scanner)
             ->postJson(route('mobile.inbound-scan.complete'), [

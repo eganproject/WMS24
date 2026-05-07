@@ -55,6 +55,7 @@ class MenuSeeder extends Seeder
             ['name' => 'Laporan Retur', 'slug' => 'report-returns', 'route' => 'admin.reports.returns.index', 'icon' => 'fas fa-undo', 'parent_slug' => 'reports', 'sort_order' => 1.26],
             ['name' => 'Laporan Absensi', 'slug' => 'report-attendance', 'route' => 'admin.reports.attendance.index', 'icon' => 'fas fa-user-clock', 'parent_slug' => 'reports', 'sort_order' => 1.265],
             ['name' => 'Replenishment Display', 'slug' => 'report-replenishment', 'route' => 'admin.reports.replenishment.index', 'icon' => 'fas fa-sync-alt', 'parent_slug' => 'reports', 'sort_order' => 1.27],
+            ['name' => 'Laporan Transfer Gudang', 'slug' => 'report-stock-transfers', 'route' => 'admin.reports.stock-transfers.index', 'icon' => 'fas fa-exchange-alt', 'parent_slug' => 'reports', 'sort_order' => 1.28],
             ['name' => 'Aktivitas User', 'slug' => 'activity-logs', 'route' => 'admin.reports.activity-logs.index', 'icon' => 'fas fa-clipboard-check', 'parent_slug' => 'reports', 'sort_order' => 2],
             ['name' => 'Laporan Stock Opname', 'slug' => 'report-stock-opname', 'route' => 'admin.reports.stock-opname.index', 'icon' => 'fas fa-clipboard-list', 'parent_slug' => 'reports', 'sort_order' => 3],
             ['name' => 'Karyawan Absensi', 'slug' => 'attendance-employees', 'route' => 'admin.attendance.employees.index', 'icon' => 'fas fa-users', 'parent_slug' => 'attendance', 'sort_order' => 1],

@@ -16,6 +16,8 @@ class StockTransfer extends Model
         'transacted_at',
         'note',
         'status',
+        'traceability_mode',
+        'legacy_reason',
         'qc_at',
         'qc_by',
         'created_by',
@@ -29,6 +31,11 @@ class StockTransfer extends Model
     public function items()
     {
         return $this->hasMany(StockTransferItem::class, 'stock_transfer_id');
+    }
+
+    public function koliScans()
+    {
+        return $this->hasMany(StockTransferKoliScan::class, 'stock_transfer_id');
     }
 
     public function fromWarehouse()

@@ -3,6 +3,7 @@
 namespace Tests\Feature\Admin;
 
 use App\Models\InboundItem;
+use App\Models\InboundKoliUnit;
 use App\Models\InboundTransaction;
 use App\Models\Item;
 use App\Models\Warehouse;
@@ -38,6 +39,11 @@ class InboundReceiptQrCodeTest extends TestCase
             'pdf_url',
             route('admin.inbound.receipts.qr-pdf', $transaction->id)
         );
+
+        $unit = InboundKoliUnit::firstOrFail();
+        $this->assertSame('INB~'.$transaction->code.'~SKU-RCV-QR-001~1', $unit->code);
+        $this->assertStringNotContainsString('IKU', $unit->code);
+        $this->assertStringNotContainsString('~', $transaction->code);
     }
 
     public function test_receipt_qr_pdf_download_returns_pdf_file(): void

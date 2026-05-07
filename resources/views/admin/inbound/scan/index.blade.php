@@ -1445,31 +1445,7 @@
                 }),
             });
 
-            let payload = null;
-            try {
-                payload = await postScan();
-            } catch (error) {
-                if (error?.payload?.action === 'confirm_over_scan') {
-                    const ok = await confirmWithDetails({
-                        title: 'SKU Melebihi Target',
-                        message: error.message || 'Scan berikutnya akan dianggap terima lebih.',
-                        details: error.details || [],
-                        confirmText: 'Lanjut tambah koli',
-                        cancelText: 'Batal',
-                    });
-
-                    if (!ok) {
-                        setStatusBox(el.scanStatus, 'Scan dibatalkan.', 'pending');
-                        pushLog('SKU', 'Scan dibatalkan operator.', 'pending', code);
-                        focusSku();
-                        return;
-                    }
-
-                    payload = await postScan({ allow_over_scan: true });
-                } else {
-                    throw error;
-                }
-            }
+            const payload = await postScan();
 
             renderTransaction(payload.transaction || null);
             setStatusBox(el.scanStatus, payload.message || 'SKU berhasil discan.', 'success');

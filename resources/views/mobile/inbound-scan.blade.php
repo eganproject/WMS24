@@ -638,27 +638,7 @@
                 }),
             });
 
-            let data = null;
-            try {
-                data = await postScan();
-            } catch (innerError) {
-                if (innerError?.payload?.action === 'confirm_over_scan') {
-                    const ok = await confirmWithDetails({
-                        title: 'Terima Lebih?',
-                        message: innerError.message || 'SKU sudah melewati target surat jalan.',
-                        details: innerError.details || [],
-                        confirmText: 'Ya, tambah 1 koli',
-                        cancelText: 'Batal',
-                    });
-                    if (!ok) {
-                        setStatus(el.scanStatus, 'Scan dibatalkan.', 'muted');
-                        return;
-                    }
-                    data = await postScan({ allow_over_scan: true });
-                } else {
-                    throw innerError;
-                }
-            }
+            const data = await postScan();
 
             renderTransaction(data?.transaction || null);
             el.skuCode.value = '';

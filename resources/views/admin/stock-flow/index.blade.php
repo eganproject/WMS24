@@ -1082,7 +1082,7 @@
                         : '';
                     const qrPdfRoute = resolveRoute(rowType, 'qr_pdf');
                     const qrPdfItem = (rowType === 'receipt' && qrPdfRoute)
-                        ? `<div class="menu-item px-3"><a href="${qrPdfRoute.replace(':id', data)}" class="menu-link px-3">Unduh QR Code</a></div>`
+                        ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-download-qr" data-url="${qrPdfRoute.replace(':id', data)}">Unduh QR Code</a></div>`
                         : '';
                     const approveItem = (showApproveAction && !isLocked && perms.update)
                         ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 text-success btn-approve" data-id="${data}" data-type="${rowType}">Approve</a></div>`
@@ -1131,6 +1131,108 @@
             if (fpTo) fpTo.clear(); else if (dateToEl) dateToEl.value = '';
             reloadTable();
         });
+
+        const filenameFromDisposition = (disposition, fallback) => {
+            const value = String(disposition || '');
+            const utfMatch = value.match(/filename\*=UTF-8''([^;]+)/i);
+            if (utfMatch?.[1]) {
+                try {
+                    return decodeURIComponent(utfMatch[1].replace(/"/g, '').trim());
+                } catch (err) {
+                    return utfMatch[1].replace(/"/g, '').trim();
+                }
+            }
+            const match = value.match(/filename="?([^";]+)"?/i);
+            return match?.[1]?.trim() || fallback;
+        };
+
+        const updateQrDownloadProgress = (percent, text = '') => {
+            const safePercent = Math.max(0, Math.min(100, Math.round(percent)));
+            const bar = document.getElementById('qr_download_progress_bar');
+            const label = document.getElementById('qr_download_progress_label');
+            const info = document.getElementById('qr_download_progress_info');
+            if (bar) {
+                bar.style.width = `${safePercent}%`;
+                bar.setAttribute('aria-valuenow', String(safePercent));
+            }
+            if (label) label.textContent = `${safePercent}%`;
+            if (info && text) info.textContent = text;
+        };
+
+        const showQrDownloadProgress = () => {
+            if (typeof Swal === 'undefined') return;
+            Swal.fire({
+                title: 'Menyiapkan QR Code',
+                html: `
+                    <div class="text-muted mb-4" id="qr_download_progress_info">Menghubungi server...</div>
+                    <div class="progress h-8px bg-light-primary mb-3">
+                        <div id="qr_download_progress_bar" class="progress-bar bg-primary" role="progressbar" style="width:0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                    </div>
+                    <div class="fw-bold" id="qr_download_progress_label">0%</div>
+                `,
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                showConfirmButton: false,
+                didOpen: () => updateQrDownloadProgress(0, 'Menghubungi server...'),
+            });
+        };
+
+        const saveBlob = (blob, filename) => {
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+        };
+
+        const downloadQrPdfWithProgress = async (url) => {
+            showQrDownloadProgress();
+            updateQrDownloadProgress(2, 'Membuat file QR...');
+
+            const response = await fetch(url, {
+                headers: { 'Accept': 'application/pdf' },
+            });
+
+            if (!response.ok) {
+                throw new Error('Gagal mengunduh QR Code.');
+            }
+
+            const filename = filenameFromDisposition(response.headers.get('Content-Disposition'), 'qr-inbound.pdf');
+            const total = Number(response.headers.get('Content-Length') || 0);
+            const reader = response.body?.getReader();
+
+            if (!reader) {
+                updateQrDownloadProgress(70, 'Menyusun file...');
+                const blob = await response.blob();
+                updateQrDownloadProgress(100, 'Download siap.');
+                saveBlob(blob, filename);
+                return;
+            }
+
+            const chunks = [];
+            let received = 0;
+            let simulated = 10;
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                chunks.push(value);
+                received += value.length;
+                if (total > 0) {
+                    updateQrDownloadProgress((received / total) * 100, 'Mengunduh file QR...');
+                } else {
+                    simulated = Math.min(95, simulated + 8);
+                    updateQrDownloadProgress(simulated, 'Mengunduh file QR...');
+                }
+            }
+
+            updateQrDownloadProgress(98, 'Menyiapkan file...');
+            const blob = new Blob(chunks, { type: response.headers.get('Content-Type') || 'application/pdf' });
+            saveBlob(blob, filename);
+            updateQrDownloadProgress(100, 'Download selesai.');
+        };
 
         importBtn?.addEventListener('click', () => {
             if (importInput) importInput.value = '';
@@ -1271,6 +1373,31 @@
             } catch (err) {
                 console.error(err);
                 if (typeof Swal !== 'undefined') Swal.fire('Error', 'Gagal import item', 'error');
+            }
+        });
+
+        tableEl.on('click', '.btn-download-qr', async function(e) {
+            e.preventDefault();
+            const url = this.getAttribute('data-url');
+            if (!url) return;
+
+            try {
+                await downloadQrPdfWithProgress(url);
+                if (typeof Swal !== 'undefined') {
+                    window.setTimeout(() => {
+                        Swal.fire({
+                            title: 'Selesai',
+                            text: 'File QR Code berhasil disiapkan.',
+                            icon: 'success',
+                            timer: 1200,
+                            showConfirmButton: false,
+                        });
+                    }, 250);
+                }
+            } catch (err) {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire('Error', err?.message || 'Gagal mengunduh QR Code.', 'error');
+                }
             }
         });
 

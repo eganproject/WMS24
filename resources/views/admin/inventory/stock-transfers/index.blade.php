@@ -167,6 +167,7 @@
     const storeUrl = '{{ $storeUrl }}';
     const showUrlTpl = '{{ $showUrlTpl }}';
     const detailUrlTpl = '{{ $detailUrlTpl }}';
+    const scanKoliUrlTpl = '{{ $scanKoliUrlTpl }}';
     const qcUrlTpl = '{{ $qcUrlTpl }}';
     const cancelUrlTpl = '{{ $cancelUrlTpl }}';
     const csrfToken = '{{ csrf_token() }}';
@@ -202,6 +203,8 @@
         let fpFrom = null;
         let fpTo = null;
         let fpTransacted = null;
+        let currentQcData = null;
+        let isScanningKoli = false;
 
         const formatDateTime = (date) => {
             const pad = (n) => String(n).padStart(2, '0');
@@ -218,6 +221,13 @@
             if (status === 'canceled') return '<span class="badge badge-light-danger">Dibatalkan</span>';
             return '<span class="badge badge-light-warning">Menunggu QC</span>';
         };
+
+        const escapeHtml = (value) => String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
 
         const clearErrors = () => {
             ['error_from_warehouse_id','error_to_warehouse_id','error_transacted_at','error_note'].forEach(id => {
@@ -298,20 +308,31 @@
             itemsContainer?.querySelectorAll('.transfer-item-row').forEach(syncRowKoliMode);
         };
 
-        const syncQcReject = (row) => {
+        const syncQcAmounts = (row, changedField = 'ok') => {
             if (!row) return;
             const qtyTransfer = parseInt(row.getAttribute('data-qty-transfer') || '0', 10);
             const qtyPerKoli = parseInt(row.getAttribute('data-qty-per-koli') || '0', 10);
             const okEl = row.querySelector('[data-qc="ok"]');
             const rejectEl = row.querySelector('[data-qc="reject"]');
-            if (!okEl || !rejectEl) return;
+            const shortEl = row.querySelector('[data-qc="short"]');
+            if (!okEl || !rejectEl || !shortEl) return;
             let okVal = parseInt(okEl.value || '0', 10);
+            let rejectVal = parseInt(rejectEl.value || '0', 10);
             if (!Number.isFinite(okVal)) okVal = 0;
+            if (!Number.isFinite(rejectVal)) rejectVal = 0;
             if (okVal < 0) okVal = 0;
+            if (rejectVal < 0) rejectVal = 0;
             if (okVal > qtyTransfer) okVal = qtyTransfer;
+            if (rejectVal > qtyTransfer) rejectVal = qtyTransfer;
+            if (changedField === 'reject' && okVal + rejectVal > qtyTransfer) {
+                okVal = Math.max(0, qtyTransfer - rejectVal);
+            } else if (okVal + rejectVal > qtyTransfer) {
+                rejectVal = Math.max(0, qtyTransfer - okVal);
+            }
             okEl.value = okVal;
-            const rejectVal = Math.max(0, qtyTransfer - okVal);
             rejectEl.value = rejectVal;
+            const shortVal = Math.max(0, qtyTransfer - okVal - rejectVal);
+            shortEl.value = shortVal;
             const formatKoli = (qty) => {
                 if (!Number.isFinite(qtyPerKoli) || qtyPerKoli <= 0 || qty <= 0) return '';
                 const koli = Math.floor(qty / qtyPerKoli);
@@ -320,8 +341,301 @@
             };
             const okKoliEl = row.querySelector('[data-role="qc-ok-koli"]');
             const rejectKoliEl = row.querySelector('[data-role="qc-reject-koli"]');
+            const shortKoliEl = row.querySelector('[data-role="qc-short-koli"]');
             if (okKoliEl) okKoliEl.textContent = formatKoli(okVal);
             if (rejectKoliEl) rejectKoliEl.textContent = formatKoli(rejectVal);
+            if (shortKoliEl) shortKoliEl.textContent = formatKoli(shortVal);
+        };
+
+        const syncScanAmounts = (row, changedField = 'ok') => {
+            if (!row) return;
+            const qty = parseInt(row.getAttribute('data-scan-qty') || '0', 10);
+            const okEl = row.querySelector('[data-scan-qc="ok"]');
+            const rejectEl = row.querySelector('[data-scan-qc="reject"]');
+            const shortEl = row.querySelector('[data-scan-qc="short"]');
+            if (!okEl || !rejectEl || !shortEl) return;
+            let okVal = parseInt(okEl.value || '0', 10);
+            let rejectVal = parseInt(rejectEl.value || '0', 10);
+            if (!Number.isFinite(okVal)) okVal = 0;
+            if (!Number.isFinite(rejectVal)) rejectVal = 0;
+            okVal = Math.max(0, Math.min(qty, okVal));
+            rejectVal = Math.max(0, Math.min(qty, rejectVal));
+            if (changedField === 'reject' && okVal + rejectVal > qty) {
+                okVal = Math.max(0, qty - rejectVal);
+            } else if (okVal + rejectVal > qty) {
+                rejectVal = Math.max(0, qty - okVal);
+            }
+            const shortVal = Math.max(0, qty - okVal - rejectVal);
+            okEl.value = okVal;
+            rejectEl.value = rejectVal;
+            shortEl.value = shortVal;
+            refreshScanAggregates();
+        };
+
+        const refreshScanAggregates = () => {
+            const hidden = document.getElementById('qc_hidden_items');
+            if (!hidden || !currentQcData) return;
+            const aggregates = {};
+            (currentQcData.items || []).forEach((item) => {
+                aggregates[item.item_id] = { item_id: item.item_id, ok: 0, reject: 0, short: 0, note: '' };
+            });
+            qcItemsContainer?.querySelectorAll('[data-scan-row]').forEach((row) => {
+                const itemId = row.getAttribute('data-item-id');
+                if (!aggregates[itemId]) return;
+                const ok = parseInt(row.querySelector('[data-scan-qc="ok"]')?.value || '0', 10);
+                const reject = parseInt(row.querySelector('[data-scan-qc="reject"]')?.value || '0', 10);
+                const short = parseInt(row.querySelector('[data-scan-qc="short"]')?.value || '0', 10);
+                const note = row.querySelector('[data-scan-qc="note"]')?.value || '';
+                aggregates[itemId].ok += Number.isFinite(ok) ? ok : 0;
+                aggregates[itemId].reject += Number.isFinite(reject) ? reject : 0;
+                aggregates[itemId].short += Number.isFinite(short) ? short : 0;
+                if (!aggregates[itemId].note && note.trim()) aggregates[itemId].note = note.trim();
+            });
+            hidden.innerHTML = Object.values(aggregates).map((row, idx) => `
+                <input type="hidden" name="items[${idx}][item_id]" value="${row.item_id}" />
+                <input type="hidden" name="items[${idx}][qty_ok]" value="${row.ok}" />
+                <input type="hidden" name="items[${idx}][qty_reject]" value="${row.reject}" />
+                <input type="hidden" name="items[${idx}][qty_short]" value="${row.short}" />
+                <input type="hidden" name="items[${idx}][qc_note]" value="${escapeHtml(row.note)}" />
+            `).join('');
+        };
+
+        const currentScanFormValues = () => {
+            const values = {};
+            qcItemsContainer?.querySelectorAll('[data-scan-row]').forEach((row) => {
+                const id = row.querySelector('input[name$="[id]"]')?.value;
+                if (!id) return;
+                values[id] = {
+                    qty_ok: row.querySelector('[data-scan-qc="ok"]')?.value ?? '',
+                    qty_reject: row.querySelector('[data-scan-qc="reject"]')?.value ?? '',
+                    qty_short: row.querySelector('[data-scan-qc="short"]')?.value ?? '',
+                    qc_note: row.querySelector('[data-scan-qc="note"]')?.value ?? '',
+                };
+            });
+            return values;
+        };
+
+        const applyScanFormValues = (json, values) => {
+            if (!json?.items || !values) return json;
+            json.items.forEach((item) => {
+                (item.scans || []).forEach((scan) => {
+                    const saved = values[String(scan.id)];
+                    if (!saved) return;
+                    scan.qty_ok = saved.qty_ok;
+                    scan.qty_reject = saved.qty_reject;
+                    scan.qty_short = saved.qty_short;
+                    scan.qc_note = saved.qc_note;
+                });
+            });
+            return json;
+        };
+
+        const setPanelDisabled = (panel, disabled) => {
+            panel?.querySelectorAll('input, textarea, select, button').forEach((el) => {
+                el.disabled = disabled;
+            });
+        };
+
+        const syncTraceabilityMode = () => {
+            const mode = qcForm?.querySelector('input[name="traceability_mode"]:checked')?.value || 'qr';
+            const qrPanel = document.getElementById('qc_qr_mode_panel');
+            const legacyPanel = document.getElementById('qc_legacy_mode_panel');
+            if (!qrPanel || !legacyPanel) return;
+            const isLegacy = mode === 'legacy';
+            qrPanel.style.display = isLegacy ? 'none' : '';
+            legacyPanel.style.display = isLegacy ? '' : 'none';
+            setPanelDisabled(qrPanel, isLegacy);
+            setPanelDisabled(legacyPanel, !isLegacy);
+            if (isLegacy) {
+                document.getElementById('qc_legacy_reason')?.focus();
+            } else {
+                document.getElementById('qc_koli_scan_code')?.focus();
+            }
+        };
+
+        const renderQcForm = (json) => {
+            currentQcData = json;
+            qcTransferIdEl.value = json.id || '';
+            if (qcTitleEl) qcTitleEl.textContent = `QC Transfer ${json.code || ''}`.trim();
+            qcItemsContainer.innerHTML = '';
+
+            if (json.requires_koli_scan) {
+                qcItemsContainer.innerHTML = `
+                    <div class="mb-6 p-4 border rounded bg-light">
+                        <label class="required fs-6 fw-bold form-label mb-3">Mode Traceability</label>
+                        <div class="d-flex flex-wrap gap-4">
+                            <label class="form-check form-check-custom form-check-solid">
+                                <input class="form-check-input" type="radio" name="traceability_mode" value="qr" checked />
+                                <span class="form-check-label fw-semibold">Scan QR Dus</span>
+                            </label>
+                            <label class="form-check form-check-custom form-check-solid">
+                                <input class="form-check-input" type="radio" name="traceability_mode" value="legacy" />
+                                <span class="form-check-label fw-semibold">Tanpa QR / Stok Lama</span>
+                            </label>
+                        </div>
+                        <div class="form-text text-muted">Pilih Tanpa QR hanya untuk stok lama yang belum ditempel QR inbound.</div>
+                    </div>
+                    <div id="qc_qr_mode_panel">
+                        <div class="mb-6 p-4 border rounded bg-light">
+                            <label class="required fs-6 fw-bold form-label mb-2">Scan QR Dus Inbound</label>
+                            <div class="d-flex gap-2">
+                                <input type="text" class="form-control form-control-solid" id="qc_koli_scan_code" placeholder="Scan / input kode QR dus inbound" autocomplete="off" />
+                                <button type="button" class="btn btn-primary" id="btn_qc_scan_koli">Scan</button>
+                            </div>
+                            <div class="form-text text-muted">Semua dus wajib discan sebelum QC disimpan.</div>
+                        </div>
+                        <div id="qc_hidden_items"></div>
+                        <div id="qc_scan_items"></div>
+                    </div>
+                    <div id="qc_legacy_mode_panel" style="display:none;">
+                        <div class="alert alert-warning">
+                            Stok lama tanpa QR tidak bisa ditelusuri ke inbound asal. Alasan wajib diisi agar audit tetap jelas.
+                        </div>
+                        <div class="mb-6">
+                            <label class="required fs-6 fw-bold form-label mb-2">Alasan Tanpa QR</label>
+                            <textarea class="form-control form-control-solid" name="legacy_reason" id="qc_legacy_reason" rows="2" placeholder="Contoh: Stok lama sebelum QR inbound diterapkan"></textarea>
+                        </div>
+                        <div id="qc_legacy_items"></div>
+                    </div>
+                `;
+                const scanItemsEl = document.getElementById('qc_scan_items');
+                let scanIndex = 0;
+                (json.items || []).forEach((item) => {
+                    const scans = item.scans || [];
+                    const scannedQty = scans.reduce((sum, scan) => sum + Number(scan.qty || 0), 0);
+                    const remainingQty = Math.max(0, Number(item.qty || 0) - scannedQty);
+                    const itemBlock = document.createElement('div');
+                    itemBlock.className = 'mb-7';
+                    itemBlock.innerHTML = `
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div>
+                                <div class="fw-bold">${escapeHtml(item.label || '-')}</div>
+                                <div class="text-muted fs-8">Transfer ${item.qty} pcs${item.koli_label ? ` | ${escapeHtml(item.koli_label)}` : ''}</div>
+                            </div>
+                            <span class="badge ${remainingQty === 0 ? 'badge-light-success' : 'badge-light-warning'}">Scan ${scannedQty}/${item.qty}</span>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-row-dashed align-middle fs-7 gy-3">
+                                <thead>
+                                    <tr class="text-muted fw-bold">
+                                        <th>QR Dus</th>
+                                        <th>Inbound</th>
+                                        <th class="text-end">Qty Dus</th>
+                                        <th class="text-end">OK</th>
+                                        <th class="text-end">Reject</th>
+                                        <th class="text-end">Kurang</th>
+                                        <th>Catatan</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${scans.length ? scans.map((scan) => {
+                                        const idx = scanIndex++;
+                                        return `
+                                            <tr data-scan-row data-scan-qty="${scan.qty}" data-item-id="${item.item_id}">
+                                                <td>
+                                                    <div class="fw-semibold">${escapeHtml(scan.code)}</div>
+                                                    <div class="text-muted fs-8">Koli ${scan.koli_no || '-'}</div>
+                                                    <input type="hidden" name="scans[${idx}][id]" value="${scan.id}" />
+                                                </td>
+                                                <td>${escapeHtml(scan.inbound_code || '-')}</td>
+                                                <td class="text-end">${scan.qty}</td>
+                                                <td><input type="number" min="0" class="form-control form-control-solid form-control-sm text-end" data-scan-qc="ok" name="scans[${idx}][qty_ok]" value="${scan.qty_ok ?? scan.qty}" /></td>
+                                                <td><input type="number" min="0" class="form-control form-control-solid form-control-sm text-end" data-scan-qc="reject" name="scans[${idx}][qty_reject]" value="${scan.qty_reject ?? 0}" /></td>
+                                                <td><input type="number" min="0" class="form-control form-control-solid form-control-sm text-end" data-scan-qc="short" name="scans[${idx}][qty_short]" value="${scan.qty_short ?? 0}" readonly /></td>
+                                                <td><input type="text" class="form-control form-control-solid form-control-sm" data-scan-qc="note" name="scans[${idx}][qc_note]" value="${escapeHtml(scan.qc_note || '')}" /></td>
+                                            </tr>
+                                        `;
+                                    }).join('') : '<tr><td colspan="7" class="text-muted text-center py-6">Belum ada QR dus yang discan untuk SKU ini.</td></tr>'}
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                    scanItemsEl?.appendChild(itemBlock);
+                });
+                const legacyItemsEl = document.getElementById('qc_legacy_items');
+                (json.items || []).forEach((item, idx) => {
+                    const row = document.createElement('div');
+                    row.className = 'row g-3 align-items-end mb-4';
+                    row.setAttribute('data-qty-transfer', String(item.qty ?? 0));
+                    row.setAttribute('data-qty-per-koli', String(item.qty_per_koli ?? 0));
+                    row.innerHTML = `
+                        <div class="col-md-3">
+                            <label class="fs-6 fw-bold form-label mb-2">Item</label>
+                            <div class="form-control form-control-solid">${escapeHtml(item.label || '-')}</div>
+                            <input type="hidden" name="items[${idx}][item_id]" value="${item.item_id}" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="fs-6 fw-bold form-label mb-2">Qty Transfer</label>
+                            <div class="form-control form-control-solid">${item.qty}${koliSubtext(item.koli_label)}</div>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="required fs-6 fw-bold form-label mb-2">Qty OK</label>
+                            <input type="number" min="0" class="form-control form-control-solid" data-qc="ok" name="items[${idx}][qty_ok]" value="${(item.qty_ok && item.qty_ok > 0) ? item.qty_ok : item.qty}" />
+                            <div class="form-text text-muted" data-role="qc-ok-koli">${item.qty_ok_koli_label || item.koli_label || ''}</div>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="required fs-6 fw-bold form-label mb-2">Qty Reject</label>
+                            <input type="number" min="0" class="form-control form-control-solid" data-qc="reject" name="items[${idx}][qty_reject]" value="${item.qty_reject ?? 0}" />
+                            <div class="form-text text-muted" data-role="qc-reject-koli">${item.qty_reject_koli_label || ''}</div>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="required fs-6 fw-bold form-label mb-2">Qty Kurang</label>
+                            <input type="number" min="0" class="form-control form-control-solid" data-qc="short" name="items[${idx}][qty_short]" value="${item.qty_short ?? 0}" readonly />
+                            <div class="form-text text-muted" data-role="qc-short-koli">${item.qty_short_koli_label || ''}</div>
+                        </div>
+                        <div class="col-md-1">
+                            <label class="fs-6 fw-bold form-label mb-2">Catatan</label>
+                            <input type="text" class="form-control form-control-solid" name="items[${idx}][qc_note]" value="${escapeHtml(item.qc_note ?? '')}" />
+                        </div>
+                    `;
+                    legacyItemsEl?.appendChild(row);
+                    syncQcAmounts(row);
+                });
+                qcItemsContainer.querySelectorAll('[data-scan-row]').forEach((row) => syncScanAmounts(row));
+                refreshScanAggregates();
+                syncTraceabilityMode();
+                document.getElementById('qc_koli_scan_code')?.focus();
+                return;
+            }
+
+            (json.items || []).forEach((item, idx) => {
+                const row = document.createElement('div');
+                row.className = 'row g-3 align-items-end mb-4';
+                row.setAttribute('data-qty-transfer', String(item.qty ?? 0));
+                row.setAttribute('data-qty-per-koli', String(item.qty_per_koli ?? 0));
+                row.innerHTML = `
+                    <div class="col-md-3">
+                        <label class="fs-6 fw-bold form-label mb-2">Item</label>
+                        <div class="form-control form-control-solid">${escapeHtml(item.label || '-')}</div>
+                        <input type="hidden" name="items[${idx}][item_id]" value="${item.item_id}" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="fs-6 fw-bold form-label mb-2">Qty Transfer</label>
+                        <div class="form-control form-control-solid">${item.qty}${koliSubtext(item.koli_label)}</div>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="required fs-6 fw-bold form-label mb-2">Qty OK</label>
+                        <input type="number" min="0" class="form-control form-control-solid" data-qc="ok" name="items[${idx}][qty_ok]" value="${(item.qty_ok && item.qty_ok > 0) ? item.qty_ok : item.qty}" />
+                        <div class="form-text text-muted" data-role="qc-ok-koli">${item.qty_ok_koli_label || item.koli_label || ''}</div>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="required fs-6 fw-bold form-label mb-2">Qty Reject</label>
+                        <input type="number" min="0" class="form-control form-control-solid" data-qc="reject" name="items[${idx}][qty_reject]" value="${item.qty_reject ?? 0}" />
+                        <div class="form-text text-muted" data-role="qc-reject-koli">${item.qty_reject_koli_label || ''}</div>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="required fs-6 fw-bold form-label mb-2">Qty Kurang</label>
+                        <input type="number" min="0" class="form-control form-control-solid" data-qc="short" name="items[${idx}][qty_short]" value="${item.qty_short ?? 0}" readonly />
+                        <div class="form-text text-muted" data-role="qc-short-koli">${item.qty_short_koli_label || ''}</div>
+                    </div>
+                    <div class="col-md-1">
+                        <label class="fs-6 fw-bold form-label mb-2">Catatan</label>
+                        <input type="text" class="form-control form-control-solid" name="items[${idx}][qc_note]" value="${escapeHtml(item.qc_note ?? '')}" />
+                    </div>
+                `;
+                qcItemsContainer.appendChild(row);
+                syncQcAmounts(row);
+            });
         };
 
         const initSelect2 = (selectEl) => {
@@ -641,42 +955,7 @@
                     if (typeof Swal !== 'undefined') Swal.fire('Error', json.message || 'Gagal memuat data', 'error');
                     return;
                 }
-                qcTransferIdEl.value = id;
-                if (qcTitleEl) qcTitleEl.textContent = `QC Transfer ${json.code || ''}`.trim();
-                qcItemsContainer.innerHTML = '';
-                (json.items || []).forEach((item, idx) => {
-                    const row = document.createElement('div');
-                    row.className = 'row g-3 align-items-end mb-4';
-                    row.setAttribute('data-qty-transfer', String(item.qty ?? 0));
-                    row.setAttribute('data-qty-per-koli', String(item.qty_per_koli ?? 0));
-                    row.innerHTML = `
-                        <div class="col-md-4">
-                            <label class="fs-6 fw-bold form-label mb-2">Item</label>
-                            <div class="form-control form-control-solid">${item.label || '-'}</div>
-                            <input type="hidden" name="items[${idx}][item_id]" value="${item.item_id}" />
-                        </div>
-                        <div class="col-md-2">
-                            <label class="fs-6 fw-bold form-label mb-2">Qty Transfer</label>
-                            <div class="form-control form-control-solid">${item.qty}${koliSubtext(item.koli_label)}</div>
-                        </div>
-                        <div class="col-md-2">
-                            <label class="required fs-6 fw-bold form-label mb-2">Qty OK</label>
-                            <input type="number" min="0" class="form-control form-control-solid" data-qc="ok" name="items[${idx}][qty_ok]" value="${(item.qty_ok && item.qty_ok > 0) ? item.qty_ok : item.qty}" />
-                            <div class="form-text text-muted" data-role="qc-ok-koli">${item.qty_ok_koli_label || item.koli_label || ''}</div>
-                        </div>
-                        <div class="col-md-2">
-                            <label class="required fs-6 fw-bold form-label mb-2">Qty Reject</label>
-                            <input type="number" min="0" class="form-control form-control-solid" data-qc="reject" name="items[${idx}][qty_reject]" value="${item.qty_reject ?? 0}" readonly />
-                            <div class="form-text text-muted" data-role="qc-reject-koli">${item.qty_reject_koli_label || ''}</div>
-                        </div>
-                        <div class="col-md-2">
-                            <label class="fs-6 fw-bold form-label mb-2">Catatan</label>
-                            <input type="text" class="form-control form-control-solid" name="items[${idx}][qc_note]" value="${item.qc_note ?? ''}" />
-                        </div>
-                    `;
-                    qcItemsContainer.appendChild(row);
-                    syncQcReject(row);
-                });
+                renderQcForm(json);
                 if (typeof Swal !== 'undefined') Swal.close();
                 qcModal?.show();
             } catch (err) {
@@ -752,6 +1031,26 @@
             e.preventDefault();
             const id = qcTransferIdEl.value;
             if (!id) return;
+            const traceabilityMode = qcForm?.querySelector('input[name="traceability_mode"]:checked')?.value || 'qr';
+            if (currentQcData?.requires_koli_scan && traceabilityMode === 'qr') {
+                const incomplete = (currentQcData.items || []).some((item) => {
+                    const scannedQty = (item.scans || []).reduce((sum, scan) => sum + Number(scan.qty || 0), 0);
+                    return scannedQty !== Number(item.qty || 0);
+                });
+                if (incomplete) {
+                    if (typeof Swal !== 'undefined') Swal.fire('Error', 'Semua QR dus wajib discan sebelum QC disimpan.', 'error');
+                    return;
+                }
+                refreshScanAggregates();
+            }
+            if (currentQcData?.requires_koli_scan && traceabilityMode === 'legacy') {
+                const reason = (document.getElementById('qc_legacy_reason')?.value || '').trim();
+                if (!reason) {
+                    if (typeof Swal !== 'undefined') Swal.fire('Error', 'Alasan wajib diisi untuk QC tanpa QR inbound.', 'error');
+                    document.getElementById('qc_legacy_reason')?.focus();
+                    return;
+                }
+            }
             const formData = new FormData(qcForm);
             try {
                 const res = await fetch(qcUrlTpl.replace(':id', id), {
@@ -769,7 +1068,11 @@
                     return;
                 }
                 if (!res.ok) {
-                    if (typeof Swal !== 'undefined') Swal.fire('Error', json.message || 'Gagal QC', 'error');
+                    const details = json?.errors
+                        ? Object.values(json.errors).flat().join('<br>')
+                        : '';
+                    const message = details || json.message || json.error || 'Gagal QC';
+                    if (typeof Swal !== 'undefined') Swal.fire('Error', message, 'error');
                     return;
                 }
                 if (typeof Swal !== 'undefined') Swal.fire('Berhasil', json.message || 'Berhasil', 'success');
@@ -783,9 +1086,77 @@
         qcItemsContainer?.addEventListener('input', (e) => {
             const target = e.target;
             if (!(target instanceof HTMLElement)) return;
-            if (target.matches('[data-qc="ok"]')) {
+            if (target.matches('[data-qc="ok"], [data-qc="reject"]')) {
                 const row = target.closest('[data-qty-transfer]');
-                syncQcReject(row);
+                syncQcAmounts(row, target.getAttribute('data-qc') || 'ok');
+            }
+            if (target.matches('[data-scan-qc="ok"], [data-scan-qc="reject"], [data-scan-qc="note"]')) {
+                const row = target.closest('[data-scan-row]');
+                if (target.matches('[data-scan-qc="note"]')) {
+                    refreshScanAggregates();
+                } else {
+                    syncScanAmounts(row, target.getAttribute('data-scan-qc') || 'ok');
+                }
+            }
+        });
+
+        qcItemsContainer?.addEventListener('change', (e) => {
+            const target = e.target;
+            if (!(target instanceof HTMLElement)) return;
+            if (target.matches('input[name="traceability_mode"]')) {
+                syncTraceabilityMode();
+            }
+        });
+
+        qcItemsContainer?.addEventListener('keydown', (e) => {
+            const target = e.target;
+            if (!(target instanceof HTMLElement)) return;
+            if (target.id === 'qc_koli_scan_code' && e.key === 'Enter') {
+                e.preventDefault();
+                document.getElementById('btn_qc_scan_koli')?.click();
+            }
+        });
+
+        qcItemsContainer?.addEventListener('click', async (e) => {
+            const btn = e.target.closest('#btn_qc_scan_koli');
+            if (!btn || isScanningKoli) return;
+            const id = qcTransferIdEl.value;
+            const input = document.getElementById('qc_koli_scan_code');
+            const code = (input?.value || '').trim();
+            if (!id || !code) return;
+            isScanningKoli = true;
+            btn.setAttribute('disabled', 'disabled');
+            try {
+                const previousValues = currentScanFormValues();
+                const formData = new FormData();
+                formData.append('code', code);
+                const res = await fetch(scanKoliUrlTpl.replace(':id', id), {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Accept': 'application/json',
+                    },
+                    body: formData,
+                });
+                const json = await res.json();
+                if (!res.ok) {
+                    if (typeof Swal !== 'undefined') Swal.fire('Error', json.message || 'Gagal scan QR dus', 'error');
+                    return;
+                }
+                const detailRes = await fetch(showUrlTpl.replace(':id', id), { headers: { 'Accept': 'application/json' }});
+                const detailJson = await detailRes.json();
+                if (!detailRes.ok) {
+                    if (typeof Swal !== 'undefined') Swal.fire('Error', detailJson.message || 'Gagal memuat ulang data QC', 'error');
+                    return;
+                }
+                renderQcForm(applyScanFormValues(detailJson, previousValues));
+                if (typeof Swal !== 'undefined') Swal.fire({ title: 'Berhasil', text: json.message || 'QR dus discan', icon: 'success', timer: 900, showConfirmButton: false });
+            } catch (err) {
+                if (typeof Swal !== 'undefined') Swal.fire('Error', 'Gagal scan QR dus', 'error');
+            } finally {
+                isScanningKoli = false;
+                btn.removeAttribute('disabled');
+                document.getElementById('qc_koli_scan_code')?.focus();
             }
         });
     });

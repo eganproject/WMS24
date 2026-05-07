@@ -5,16 +5,20 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\DamagedGood;
 use App\Models\DamagedGoodItem;
+use App\Models\InboundKoliUnit;
 use App\Models\Item;
 use App\Models\StockTransfer;
 use App\Models\StockTransferItem;
+use App\Models\StockTransferKoliScan;
 use App\Models\Warehouse;
 use App\Support\BundleService;
+use App\Support\InboundScanStatus;
 use App\Support\StockService;
 use App\Support\WarehouseService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -35,6 +39,7 @@ class StockTransferController extends Controller
             'storeUrl' => route('admin.inventory.stock-transfers.store'),
             'showUrlTpl' => route('admin.inventory.stock-transfers.show', ':id'),
             'detailUrlTpl' => route('admin.inventory.stock-transfers.detail', ':id'),
+            'scanKoliUrlTpl' => route('admin.inventory.stock-transfers.scan-koli', ':id'),
             'qcUrlTpl' => route('admin.inventory.stock-transfers.qc', ':id'),
             'cancelUrlTpl' => route('admin.inventory.stock-transfers.cancel', ':id'),
             'defaultFrom' => WarehouseService::defaultWarehouseId(),
@@ -120,7 +125,12 @@ class StockTransferController extends Controller
 
     public function show(int $id)
     {
-        $transfer = StockTransfer::with(['items.item', 'fromWarehouse', 'toWarehouse'])
+        $transfer = StockTransfer::with([
+            'items.item',
+            'items.koliScans.koliUnit.transaction',
+            'fromWarehouse',
+            'toWarehouse',
+        ])
             ->findOrFail($id);
 
         return response()->json([
@@ -130,6 +140,8 @@ class StockTransferController extends Controller
             'to_warehouse_id' => $transfer->to_warehouse_id,
             'note' => $transfer->note,
             'status' => $transfer->status ?? 'qc_pending',
+            'traceability_mode' => $transfer->traceability_mode,
+            'legacy_reason' => $transfer->legacy_reason,
             'transacted_at' => $transfer->transacted_at?->format('Y-m-d\TH:i'),
             'items' => $transfer->items->map(function ($row) {
                 return [
@@ -137,21 +149,150 @@ class StockTransferController extends Controller
                     'qty' => (int) $row->qty,
                     'qty_ok' => (int) $row->qty_ok,
                     'qty_reject' => (int) $row->qty_reject,
+                    'qty_short' => (int) ($row->qty_short ?? 0),
                     'koli_label' => $this->formatKoliBreakdown((int) $row->qty, (int) ($row->item?->koli_qty ?? 0)),
                     'qty_ok_koli_label' => $this->formatKoliBreakdown((int) $row->qty_ok, (int) ($row->item?->koli_qty ?? 0)),
                     'qty_reject_koli_label' => $this->formatKoliBreakdown((int) $row->qty_reject, (int) ($row->item?->koli_qty ?? 0)),
+                    'qty_short_koli_label' => $this->formatKoliBreakdown((int) ($row->qty_short ?? 0), (int) ($row->item?->koli_qty ?? 0)),
                     'qty_per_koli' => (int) ($row->item?->koli_qty ?? 0),
                     'note' => $row->note ?? '',
                     'qc_note' => $row->qc_note ?? '',
                     'label' => trim(($row->item?->sku ?? '').' - '.($row->item?->name ?? '')),
+                    'scans' => $row->koliScans
+                        ->sortBy(fn ($scan) => $scan->koliUnit?->code ?? '')
+                        ->map(fn ($scan) => $this->serializeKoliScan($scan))
+                        ->values(),
                 ];
             })->values(),
+            'requires_koli_scan' => $this->requiresKoliScan($transfer),
+        ]);
+    }
+
+    public function scanKoli(Request $request, int $id)
+    {
+        $validated = $request->validate([
+            'code' => ['required', 'string', 'max:160'],
+        ]);
+
+        $code = trim((string) $validated['code']);
+        if ($code === '') {
+            throw ValidationException::withMessages([
+                'code' => 'Kode QR dus wajib diisi.',
+            ]);
+        }
+
+        DB::beginTransaction();
+        try {
+            $transfer = StockTransfer::whereKey($id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if (($transfer->status ?? 'qc_pending') !== 'qc_pending') {
+                DB::rollBack();
+                return response()->json(['message' => 'Transfer sudah diproses QC'], 422);
+            }
+
+            if (!$this->requiresKoliScan($transfer)) {
+                DB::rollBack();
+                return response()->json(['message' => 'Scan QR dus hanya dipakai untuk transfer Gudang Besar ke Gudang Display.'], 422);
+            }
+
+            $unit = InboundKoliUnit::with(['transaction', 'item'])
+                ->where('code', $code)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$unit) {
+                DB::rollBack();
+                return response()->json(['message' => 'QR dus inbound tidak ditemukan.'], 422);
+            }
+
+            if (!in_array((string) ($unit->transaction?->status ?? ''), [InboundScanStatus::COMPLETED, 'approved'], true)) {
+                DB::rollBack();
+                return response()->json(['message' => 'Inbound asal QR dus belum selesai diterima.'], 422);
+            }
+
+            if (($unit->status ?? '') === InboundKoliUnit::STATUS_NOT_RECEIVED) {
+                DB::rollBack();
+                return response()->json(['message' => 'QR dus inbound ini tidak tercatat diterima pada proses scan inbound.'], 422);
+            }
+
+            if (($unit->status ?? InboundKoliUnit::STATUS_AVAILABLE) !== InboundKoliUnit::STATUS_AVAILABLE) {
+                DB::rollBack();
+                return response()->json(['message' => 'QR dus inbound sudah dipakai pada transfer lain.'], 422);
+            }
+
+            $transferItem = StockTransferItem::where('stock_transfer_id', $transfer->id)
+                ->where('item_id', $unit->item_id)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$transferItem) {
+                DB::rollBack();
+                return response()->json(['message' => 'SKU pada QR tidak ada di transfer ini.'], 422);
+            }
+
+            $scannedQty = (int) StockTransferKoliScan::where('stock_transfer_item_id', $transferItem->id)
+                ->lockForUpdate()
+                ->sum('qty');
+            $nextQty = $scannedQty + (int) $unit->qty;
+            if ($nextQty > (int) $transferItem->qty) {
+                DB::rollBack();
+                return response()->json([
+                    'message' => 'Jumlah dus yang discan melebihi qty transfer untuk SKU ini.',
+                    'details' => [
+                        'qty_transfer' => (int) $transferItem->qty,
+                        'qty_scanned' => $scannedQty,
+                        'qty_next' => $nextQty,
+                    ],
+                ], 422);
+            }
+
+            $scan = StockTransferKoliScan::create([
+                'stock_transfer_id' => $transfer->id,
+                'stock_transfer_item_id' => $transferItem->id,
+                'inbound_koli_unit_id' => $unit->id,
+                'item_id' => $unit->item_id,
+                'qty' => (int) $unit->qty,
+                'qty_ok' => (int) $unit->qty,
+                'qty_reject' => 0,
+                'qty_short' => 0,
+                'scanned_by' => auth()->id(),
+                'scanned_at' => now(),
+            ]);
+
+            $unit->status = InboundKoliUnit::STATUS_RESERVED;
+            $unit->reserved_transfer_id = $transfer->id;
+            $unit->save();
+
+            DB::commit();
+        } catch (ValidationException $e) {
+            DB::rollBack();
+            throw $e;
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return response()->json([
+                'message' => 'Gagal scan QR dus inbound',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+
+        return response()->json([
+            'message' => 'QR dus inbound berhasil discan.',
+            'scan' => $this->serializeKoliScan($scan->fresh(['koliUnit.transaction', 'koliUnit.item'])),
         ]);
     }
 
     public function detail(int $id)
     {
-        $transfer = StockTransfer::with(['items.item', 'fromWarehouse', 'toWarehouse', 'creator', 'qcBy'])
+        $transfer = StockTransfer::with([
+            'items.item',
+            'items.koliScans.koliUnit.transaction',
+            'fromWarehouse',
+            'toWarehouse',
+            'creator',
+            'qcBy',
+        ])
             ->findOrFail($id);
 
         return view('admin.inventory.stock-transfers.detail', [
@@ -221,7 +362,9 @@ class StockTransferController extends Controller
 
     public function qc(Request $request, int $id)
     {
-        $transfer = StockTransfer::with('items')->findOrFail($id);
+        $this->assertQcSchemaReady();
+
+        $transfer = StockTransfer::with(['items.koliScans'])->findOrFail($id);
         if (($transfer->status ?? 'qc_pending') !== 'qc_pending') {
             return response()->json(['message' => 'Transfer sudah diproses QC'], 422);
         }
@@ -231,39 +374,83 @@ class StockTransferController extends Controller
             'items.*.item_id' => ['required', 'integer'],
             'items.*.qty_ok' => ['required', 'integer', 'min:0'],
             'items.*.qty_reject' => ['required', 'integer', 'min:0'],
+            'items.*.qty_short' => ['nullable', 'integer', 'min:0'],
             'items.*.qc_note' => ['nullable', 'string'],
+            'scans' => ['nullable', 'array'],
+            'scans.*.id' => ['required', 'integer'],
+            'scans.*.qty_ok' => ['required', 'integer', 'min:0'],
+            'scans.*.qty_reject' => ['required', 'integer', 'min:0'],
+            'scans.*.qty_short' => ['nullable', 'integer', 'min:0'],
+            'scans.*.qc_note' => ['nullable', 'string'],
+            'traceability_mode' => ['nullable', 'string', 'in:qr,legacy'],
+            'legacy_reason' => ['nullable', 'string', 'max:500'],
         ]);
-
-        $itemMap = $transfer->items->keyBy('item_id');
-
-        foreach ($validated['items'] as $row) {
-            $itemId = (int) $row['item_id'];
-            $transferItem = $itemMap->get($itemId);
-            if (!$transferItem) {
-                throw ValidationException::withMessages([
-                    'items' => 'Item tidak ditemukan di transfer',
-                ]);
-            }
-            $ok = (int) $row['qty_ok'];
-            $reject = (int) $row['qty_reject'];
-            $total = $ok + $reject;
-            $transferQty = (int) $transferItem->qty;
-            if ($total !== $transferQty) {
-                throw ValidationException::withMessages([
-                    'items' => 'Qty OK + reject harus sama dengan qty transfer',
-                ]);
-            }
-        }
-        $hasReject = collect($validated['items'])->sum(fn ($row) => (int) ($row['qty_reject'] ?? 0)) > 0;
-        $damagedWarehouseId = WarehouseService::damagedWarehouseId();
-        if ($hasReject && $damagedWarehouseId <= 0) {
-            throw ValidationException::withMessages([
-                'items' => 'Gudang Rusak belum dikonfigurasi.',
-            ]);
-        }
 
         DB::beginTransaction();
         try {
+            $transfer = StockTransfer::with(['items.koliScans'])
+                ->whereKey($id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if (($transfer->status ?? 'qc_pending') !== 'qc_pending') {
+                DB::rollBack();
+                return response()->json(['message' => 'Transfer sudah diproses QC'], 422);
+            }
+
+            $requiresKoliScan = $this->requiresKoliScan($transfer);
+            $traceabilityMode = $requiresKoliScan
+                ? (string) ($validated['traceability_mode'] ?? 'qr')
+                : null;
+            $legacyReason = trim((string) ($validated['legacy_reason'] ?? ''));
+
+            if ($requiresKoliScan && $traceabilityMode === 'legacy' && $legacyReason === '') {
+                throw ValidationException::withMessages([
+                    'legacy_reason' => 'Alasan wajib diisi untuk QC tanpa QR inbound.',
+                ]);
+            }
+
+            if ($requiresKoliScan && $traceabilityMode !== 'legacy') {
+                $validated['items'] = $this->validateKoliScanQcPayload($transfer, $validated['scans'] ?? []);
+            }
+            if ($requiresKoliScan && $traceabilityMode === 'legacy') {
+                InboundKoliUnit::where('reserved_transfer_id', $transfer->id)
+                    ->update([
+                        'status' => InboundKoliUnit::STATUS_AVAILABLE,
+                        'reserved_transfer_id' => null,
+                    ]);
+                StockTransferKoliScan::where('stock_transfer_id', $transfer->id)->delete();
+            }
+
+            $itemMap = $transfer->items->keyBy('item_id');
+            foreach ($validated['items'] as $row) {
+                $itemId = (int) $row['item_id'];
+                $transferItem = $itemMap->get($itemId);
+                if (!$transferItem) {
+                    throw ValidationException::withMessages([
+                        'items' => 'Item tidak ditemukan di transfer',
+                    ]);
+                }
+                $ok = (int) $row['qty_ok'];
+                $reject = (int) $row['qty_reject'];
+                $short = (int) ($row['qty_short'] ?? 0);
+                $total = $ok + $reject + $short;
+                $transferQty = (int) $transferItem->qty;
+                if ($total !== $transferQty) {
+                    throw ValidationException::withMessages([
+                        'items' => 'Qty OK + reject + kurang harus sama dengan qty transfer',
+                    ]);
+                }
+            }
+
+            $hasReject = collect($validated['items'])->sum(fn ($row) => (int) ($row['qty_reject'] ?? 0)) > 0;
+            $damagedWarehouseId = WarehouseService::damagedWarehouseId();
+            if ($hasReject && $damagedWarehouseId <= 0) {
+                throw ValidationException::withMessages([
+                    'items' => 'Gudang Rusak belum dikonfigurasi.',
+                ]);
+            }
+
             $damagedGood = null;
             if ($hasReject) {
                 $damagedGood = DamagedGood::create([
@@ -285,12 +472,25 @@ class StockTransferController extends Controller
                 $transferItem = $itemMap->get($itemId);
                 $ok = (int) $row['qty_ok'];
                 $reject = (int) $row['qty_reject'];
+                $short = (int) ($row['qty_short'] ?? 0);
 
                 $transferItem->update([
                     'qty_ok' => $ok,
                     'qty_reject' => $reject,
+                    'qty_short' => $short,
                     'qc_note' => $row['qc_note'] ?? null,
                 ]);
+
+                if ($requiresKoliScan && $traceabilityMode !== 'legacy') {
+                    foreach (($row['scan_updates'] ?? []) as $scanUpdate) {
+                        StockTransferKoliScan::whereKey($scanUpdate['id'])->update([
+                            'qty_ok' => $scanUpdate['qty_ok'],
+                            'qty_reject' => $scanUpdate['qty_reject'],
+                            'qty_short' => $scanUpdate['qty_short'],
+                            'qc_note' => $scanUpdate['qc_note'],
+                        ]);
+                    }
+                }
 
                 if ($ok > 0) {
                     StockService::mutate([
@@ -337,7 +537,14 @@ class StockTransferController extends Controller
                 'status' => 'completed',
                 'qc_at' => now(),
                 'qc_by' => auth()->id(),
+                'traceability_mode' => $requiresKoliScan ? $traceabilityMode : null,
+                'legacy_reason' => $requiresKoliScan && $traceabilityMode === 'legacy' ? $legacyReason : null,
             ]);
+
+            if ($requiresKoliScan && $traceabilityMode !== 'legacy') {
+                InboundKoliUnit::where('reserved_transfer_id', $transfer->id)
+                    ->update(['status' => InboundKoliUnit::STATUS_COMPLETED]);
+            }
 
             DB::commit();
         } catch (ValidationException $e) {
@@ -372,6 +579,12 @@ class StockTransferController extends Controller
         DB::beginTransaction();
         try {
             StockService::rollbackBySource('transfer', $transfer->id);
+            InboundKoliUnit::where('reserved_transfer_id', $transfer->id)
+                ->update([
+                    'status' => InboundKoliUnit::STATUS_AVAILABLE,
+                    'reserved_transfer_id' => null,
+                ]);
+            StockTransferKoliScan::where('stock_transfer_id', $transfer->id)->delete();
 
             $reason = trim((string) ($validated['reason'] ?? ''));
             $cancelNote = 'Transfer dibatalkan sebelum QC';
@@ -381,6 +594,8 @@ class StockTransferController extends Controller
 
             $transfer->update([
                 'status' => 'canceled',
+                'traceability_mode' => null,
+                'legacy_reason' => null,
                 'note' => $this->mergeCancelNote($transfer->note, $cancelNote),
                 'qc_at' => null,
                 'qc_by' => null,
@@ -503,6 +718,136 @@ class StockTransferController extends Controller
             : null;
 
         return $validated;
+    }
+
+    private function validateKoliScanQcPayload(StockTransfer $transfer, array $scanRows): array
+    {
+        if (empty($scanRows)) {
+            throw ValidationException::withMessages([
+                'scans' => 'Scan QR dus inbound wajib dilakukan sebelum QC transfer Gudang Besar ke Gudang Display.',
+            ]);
+        }
+
+        $scans = StockTransferKoliScan::with(['koliUnit.transaction'])
+            ->where('stock_transfer_id', $transfer->id)
+            ->get()
+            ->keyBy('id');
+
+        $posted = collect($scanRows)->keyBy(fn ($row) => (int) ($row['id'] ?? 0));
+        if ($posted->count() !== count($scanRows)) {
+            throw ValidationException::withMessages([
+                'scans' => 'Data scan QR dus duplikat pada form QC.',
+            ]);
+        }
+
+        foreach ($posted->keys() as $scanId) {
+            if (!$scans->has($scanId)) {
+                throw ValidationException::withMessages([
+                    'scans' => 'Ada QR dus yang tidak terdaftar pada transfer ini.',
+                ]);
+            }
+        }
+
+        $updates = [];
+        foreach ($scans as $scan) {
+            $row = $posted->get($scan->id);
+            if (!$row) {
+                throw ValidationException::withMessages([
+                    'scans' => 'Semua QR dus yang sudah discan wajib masuk ke form QC.',
+                ]);
+            }
+
+            $ok = (int) ($row['qty_ok'] ?? 0);
+            $reject = (int) ($row['qty_reject'] ?? 0);
+            $short = (int) ($row['qty_short'] ?? 0);
+            if ($ok + $reject + $short !== (int) $scan->qty) {
+                throw ValidationException::withMessages([
+                    'scans' => 'Qty OK + reject + kurang pada setiap QR dus harus sama dengan qty dus.',
+                ]);
+            }
+
+            $updates[] = [
+                'id' => (int) $scan->id,
+                'item_id' => (int) $scan->item_id,
+                'qty_ok' => $ok,
+                'qty_reject' => $reject,
+                'qty_short' => $short,
+                'qc_note' => $row['qc_note'] ?? null,
+            ];
+        }
+
+        $scanQtyByItem = $scans->groupBy('item_id')->map(fn ($rows) => (int) $rows->sum('qty'));
+        foreach ($transfer->items as $item) {
+            if ((int) ($scanQtyByItem[$item->item_id] ?? 0) !== (int) $item->qty) {
+                throw ValidationException::withMessages([
+                    'scans' => 'Qty dus yang discan harus sama dengan qty transfer untuk setiap SKU.',
+                ]);
+            }
+        }
+
+        return collect($updates)
+            ->groupBy('item_id')
+            ->map(function ($rows, $itemId) {
+                $firstNote = $rows->pluck('qc_note')->first(fn ($note) => trim((string) $note) !== '') ?? null;
+
+                return [
+                    'item_id' => (int) $itemId,
+                    'qty_ok' => (int) $rows->sum('qty_ok'),
+                    'qty_reject' => (int) $rows->sum('qty_reject'),
+                    'qty_short' => (int) $rows->sum('qty_short'),
+                    'qc_note' => $firstNote,
+                    'scan_updates' => $rows->values()->all(),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function assertQcSchemaReady(): void
+    {
+        $missing = [];
+        foreach ([
+            'stock_transfer_items.qty_short' => Schema::hasColumn('stock_transfer_items', 'qty_short'),
+            'stock_transfers.traceability_mode' => Schema::hasColumn('stock_transfers', 'traceability_mode'),
+            'stock_transfers.legacy_reason' => Schema::hasColumn('stock_transfers', 'legacy_reason'),
+            'inbound_koli_units' => Schema::hasTable('inbound_koli_units'),
+            'stock_transfer_koli_scans' => Schema::hasTable('stock_transfer_koli_scans'),
+        ] as $name => $exists) {
+            if (!$exists) {
+                $missing[] = $name;
+            }
+        }
+
+        if (!empty($missing)) {
+            throw ValidationException::withMessages([
+                'database' => 'Database belum diperbarui untuk QC transfer. Jalankan migration terlebih dahulu. Bagian yang belum ada: '.implode(', ', $missing).'.',
+            ]);
+        }
+    }
+
+    private function serializeKoliScan(StockTransferKoliScan $scan): array
+    {
+        $unit = $scan->koliUnit;
+        $transaction = $unit?->transaction;
+
+        return [
+            'id' => (int) $scan->id,
+            'code' => (string) ($unit?->code ?? ''),
+            'inbound_code' => (string) ($transaction?->code ?? ''),
+            'sku' => (string) ($unit?->sku ?? ''),
+            'koli_no' => (int) ($unit?->koli_no ?? 0),
+            'qty' => (int) $scan->qty,
+            'qty_ok' => (int) $scan->qty_ok,
+            'qty_reject' => (int) $scan->qty_reject,
+            'qty_short' => (int) $scan->qty_short,
+            'qc_note' => (string) ($scan->qc_note ?? ''),
+        ];
+    }
+
+    private function requiresKoliScan(StockTransfer $transfer): bool
+    {
+        return (int) $transfer->from_warehouse_id === WarehouseService::defaultWarehouseId()
+            && (int) $transfer->to_warehouse_id === WarehouseService::displayWarehouseId();
     }
 
     private function formatKoliBreakdown(int $qty, int $qtyPerKoli): string

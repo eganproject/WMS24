@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\InboundScanSession;
 use App\Models\InboundScanSessionItem;
 use App\Models\InboundTransaction;
+use App\Support\InboundKoliUnitService;
 use App\Support\InboundScanStatus;
 use App\Support\StockService;
 use Illuminate\Http\Request;
@@ -143,7 +144,6 @@ class InboundScanController extends Controller
         $validated = $request->validate([
             'session_id' => ['required', 'integer', 'exists:inbound_scan_sessions,id'],
             'code' => ['required', 'string'],
-            'allow_over_scan' => ['sometimes', 'boolean'],
         ]);
 
         $code = trim((string) $validated['code']);
@@ -170,12 +170,21 @@ class InboundScanController extends Controller
                 ], 422);
             }
 
+            $parsedCode = $this->parseInboundKoliQrCode($code, $transaction);
+            if (!$parsedCode['valid']) {
+                DB::rollBack();
+                return response()->json([
+                    'message' => $parsedCode['message'],
+                ], 422);
+            }
+            $skuCode = $parsedCode['sku'];
+
             $items = InboundScanSessionItem::where('inbound_scan_session_id', $session->id)
                 ->lockForUpdate()
                 ->get();
 
-            $target = $items->first(function (InboundScanSessionItem $row) use ($code) {
-                return strtolower((string) $row->sku) === strtolower($code);
+            $target = $items->first(function (InboundScanSessionItem $row) use ($skuCode) {
+                return strtolower((string) $row->sku) === strtolower($skuCode);
             });
 
             if (!$target) {
@@ -187,11 +196,10 @@ class InboundScanController extends Controller
 
             $nextScannedKoli = (int) $target->scanned_koli + 1;
             $willOverScan = $nextScannedKoli > (int) $target->expected_koli;
-            if ($willOverScan && empty($validated['allow_over_scan'])) {
+            if ($willOverScan) {
                 DB::rollBack();
                 return response()->json([
-                    'message' => 'SKU sudah mencapai target surat jalan. Scan lagi akan dianggap terima lebih. Lanjutkan?',
-                    'action' => 'confirm_over_scan',
+                    'message' => 'Scan inbound tidak boleh melebihi jumlah penerimaan barang.',
                     'details' => [[
                         'sku' => $target->sku,
                         'expected_koli' => (int) $target->expected_koli,
@@ -201,7 +209,7 @@ class InboundScanController extends Controller
                         'next_scanned_koli' => $nextScannedKoli,
                         'next_scanned_qty' => (int) $target->scanned_qty + (int) $target->qty_per_koli,
                     ]],
-                ], 409);
+                ], 422);
             }
 
             $target->scanned_koli = $nextScannedKoli;
@@ -356,6 +364,8 @@ class InboundScanController extends Controller
             $transaction->approved_by = auth()->id();
             $transaction->save();
 
+            app(InboundKoliUnitService::class)->syncForTransaction($transaction->fresh(['items.item']));
+
             $session->completed_by = auth()->id();
             $session->completed_at = $completedAt;
             $session->last_scanned_by = auth()->id();
@@ -488,6 +498,54 @@ class InboundScanController extends Controller
                 'note' => $row->note,
             ]);
         }
+    }
+
+    /**
+     * @return array{valid:bool,sku:string,message?:string}
+     */
+    private function parseInboundKoliQrCode(string $code, InboundTransaction $transaction): array
+    {
+        $code = trim($code);
+        if (!str_starts_with($code, 'INB~')) {
+            return [
+                'valid' => true,
+                'sku' => $code,
+            ];
+        }
+
+        $parts = explode('~', $code);
+        if (count($parts) !== 4 || $parts[0] !== 'INB') {
+            return [
+                'valid' => false,
+                'sku' => '',
+                'message' => 'Format QR inbound tidak valid.',
+            ];
+        }
+
+        $inboundCode = trim($parts[1]);
+        $sku = trim($parts[2]);
+        $koliNo = trim($parts[3]);
+
+        if ($inboundCode === '' || $sku === '' || $koliNo === '' || !ctype_digit($koliNo)) {
+            return [
+                'valid' => false,
+                'sku' => '',
+                'message' => 'Format QR inbound tidak valid.',
+            ];
+        }
+
+        if (strcasecmp($inboundCode, (string) $transaction->code) !== 0) {
+            return [
+                'valid' => false,
+                'sku' => '',
+                'message' => 'QR inbound tidak sesuai dengan inbound yang sedang dibuka.',
+            ];
+        }
+
+        return [
+            'valid' => true,
+            'sku' => $sku,
+        ];
     }
 
     private function serializeTransactionSummary(InboundTransaction $transaction): array

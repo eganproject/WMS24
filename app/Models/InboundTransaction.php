@@ -60,4 +60,9 @@ class InboundTransaction extends Model
     {
         return $this->hasOne(InboundScanSession::class, 'inbound_transaction_id');
     }
+
+    public function koliUnits()
+    {
+        return $this->hasMany(InboundKoliUnit::class, 'inbound_transaction_id');
+    }
 }

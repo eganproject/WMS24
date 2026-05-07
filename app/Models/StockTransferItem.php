@@ -15,6 +15,7 @@ class StockTransferItem extends Model
         'qty',
         'qty_ok',
         'qty_reject',
+        'qty_short',
         'note',
         'qc_note',
     ];
@@ -27,5 +28,10 @@ class StockTransferItem extends Model
     public function item()
     {
         return $this->belongsTo(Item::class, 'item_id');
+    }
+
+    public function koliScans()
+    {
+        return $this->hasMany(StockTransferKoliScan::class, 'stock_transfer_item_id');
     }
 }

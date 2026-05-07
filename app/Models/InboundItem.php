@@ -31,4 +31,9 @@ class InboundItem extends Model
     {
         return $this->belongsTo(Item::class, 'item_id');
     }
+
+    public function koliUnits()
+    {
+        return $this->hasMany(InboundKoliUnit::class, 'inbound_item_id');
+    }
 }

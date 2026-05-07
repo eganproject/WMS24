@@ -13,6 +13,7 @@ use App\Models\Item;
 use App\Models\Supplier;
 use App\Models\Warehouse;
 use App\Support\BundleService;
+use App\Support\InboundKoliUnitService;
 use App\Support\InboundReceiptQrPdfService;
 use App\Support\InboundScanExpectation;
 use App\Support\InboundScanStatus;
@@ -149,13 +150,15 @@ class InboundController extends Controller
     {
         $transaction = $this->qrTransaction('receipt', $id);
         $service = app(InboundReceiptQrPdfService::class);
+        $pdf = $service->pdfForTransaction($transaction);
 
         return response(
-            $service->pdfForTransaction($transaction),
+            $pdf,
             200,
             [
                 'Content-Type' => 'application/pdf',
                 'Content-Disposition' => 'attachment; filename="'.$service->downloadFilename($transaction).'"',
+                'Content-Length' => (string) strlen($pdf),
                 'Cache-Control' => 'no-store, no-cache, must-revalidate',
             ]
         );
@@ -184,7 +187,7 @@ class InboundController extends Controller
             $request,
             new InboundReceiptsImport(false),
             'manual',
-            'INB-MNL',
+            'MNL',
             'Import inbound manual berhasil',
             'Gagal import inbound manual'
         );
@@ -196,7 +199,7 @@ class InboundController extends Controller
             $request,
             new InboundReturnsImport(),
             'return',
-            'INB-RET',
+            'RET',
             'Import retur inbound berhasil',
             'Gagal import retur inbound'
         );
@@ -208,7 +211,7 @@ class InboundController extends Controller
             $request,
             new InboundReceiptsImport(true),
             'receipt',
-            'INB-RCV',
+            'RCV',
             'Import penerimaan barang berhasil',
             'Gagal import penerimaan barang'
         );
@@ -300,9 +303,9 @@ class InboundController extends Controller
             'lockedStatuses' => [InboundScanStatus::SCANNING, InboundScanStatus::COMPLETED, 'approved'],
             'showDeliveryNoteFields' => true,
             'deliveryNotePrefixMap' => [
-                'receipt' => 'SJ-INB-RCV',
-                'return' => 'SJ-INB-RET',
-                'manual' => 'SJ-INB-MNL',
+                'receipt' => 'SJ-RCV',
+                'return' => 'SJ-RET',
+                'manual' => 'SJ-MNL',
             ],
             'suppliers' => $suppliers,
             'supplierFlowTypes' => $this->usesSupplier($type) ? [$type] : [],
@@ -968,15 +971,25 @@ class InboundController extends Controller
 
     private function generateCode(string $prefix): string
     {
-        return $prefix.'-'.now()->format('YmdHis').'-'.Str::upper(Str::random(4));
+        $prefix = preg_replace('/[^A-Z0-9-]+/i', '-', trim($prefix)) ?: 'INB';
+        $prefix = trim(Str::upper($prefix), '-');
+
+        for ($attempt = 0; $attempt < 10; $attempt++) {
+            $code = $prefix.'-'.now()->format('ymdHis').'-'.Str::upper(Str::random(3));
+            if (str_starts_with($prefix, 'SJ-') || !InboundTransaction::where('code', $code)->exists()) {
+                return $code;
+            }
+        }
+
+        return $prefix.'-'.now()->format('ymdHis').'-'.Str::upper(Str::random(6));
     }
 
     private function prefixForType(string $type): string
     {
         return match ($type) {
-            'receipt' => 'INB-RCV',
-            'return' => 'INB-RET',
-            default => 'INB-MNL',
+            'receipt' => 'RCV',
+            'return' => 'RET',
+            default => 'MNL',
         };
     }
 
@@ -997,6 +1010,8 @@ class InboundController extends Controller
     private function receiptQrPayload(InboundTransaction $transaction): array
     {
         $barcodeService = app(SimpleBarcodeService::class);
+        app(InboundKoliUnitService::class)->syncForTransaction($transaction);
+        $transaction->loadMissing(['items.koliUnits']);
         $items = $transaction->items
             ->filter(fn (InboundItem $row) => $row->item !== null && trim((string) $row->item->sku) !== '')
             ->values()
@@ -1009,6 +1024,7 @@ class InboundController extends Controller
                     'name' => trim((string) ($item?->name ?? '-')),
                     'qty' => (int) ($row->qty ?? 0),
                     'koli' => (int) ($row->koli ?? 0),
+                    'koli_qr_count' => (int) $row->koliUnits->count(),
                     'qr_url' => route('admin.masterdata.items.qr-code', ['item' => $row->item_id]),
                 ];
             })

@@ -398,12 +398,6 @@
         };
 
         const updateSystemQty = (row) => {
-            const selectEl = row.querySelector('.opname-item-select');
-            const systemEl = row.querySelector('[data-name="system_qty"]');
-            const selected = selectEl?.selectedOptions?.[0];
-            if (systemEl && selected) {
-                systemEl.value = selected.getAttribute('data-stock') || '0';
-            }
             syncRowKoliMode(row);
         };
 
@@ -443,9 +437,12 @@
                 if (koliEl) koliEl.value = '';
                 return;
             }
-            const koli = parseInt(koliEl?.value || '0', 10);
+            const koliRaw = koliEl?.value;
+            const koli = koliRaw === '' || koliRaw == null ? null : parseInt(koliRaw, 10);
             if (qtyPerKoli > 0 && Number.isFinite(koli) && koli >= 0) {
                 if (countedEl) countedEl.value = String(koli * qtyPerKoli);
+            } else if (countedEl) {
+                countedEl.value = '';
             }
         };
 
@@ -457,17 +454,13 @@
             const row = document.createElement('div');
             row.className = 'row g-3 align-items-end mb-4 opname-item-row';
             row.innerHTML = `
-                <div class="col-md-3">
+                <div class="col-md-4">
                     <label class="required fs-6 fw-bold form-label mb-2">Item</label>
                     <select class="form-select form-select-solid opname-item-select" data-name="item_id" required>
                         <option value=""></option>
                         ${currentItemOptionsHtml}
                     </select>
                     <div class="invalid-feedback" data-error-for="item_id"></div>
-                </div>
-                <div class="col-md-2">
-                    <label class="fs-6 fw-bold form-label mb-2">System</label>
-                    <input type="number" class="form-control form-control-solid" data-name="system_qty" readonly />
                 </div>
                 <div class="col-md-2" data-role="koli-wrap" style="display:none;">
                     <label class="required fs-6 fw-bold form-label mb-2">Kolian</label>
@@ -480,7 +473,7 @@
                     <input type="number" min="0" class="form-control form-control-solid" data-name="counted_qty" />
                     <div class="invalid-feedback" data-error-for="counted_qty"></div>
                 </div>
-                <div class="col-md-2">
+                <div class="col-md-3">
                     <label class="fs-6 fw-bold form-label mb-2">Catatan Item</label>
                     <input type="text" class="form-control form-control-solid" data-name="note" />
                 </div>
@@ -522,13 +515,21 @@
             loadItemsForWarehouse(whVal, true);
         };
 
-        itemsContainer?.addEventListener('change', (e) => {
-            if (e.target.matches('.opname-item-select')) {
-                const row = e.target.closest('.opname-item-row');
+        if (typeof $ !== 'undefined') {
+            $(itemsContainer).on('change', '.opname-item-select', function () {
+                const row = this.closest('.opname-item-row');
                 if (row) updateSystemQty(row);
                 validateUniqueItems();
-            }
-        });
+            });
+        } else {
+            itemsContainer?.addEventListener('change', (e) => {
+                if (e.target.matches('.opname-item-select')) {
+                    const row = e.target.closest('.opname-item-row');
+                    if (row) updateSystemQty(row);
+                    validateUniqueItems();
+                }
+            });
+        }
 
         itemsContainer?.addEventListener('input', (e) => {
             if (e.target.matches('input[data-name="koli"]')) {

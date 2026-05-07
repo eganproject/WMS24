@@ -156,6 +156,46 @@
         color: #065f46;
         border: 1px solid #6ee7b7;
     }
+    .opn-mode-badge {
+        display: inline-block;
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-weight: 700;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+    .opn-mode-koli {
+        background: #dbeafe;
+        color: #1e40af;
+        border: 1px solid #93c5fd;
+    }
+    .opn-mode-pcs {
+        background: #f3f4f6;
+        color: #374151;
+        border: 1px solid #d1d5db;
+    }
+    .opn-mode-info {
+        margin-bottom: 16px;
+        padding: 10px 12px;
+        border-left: 4px solid #1e40af;
+        background: #eff6ff;
+        font-size: 12px;
+        line-height: 1.55;
+        color: #1e3a8a;
+    }
+    .opn-mode-info.is-pcs {
+        border-left-color: #6b7280;
+        background: #f9fafb;
+        color: #374151;
+    }
+    .opn-cell-sub {
+        display: block;
+        font-size: 11px;
+        color: #6b7280;
+        font-weight: 400;
+        margin-top: 2px;
+    }
     .opn-signatures {
         display: grid;
         grid-template-columns: repeat(2, 1fr);
@@ -206,11 +246,33 @@
     $statusClass = $status === 'completed' ? 'opn-status-completed' : 'opn-status-open';
     $statusLabel = $status === 'completed' ? 'Selesai' : 'Berjalan';
     $isDefaultWarehouse = (int) ($opname->warehouse_id ?? 0) === WarehouseService::defaultWarehouseId();
+    $modeLabel = $isDefaultWarehouse ? 'Mode Kolian' : 'Mode Qty (Pcs)';
+    $modeClass = $isDefaultWarehouse ? 'opn-mode-koli' : 'opn-mode-pcs';
     $totalSystem = (int) $opname->items->sum('system_qty');
     $totalCounted = (int) $opname->items->sum('counted_qty');
     $totalAdjustment = (int) $opname->items->sum('adjustment');
     $totalKoli = (int) $opname->items->sum(fn ($row) => (int) ($row->koli ?? 0));
     $exportUrl = route('admin.inventory.stock-opname.export', $opname->id);
+
+    $formatKoliBreakdown = function ($qty, $qtyPerKoli) {
+        $qty = (int) $qty;
+        $qtyPerKoli = (int) $qtyPerKoli;
+        if ($qty === 0 || $qtyPerKoli <= 0) {
+            return '';
+        }
+        $absQty = abs($qty);
+        $koli = intdiv($absQty, $qtyPerKoli);
+        $sisa = $absQty % $qtyPerKoli;
+        $sign = $qty < 0 ? '-' : '';
+        $parts = [];
+        if ($koli > 0) {
+            $parts[] = $sign.$koli.' koli';
+        }
+        if ($sisa > 0) {
+            $parts[] = ($koli > 0 ? '' : $sign).$sisa.' pcs';
+        }
+        return $parts ? '≈ '.implode(' + ', $parts) : '';
+    };
 @endphp
 
 <div class="opn-shell">
@@ -239,7 +301,8 @@
             <div class="opn-box">
                 <div class="opn-box-title">Informasi Gudang</div>
                 <div class="opn-box-body">
-                    <strong>{{ $opname->warehouse?->name ?? '-' }}</strong><br>
+                    <strong>{{ $opname->warehouse?->name ?? '-' }}</strong>
+                    <span class="opn-mode-badge {{ $modeClass }} ms-1">{{ $modeLabel }}</span><br>
                     Kode: {{ $opname->warehouse?->code ?? '-' }}<br>
                     Tanggal Opname: {{ $opname->transacted_at?->format('Y-m-d H:i') ?? '-' }}
                 </div>
@@ -273,17 +336,28 @@
             </tr>
         </table>
 
+        <div class="opn-mode-info {{ $isDefaultWarehouse ? '' : 'is-pcs' }}">
+            @if($isDefaultWarehouse)
+                <strong>Cara baca:</strong> di <em>Gudang Besar</em>, hitungan fisik diinput per <strong>kolian</strong>.
+                Qty pcs dihitung otomatis = <em>kolian × isi/koli</em> per item.
+                Kolom "Hitungan Fisik" menampilkan jumlah koli, dengan rincian total pcs di bawahnya.
+            @else
+                <strong>Cara baca:</strong> di gudang ini, hitungan fisik diinput langsung dalam satuan <strong>pcs</strong>.
+                Kolom "Hitungan Fisik" menampilkan jumlah pcs.
+            @endif
+        </div>
+
         <table class="opn-items">
             <thead>
                 <tr>
                     <th class="opn-num">No</th>
                     <th>SKU</th>
                     <th>Nama Barang</th>
-                    <th class="opn-qty">System</th>
                     @if($isDefaultWarehouse)
-                        <th class="opn-qty">Kolian</th>
+                        <th class="opn-qty">Isi/Koli</th>
                     @endif
-                    <th class="opn-qty">Counted</th>
+                    <th class="opn-qty">Stok Sistem</th>
+                    <th class="opn-qty">Hitungan Fisik</th>
                     <th class="opn-qty">Selisih</th>
                     <th>Catatan</th>
                 </tr>
@@ -293,19 +367,54 @@
                     @php
                         $adj = (int) $row->adjustment;
                         $adjClass = $adj > 0 ? 'opn-adj-pos' : ($adj < 0 ? 'opn-adj-neg' : '');
-                        $adjStr = $adj > 0 ? '+'.$adj : (string) $adj;
+                        $adjStr = ($adj > 0 ? '+' : '').number_format($adj, 0, ',', '.').' pcs';
                         $koliVal = $row->koli !== null ? (int) $row->koli : null;
+                        $itemKoliQty = (int) ($row->item?->koli_qty ?? 0);
+                        $systemQty = (int) $row->system_qty;
+                        $countedQty = (int) $row->counted_qty;
+                        $systemKoli = $formatKoliBreakdown($systemQty, $itemKoliQty);
+                        $adjKoli = $formatKoliBreakdown($adj, $itemKoliQty);
                     @endphp
                     <tr>
                         <td class="opn-num">{{ $loop->iteration }}</td>
                         <td>{{ $row->item?->sku ?? '-' }}</td>
                         <td>{{ $row->item?->name ?? '-' }}</td>
-                        <td class="opn-qty">{{ number_format((int) $row->system_qty, 0, ',', '.') }}</td>
                         @if($isDefaultWarehouse)
-                            <td class="opn-qty">{{ $koliVal !== null && $koliVal > 0 ? number_format($koliVal, 0, ',', '.') : '-' }}</td>
+                            <td class="opn-qty">
+                                {{ $itemKoliQty > 0 ? number_format($itemKoliQty, 0, ',', '.').' pcs' : '-' }}
+                            </td>
                         @endif
-                        <td class="opn-qty">{{ number_format((int) $row->counted_qty, 0, ',', '.') }}</td>
-                        <td class="opn-qty {{ $adjClass }}">{{ $adjStr }}</td>
+                        <td class="opn-qty">
+                            {{ number_format($systemQty, 0, ',', '.') }} pcs
+                            @if($isDefaultWarehouse && $systemKoli)
+                                <span class="opn-cell-sub">{{ $systemKoli }}</span>
+                            @endif
+                        </td>
+                        <td class="opn-qty">
+                            @if($isDefaultWarehouse)
+                                @if($koliVal !== null)
+                                    {{ number_format($koliVal, 0, ',', '.') }} koli
+                                    <span class="opn-cell-sub">
+                                        @if($itemKoliQty > 0)
+                                            = {{ $koliVal }} × {{ $itemKoliQty }} = {{ number_format($countedQty, 0, ',', '.') }} pcs
+                                        @else
+                                            {{ number_format($countedQty, 0, ',', '.') }} pcs
+                                        @endif
+                                    </span>
+                                @else
+                                    {{ number_format($countedQty, 0, ',', '.') }} pcs
+                                    <span class="opn-cell-sub">kolian belum dicatat</span>
+                                @endif
+                            @else
+                                {{ number_format($countedQty, 0, ',', '.') }} pcs
+                            @endif
+                        </td>
+                        <td class="opn-qty {{ $adjClass }}">
+                            {{ $adjStr }}
+                            @if($isDefaultWarehouse && $adjKoli)
+                                <span class="opn-cell-sub">{{ $adjKoli }}</span>
+                            @endif
+                        </td>
                         <td>{{ $row->note ?: '-' }}</td>
                     </tr>
                 @endforeach
@@ -317,13 +426,19 @@
             </tbody>
             <tfoot>
                 <tr>
-                    <td colspan="3">TOTAL</td>
-                    <td class="opn-qty">{{ number_format($totalSystem, 0, ',', '.') }}</td>
-                    @if($isDefaultWarehouse)
-                        <td class="opn-qty">{{ $totalKoli > 0 ? number_format($totalKoli, 0, ',', '.') : '-' }}</td>
-                    @endif
-                    <td class="opn-qty">{{ number_format($totalCounted, 0, ',', '.') }}</td>
-                    <td class="opn-qty {{ $totalAdjustment > 0 ? 'opn-adj-pos' : ($totalAdjustment < 0 ? 'opn-adj-neg' : '') }}">{{ $totalAdjustment > 0 ? '+'.$totalAdjustment : (string) $totalAdjustment }}</td>
+                    <td colspan="{{ $isDefaultWarehouse ? 4 : 3 }}">TOTAL</td>
+                    <td class="opn-qty">{{ number_format($totalSystem, 0, ',', '.') }} pcs</td>
+                    <td class="opn-qty">
+                        @if($isDefaultWarehouse)
+                            {{ $totalKoli > 0 ? number_format($totalKoli, 0, ',', '.').' koli' : '-' }}
+                            <span class="opn-cell-sub">= {{ number_format($totalCounted, 0, ',', '.') }} pcs</span>
+                        @else
+                            {{ number_format($totalCounted, 0, ',', '.') }} pcs
+                        @endif
+                    </td>
+                    <td class="opn-qty {{ $totalAdjustment > 0 ? 'opn-adj-pos' : ($totalAdjustment < 0 ? 'opn-adj-neg' : '') }}">
+                        {{ ($totalAdjustment > 0 ? '+' : '').number_format($totalAdjustment, 0, ',', '.') }} pcs
+                    </td>
                     <td></td>
                 </tr>
             </tfoot>

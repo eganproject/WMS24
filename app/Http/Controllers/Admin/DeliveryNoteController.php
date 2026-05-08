@@ -63,6 +63,9 @@ class DeliveryNoteController extends Controller
             ->where('outbound_transactions.id', $id)
             ->firstOrFail();
 
+        $canPrint = in_array($transaction->status ?? 'pending', ['pending_qc', 'qc_scanning', 'approved'], true);
+        abort_if(!$canPrint, 403, 'Surat jalan hanya bisa dilihat atau dicetak setelah outbound di-approve.');
+
         $totalQty = (int) $transaction->items->sum('qty');
         $totalKoli = $transaction->items->sum(function ($row) use ($transaction) {
             $qtyPerKoli = (int) ($row->item?->koli_qty ?? 0);
@@ -80,6 +83,7 @@ class DeliveryNoteController extends Controller
         return view('admin.outbound.delivery-notes.document', [
             'transaction' => $transaction,
             'printMode' => $printMode,
+            'canPrint' => $canPrint,
             'totalQty' => $totalQty,
             'totalKoli' => (int) $totalKoli,
             'backUrl' => route('admin.outbound.delivery-notes.index'),
@@ -93,7 +97,7 @@ class DeliveryNoteController extends Controller
             ->with([
                 'items.item:id,sku,name,koli_qty',
                 'warehouse:id,name,code',
-                'supplier:id,name',
+                'supplier:id,name,address',
                 'creator:id,name',
                 'approver:id,name',
                 'damagedAllocation:id,outbound_transaction_id,code,type,source_ref',

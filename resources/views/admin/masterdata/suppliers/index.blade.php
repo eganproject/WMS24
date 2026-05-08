@@ -39,6 +39,7 @@
                     <tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0">
                         <th>ID</th>
                         <th>Nama</th>
+                        <th>Alamat</th>
                         <th class="text-end">Aksi</th>
                     </tr>
                 </thead>
@@ -70,6 +71,11 @@
                         <label class="required fs-6 fw-bold form-label mb-2">Nama</label>
                         <input type="text" class="form-control form-control-solid" name="name" id="supplier_name" required />
                         <div class="invalid-feedback" id="error_name"></div>
+                    </div>
+                    <div class="fv-row mb-7">
+                        <label class="fs-6 fw-bold form-label mb-2">Alamat</label>
+                        <textarea class="form-control form-control-solid" name="address" id="supplier_address" rows="3"></textarea>
+                        <div class="invalid-feedback" id="error_address"></div>
                     </div>
                     <div class="text-end pt-3">
                         <button type="button" class="btn btn-light me-3" data-bs-dismiss="modal">Batal</button>
@@ -103,6 +109,7 @@
         const modalEl = document.getElementById('modal_supplier_form');
         const modal = modalEl ? new bootstrap.Modal(modalEl) : null;
         const formName = document.getElementById('supplier_name');
+        const formAddress = document.getElementById('supplier_address');
         const formId = document.getElementById('supplier_id');
         const titleEl = document.getElementById('modal_supplier_title');
 
@@ -116,6 +123,13 @@
                 KTMenu.createInstances();
             }
         };
+
+        const escapeHtml = (value) => String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
 
         const dt = tableEl.DataTable({
             processing: true,
@@ -132,8 +146,9 @@
             columns: [
                 { data: 'id' },
                 { data: 'name' },
+                { data: 'address', render: (data) => data ? escapeHtml(data).replace(/\n/g, '<br>') : '<span class="text-muted">-</span>' },
                 { data: 'id', orderable: false, searchable: false, className: 'text-end', render: (data, type, row) => {
-                    const editItem = canUpdate ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-edit" data-id="${data}" data-name="${row.name}">Edit</a></div>` : '';
+                    const editItem = canUpdate ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-edit" data-id="${data}">Edit</a></div>` : '';
                     const delItem = canDelete ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 text-danger btn-delete" data-id="${data}">Hapus</a></div>` : '';
                     const actions = `${editItem}${delItem}`;
                     if (!actions) return '';
@@ -161,8 +176,10 @@
         const reloadTable = () => dt.ajax.reload();
 
         const clearErrors = () => {
-            const el = document.getElementById('error_name');
-            if (el) el.textContent = '';
+            ['error_name', 'error_address'].forEach((id) => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = '';
+            });
         };
 
         searchInput?.addEventListener('keyup', reloadTable);
@@ -200,6 +217,8 @@
                     const msg = json?.message || 'Gagal menyimpan data';
                     if (json?.errors?.name && document.getElementById('error_name')) {
                         document.getElementById('error_name').textContent = json.errors.name[0];
+                    } else if (json?.errors?.address && document.getElementById('error_address')) {
+                        document.getElementById('error_address').textContent = json.errors.address[0];
                     } else if (typeof Swal !== 'undefined') {
                         Swal.fire('Error', msg, 'error');
                     }
@@ -222,9 +241,10 @@
         tableEl.on('click', '.btn-edit', function (e) {
             e.preventDefault();
             const id = this.getAttribute('data-id');
-            const name = this.getAttribute('data-name');
+            const rowData = dt.row($(this).closest('tr')).data() || {};
             if (formId) formId.value = id || '';
-            if (formName) formName.value = name || '';
+            if (formName) formName.value = rowData.name || '';
+            if (formAddress) formAddress.value = rowData.address || '';
             clearErrors();
             if (titleEl) titleEl.textContent = 'Edit Supplier';
             modal?.show();

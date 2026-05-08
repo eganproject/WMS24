@@ -10,14 +10,42 @@
         padding: 24px 0 40px;
     }
     .delivery-note-paper {
+        position: relative;
+        overflow: hidden;
         width: min(100%, 920px);
-        margin: 0 auto;
+        margin: 0 auto 24px;
         background: #fff;
         color: #111827;
         border: 1px solid #d1d5db;
         box-shadow: 0 14px 40px rgba(15, 23, 42, 0.08);
         padding: 36px 42px;
         font-family: Arial, Helvetica, sans-serif;
+        page-break-after: always;
+    }
+    .delivery-note-paper:last-child {
+        margin-bottom: 0;
+        page-break-after: auto;
+    }
+    .delivery-note-paper::before {
+        content: attr(data-copy-label);
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        z-index: 0;
+        transform: translate(-50%, -50%) rotate(-28deg);
+        color: rgba(17, 24, 39, 0.06);
+        font-size: 128px;
+        font-weight: 900;
+        letter-spacing: 10px;
+        line-height: 1;
+        text-transform: uppercase;
+        white-space: nowrap;
+        pointer-events: none;
+        user-select: none;
+    }
+    .dn-document-content {
+        position: relative;
+        z-index: 1;
     }
     .dn-topbar {
         display: flex;
@@ -170,6 +198,13 @@
             border: 0;
             box-shadow: none;
             padding: 0;
+            min-height: calc(297mm - 24mm);
+            page-break-after: always;
+        }
+        .delivery-note-paper:last-child { page-break-after: auto; }
+        .delivery-note-paper::before {
+            color: rgba(17, 24, 39, 0.08);
+            font-size: 118px;
         }
         .dn-topbar { margin-top: 0; }
     }
@@ -182,127 +217,146 @@
     $recipientTitle = $transaction->type === 'return' ? 'Kepada Supplier' : 'Tujuan Pengiriman';
     $recipientName = $transaction->type === 'return'
         ? ($transaction->supplier?->name ?? '-')
-        : ($transaction->ref_no ?: 'Tujuan Manual');
+        : ($transaction->recipient_name ?: ($transaction->ref_no ?: 'Tujuan Manual'));
+    $recipientAddress = $transaction->type === 'return'
+        ? ($transaction->supplier?->address ?? null)
+        : $transaction->recipient_address;
+    $recipientPhone = $transaction->type === 'return' ? null : $transaction->recipient_phone;
     $warehouseName = $transaction->warehouse?->name ?? '-';
     $docDate = $transaction->surat_jalan_at ?: $transaction->transacted_at;
+    $copyLabels = ['ARSIP', 'COPY', 'ASLI'];
 @endphp
 
 <div class="delivery-note-shell">
     <div class="dn-actions">
         <a href="{{ $backUrl }}" class="btn btn-light">Kembali</a>
-        <a href="{{ $printUrl }}" target="_blank" rel="noopener" class="btn btn-primary">Buka Mode Cetak</a>
-        <button type="button" class="btn btn-success" onclick="window.print()">Cetak</button>
+        @if(!empty($canPrint))
+            <a href="{{ $printUrl }}" target="_blank" rel="noopener" class="btn btn-primary">Buka Mode Cetak</a>
+            <button type="button" class="btn btn-success" onclick="window.print()">Cetak</button>
+        @else
+            <span class="badge badge-light-warning align-self-center">Belum bisa dicetak sebelum outbound di-approve</span>
+        @endif
     </div>
 
-    <div class="delivery-note-paper">
-        <div class="dn-topbar">
-            <div>
-                <div class="dn-company-name">{{ config('app.name', 'WMS') }}</div>
-                <div class="dn-company-meta">
-                    Dokumen operasional gudang<br>
-                    Dicetak: {{ now()->format('Y-m-d H:i') }}
+    @foreach($copyLabels as $copyLabel)
+        <div class="delivery-note-paper" data-copy-label="{{ $copyLabel }}">
+            <div class="dn-document-content">
+                <div class="dn-topbar">
+                    <div>
+                        <div class="dn-company-name">{{ config('app.name', 'WMS') }}</div>
+                        <div class="dn-company-meta">
+                            Dokumen operasional gudang<br>
+                            Dicetak: {{ now()->format('Y-m-d H:i') }}
+                        </div>
+                    </div>
+                    <div class="dn-title">
+                        <h1>SURAT JALAN</h1>
+                        <div class="dn-number">{{ $transaction->surat_jalan_no }}</div>
+                    </div>
                 </div>
-            </div>
-            <div class="dn-title">
-                <h1>SURAT JALAN</h1>
-                <div class="dn-number">{{ $transaction->surat_jalan_no }}</div>
-            </div>
-        </div>
 
-        <div class="dn-grid">
-            <div class="dn-box">
-                <div class="dn-box-title">{{ $recipientTitle }}</div>
-                <div class="dn-box-body">
-                    <strong>{{ $recipientName }}</strong><br>
-                    Ref: {{ $transaction->ref_no ?: '-' }}<br>
-                    Jenis: {{ $typeLabel }}
+                <div class="dn-grid">
+                    <div class="dn-box">
+                        <div class="dn-box-title">{{ $recipientTitle }}</div>
+                        <div class="dn-box-body">
+                            <strong>{{ $recipientName }}</strong><br>
+                            @if($recipientAddress)
+                                Alamat: {!! nl2br(e($recipientAddress)) !!}<br>
+                            @endif
+                            @if($recipientPhone)
+                                Kontak: {{ $recipientPhone }}<br>
+                            @endif
+                            Ref: {{ $transaction->ref_no ?: '-' }}<br>
+                            Jenis: {{ $typeLabel }}
+                        </div>
+                    </div>
+                    <div class="dn-box">
+                        <div class="dn-box-title">Informasi Gudang</div>
+                        <div class="dn-box-body">
+                            Gudang: <strong>{{ $warehouseName }}</strong><br>
+                            Kode Outbound: {{ $transaction->code }}<br>
+                            @if($transaction->damagedAllocation)
+                                Alokasi Barang Rusak: {{ $transaction->damagedAllocation->code }}<br>
+                            @endif
+                            Status: {{ strtoupper(str_replace('_', ' ', $transaction->status ?? 'pending')) }}
+                        </div>
+                    </div>
                 </div>
-            </div>
-            <div class="dn-box">
-                <div class="dn-box-title">Informasi Gudang</div>
-                <div class="dn-box-body">
-                    Gudang: <strong>{{ $warehouseName }}</strong><br>
-                    Kode Outbound: {{ $transaction->code }}<br>
-                    @if($transaction->damagedAllocation)
-                        Alokasi Barang Rusak: {{ $transaction->damagedAllocation->code }}<br>
-                    @endif
-                    Status: {{ strtoupper(str_replace('_', ' ', $transaction->status ?? 'pending')) }}
-                </div>
-            </div>
-        </div>
 
-        <table class="dn-meta-table">
-            <tr>
-                <td>Tanggal SJ</td>
-                <td>{{ $docDate?->format('Y-m-d') ?: '-' }}</td>
-                <td>Tanggal Transaksi</td>
-                <td>{{ $transaction->transacted_at?->format('Y-m-d H:i') ?: '-' }}</td>
-            </tr>
-            <tr>
-                <td>Dibuat Oleh</td>
-                <td>{{ $transaction->creator?->name ?? '-' }}</td>
-                <td>Disetujui Oleh</td>
-                <td>{{ $transaction->approver?->name ?? '-' }}</td>
-            </tr>
-        </table>
-
-        <table class="dn-items">
-            <thead>
-                <tr>
-                    <th class="dn-num">No</th>
-                    <th>SKU</th>
-                    <th>Nama Barang</th>
-                    <th class="dn-qty">Koli</th>
-                    <th class="dn-qty">Qty</th>
-                    <th>Catatan</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach($transaction->items as $row)
-                    @php
-                        $qtyPerKoli = (int) ($row->item?->koli_qty ?? 0);
-                        $koli = $qtyPerKoli > 0 ? intdiv((int) $row->qty, $qtyPerKoli) : 0;
-                    @endphp
+                <table class="dn-meta-table">
                     <tr>
-                        <td class="dn-num">{{ $loop->iteration }}</td>
-                        <td>{{ $row->item?->sku ?? '-' }}</td>
-                        <td>{{ $row->item?->name ?? '-' }}</td>
-                        <td class="dn-qty">{{ $koli > 0 ? $koli : '-' }}</td>
-                        <td class="dn-qty">{{ number_format((int) $row->qty, 0, ',', '.') }}</td>
-                        <td>{{ $row->note ?: '-' }}</td>
+                        <td>Tanggal SJ</td>
+                        <td>{{ $docDate?->format('Y-m-d') ?: '-' }}</td>
+                        <td>Tanggal Transaksi</td>
+                        <td>{{ $transaction->transacted_at?->format('Y-m-d H:i') ?: '-' }}</td>
                     </tr>
-                @endforeach
-            </tbody>
-            <tfoot>
-                <tr>
-                    <td colspan="3">TOTAL</td>
-                    <td class="dn-qty">{{ ($totalKoli ?? 0) > 0 ? number_format($totalKoli, 0, ',', '.') : '-' }}</td>
-                    <td class="dn-qty">{{ number_format($totalQty, 0, ',', '.') }}</td>
-                    <td></td>
-                </tr>
-            </tfoot>
-        </table>
+                    <tr>
+                        <td>Dibuat Oleh</td>
+                        <td>{{ $transaction->creator?->name ?? '-' }}</td>
+                        <td>Disetujui Oleh</td>
+                        <td>{{ $transaction->approver?->name ?? '-' }}</td>
+                    </tr>
+                </table>
 
-        <div class="dn-note">
-            <strong>Catatan:</strong><br>
-            {{ $transaction->note ?: 'Barang telah diterima/diserahkan sesuai daftar item di atas.' }}
-        </div>
+                <table class="dn-items">
+                    <thead>
+                        <tr>
+                            <th class="dn-num">No</th>
+                            <th>SKU</th>
+                            <th>Nama Barang</th>
+                            <th class="dn-qty">Koli</th>
+                            <th class="dn-qty">Qty</th>
+                            <th>Catatan</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($transaction->items as $row)
+                            @php
+                                $qtyPerKoli = (int) ($row->item?->koli_qty ?? 0);
+                                $koli = $qtyPerKoli > 0 ? intdiv((int) $row->qty, $qtyPerKoli) : 0;
+                            @endphp
+                            <tr>
+                                <td class="dn-num">{{ $loop->iteration }}</td>
+                                <td>{{ $row->item?->sku ?? '-' }}</td>
+                                <td>{{ $row->item?->name ?? '-' }}</td>
+                                <td class="dn-qty">{{ $koli > 0 ? $koli : '-' }}</td>
+                                <td class="dn-qty">{{ number_format((int) $row->qty, 0, ',', '.') }}</td>
+                                <td>{{ $row->note ?: '-' }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="3">TOTAL</td>
+                            <td class="dn-qty">{{ ($totalKoli ?? 0) > 0 ? number_format($totalKoli, 0, ',', '.') : '-' }}</td>
+                            <td class="dn-qty">{{ number_format($totalQty, 0, ',', '.') }}</td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                </table>
 
-        <div class="dn-signatures">
-            <div class="dn-signature-box">
-                <div>Dibuat Oleh,</div>
-                <div class="dn-sign-line">{{ $transaction->creator?->name ?? 'Admin Gudang' }}</div>
-            </div>
-            <div class="dn-signature-box">
-                <div>Pengirim,</div>
-                <div class="dn-sign-line">Gudang</div>
-            </div>
-            <div class="dn-signature-box">
-                <div>Penerima,</div>
-                <div class="dn-sign-line">{{ $transaction->type === 'return' ? 'Supplier' : 'Penerima' }}</div>
+                <div class="dn-note">
+                    <strong>Catatan:</strong><br>
+                    {{ $transaction->note ?: 'Barang telah diterima/diserahkan sesuai daftar item di atas.' }}
+                </div>
+
+                <div class="dn-signatures">
+                    <div class="dn-signature-box">
+                        <div>Dibuat Oleh,</div>
+                        <div class="dn-sign-line">{{ $transaction->creator?->name ?? 'Admin Gudang' }}</div>
+                    </div>
+                    <div class="dn-signature-box">
+                        <div>Pengirim,</div>
+                        <div class="dn-sign-line">Gudang</div>
+                    </div>
+                    <div class="dn-signature-box">
+                        <div>Penerima,</div>
+                        <div class="dn-sign-line">{{ $transaction->type === 'return' ? 'Supplier' : 'Penerima' }}</div>
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
+    @endforeach
 </div>
 
 @if(!empty($printMode))

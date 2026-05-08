@@ -314,7 +314,7 @@ class OutboundController extends Controller
         $items = Item::orderBy('name')->get(['id', 'sku', 'name', 'koli_qty', 'item_type']);
         $warehouses = Warehouse::orderBy('name')->get(['id', 'name', 'code']);
         $suppliers = $this->usesSupplier($type)
-            ? Supplier::orderBy('name')->get(['id', 'name'])
+            ? Supplier::orderBy('name')->get(['id', 'name', 'address'])
             : collect();
         $baseOptions = $this->typeOptions();
         $typeOptions = ['all' => 'Semua'] + $baseOptions;
@@ -381,6 +381,7 @@ class OutboundController extends Controller
                 : null,
             'importRequiresSupplier' => $this->usesSupplier($type),
             'showDeliveryNoteFields' => in_array($type, ['manual', 'return'], true),
+            'showRecipientFields' => $type === 'manual',
             'deliveryNotePrefixMap' => [
                 'picker' => 'SJ-OUT-PCK',
                 'manual' => 'SJ-OUT-MNL',
@@ -430,6 +431,9 @@ class OutboundController extends Controller
                 'outbound_transactions.type',
                 'outbound_transactions.ref_no',
                 'outbound_transactions.supplier_id',
+                'outbound_transactions.recipient_name',
+                'outbound_transactions.recipient_phone',
+                'outbound_transactions.recipient_address',
                 'outbound_transactions.surat_jalan_no',
                 'outbound_transactions.surat_jalan_at',
                 'outbound_transactions.note',
@@ -449,6 +453,9 @@ class OutboundController extends Controller
                 $this->applyTextSearch($q, 'outbound_transactions.code', $search, $exact);
                 $this->applyTextSearch($q, 'outbound_transactions.ref_no', $search, $exact, 'or');
                 $this->applyTextSearch($q, 'outbound_transactions.surat_jalan_no', $search, $exact, 'or');
+                $this->applyTextSearch($q, 'outbound_transactions.recipient_name', $search, $exact, 'or');
+                $this->applyTextSearch($q, 'outbound_transactions.recipient_phone', $search, $exact, 'or');
+                $this->applyTextSearch($q, 'outbound_transactions.recipient_address', $search, $exact, 'or');
                 $q->orWhereHas('supplier', function ($supplierQ) use ($search, $exact) {
                     $this->applyTextSearch($supplierQ, 'name', $search, $exact);
                 })->orWhereHas('items.item', function ($itemQ) use ($search, $exact) {
@@ -512,6 +519,9 @@ class OutboundController extends Controller
                 'warehouse' => $row->warehouse?->name ?? '-',
                 'warehouse_id' => $row->warehouse_id,
                 'supplier' => $row->supplier?->name ?? '-',
+                'recipient_name' => $row->recipient_name ?? '',
+                'recipient_phone' => $row->recipient_phone ?? '',
+                'recipient_address' => $row->recipient_address ?? '',
                 'item' => $itemLabel ?: '-',
                 'qty' => $totalQty,
                 'note' => $row->note ?? '',
@@ -541,6 +551,9 @@ class OutboundController extends Controller
             'ref_no' => $tx->ref_no,
             'supplier_id' => $tx->supplier_id,
             'supplier' => $tx->supplier?->name,
+            'recipient_name' => $tx->recipient_name,
+            'recipient_phone' => $tx->recipient_phone,
+            'recipient_address' => $tx->recipient_address,
             'surat_jalan_no' => $tx->surat_jalan_no,
             'surat_jalan_at' => $tx->surat_jalan_at?->format('Y-m-d'),
             'note' => $tx->note,
@@ -580,6 +593,7 @@ class OutboundController extends Controller
             'transaction' => $tx,
             'totalQty' => $totalQty,
             'showSupplierField' => $this->usesSupplier($type),
+            'showRecipientFields' => $type === 'manual',
             'showDeliveryNoteFields' => in_array($type, ['manual', 'return'], true),
             'warehouseLabel' => $tx->warehouse?->name,
             'backUrl' => route("admin.outbound.{$routeBase}.index"),
@@ -615,6 +629,9 @@ class OutboundController extends Controller
                 'type' => $type,
                 'ref_no' => $validated['ref_no'] ?? null,
                 'supplier_id' => $validated['supplier_id'] ?? null,
+                'recipient_name' => $validated['recipient_name'] ?? null,
+                'recipient_phone' => $validated['recipient_phone'] ?? null,
+                'recipient_address' => $validated['recipient_address'] ?? null,
                 'surat_jalan_no' => $this->resolveDeliveryNoteNo($validated['surat_jalan_no'] ?? null, 'SJ-'.$prefix),
                 'surat_jalan_at' => $validated['surat_jalan_at'] ?? null,
                 'note' => $validated['note'] ?? null,
@@ -682,6 +699,9 @@ class OutboundController extends Controller
             $tx->update([
                 'ref_no' => $validated['ref_no'] ?? null,
                 'supplier_id' => $validated['supplier_id'] ?? null,
+                'recipient_name' => $validated['recipient_name'] ?? null,
+                'recipient_phone' => $validated['recipient_phone'] ?? null,
+                'recipient_address' => $validated['recipient_address'] ?? null,
                 'surat_jalan_no' => $this->resolveDeliveryNoteNo($validated['surat_jalan_no'] ?? null, 'SJ-'.$this->prefixForType($type)),
                 'surat_jalan_at' => $validated['surat_jalan_at'] ?? null,
                 'note' => $validated['note'] ?? null,
@@ -835,6 +855,9 @@ class OutboundController extends Controller
             'ref_no' => ['nullable', 'string', 'max:100'],
             'surat_jalan_no' => ['nullable', 'string', 'max:100'],
             'surat_jalan_at' => ['nullable', 'date'],
+            'recipient_name' => ['nullable', 'string', 'max:150'],
+            'recipient_phone' => ['nullable', 'string', 'max:50'],
+            'recipient_address' => ['nullable', 'string', 'max:1000'],
             'supplier_id' => $usesSupplier
                 ? ['required', 'integer', 'exists:suppliers,id']
                 : ['nullable'],
@@ -847,6 +870,16 @@ class OutboundController extends Controller
             throw ValidationException::withMessages([
                 'supplier_id' => 'Supplier hanya digunakan untuk outbound retur.',
             ]);
+        }
+
+        if ($type !== 'manual') {
+            $validated['recipient_name'] = null;
+            $validated['recipient_phone'] = null;
+            $validated['recipient_address'] = null;
+        } else {
+            $validated['recipient_name'] = $this->normalizeNullableText($validated['recipient_name'] ?? null);
+            $validated['recipient_phone'] = $this->normalizeNullableText($validated['recipient_phone'] ?? null);
+            $validated['recipient_address'] = $this->normalizeNullableText($validated['recipient_address'] ?? null);
         }
 
         $rawItems = collect($validated['items'] ?? [])->values();
@@ -1011,6 +1044,16 @@ class OutboundController extends Controller
         $value = trim((string) $value);
 
         return $value !== '' ? $value : $this->generateCode($prefix);
+    }
+
+    private function normalizeNullableText(mixed $value): ?string
+    {
+        $value = trim((string) $value);
+        if ($value === '') {
+            return null;
+        }
+
+        return preg_replace('/[ \t]+/', ' ', $value) ?? $value;
     }
 
     private function usesSupplier(string $type): bool

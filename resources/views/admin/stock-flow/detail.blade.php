@@ -304,6 +304,20 @@
                             <div class="label">Supplier</div>
                             <div class="value">{{ !empty($showSupplierField ?? false) ? ($transaction->supplier?->name ?? '-') : '-' }}</div>
                         </div>
+                        @if(!empty($showRecipientFields ?? false))
+                            <div class="cell">
+                                <div class="label">Nama Penerima</div>
+                                <div class="value">{{ $transaction->recipient_name ?: '-' }}</div>
+                            </div>
+                            <div class="cell">
+                                <div class="label">Kontak Penerima</div>
+                                <div class="value">{{ $transaction->recipient_phone ?: '-' }}</div>
+                            </div>
+                            <div class="cell">
+                                <div class="label">Alamat Penerima</div>
+                                <div class="value">{{ $transaction->recipient_address ?: '-' }}</div>
+                            </div>
+                        @endif
                         <div class="cell">
                             <div class="label">Dibuat Oleh</div>
                             <div class="value">{{ $transaction->creator?->name ?? '-' }}</div>
@@ -459,6 +473,20 @@
                     <div class="col-md-4">
                         <div class="fw-bold text-gray-600">Tgl. Surat Jalan</div>
                         <div>{{ $transaction->surat_jalan_at?->format('Y-m-d') ?: '-' }}</div>
+                    </div>
+                @endif
+                @if(!empty($showRecipientFields ?? false))
+                    <div class="col-md-4">
+                        <div class="fw-bold text-gray-600">Nama Penerima</div>
+                        <div>{{ $transaction->recipient_name ?: '-' }}</div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="fw-bold text-gray-600">Kontak Penerima</div>
+                        <div>{{ $transaction->recipient_phone ?: '-' }}</div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="fw-bold text-gray-600">Alamat Penerima</div>
+                        <div>{{ $transaction->recipient_address ?: '-' }}</div>
                     </div>
                 @endif
                 <div class="col-md-4">

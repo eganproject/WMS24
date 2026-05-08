@@ -21,7 +21,11 @@ class SupplierController extends Controller
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
-            $this->applyTextSearch($query, 'name', $search, $this->isExactSearch($request));
+            $exact = $this->isExactSearch($request);
+            $query->where(function ($q) use ($search, $exact) {
+                $this->applyTextSearch($q, 'name', $search, $exact);
+                $this->applyTextSearch($q, 'address', $search, $exact, 'or');
+            });
         }
 
         $recordsTotal = Supplier::count();
@@ -37,6 +41,7 @@ class SupplierController extends Controller
             return [
                 'id' => $supplier->id,
                 'name' => $supplier->name,
+                'address' => $supplier->address,
             ];
         });
 
@@ -52,10 +57,12 @@ class SupplierController extends Controller
     {
         $request->merge([
             'name' => $this->normalizeName((string) $request->input('name')),
+            'address' => $this->normalizeNullableText($request->input('address')),
         ]);
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:150', 'unique:suppliers,name'],
+            'address' => ['nullable', 'string', 'max:1000'],
         ]);
 
         DB::beginTransaction();
@@ -68,6 +75,7 @@ class SupplierController extends Controller
                 'supplier' => [
                     'id' => $supplier->id,
                     'name' => $supplier->name,
+                    'address' => $supplier->address,
                 ],
             ]);
         } catch (\Throwable $e) {
@@ -84,6 +92,7 @@ class SupplierController extends Controller
     {
         $request->merge([
             'name' => $this->normalizeName((string) $request->input('name')),
+            'address' => $this->normalizeNullableText($request->input('address')),
         ]);
 
         $validated = $request->validate([
@@ -93,6 +102,7 @@ class SupplierController extends Controller
                 'max:150',
                 Rule::unique('suppliers', 'name')->ignore($supplier->id),
             ],
+            'address' => ['nullable', 'string', 'max:1000'],
         ]);
 
         DB::beginTransaction();
@@ -105,6 +115,7 @@ class SupplierController extends Controller
                 'supplier' => [
                     'id' => $supplier->id,
                     'name' => $supplier->name,
+                    'address' => $supplier->address,
                 ],
             ]);
         } catch (\Throwable $e) {
@@ -148,5 +159,15 @@ class SupplierController extends Controller
     {
         $name = trim($name);
         return preg_replace('/\s+/', ' ', $name) ?? $name;
+    }
+
+    private function normalizeNullableText(mixed $value): ?string
+    {
+        $value = trim((string) $value);
+        if ($value === '') {
+            return null;
+        }
+
+        return preg_replace('/[ \t]+/', ' ', $value) ?? $value;
     }
 }

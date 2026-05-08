@@ -138,10 +138,16 @@
                 { data: 'items', orderable: false, searchable: false },
                 { data: 'qty', className: 'text-end fw-bold' },
                 { data: 'status', orderable: false, searchable: false, render: statusBadge },
-                { data: 'id', orderable: false, searchable: false, className: 'text-end', render: (data) => `
-                    <a href="${showUrlTpl.replace(':id', data)}" class="btn btn-sm btn-light-primary me-2">Detail</a>
-                    <a href="${printUrlTpl.replace(':id', data)}" target="_blank" rel="noopener" class="btn btn-sm btn-primary">Cetak</a>
-                ` },
+                { data: 'id', orderable: false, searchable: false, className: 'text-end', render: (data, type, row) => {
+                    const actionButtons = ['pending_qc', 'qc_scanning', 'approved'].includes(row?.status)
+                        ? `
+                            <a href="${showUrlTpl.replace(':id', data)}" class="btn btn-sm btn-light-primary me-2">Detail</a>
+                            <a href="${printUrlTpl.replace(':id', data)}" target="_blank" rel="noopener" class="btn btn-sm btn-primary">Cetak</a>
+                        `
+                        : '<span class="badge badge-light-warning">Belum approve</span>';
+
+                    return actionButtons;
+                } },
             ],
         });
 

@@ -112,6 +112,9 @@
                         @if(!empty($showSupplierColumn ?? false))
                             <th>Supplier</th>
                         @endif
+                        @if(!empty($showRecipientFields ?? false))
+                            <th>Penerima</th>
+                        @endif
                         <th>Item</th>
                         <th>Qty</th>
                         @if(!empty($showScanProgressColumn ?? false))
@@ -175,6 +178,27 @@
                         <input type="text" class="form-control form-control-solid" name="ref_no" id="flow_ref_no" />
                         <div class="invalid-feedback" id="error_ref_no"></div>
                     </div>
+                    @if(!empty($showRecipientFields ?? false))
+                        <div id="flow_recipient_fields">
+                            <div class="row g-4 mb-7">
+                                <div class="col-md-6">
+                                    <label class="fs-6 fw-bold form-label mb-2">Nama Penerima</label>
+                                    <input type="text" class="form-control form-control-solid" name="recipient_name" id="flow_recipient_name" />
+                                    <div class="invalid-feedback" id="error_recipient_name"></div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="fs-6 fw-bold form-label mb-2">Telepon/Kontak Penerima</label>
+                                    <input type="text" class="form-control form-control-solid" name="recipient_phone" id="flow_recipient_phone" />
+                                    <div class="invalid-feedback" id="error_recipient_phone"></div>
+                                </div>
+                            </div>
+                            <div class="fv-row mb-7">
+                                <label class="fs-6 fw-bold form-label mb-2">Alamat Penerima</label>
+                                <textarea class="form-control form-control-solid" name="recipient_address" id="flow_recipient_address" rows="3"></textarea>
+                                <div class="invalid-feedback" id="error_recipient_address"></div>
+                            </div>
+                        </div>
+                    @endif
                     @if(isset($supplierFlowTypes) && count($supplierFlowTypes) > 0)
                         <div class="fv-row mb-7" id="flow_supplier_row" style="display:none;">
                             <label class="fs-6 fw-bold form-label mb-2">Supplier</label>
@@ -353,6 +377,7 @@
     const deleteWarningText = @json($deleteWarningText ?? 'Data akan dihapus dan stok akan dikembalikan');
     const showScanProgressColumn = {{ !empty($showScanProgressColumn ?? false) ? 'true' : 'false' }};
     const deliveryNotePrefixMap = @json($deliveryNotePrefixMap ?? []);
+    const showRecipientFields = {{ !empty($showRecipientFields ?? false) ? 'true' : 'false' }};
 
     document.addEventListener('DOMContentLoaded', () => {
         const tableEl = $('#stock_flow_table');
@@ -387,6 +412,10 @@
         const warehouseSelect = document.getElementById('flow_warehouse_id');
         const supplierRow = document.getElementById('flow_supplier_row');
         const supplierSelect = document.getElementById('flow_supplier_id');
+        const recipientFields = document.getElementById('flow_recipient_fields');
+        const recipientNameEl = document.getElementById('flow_recipient_name');
+        const recipientPhoneEl = document.getElementById('flow_recipient_phone');
+        const recipientAddressEl = document.getElementById('flow_recipient_address');
         const suratJalanNoEl = document.getElementById('flow_surat_jalan_no');
         const suratJalanAtEl = document.getElementById('flow_surat_jalan_at');
         let fpFrom = null;
@@ -477,7 +506,7 @@
         };
 
         const clearErrors = () => {
-            ['error_transacted_at','error_ref_no','error_supplier_id','error_surat_jalan_no','error_surat_jalan_at','error_note','error_warehouse_id'].forEach(id => {
+            ['error_transacted_at','error_ref_no','error_recipient_name','error_recipient_phone','error_recipient_address','error_supplier_id','error_surat_jalan_no','error_surat_jalan_at','error_note','error_warehouse_id'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.textContent = '';
             });
@@ -833,6 +862,17 @@
             }
         };
 
+        const applyRecipientVisibility = (flowType) => {
+            if (!recipientFields) return;
+            const shouldShow = showRecipientFields && flowType === 'manual';
+            recipientFields.style.display = shouldShow ? '' : 'none';
+            if (!shouldShow) {
+                if (recipientNameEl) recipientNameEl.value = '';
+                if (recipientPhoneEl) recipientPhoneEl.value = '';
+                if (recipientAddressEl) recipientAddressEl.value = '';
+            }
+        };
+
         if (typeof flatpickr !== 'undefined') {
             if (dateFromEl) {
                 fpFrom = flatpickr(dateFromEl, { dateFormat: 'Y-m-d', allowInput: true });
@@ -946,6 +986,7 @@
             }
             applyWarehouseVisibility(defaultTypeFilter || '');
             applySupplierVisibility(defaultTypeFilter || '');
+            applyRecipientVisibility(defaultTypeFilter || '');
             if (supplierSelect) {
                 supplierSelect.value = '';
                 if (typeof $ !== 'undefined' && $(supplierSelect).data('select2')) {
@@ -1059,6 +1100,20 @@
                 @if(!empty($showSupplierColumn ?? false))
                     { data: 'supplier' },
                 @endif
+                @if(!empty($showRecipientFields ?? false))
+                    { data: 'recipient_name', orderable: false, searchable: false, render: (data, type, row) => {
+                        const name = data || '';
+                        const phone = row?.recipient_phone || '';
+                        const address = row?.recipient_address || '';
+                        if (!name && !phone && !address) return '<span class="text-muted">-</span>';
+                        const lines = [
+                            name ? `<div class="fw-bold">${escapeHtml(name)}</div>` : '',
+                            phone ? `<div class="text-muted fs-8">${escapeHtml(phone)}</div>` : '',
+                            address ? `<div class="text-muted fs-8">${escapeHtml(address).replace(/\n/g, '<br>')}</div>` : '',
+                        ].filter(Boolean);
+                        return lines.join('');
+                    }},
+                @endif
                 { data: 'item' },
                 { data: 'qty' },
                 @if(!empty($showScanProgressColumn ?? false))
@@ -1074,10 +1129,11 @@
                     const detailItem = `<div class="menu-item px-3"><a href="${resolveRoute(rowType, 'detail').replace(':id', data)}" class="menu-link px-3">Detail</a></div>`;
                     const deliveryNoteRoute = resolveRoute(rowType, 'delivery_note');
                     const deliveryNotePrintRoute = resolveRoute(rowType, 'delivery_note_print');
-                    const deliveryNoteItem = (['manual', 'return'].includes(rowType) && row?.surat_jalan_no && deliveryNoteRoute)
+                    const canPrintDeliveryNote = ['pending_qc', 'qc_scanning', 'approved'].includes(row?.status);
+                    const deliveryNoteItem = (['manual', 'return'].includes(rowType) && row?.surat_jalan_no && canPrintDeliveryNote && deliveryNoteRoute)
                         ? `<div class="menu-item px-3"><a href="${deliveryNoteRoute.replace(':id', data)}" class="menu-link px-3">Detail Surat Jalan</a></div>`
                         : '';
-                    const deliveryNotePrintItem = (['manual', 'return'].includes(rowType) && row?.surat_jalan_no && deliveryNotePrintRoute)
+                    const deliveryNotePrintItem = (['manual', 'return'].includes(rowType) && row?.surat_jalan_no && canPrintDeliveryNote && deliveryNotePrintRoute)
                         ? `<div class="menu-item px-3"><a href="${deliveryNotePrintRoute.replace(':id', data)}" class="menu-link px-3" target="_blank" rel="noopener">Cetak Surat Jalan</a></div>`
                         : '';
                     const qrPdfRoute = resolveRoute(rowType, 'qr_pdf');
@@ -1418,6 +1474,10 @@
             if (modalTitle) modalTitle.textContent = `Edit ${json.code || ''}`.trim();
                 document.getElementById('flow_ref_no').value = json.ref_no || '';
                 applySupplierVisibility(rowType);
+                applyRecipientVisibility(rowType);
+                if (recipientNameEl) recipientNameEl.value = json.recipient_name || '';
+                if (recipientPhoneEl) recipientPhoneEl.value = json.recipient_phone || '';
+                if (recipientAddressEl) recipientAddressEl.value = json.recipient_address || '';
                 if (supplierSelect) {
                     supplierSelect.value = json.supplier_id ? String(json.supplier_id) : '';
                     if (typeof $ !== 'undefined' && $(supplierSelect).data('select2')) {

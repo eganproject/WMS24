@@ -17,7 +17,7 @@ class SearchModeTest extends TestCase
 
     public function test_supplier_data_supports_contains_and_exact_search_modes(): void
     {
-        Supplier::create(['name' => 'BAN']);
+        Supplier::create(['name' => 'BAN', 'address' => 'Jl. Utama Supplier']);
         Supplier::create(['name' => 'BAN BESAR']);
 
         $containsResponse = $this->withoutMiddleware()->getJson(route('admin.masterdata.suppliers.data', [
@@ -42,6 +42,17 @@ class SearchModeTest extends TestCase
         $exactResponse->assertOk();
         $exactNames = Collection::make($exactResponse->json('data'))->pluck('name')->all();
         $this->assertSame(['BAN'], $exactNames);
+
+        $addressResponse = $this->withoutMiddleware()->getJson(route('admin.masterdata.suppliers.data', [
+            'draw' => 1,
+            'start' => 0,
+            'length' => 25,
+            'q' => 'Utama Supplier',
+        ]));
+
+        $addressResponse->assertOk();
+        $this->assertSame(['BAN'], Collection::make($addressResponse->json('data'))->pluck('name')->all());
+        $this->assertSame('Jl. Utama Supplier', $addressResponse->json('data.0.address'));
     }
 
     public function test_customer_return_data_supports_exact_search_for_related_item_sku(): void

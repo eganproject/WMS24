@@ -31,6 +31,9 @@ class OutboundManualStockValidationTest extends TestCase
             ->postJson(route('admin.outbound.manuals.store'), [
                 'warehouse_id' => $warehouse->id,
                 'transacted_at' => now()->format('Y-m-d H:i'),
+                'recipient_name' => 'Budi Penerima',
+                'recipient_phone' => '08123456789',
+                'recipient_address' => 'Jl. Manual No. 10',
                 'items' => [
                     [
                         'item_id' => $item->id,
@@ -63,6 +66,9 @@ class OutboundManualStockValidationTest extends TestCase
             ->postJson(route('admin.outbound.manuals.store'), [
                 'warehouse_id' => $warehouse->id,
                 'transacted_at' => now()->format('Y-m-d H:i'),
+                'recipient_name' => 'Budi Penerima',
+                'recipient_phone' => '08123456789',
+                'recipient_address' => 'Jl. Manual No. 10',
                 'items' => [
                     [
                         'item_id' => $item->id,
@@ -75,6 +81,9 @@ class OutboundManualStockValidationTest extends TestCase
         $transaction = OutboundTransaction::firstOrFail();
         $this->assertSame('manual', $transaction->type);
         $this->assertSame($warehouse->id, (int) $transaction->warehouse_id);
+        $this->assertSame('Budi Penerima', $transaction->recipient_name);
+        $this->assertSame('08123456789', $transaction->recipient_phone);
+        $this->assertSame('Jl. Manual No. 10', $transaction->recipient_address);
         $this->assertSame('pending', $transaction->status);
     }
 

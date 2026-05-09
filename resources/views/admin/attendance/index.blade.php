@@ -372,7 +372,11 @@
                     </div>
                     <form class="row g-3 ajax-form" data-table="employees_table" action="{{ route('admin.attendance.employees.store') }}">
                         @csrf
-                        <div class="col-12 col-md-6 col-lg-3"><label class="form-label fw-bold">Kode Karyawan</label><input name="employee_code" class="form-control form-control-solid" placeholder="EMP001" required></div>
+                        <div class="col-12 col-md-6 col-lg-3">
+                            <label class="form-label fw-bold">Kode Karyawan</label>
+                            <input name="employee_code" class="form-control form-control-solid" placeholder="Otomatis jika kosong">
+                            <div class="form-text">Kosongkan untuk kode otomatis, contoh K0001.</div>
+                        </div>
                         <div class="col-12 col-md-6 col-lg-4"><label class="form-label fw-bold">Nama</label><input name="name" class="form-control form-control-solid" placeholder="Nama lengkap karyawan" required></div>
                         <div class="col-12 col-md-6 col-lg-3"><label class="form-label fw-bold">Telepon</label><input name="phone" class="form-control form-control-solid" placeholder="08xxxxxxxxxx"></div>
                         <div class="col-12 col-md-6 col-lg-2">
@@ -832,12 +836,12 @@
                 <div class="alert alert-info border-0 mb-5" style="background:#eff8ff;">
                     <div class="fw-bold mb-2">Format kolom Excel</div>
                     <div class="fs-7 text-muted">
-                        Wajib: <code>employee_code</code>, <code>name</code>.
+                        Wajib: <code>name</code>.
                         Opsional: <code>phone</code>, <code>employment_status</code>, <code>position</code>,
                         <code>position_id</code>, <code>area</code>, <code>area_id</code>, <code>user_email</code>,
-                        <code>user_id</code>, <code>join_date</code>.
+                        <code>user_id</code>, <code>join_date</code>, <code>employee_code</code>.
                     </div>
-                    <div class="fs-8 text-muted mt-2">Status kerja isi <code>active</code> atau <code>inactive</code>. Area dan jabatan bisa memakai ID, kode, atau nama.</div>
+                    <div class="fs-8 text-muted mt-2">Kosongkan <code>employee_code</code> agar sistem membuat kode pendek otomatis. Status kerja isi <code>active</code> atau <code>inactive</code>.</div>
                 </div>
                 <div class="mb-4">
                     <label class="form-label fw-bold">Mode Import</label>

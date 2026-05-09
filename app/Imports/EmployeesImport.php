@@ -15,7 +15,6 @@ class EmployeesImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
 
     /** @var array<int,string> */
     private array $requiredHeaders = [
-        'employee_code',
         'name',
     ];
 
@@ -35,7 +34,7 @@ class EmployeesImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
         if (!empty($missing)) {
             $detected = implode(', ', array_filter($headers));
             throw ValidationException::withMessages([
-                'file' => 'Header wajib: employee_code, name. Header opsional: phone, employment_status, position, position_id, area, area_id, user_email, user_id, join_date. '
+                'file' => 'Header wajib: name. Header opsional: employee_code, phone, employment_status, position, position_id, area, area_id, user_email, user_id, join_date. '
                     .($detected !== '' ? 'Header terdeteksi: '.$detected : ''),
             ]);
         }
@@ -58,17 +57,19 @@ class EmployeesImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             $userRaw = trim((string) ($rowData['user_id'] ?? $rowData['user_email'] ?? $rowData['email'] ?? ''));
             $joinDate = $rowData['join_date'] ?? null;
 
-            if ($employeeCode === '' || $name === '') {
-                $errors[] = "Baris {$rowIndex}: Kode karyawan dan nama wajib diisi";
+            if ($name === '') {
+                $errors[] = "Baris {$rowIndex}: Nama wajib diisi";
                 continue;
             }
 
             $codeKey = strtolower($employeeCode);
-            if (isset($seenCodes[$codeKey])) {
+            if ($codeKey !== '' && isset($seenCodes[$codeKey])) {
                 $errors[] = "Baris {$rowIndex}: Kode karyawan duplikat di file ({$employeeCode})";
                 continue;
             }
-            $seenCodes[$codeKey] = true;
+            if ($codeKey !== '') {
+                $seenCodes[$codeKey] = true;
+            }
 
             if (!in_array($employmentStatus, ['active', 'inactive'], true)) {
                 $errors[] = "Baris {$rowIndex}: employment_status harus active atau inactive";

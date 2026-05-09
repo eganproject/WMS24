@@ -12,7 +12,7 @@ class EmployeesTemplateExport implements FromCollection, WithHeadings
     {
         return new Collection([
             [
-                'EMP001',
+                '',
                 'Budi Santoso',
                 '081234567890',
                 'active',

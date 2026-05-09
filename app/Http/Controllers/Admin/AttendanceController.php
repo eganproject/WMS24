@@ -155,6 +155,7 @@ class AttendanceController extends Controller
     public function storeEmployee(Request $request)
     {
         $validated = $this->validateEmployee($request);
+        $validated['employee_code'] = $validated['employee_code'] ?: $this->generateEmployeeCode();
         $employee = Employee::create($validated);
 
         return response()->json(['message' => 'Karyawan berhasil dibuat', 'employee' => $employee]);
@@ -193,15 +194,24 @@ class AttendanceController extends Controller
 
         $errors = [];
         $prepared = [];
+        $reservedCodes = [];
 
         foreach ($rows as $row) {
             $rowNo = $row['row'] ?? '?';
-            $employeeCode = (string) $row['employee_code'];
-            $existingEmployee = Employee::query()->where('employee_code', $employeeCode)->first();
+            $employeeCode = trim((string) ($row['employee_code'] ?? ''));
+            $existingEmployee = $employeeCode !== ''
+                ? Employee::query()->where('employee_code', $employeeCode)->first()
+                : null;
 
             if ($existingEmployee && $mode === 'create_only') {
                 $errors[] = "Baris {$rowNo}: Kode karyawan sudah ada ({$employeeCode})";
                 continue;
+            }
+
+            if ($employeeCode === '') {
+                $employeeCode = $this->generateEmployeeCode($reservedCodes);
+            } else {
+                $reservedCodes[strtolower($employeeCode)] = true;
             }
 
             $areaId = null;
@@ -322,6 +332,7 @@ class AttendanceController extends Controller
     public function updateEmployee(Request $request, Employee $employee)
     {
         $validated = $this->validateEmployee($request, $employee);
+        $validated['employee_code'] = $validated['employee_code'] ?: $this->generateEmployeeCode();
         $employee->update($validated);
 
         return response()->json(['message' => 'Karyawan berhasil diperbarui', 'employee' => $employee]);
@@ -1238,17 +1249,47 @@ class AttendanceController extends Controller
 
     private function validateEmployee(Request $request, ?Employee $employee = null): array
     {
-        return $request->validate([
+        $validated = $request->validate([
             'user_id' => ['nullable', 'integer', 'exists:users,id', Rule::unique('employees', 'user_id')->ignore($employee?->id)],
             'area_id' => ['nullable', 'integer', 'exists:areas,id'],
             'position_id' => ['nullable', 'integer', 'exists:employee_positions,id'],
-            'employee_code' => ['required', 'string', 'max:50', Rule::unique('employees', 'employee_code')->ignore($employee?->id)],
+            'employee_code' => ['nullable', 'string', 'max:20', Rule::unique('employees', 'employee_code')->ignore($employee?->id)],
             'name' => ['required', 'string', 'max:150'],
             'phone' => ['nullable', 'string', 'max:50'],
             'position' => ['nullable', 'string', 'max:100'],
             'join_date' => ['nullable', 'date'],
             'employment_status' => ['required', 'string', 'max:30'],
         ]);
+
+        $validated['employee_code'] = trim((string) ($validated['employee_code'] ?? ''));
+
+        return $validated;
+    }
+
+    private function generateEmployeeCode(array &$reserved = []): string
+    {
+        $prefix = 'K';
+        $width = 4;
+        $maxNumber = Employee::query()
+            ->where('employee_code', 'like', $prefix.'%')
+            ->pluck('employee_code')
+            ->map(function ($code) use ($prefix) {
+                $suffix = substr((string) $code, strlen($prefix));
+                return ctype_digit($suffix) ? (int) $suffix : 0;
+            })
+            ->max() ?? 0;
+
+        $number = max(0, (int) $maxNumber) + 1;
+        do {
+            $code = $prefix.str_pad((string) $number, $width, '0', STR_PAD_LEFT);
+            $key = strtolower($code);
+            $exists = isset($reserved[$key]) || Employee::query()->where('employee_code', $code)->exists();
+            $number++;
+        } while ($exists);
+
+        $reserved[$key] = true;
+
+        return $code;
     }
 
     private function parseEmployeeImportDate(mixed $value, int|string $rowNo): ?string

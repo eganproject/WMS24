@@ -878,12 +878,14 @@ class AttendanceController extends Controller
             'weekly_schedule_template_id' => ['required', 'integer', 'exists:weekly_schedule_templates,id'],
             'effective_from' => ['required', 'date'],
             'effective_until' => ['nullable', 'date', 'after_or_equal:effective_from'],
+            'conflict_strategy' => ['nullable', 'string', Rule::in(['overwrite', 'skip_existing'])],
         ]);
 
         $from = Carbon::parse($validated['effective_from'])->startOfDay();
         $until = !empty($validated['effective_until'])
             ? Carbon::parse($validated['effective_until'])->startOfDay()
             : $from->copy()->endOfMonth();
+        $validated['effective_until'] = $until->toDateString();
 
         if ($from->diffInDays($until) > 366) {
             return response()->json([
@@ -892,10 +894,25 @@ class AttendanceController extends Controller
             ], 422);
         }
 
+        $conflicts = $this->detectTemplateAssignmentConflicts((int) $validated['employee_id'], $from, $until);
+        if (empty($validated['conflict_strategy']) && ($conflicts['schedule_count'] > 0 || $conflicts['assignment_count'] > 0)) {
+            return response()->json([
+                'message' => 'Periode ini memiliki jadwal atau assignment template yang sudah ada.',
+                'requires_decision' => true,
+                'conflicts' => $conflicts,
+            ], 409);
+        }
+
+        $strategy = $validated['conflict_strategy'] ?? 'overwrite';
+        unset($validated['conflict_strategy']);
+
         $generatedCount = 0;
-        $assignment = DB::transaction(function () use ($validated, $from, $until, &$generatedCount) {
+        $skippedCount = 0;
+        $assignment = DB::transaction(function () use ($validated, $from, $until, $strategy, &$generatedCount, &$skippedCount) {
             $assignment = EmployeeScheduleAssignment::create($validated);
-            $generatedCount = $this->materializeTemplateSchedules($assignment, $from, $until);
+            $result = $this->materializeTemplateSchedules($assignment, $from, $until, $strategy);
+            $generatedCount = $result['generated'];
+            $skippedCount = $result['skipped'];
 
             return $assignment;
         });
@@ -912,6 +929,8 @@ class AttendanceController extends Controller
                 'effective_until' => $assignment->effective_until?->toDateString(),
             ],
             'generated_count' => $generatedCount,
+            'skipped_count' => $skippedCount,
+            'conflict_strategy' => $strategy,
             'generated_until' => $until->toDateString(),
         ]);
     }
@@ -1460,7 +1479,38 @@ class AttendanceController extends Controller
         }
     }
 
-    private function materializeTemplateSchedules(EmployeeScheduleAssignment $assignment, Carbon $from, Carbon $until): int
+    private function detectTemplateAssignmentConflicts(int $employeeId, Carbon $from, Carbon $until): array
+    {
+        $existingScheduleDates = EmployeeSchedule::query()
+            ->where('employee_id', $employeeId)
+            ->whereDate('schedule_date', '>=', $from->toDateString())
+            ->whereDate('schedule_date', '<=', $until->toDateString())
+            ->orderBy('schedule_date')
+            ->pluck('schedule_date')
+            ->map(fn ($date) => Carbon::parse($date)->toDateString())
+            ->values();
+
+        $assignmentCount = EmployeeScheduleAssignment::query()
+            ->where('employee_id', $employeeId)
+            ->whereDate('effective_from', '<=', $until->toDateString())
+            ->where(function ($query) use ($from) {
+                $query->whereNull('effective_until')
+                    ->orWhereDate('effective_until', '>=', $from->toDateString());
+            })
+            ->count();
+
+        return [
+            'schedule_count' => $existingScheduleDates->count(),
+            'assignment_count' => $assignmentCount,
+            'date_samples' => $existingScheduleDates->take(8)->all(),
+            'period' => [
+                'from' => $from->toDateString(),
+                'until' => $until->toDateString(),
+            ],
+        ];
+    }
+
+    private function materializeTemplateSchedules(EmployeeScheduleAssignment $assignment, Carbon $from, Carbon $until, string $strategy = 'overwrite'): array
     {
         $templateDays = WeeklyScheduleTemplateDay::query()
             ->where('weekly_schedule_template_id', $assignment->weekly_schedule_template_id)
@@ -1470,23 +1520,31 @@ class AttendanceController extends Controller
         $employee = Employee::findOrFail($assignment->employee_id);
         $current = $from->copy();
         $generatedCount = 0;
+        $skippedCount = 0;
 
         while ($current->lte($until)) {
             $templateDay = $templateDays->get((int) $current->dayOfWeekIso);
 
             if ($templateDay) {
-                $schedule = EmployeeSchedule::query()->updateOrCreate(
-                    [
-                        'employee_id' => $assignment->employee_id,
-                        'schedule_date' => $current->toDateString(),
-                    ],
-                    [
-                        'work_shift_id' => $templateDay->schedule_type === EmployeeSchedule::TYPE_WORK ? $templateDay->work_shift_id : null,
-                        'schedule_type' => $templateDay->schedule_type,
-                        'note' => 'Dibuat dari template jadwal',
-                        'created_by' => auth()->id(),
-                    ]
-                );
+                $scheduleDate = $current->toDateString();
+                $attributes = [
+                    'employee_id' => $assignment->employee_id,
+                    'schedule_date' => $scheduleDate,
+                ];
+                $values = [
+                    'work_shift_id' => $templateDay->schedule_type === EmployeeSchedule::TYPE_WORK ? $templateDay->work_shift_id : null,
+                    'schedule_type' => $templateDay->schedule_type,
+                    'note' => 'Dibuat dari template jadwal',
+                    'created_by' => auth()->id(),
+                ];
+
+                if ($strategy === 'skip_existing' && EmployeeSchedule::query()->where($attributes)->exists()) {
+                    $skippedCount++;
+                    $current->addDay();
+                    continue;
+                }
+
+                $schedule = EmployeeSchedule::query()->updateOrCreate($attributes, $values);
 
                 app(AttendanceProcessor::class)->rebuildDailyAttendance($employee, $schedule->schedule_date);
                 $generatedCount++;
@@ -1495,7 +1553,10 @@ class AttendanceController extends Controller
             $current->addDay();
         }
 
-        return $generatedCount;
+        return [
+            'generated' => $generatedCount,
+            'skipped' => $skippedCount,
+        ];
     }
 
     private function applySearch($query, Request $request, array $columns): void

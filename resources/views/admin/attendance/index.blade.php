@@ -1468,7 +1468,10 @@ document.addEventListener('DOMContentLoaded', () => {
         templateAssignmentResult.querySelector('[data-result="employee"]').textContent = employee;
         templateAssignmentResult.querySelector('[data-result="template"]').textContent = template;
         templateAssignmentResult.querySelector('[data-result="period"]').textContent = `${from} s/d ${until}`;
-        templateAssignmentResult.querySelector('[data-result="count"]').textContent = `${json?.generated_count ?? 0} jadwal`;
+        const skipped = Number(json?.skipped_count || 0);
+        templateAssignmentResult.querySelector('[data-result="count"]').textContent = skipped > 0
+            ? `${json?.generated_count ?? 0} dibuat, ${skipped} dilewati`
+            : `${json?.generated_count ?? 0} jadwal`;
         templateAssignmentResult.classList.remove('d-none');
     };
 
@@ -1830,6 +1833,91 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => form.querySelector('input, select, textarea')?.focus(), 250);
     };
 
+    const finishSuccessfulFormSubmit = (form, json) => {
+        if (json?.notification?.late_check_in) {
+            Swal?.fire('Absensi Terlambat', json.notification.message || 'Karyawan terlambat.', 'warning');
+        } else {
+            Swal?.fire('Berhasil', json?.message || 'Data tersimpan', 'success');
+        }
+        if (form.action === assignTemplateUrl) {
+            setAssignmentResult(json);
+        }
+        form.reset();
+        clearEditState(form);
+        $(form).find('select').trigger('change.select2');
+        updateTemplateShiftState(form);
+        if (form.id === 'template_assignment_form') {
+            renderTemplateAssignmentPreview();
+        }
+        const tableId = form.getAttribute('data-table');
+        tables[tableId]?.ajax.reload();
+        if (form.action === assignTemplateUrl) {
+            tables.schedules_table?.ajax.reload();
+        }
+        scheduleCalendar?.refetchEvents();
+        formModal?.hide();
+    };
+
+    const confirmTemplateAssignmentConflict = async (form, conflictJson, isEditing) => {
+        const conflicts = conflictJson?.conflicts || {};
+        const dateSamples = Array.isArray(conflicts.date_samples) && conflicts.date_samples.length
+            ? `<div class="mt-2 fs-8 text-muted">Contoh tanggal: ${conflicts.date_samples.join(', ')}</div>`
+            : '';
+        const html = `
+            <div class="text-start">
+                <div>Periode ini sudah memiliki <strong>${conflicts.schedule_count || 0}</strong> jadwal dan <strong>${conflicts.assignment_count || 0}</strong> assignment template yang overlap.</div>
+                ${dateSamples}
+                <div class="mt-3">Pilih cara sistem menerapkan template baru.</div>
+            </div>
+        `;
+        const decision = typeof Swal !== 'undefined'
+            ? await Swal.fire({
+                title: 'Jadwal sudah ada',
+                html,
+                icon: 'warning',
+                showDenyButton: true,
+                showCancelButton: true,
+                confirmButtonText: 'Timpa jadwal lama',
+                denyButtonText: 'Lewati yang sudah ada',
+                cancelButtonText: 'Batalkan',
+                reverseButtons: true,
+                width: 680,
+            })
+            : { isDismissed: true };
+
+        const strategy = decision.isConfirmed
+            ? 'overwrite'
+            : decision.isDenied
+                ? 'skip_existing'
+                : null;
+        if (!strategy) return;
+
+        restoreOriginalNames(form);
+        const retryFormData = new FormData(form);
+        retryFormData.append('conflict_strategy', strategy);
+        if (isEditing) {
+            retryFormData.append('_method', 'PUT');
+        }
+        maskAutocompleteFields(form);
+
+        try {
+            const response = await fetch(isEditing ? form.dataset.editUrl : form.action, {
+                method: 'POST',
+                headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' },
+                body: retryFormData,
+            });
+            const json = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                const firstError = json?.errors ? Object.values(json.errors)[0]?.[0] : null;
+                Swal?.fire('Error', firstError || json?.message || 'Gagal menyimpan data', 'error');
+                return;
+            }
+            finishSuccessfulFormSubmit(form, json);
+        } catch (error) {
+            Swal?.fire('Error', 'Gagal mengirim request', 'error');
+        }
+    };
+
     document.querySelectorAll('.ajax-form').forEach((form) => {
         form.addEventListener('submit', async (event) => {
             event.preventDefault();
@@ -1872,32 +1960,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 const json = await response.json().catch(() => ({}));
                 if (!response.ok) {
+                    if (response.status === 409 && form.action === assignTemplateUrl && json?.requires_decision) {
+                        await confirmTemplateAssignmentConflict(form, json, isEditing);
+                        return;
+                    }
                     const firstError = json?.errors ? Object.values(json.errors)[0]?.[0] : null;
                     Swal?.fire('Error', firstError || json?.message || 'Gagal menyimpan data', 'error');
                     return;
                 }
-                if (json?.notification?.late_check_in) {
-                    Swal?.fire('Absensi Terlambat', json.notification.message || 'Karyawan terlambat.', 'warning');
-                } else {
-                    Swal?.fire('Berhasil', json?.message || 'Data tersimpan', 'success');
-                }
-                if (form.action === assignTemplateUrl) {
-                    setAssignmentResult(json);
-                }
-                form.reset();
-                clearEditState(form);
-                $(form).find('select').trigger('change.select2');
-                updateTemplateShiftState(form);
-                if (form.id === 'template_assignment_form') {
-                    renderTemplateAssignmentPreview();
-                }
-                const tableId = form.getAttribute('data-table');
-                tables[tableId]?.ajax.reload();
-                if (form.action === assignTemplateUrl) {
-                    tables.schedules_table?.ajax.reload();
-                }
-                scheduleCalendar?.refetchEvents();
-                formModal?.hide();
+                finishSuccessfulFormSubmit(form, json);
             } catch (error) {
                 Swal?.fire('Error', 'Gagal mengirim request', 'error');
             }

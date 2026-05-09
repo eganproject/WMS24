@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Exports\EmployeesTemplateExport;
+use App\Imports\EmployeesImport;
 use App\Models\Area;
 use App\Models\Attendance;
 use App\Models\AttendanceDevice;
@@ -26,6 +28,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Maatwebsite\Excel\Facades\Excel;
 
 class AttendanceController extends Controller
 {
@@ -155,6 +158,165 @@ class AttendanceController extends Controller
         $employee = Employee::create($validated);
 
         return response()->json(['message' => 'Karyawan berhasil dibuat', 'employee' => $employee]);
+    }
+
+    public function importEmployees(Request $request)
+    {
+        $validated = $request->validate([
+            'file' => ['required', 'file', 'mimes:xlsx,xls'],
+            'mode' => ['nullable', Rule::in(['create_only', 'upsert'])],
+        ]);
+
+        $mode = $validated['mode'] ?? 'create_only';
+        $import = new EmployeesImport();
+        Excel::import($import, $validated['file']);
+
+        $rows = $import->rows;
+        if (empty($rows)) {
+            throw ValidationException::withMessages([
+                'file' => 'Tidak ada data valid untuk diimport',
+            ]);
+        }
+
+        $areas = Area::query()->get(['id', 'code', 'name']);
+        $areaById = $areas->keyBy(fn ($area) => (string) $area->id);
+        $areaByCode = $areas->keyBy(fn ($area) => strtolower((string) $area->code));
+        $areaByName = $areas->keyBy(fn ($area) => strtolower((string) $area->name));
+
+        $positions = EmployeePosition::query()->get(['id', 'name']);
+        $positionById = $positions->keyBy(fn ($position) => (string) $position->id);
+        $positionByName = $positions->keyBy(fn ($position) => strtolower((string) $position->name));
+
+        $users = User::query()->get(['id', 'name', 'email']);
+        $userById = $users->keyBy(fn ($user) => (string) $user->id);
+        $userByEmail = $users->keyBy(fn ($user) => strtolower((string) $user->email));
+
+        $errors = [];
+        $prepared = [];
+
+        foreach ($rows as $row) {
+            $rowNo = $row['row'] ?? '?';
+            $employeeCode = (string) $row['employee_code'];
+            $existingEmployee = Employee::query()->where('employee_code', $employeeCode)->first();
+
+            if ($existingEmployee && $mode === 'create_only') {
+                $errors[] = "Baris {$rowNo}: Kode karyawan sudah ada ({$employeeCode})";
+                continue;
+            }
+
+            $areaId = null;
+            $areaRaw = trim((string) ($row['area_raw'] ?? ''));
+            if ($areaRaw !== '') {
+                $area = is_numeric($areaRaw)
+                    ? $areaById->get((string) $areaRaw)
+                    : ($areaByCode->get(strtolower($areaRaw)) ?? $areaByName->get(strtolower($areaRaw)));
+
+                if (!$area) {
+                    $errors[] = "Baris {$rowNo}: Area tidak ditemukan ({$areaRaw})";
+                    continue;
+                }
+                $areaId = $area->id;
+            }
+
+            $positionId = null;
+            $positionRaw = trim((string) ($row['position_raw'] ?? ''));
+            if ($positionRaw !== '') {
+                $position = is_numeric($positionRaw)
+                    ? $positionById->get((string) $positionRaw)
+                    : $positionByName->get(strtolower($positionRaw));
+
+                if ($position) {
+                    $positionId = $position->id;
+                }
+            }
+
+            $userId = null;
+            $userRaw = trim((string) ($row['user_raw'] ?? ''));
+            if ($userRaw !== '') {
+                $user = is_numeric($userRaw)
+                    ? $userById->get((string) $userRaw)
+                    : $userByEmail->get(strtolower($userRaw));
+
+                if (!$user) {
+                    $errors[] = "Baris {$rowNo}: User login tidak ditemukan ({$userRaw})";
+                    continue;
+                }
+
+                $usedBy = Employee::query()
+                    ->where('user_id', $user->id)
+                    ->when($existingEmployee, fn ($query) => $query->where('id', '!=', $existingEmployee->id))
+                    ->first();
+
+                if ($usedBy) {
+                    $errors[] = "Baris {$rowNo}: User login sudah dipakai karyawan lain ({$userRaw})";
+                    continue;
+                }
+                $userId = $user->id;
+            }
+
+            $joinDate = $this->parseEmployeeImportDate($row['join_date'] ?? null, $rowNo);
+
+            $prepared[] = [
+                'existing' => $existingEmployee,
+                'payload' => [
+                    'employee_code' => $employeeCode,
+                    'name' => $row['name'],
+                    'phone' => $row['phone'],
+                    'employment_status' => $row['employment_status'],
+                    'position' => $row['position'],
+                    'position_id' => $positionId,
+                    'area_id' => $areaId,
+                    'user_id' => $userId,
+                    'join_date' => $joinDate,
+                ],
+            ];
+        }
+
+        if (!empty($errors)) {
+            throw ValidationException::withMessages([
+                'file' => implode(' | ', array_slice($errors, 0, 8)),
+            ]);
+        }
+
+        $created = 0;
+        $updated = 0;
+
+        DB::beginTransaction();
+        try {
+            foreach ($prepared as $row) {
+                if ($row['existing']) {
+                    $row['existing']->update($row['payload']);
+                    $updated++;
+                    continue;
+                }
+
+                Employee::create($row['payload']);
+                $created++;
+            }
+
+            DB::commit();
+        } catch (\Throwable $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'message' => 'Gagal import karyawan',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+
+        return response()->json([
+            'message' => 'Import karyawan berhasil',
+            'created' => $created,
+            'updated' => $updated,
+        ]);
+    }
+
+    public function downloadEmployeesImportTemplate()
+    {
+        return Excel::download(
+            new EmployeesTemplateExport(),
+            'template_import_karyawan.xlsx'
+        );
     }
 
     public function updateEmployee(Request $request, Employee $employee)
@@ -1087,6 +1249,26 @@ class AttendanceController extends Controller
             'join_date' => ['nullable', 'date'],
             'employment_status' => ['required', 'string', 'max:30'],
         ]);
+    }
+
+    private function parseEmployeeImportDate(mixed $value, int|string $rowNo): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        try {
+            if (is_numeric($value)) {
+                return \PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject((float) $value)
+                    ->format('Y-m-d');
+            }
+
+            return Carbon::parse((string) $value)->toDateString();
+        } catch (\Throwable) {
+            throw ValidationException::withMessages([
+                'file' => "Baris {$rowNo}: Format tanggal masuk tidak valid ({$value})",
+            ]);
+        }
     }
 
     private function validateDevice(Request $request, ?AttendanceDevice $device = null): array

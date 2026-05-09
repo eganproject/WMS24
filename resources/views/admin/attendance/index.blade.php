@@ -347,6 +347,9 @@
                 <input type="text" class="form-control form-control-solid" placeholder="Cari data pada tab aktif..." id="attendance_search" />
             </div>
             <div class="att-toolbar-actions">
+                <button type="button" class="btn btn-light-primary d-none" id="attendance_import_employees">
+                    <i class="fas fa-file-import me-1"></i>Import Karyawan
+                </button>
                 <button type="button" class="btn btn-primary" id="attendance_open_form" data-active-section="{{ $activeSection }}">
                     <i class="fas fa-plus me-1"></i><span>Tambah {{ $activeSectionLabel }}</span>
                 </button>
@@ -814,6 +817,54 @@
 
 <div id="attendance_form_bank" class="attendance-form-bank"></div>
 
+{{-- ===== Modal Import Karyawan ===== --}}
+<div class="modal fade" id="attendance_import_employees_modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h2 class="fw-bolder mb-1"><i class="fas fa-file-import text-primary me-2"></i>Import Karyawan</h2>
+                    <div class="text-muted fs-7">Upload Excel untuk menambahkan atau memperbarui data karyawan absensi.</div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info border-0 mb-5" style="background:#eff8ff;">
+                    <div class="fw-bold mb-2">Format kolom Excel</div>
+                    <div class="fs-7 text-muted">
+                        Wajib: <code>employee_code</code>, <code>name</code>.
+                        Opsional: <code>phone</code>, <code>employment_status</code>, <code>position</code>,
+                        <code>position_id</code>, <code>area</code>, <code>area_id</code>, <code>user_email</code>,
+                        <code>user_id</code>, <code>join_date</code>.
+                    </div>
+                    <div class="fs-8 text-muted mt-2">Status kerja isi <code>active</code> atau <code>inactive</code>. Area dan jabatan bisa memakai ID, kode, atau nama.</div>
+                </div>
+                <div class="mb-4">
+                    <label class="form-label fw-bold">Mode Import</label>
+                    <select id="employee_import_mode" class="form-select form-select-solid">
+                        <option value="create_only">Tambah data baru saja</option>
+                        <option value="upsert">Tambah dan update berdasarkan kode karyawan</option>
+                    </select>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-bold">File Excel</label>
+                    <input type="file" id="employee_import_file" class="form-control form-control-solid" accept=".xlsx,.xls">
+                    <div class="invalid-feedback d-block" id="employee_import_error"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <a href="{{ route('admin.attendance.employees.import-template') }}" class="btn btn-light-primary me-auto" id="employee_import_template">
+                    <i class="fas fa-download me-1"></i>Download Template
+                </a>
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Batal</button>
+                <button type="button" class="btn btn-primary" id="employee_import_submit">
+                    <i class="fas fa-file-import me-1"></i>Import
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {{-- ===== Modal Create/Edit ===== --}}
 <div class="modal fade" id="attendance_form_modal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
@@ -881,6 +932,8 @@ const csrfToken = '{{ csrf_token() }}';
 const searchInput = document.getElementById('attendance_search');
 const calendarEventsUrl = '{{ route('admin.attendance.schedules.calendar-events') }}';
 const assignTemplateUrl = '{{ route('admin.attendance.templates.assign') }}';
+const employeeImportUrl = '{{ route('admin.attendance.employees.import') }}';
+const employeeImportTemplateUrl = '{{ route('admin.attendance.employees.import-template') }}';
 const positionStoreUrl = '{{ route('admin.attendance.positions.store') }}';
 const positionUpdateTpl = '{{ route('admin.attendance.positions.update', ':id') }}';
 const positionDeleteTpl = '{{ route('admin.attendance.positions.destroy', ':id') }}';
@@ -1018,6 +1071,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const formModalTitle = document.getElementById('attendance_form_modal_title');
     const formModalSubtitle = document.getElementById('attendance_form_modal_subtitle');
     const openFormButton = document.getElementById('attendance_open_form');
+    const importEmployeesButton = document.getElementById('attendance_import_employees');
+    const importEmployeesModalEl = document.getElementById('attendance_import_employees_modal');
+    const importEmployeesModal = importEmployeesModalEl && typeof bootstrap !== 'undefined'
+        ? bootstrap.Modal.getOrCreateInstance(importEmployeesModalEl)
+        : null;
+    const employeeImportFile = document.getElementById('employee_import_file');
+    const employeeImportMode = document.getElementById('employee_import_mode');
+    const employeeImportError = document.getElementById('employee_import_error');
+    const employeeImportSubmit = document.getElementById('employee_import_submit');
     const formCardsBySection = {};
     const formModal = formModalEl && typeof bootstrap !== 'undefined'
         ? bootstrap.Modal.getOrCreateInstance(formModalEl)
@@ -1086,6 +1148,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         openFormButton.classList.toggle('d-none', !hasCreateForm);
+        importEmployeesButton?.classList.toggle('d-none', section !== 'employees');
         openFormButton.dataset.activeSection = section;
         openFormButton.querySelector('span').textContent = section === 'raw_logs'
             ? 'Input Manual Raw Log'
@@ -1389,6 +1452,56 @@ document.addEventListener('DOMContentLoaded', () => {
         (tabTableMap[activeTabId] || []).forEach((tableId) => {
             initAttendanceTable(tableId)?.ajax.reload();
         });
+    });
+    importEmployeesButton?.addEventListener('click', () => {
+        if (employeeImportFile) employeeImportFile.value = '';
+        if (employeeImportError) employeeImportError.textContent = '';
+        if (employeeImportMode) employeeImportMode.value = 'create_only';
+        importEmployeesModal?.show();
+    });
+    employeeImportSubmit?.addEventListener('click', async () => {
+        if (!employeeImportUrl) return;
+        if (employeeImportError) employeeImportError.textContent = '';
+
+        const file = employeeImportFile?.files?.[0];
+        if (!file) {
+            if (employeeImportError) employeeImportError.textContent = 'Pilih file Excel terlebih dahulu.';
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('mode', employeeImportMode?.value || 'create_only');
+
+        employeeImportSubmit.disabled = true;
+        employeeImportSubmit.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Mengimport...';
+
+        try {
+            const response = await fetch(employeeImportUrl, {
+                method: 'POST',
+                headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' },
+                body: formData,
+            });
+            const json = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                const message = json?.errors?.file?.[0] || json?.message || 'Gagal import karyawan';
+                if (employeeImportError) employeeImportError.textContent = message;
+                Swal?.fire('Error', message, 'error');
+                return;
+            }
+
+            const detail = `Created: ${json.created ?? 0}, Updated: ${json.updated ?? 0}`;
+            Swal?.fire('Berhasil', `${json.message || 'Import karyawan berhasil'} (${detail})`, 'success');
+            if (employeeImportFile) employeeImportFile.value = '';
+            importEmployeesModal?.hide();
+            initAttendanceTable('employees_table')?.ajax.reload(null, false);
+        } catch (error) {
+            if (employeeImportError) employeeImportError.textContent = 'Gagal import karyawan';
+            Swal?.fire('Error', 'Gagal import karyawan', 'error');
+        } finally {
+            employeeImportSubmit.disabled = false;
+            employeeImportSubmit.innerHTML = '<i class="fas fa-file-import me-1"></i>Import';
+        }
     });
     document.getElementById('modal_positions')?.addEventListener('shown.bs.modal', () => {
         initAttendanceTable('positions_table')?.ajax.reload(null, false);

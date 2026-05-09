@@ -435,7 +435,9 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/attendances', [AttendanceController::class, 'sectionPage'])->defaults('section', 'attendances')->name('attendances.index');
         Route::get('/employee-schedule', [AttendanceController::class, 'employeeSchedule'])->name('employee-schedule.index');
         Route::get('/employees/data', [AttendanceController::class, 'employeesData'])->name('employees.data');
+        Route::get('/employees/import-template', [AttendanceController::class, 'downloadEmployeesImportTemplate'])->name('employees.import-template');
         Route::post('/employees', [AttendanceController::class, 'storeEmployee'])->name('employees.store');
+        Route::post('/employees/import', [AttendanceController::class, 'importEmployees'])->name('employees.import');
         Route::put('/employees/{employee}', [AttendanceController::class, 'updateEmployee'])->name('employees.update');
         Route::delete('/employees/{employee}', [AttendanceController::class, 'destroyEmployee'])->name('employees.destroy');
         Route::get('/positions/data', [AttendanceController::class, 'positionsData'])->name('positions.data');

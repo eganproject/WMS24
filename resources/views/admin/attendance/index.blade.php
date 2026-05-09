@@ -374,8 +374,8 @@
                         @csrf
                         <div class="col-12 col-md-6 col-lg-3">
                             <label class="form-label fw-bold">Kode Karyawan</label>
-                            <input name="employee_code" class="form-control form-control-solid" placeholder="Otomatis jika kosong">
-                            <div class="form-text">Kosongkan untuk kode otomatis, contoh K0001.</div>
+                            <input name="employee_code" class="form-control form-control-solid" value="{{ $nextEmployeeCode ?? 'K0001' }}" readonly>
+                            <div class="form-text">Dibuat otomatis oleh sistem dan tidak bisa diedit.</div>
                         </div>
                         <div class="col-12 col-md-6 col-lg-4"><label class="form-label fw-bold">Nama</label><input name="name" class="form-control form-control-solid" placeholder="Nama lengkap karyawan" required></div>
                         <div class="col-12 col-md-6 col-lg-3"><label class="form-label fw-bold">Telepon</label><input name="phone" class="form-control form-control-solid" placeholder="08xxxxxxxxxx"></div>
@@ -938,6 +938,7 @@ const calendarEventsUrl = '{{ route('admin.attendance.schedules.calendar-events'
 const assignTemplateUrl = '{{ route('admin.attendance.templates.assign') }}';
 const employeeImportUrl = '{{ route('admin.attendance.employees.import') }}';
 const employeeImportTemplateUrl = '{{ route('admin.attendance.employees.import-template') }}';
+const nextEmployeeCode = @json($nextEmployeeCode ?? 'K0001');
 const positionStoreUrl = '{{ route('admin.attendance.positions.store') }}';
 const positionUpdateTpl = '{{ route('admin.attendance.positions.update', ':id') }}';
 const positionDeleteTpl = '{{ route('admin.attendance.positions.destroy', ':id') }}';
@@ -1203,6 +1204,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 card.querySelectorAll('form.ajax-form').forEach((form) => {
                     form.reset();
                     clearEditState(form);
+                    if (form.getAttribute('data-table') === 'employees_table') {
+                        setFieldValue(form, 'employee_code', nextEmployeeCode);
+                    }
                     if (typeof $ !== 'undefined') {
                         $(form).find('select').trigger('change.select2');
                     }

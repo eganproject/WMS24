@@ -56,6 +56,7 @@ class AttendanceController extends Controller
             'devices' => AttendanceDevice::query()->orderBy('name')->get(['id', 'name']),
             'shifts' => WorkShift::query()->orderBy('name')->get(['id', 'name', 'start_time', 'end_time']),
             'templates' => WeeklyScheduleTemplate::query()->orderBy('name')->get(['id', 'name']),
+            'nextEmployeeCode' => $this->generateEmployeeCode(),
         ]);
     }
 
@@ -155,7 +156,7 @@ class AttendanceController extends Controller
     public function storeEmployee(Request $request)
     {
         $validated = $this->validateEmployee($request);
-        $validated['employee_code'] = $validated['employee_code'] ?: $this->generateEmployeeCode();
+        $validated['employee_code'] = $this->generateEmployeeCode();
         $employee = Employee::create($validated);
 
         return response()->json(['message' => 'Karyawan berhasil dibuat', 'employee' => $employee]);
@@ -332,7 +333,7 @@ class AttendanceController extends Controller
     public function updateEmployee(Request $request, Employee $employee)
     {
         $validated = $this->validateEmployee($request, $employee);
-        $validated['employee_code'] = $validated['employee_code'] ?: $this->generateEmployeeCode();
+        $validated['employee_code'] = $employee->employee_code;
         $employee->update($validated);
 
         return response()->json(['message' => 'Karyawan berhasil diperbarui', 'employee' => $employee]);
@@ -1253,7 +1254,7 @@ class AttendanceController extends Controller
             'user_id' => ['nullable', 'integer', 'exists:users,id', Rule::unique('employees', 'user_id')->ignore($employee?->id)],
             'area_id' => ['nullable', 'integer', 'exists:areas,id'],
             'position_id' => ['nullable', 'integer', 'exists:employee_positions,id'],
-            'employee_code' => ['nullable', 'string', 'max:20', Rule::unique('employees', 'employee_code')->ignore($employee?->id)],
+            'employee_code' => ['nullable', 'string', 'max:20'],
             'name' => ['required', 'string', 'max:150'],
             'phone' => ['nullable', 'string', 'max:50'],
             'position' => ['nullable', 'string', 'max:100'],

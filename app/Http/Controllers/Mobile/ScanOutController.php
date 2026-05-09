@@ -20,6 +20,7 @@ class ScanOutController extends Controller
                 'dashboard' => route('mobile.dashboard'),
                 'scan' => route('mobile.scan-out.scan'),
                 'history' => route('mobile.scan-out.history'),
+                'desktop' => route('admin.outbound.scan-out.index'),
                 'logout' => route('logout'),
             ],
         ]);

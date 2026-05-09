@@ -1145,6 +1145,9 @@ class AttendanceController extends Controller
             ->with(['employee:id,employee_code,name', 'shift:id,name', 'approver:id,name'])
             ->when($request->input('date_from'), fn ($q, $date) => $q->whereDate('attendance_date', '>=', $date))
             ->when($request->input('date_to'), fn ($q, $date) => $q->whereDate('attendance_date', '<=', $date))
+            ->when($request->input('employee_id'), fn ($q, $employeeId) => $q->where('employee_id', $employeeId))
+            ->when($request->input('status'), fn ($q, $status) => $q->where('status', $status))
+            ->when($request->input('overtime_status'), fn ($q, $status) => $q->where('overtime_status', $status))
             ->latest('attendance_date');
 
         return $this->datatable($query, $request, fn (Attendance $attendance) => [

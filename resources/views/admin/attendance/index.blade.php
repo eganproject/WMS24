@@ -982,6 +982,60 @@
                         </div>
                     </form>
                 </div>
+
+                <div class="attendance-form-section mb-4" id="attendance_recap_filters">
+                    <div class="attendance-form-section-title">Filter Rekap</div>
+                    <div class="row g-3 align-items-end">
+                        <div class="col-12 col-md-6 col-lg-2">
+                            <label class="form-label fw-bold">Dari Tanggal</label>
+                            <input type="text" class="form-control form-control-solid js-date" id="recap_filter_date_from" placeholder="YYYY-MM-DD">
+                        </div>
+                        <div class="col-12 col-md-6 col-lg-2">
+                            <label class="form-label fw-bold">Sampai Tanggal</label>
+                            <input type="text" class="form-control form-control-solid js-date" id="recap_filter_date_to" placeholder="YYYY-MM-DD">
+                        </div>
+                        <div class="col-12 col-md-6 col-lg-3">
+                            <label class="form-label fw-bold">Karyawan</label>
+                            <select class="form-select form-select-solid" id="recap_filter_employee">
+                                <option value="">Semua karyawan</option>
+                                @foreach($employees as $employee)
+                                    <option value="{{ $employee->id }}">{{ $employee->employee_code }} - {{ $employee->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-6 col-lg-2">
+                            <label class="form-label fw-bold">Status Absensi</label>
+                            <select class="form-select form-select-solid" id="recap_filter_status">
+                                <option value="">Semua status</option>
+                                <option value="present">Hadir</option>
+                                <option value="late">Terlambat</option>
+                                <option value="absent">Alpha</option>
+                                <option value="incomplete">Belum Lengkap</option>
+                                <option value="leave">Cuti/Izin</option>
+                                <option value="holiday">Libur Perusahaan</option>
+                                <option value="day_off">Libur</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-6 col-lg-2">
+                            <label class="form-label fw-bold">Status Lembur</label>
+                            <select class="form-select form-select-solid" id="recap_filter_overtime_status">
+                                <option value="">Semua lembur</option>
+                                <option value="none">Tidak Ada</option>
+                                <option value="pending">Pending</option>
+                                <option value="approved">Approved</option>
+                                <option value="rejected">Rejected</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-6 col-lg-1 d-grid gap-2">
+                            <button type="button" class="btn btn-light-primary" id="recap_apply_filters">
+                                <i class="fas fa-filter"></i>
+                            </button>
+                            <button type="button" class="btn btn-light" id="recap_reset_filters">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
                 <x-attendance-table id="attendances_table" :headers="['Karyawan','Tanggal','Shift','Masuk','Pulang','Telat','Pulang Cepat','Menit Kerja','Lembur Hitung','Lembur Approved','Status Lembur','Status','Source','Catatan','Aksi']" />
             </div>
         </div>
@@ -1255,6 +1309,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const employeeImportMode = document.getElementById('employee_import_mode');
     const employeeImportError = document.getElementById('employee_import_error');
     const employeeImportSubmit = document.getElementById('employee_import_submit');
+    const recapFilterDateFrom = document.getElementById('recap_filter_date_from');
+    const recapFilterDateTo = document.getElementById('recap_filter_date_to');
+    const recapFilterEmployee = document.getElementById('recap_filter_employee');
+    const recapFilterStatus = document.getElementById('recap_filter_status');
+    const recapFilterOvertimeStatus = document.getElementById('recap_filter_overtime_status');
     const formCardsBySection = {};
     const formModal = formModalEl && typeof bootstrap !== 'undefined'
         ? bootstrap.Modal.getOrCreateInstance(formModalEl)
@@ -1412,7 +1471,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     if (typeof $ !== 'undefined' && $.fn.select2) {
-        document.querySelectorAll('#attendance_form_bank select, #attendance_form_modal select, #modal_positions select, #template_assignment_panel select').forEach((select) => {
+        document.querySelectorAll('#attendance_form_bank select, #attendance_form_modal select, #modal_positions select, #template_assignment_panel select, #attendance_recap_filters select').forEach((select) => {
             const allowClear = select.querySelector('option[value=""]') !== null;
             const parentModal = select.closest('.modal') || (select.closest('#attendance_form_bank') ? formModalEl : null);
             $(select).select2({
@@ -1531,6 +1590,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 dataSrc: 'data',
                 data: (params) => {
                     params.q = searchInput?.value || '';
+                    if (id === 'attendances_table') {
+                        params.date_from = recapFilterDateFrom?.value || '';
+                        params.date_to = recapFilterDateTo?.value || '';
+                        params.employee_id = recapFilterEmployee?.value || '';
+                        params.status = recapFilterStatus?.value || '';
+                        params.overtime_status = recapFilterOvertimeStatus?.value || '';
+                    }
                 },
             },
             columns: config.columns.map((column) => {
@@ -1574,6 +1640,23 @@ document.addEventListener('DOMContentLoaded', () => {
         (tabTableMap[activeTabId] || []).forEach((tableId) => {
             initAttendanceTable(tableId)?.ajax.reload();
         });
+    });
+    const reloadRecapTable = () => initAttendanceTable('attendances_table')?.ajax.reload();
+    document.getElementById('recap_apply_filters')?.addEventListener('click', reloadRecapTable);
+    document.getElementById('recap_reset_filters')?.addEventListener('click', () => {
+        [recapFilterDateFrom, recapFilterDateTo, recapFilterEmployee, recapFilterStatus, recapFilterOvertimeStatus].forEach((field) => {
+            if (field) field.value = '';
+        });
+        if (typeof $ !== 'undefined') {
+            $('#attendance_recap_filters select').val('').trigger('change.select2');
+        }
+        reloadRecapTable();
+    });
+    [recapFilterDateFrom, recapFilterDateTo].forEach((field) => {
+        field?.addEventListener('change', reloadRecapTable);
+    });
+    [recapFilterEmployee, recapFilterStatus, recapFilterOvertimeStatus].forEach((field) => {
+        field?.addEventListener('change', reloadRecapTable);
     });
 
     const resetFormsInTab = (tabId) => {

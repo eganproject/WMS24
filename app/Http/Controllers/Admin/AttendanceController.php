@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Exports\AbsentEmployeesExport;
 use App\Exports\EmployeesTemplateExport;
 use App\Imports\EmployeesImport;
 use App\Models\Area;
@@ -94,8 +95,21 @@ class AttendanceController extends Controller
             'leaves' => ['label' => 'Cuti/Izin', 'route' => 'admin.attendance.leaves.index', 'icon' => 'fas fa-plane-departure'],
             'raw_logs' => ['label' => 'Raw Log', 'route' => 'admin.attendance.raw-logs.index', 'icon' => 'fas fa-list'],
             'attendances' => ['label' => 'Rekap', 'route' => 'admin.attendance.attendances.index', 'icon' => 'fas fa-clipboard-check'],
+            'absences' => ['label' => 'Orang Absen', 'route' => 'admin.attendance.absences.index', 'icon' => 'fas fa-user-times'],
             'machine_logs' => ['label' => 'Machine Log', 'route' => 'admin.attendance.machine-logs.index', 'icon' => 'fas fa-satellite-dish'],
         ];
+    }
+
+    public function absencesIndex()
+    {
+        return view('admin.attendance.absences', [
+            'sectionLinks' => $this->sectionLinks(),
+            'employees' => Employee::query()
+                ->where('employment_status', Employee::STATUS_ACTIVE)
+                ->orderBy('name')
+                ->get(['id', 'employee_code', 'name']),
+            'today' => now()->toDateString(),
+        ]);
     }
 
     public function employeesData(Request $request)
@@ -1158,6 +1172,48 @@ class AttendanceController extends Controller
         ]);
     }
 
+    public function absencesData(Request $request)
+    {
+        $query = $this->absencesQuery($request);
+        $total = (clone $query)->count();
+
+        $response = $this->simplePaginatedResponse($query, $request, fn (Attendance $attendance) => [
+            'id' => $attendance->id,
+            'employee_id' => $attendance->employee_id,
+            'employee_code' => $attendance->employee?->employee_code ?? '-',
+            'employee_name' => $attendance->employee?->name ?? '-',
+            'employee' => $attendance->employee ? "{$attendance->employee->employee_code} - {$attendance->employee->name}" : '-',
+            'position' => $attendance->employee?->positionRelation?->name ?? $attendance->employee?->position ?? '-',
+            'area' => $attendance->employee?->area ? "{$attendance->employee->area->code} - {$attendance->employee->area->name}" : '-',
+            'attendance_date' => $attendance->attendance_date?->format('Y-m-d'),
+            'shift' => $attendance->shift?->name ?? '-',
+            'note' => $attendance->note ?? '-',
+        ]);
+
+        $data = $response->getData(true);
+        $data['summary'] = [
+            'absent_count' => $total,
+            'date_from' => $this->absenceDateFrom($request),
+            'date_to' => $this->absenceDateTo($request),
+        ];
+
+        return response()->json($data);
+    }
+
+    public function exportAbsences(Request $request)
+    {
+        $dateFrom = $this->absenceDateFrom($request);
+        $dateTo = $this->absenceDateTo($request);
+        $filename = 'orang_absen_'.$dateFrom.'_sd_'.$dateTo.'.xlsx';
+
+        return Excel::download(new AbsentEmployeesExport([
+            'date_from' => $dateFrom,
+            'date_to' => $dateTo,
+            'employee_id' => $request->input('employee_id'),
+            'q' => $request->input('q'),
+        ]), $filename);
+    }
+
     public function updateAttendance(Request $request, Attendance $attendance)
     {
         $validated = $request->validate([
@@ -1291,6 +1347,40 @@ class AttendanceController extends Controller
             'from' => $total ? $offset + 1 : 0,
             'to' => $total ? $offset + $rows->count() : 0,
         ]);
+    }
+
+    private function absencesQuery(Request $request)
+    {
+        $dateFrom = $this->absenceDateFrom($request);
+        $dateTo = $this->absenceDateTo($request);
+        $search = trim((string) $request->input('q', ''));
+
+        return Attendance::query()
+            ->with(['employee.area:id,code,name', 'employee.positionRelation:id,name', 'shift:id,name'])
+            ->where('status', Attendance::STATUS_ABSENT)
+            ->whereDate('attendance_date', '>=', $dateFrom)
+            ->whereDate('attendance_date', '<=', $dateTo)
+            ->when($request->input('employee_id'), fn ($query, $employeeId) => $query->where('employee_id', $employeeId))
+            ->when($search !== '', function ($query) use ($search) {
+                $query->whereHas('employee', fn ($employeeQuery) => $employeeQuery
+                    ->where('name', 'like', "%{$search}%")
+                    ->orWhere('employee_code', 'like', "%{$search}%")
+                    ->orWhere('phone', 'like', "%{$search}%"));
+            })
+            ->orderByDesc('attendance_date')
+            ->orderBy('employee_id');
+    }
+
+    private function absenceDateFrom(Request $request): string
+    {
+        return Carbon::parse($request->input('date_from') ?: now()->toDateString())->toDateString();
+    }
+
+    private function absenceDateTo(Request $request): string
+    {
+        $dateFrom = $this->absenceDateFrom($request);
+
+        return Carbon::parse($request->input('date_to') ?: $dateFrom)->toDateString();
     }
 
     private function validateEmployee(Request $request, ?Employee $employee = null): array

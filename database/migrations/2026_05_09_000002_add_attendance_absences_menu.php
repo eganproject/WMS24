@@ -20,9 +20,9 @@ return new class extends Migration
         DB::table('menus')->updateOrInsert(
             ['slug' => 'attendance-absences'],
             [
-                'name' => 'Orang Absen',
+                'name' => 'Monitor Harian',
                 'route' => 'admin.attendance.absences.index',
-                'icon' => 'fas fa-user-times',
+                'icon' => 'fas fa-user-check',
                 'parent_id' => $attendanceMenuId,
                 'sort_order' => 10.5,
                 'is_active' => true,

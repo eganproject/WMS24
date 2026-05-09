@@ -1,7 +1,7 @@
 @extends('layouts.admin')
 
-@section('title', 'Orang Absen')
-@section('page_title', 'Orang Absen')
+@section('title', 'Monitor Harian')
+@section('page_title', 'Monitor Harian')
 
 @push('styles')
 <style>
@@ -62,11 +62,11 @@
         margin-bottom: 1.25rem;
     }
     .abs-stat {
-        background: #fff5f8;
-        border: 1px solid #ffe0e8;
+        background: #f9fafc;
+        border: 1px solid #eef0f8;
         border-radius: .75rem;
         padding: 1rem;
-        min-width: 180px;
+        min-width: 150px;
     }
     .abs-stat .label {
         color: #7e8299;
@@ -75,12 +75,16 @@
         text-transform: uppercase;
     }
     .abs-stat .value {
-        color: #f1416c;
+        color: #1e1e2d;
         font-size: 1.75rem;
         font-weight: 800;
         line-height: 1.1;
         margin-top: .25rem;
     }
+    .abs-stat.danger .value { color: #f1416c; }
+    .abs-stat.warning .value { color: #ffc700; }
+    .abs-stat.success .value { color: #50cd89; }
+    .abs-stat.info .value { color: #1b84ff; }
     .abs-table-wrap {
         border: 1px solid #eef0f8;
         border-radius: .75rem;
@@ -130,9 +134,9 @@
 <div class="abs-hero">
     <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
         <div>
-            <div class="abs-hero-eyebrow"><i class="fas fa-user-times me-1"></i>Modul Absensi</div>
-            <h1><i class="fas fa-user-times me-2 text-danger"></i>Orang Absen</h1>
-            <p class="mb-0">Pantau karyawan dengan status absen berdasarkan rekap absensi yang sudah diproses sistem.</p>
+            <div class="abs-hero-eyebrow"><i class="fas fa-user-check me-1"></i>Modul Absensi</div>
+            <h1><i class="fas fa-user-check me-2 text-danger"></i>Monitor Harian</h1>
+            <p class="mb-0">Lihat jadwal hari ini, check-in/check-out, karyawan belum check-in, alfa, cuti, dan status lainnya dalam satu halaman.</p>
         </div>
         <button type="button" class="btn btn-light-danger btn-sm" id="btn_refresh_absences">
             <i class="fas fa-sync-alt me-1"></i>Refresh
@@ -156,12 +160,8 @@
 <div class="abs-filter-card">
     <div class="row g-3 align-items-end">
         <div class="col-12 col-md-3">
-            <label class="form-label fw-bold">Dari Tanggal</label>
-            <input type="text" class="form-control form-control-solid js-date" id="filter_date_from" value="{{ $today }}" placeholder="YYYY-MM-DD">
-        </div>
-        <div class="col-12 col-md-3">
-            <label class="form-label fw-bold">Sampai Tanggal</label>
-            <input type="text" class="form-control form-control-solid js-date" id="filter_date_to" value="{{ $today }}" placeholder="YYYY-MM-DD">
+            <label class="form-label fw-bold">Tanggal</label>
+            <input type="text" class="form-control form-control-solid js-date" id="filter_date" value="{{ $today }}" placeholder="YYYY-MM-DD">
         </div>
         <div class="col-12 col-md-3">
             <label class="form-label fw-bold">Karyawan</label>
@@ -173,13 +173,46 @@
             </select>
         </div>
         <div class="col-12 col-md-3">
+            <label class="form-label fw-bold">Status</label>
+            <select class="form-select form-select-solid" id="filter_status">
+                <option value="">Semua status</option>
+                <option value="not_checked_in">Belum Check-in</option>
+                <option value="absent">Alfa</option>
+                <option value="incomplete">Belum Check-out</option>
+                <option value="late">Terlambat</option>
+                <option value="present">Hadir</option>
+                <option value="leave">Cuti/Izin</option>
+                <option value="day_off">Libur</option>
+                <option value="holiday">Libur Perusahaan</option>
+                <option value="unscheduled">Tidak Ada Jadwal</option>
+            </select>
+        </div>
+        <div class="col-12 col-md-3">
             <label class="form-label fw-bold">Cari</label>
             <input type="text" class="form-control form-control-solid" id="filter_search" placeholder="Nama / kode / telepon">
         </div>
         <div class="col-12 d-flex flex-wrap gap-2 justify-content-between align-items-center pt-2">
-            <div class="abs-stat">
-                <div class="label">Total Absen</div>
-                <div class="value" id="summary_absent_count">0</div>
+            <div class="d-flex flex-wrap gap-2">
+                <div class="abs-stat info">
+                    <div class="label">Total Jadwal</div>
+                    <div class="value" id="summary_total">0</div>
+                </div>
+                <div class="abs-stat success">
+                    <div class="label">Hadir/Telat</div>
+                    <div class="value" id="summary_present">0</div>
+                </div>
+                <div class="abs-stat warning">
+                    <div class="label">Belum Check-in</div>
+                    <div class="value" id="summary_not_checked_in">0</div>
+                </div>
+                <div class="abs-stat danger">
+                    <div class="label">Alfa</div>
+                    <div class="value" id="summary_absent_count">0</div>
+                </div>
+                <div class="abs-stat">
+                    <div class="label">Belum Check-out</div>
+                    <div class="value" id="summary_incomplete">0</div>
+                </div>
             </div>
             <div class="d-flex flex-wrap gap-2">
                 <button type="button" class="btn btn-light" id="btn_reset_absences">
@@ -199,7 +232,7 @@
 <div class="abs-table-card">
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
         <div>
-            <div class="fw-bold text-gray-900">Daftar Karyawan Absen</div>
+            <div class="fw-bold text-gray-900">Monitoring Absensi Harian</div>
             <div class="text-muted fs-8" id="absence_range_label">-</div>
         </div>
         <div class="text-muted fs-8" id="absence_info">Memuat data...</div>
@@ -213,12 +246,17 @@
                     <th>Nama</th>
                     <th>Jabatan</th>
                     <th>Area</th>
+                    <th>Jadwal</th>
                     <th>Shift</th>
+                    <th>Check In</th>
+                    <th>Check Out</th>
+                    <th>Status</th>
+                    <th>Telat</th>
                     <th>Catatan</th>
                 </tr>
             </thead>
             <tbody id="absence_rows">
-                <tr><td colspan="7"><div class="abs-empty">Memuat data...</div></td></tr>
+                <tr><td colspan="11"><div class="abs-empty">Memuat data...</div></td></tr>
             </tbody>
         </table>
     </div>
@@ -242,10 +280,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const infoEl = document.getElementById('absence_info');
     const pageInfoEl = document.getElementById('absence_page_info');
     const rangeLabelEl = document.getElementById('absence_range_label');
-    const summaryEl = document.getElementById('summary_absent_count');
-    const dateFromEl = document.getElementById('filter_date_from');
-    const dateToEl = document.getElementById('filter_date_to');
+    const summaryTotalEl = document.getElementById('summary_total');
+    const summaryPresentEl = document.getElementById('summary_present');
+    const summaryNotCheckedInEl = document.getElementById('summary_not_checked_in');
+    const summaryAbsentEl = document.getElementById('summary_absent_count');
+    const summaryIncompleteEl = document.getElementById('summary_incomplete');
+    const dateEl = document.getElementById('filter_date');
     const employeeEl = document.getElementById('filter_employee');
+    const statusEl = document.getElementById('filter_status');
     const searchEl = document.getElementById('filter_search');
     const exportEl = document.getElementById('btn_export_absences');
     const prevEl = document.getElementById('btn_prev_absences');
@@ -265,10 +307,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const query = new URLSearchParams({
             page,
             per_page: 30,
-            date_from: dateFromEl.value || today,
-            date_to: dateToEl.value || dateFromEl.value || today,
+            date: dateEl.value || today,
         });
         if (employeeEl.value) query.set('employee_id', employeeEl.value);
+        if (statusEl.value) query.set('status', statusEl.value);
         if (searchEl.value.trim()) query.set('q', searchEl.value.trim());
         return query;
     };
@@ -279,18 +321,35 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const renderRows = (rows) => {
         if (!rows.length) {
-            rowsEl.innerHTML = '<tr><td colspan="7"><div class="abs-empty"><i class="fas fa-check-circle fs-2 d-block mb-2 text-success"></i>Tidak ada karyawan absen pada filter ini.</div></td></tr>';
+            rowsEl.innerHTML = '<tr><td colspan="11"><div class="abs-empty"><i class="fas fa-check-circle fs-2 d-block mb-2 text-success"></i>Tidak ada data pada filter ini.</div></td></tr>';
             return;
         }
+
+        const badgeClass = (status) => ({
+            present: 'badge-light-success',
+            late: 'badge-light-warning',
+            absent: 'badge-light-danger',
+            not_checked_in: 'badge-light-primary',
+            incomplete: 'badge-light-info',
+            leave: 'badge-light-info',
+            day_off: 'badge-light-secondary',
+            holiday: 'badge-light-danger',
+            unscheduled: 'badge-light-dark',
+        }[status] || 'badge-light');
 
         rowsEl.innerHTML = rows.map((row) => `
             <tr>
                 <td class="fw-semibold">${escapeHtml(row.attendance_date)}</td>
-                <td><span class="badge badge-light-danger">${escapeHtml(row.employee_code)}</span></td>
+                <td><span class="badge badge-light">${escapeHtml(row.employee_code)}</span></td>
                 <td class="fw-bold text-gray-900">${escapeHtml(row.employee_name)}</td>
                 <td>${escapeHtml(row.position)}</td>
                 <td>${escapeHtml(row.area)}</td>
-                <td>${escapeHtml(row.shift)}</td>
+                <td>${escapeHtml(row.schedule_type_label)}</td>
+                <td>${escapeHtml(row.shift)}<div class="text-muted fs-8">${escapeHtml(row.shift_time)}</div></td>
+                <td class="fw-semibold">${escapeHtml(row.check_in_at)}</td>
+                <td class="fw-semibold">${escapeHtml(row.check_out_at)}</td>
+                <td><span class="badge ${badgeClass(row.status_key)}">${escapeHtml(row.status_label)}</span></td>
+                <td>${Number(row.late_minutes || 0)} menit</td>
                 <td>${escapeHtml(row.note)}</td>
             </tr>
         `).join('');
@@ -298,7 +357,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const loadAbsences = async (page = 1) => {
         currentPage = page;
-        rowsEl.innerHTML = '<tr><td colspan="7"><div class="abs-empty"><span class="spinner-border spinner-border-sm me-2"></span>Memuat data...</div></td></tr>';
+        rowsEl.innerHTML = '<tr><td colspan="11"><div class="abs-empty"><span class="spinner-border spinner-border-sm me-2"></span>Memuat data...</div></td></tr>';
         updateExportLink();
 
         try {
@@ -310,14 +369,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
             lastPage = json.last_page || 1;
             renderRows(json.data || []);
-            summaryEl.textContent = json.summary?.absent_count ?? json.total ?? 0;
-            rangeLabelEl.textContent = `${json.summary?.date_from || dateFromEl.value} s/d ${json.summary?.date_to || dateToEl.value}`;
+            summaryTotalEl.textContent = json.summary?.total ?? json.total ?? 0;
+            summaryPresentEl.textContent = json.summary?.present_count ?? 0;
+            summaryNotCheckedInEl.textContent = json.summary?.not_checked_in_count ?? 0;
+            summaryAbsentEl.textContent = json.summary?.absent_count ?? 0;
+            summaryIncompleteEl.textContent = json.summary?.incomplete_count ?? 0;
+            rangeLabelEl.textContent = `Tanggal ${json.summary?.date || dateEl.value}`;
             infoEl.textContent = `${json.total || 0} data ditemukan`;
             pageInfoEl.textContent = `Halaman ${json.current_page || 1} dari ${json.last_page || 1}`;
             prevEl.disabled = currentPage <= 1;
             nextEl.disabled = currentPage >= lastPage;
         } catch (error) {
-            rowsEl.innerHTML = '<tr><td colspan="7"><div class="abs-empty text-danger">Gagal memuat data absen.</div></td></tr>';
+            rowsEl.innerHTML = '<tr><td colspan="11"><div class="abs-empty text-danger">Gagal memuat data monitoring.</div></td></tr>';
             infoEl.textContent = 'Gagal memuat data';
         }
     };
@@ -329,22 +392,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }));
     }
     if (typeof $ !== 'undefined' && $.fn.select2) {
-        $('#filter_employee').select2({
+        $('#filter_employee, #filter_status').select2({
             width: '100%',
             allowClear: true,
-            placeholder: 'Semua karyawan',
+            placeholder: 'Pilih',
         });
     }
 
     document.getElementById('btn_filter_absences')?.addEventListener('click', () => loadAbsences(1));
     document.getElementById('btn_refresh_absences')?.addEventListener('click', () => loadAbsences(currentPage));
     document.getElementById('btn_reset_absences')?.addEventListener('click', () => {
-        dateFromEl.value = today;
-        dateToEl.value = today;
+        dateEl.value = today;
         employeeEl.value = '';
+        statusEl.value = '';
         searchEl.value = '';
         if (typeof $ !== 'undefined' && $.fn.select2) {
             $('#filter_employee').val('').trigger('change.select2');
+            $('#filter_status').val('').trigger('change.select2');
         }
         loadAbsences(1);
     });

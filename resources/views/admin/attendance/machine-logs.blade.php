@@ -204,6 +204,15 @@
     #machine_logs_table tbody td {
         vertical-align: middle;
     }
+    .ml-table-wrap {
+        border: 1px solid #eef0f8;
+        border-radius: .85rem;
+        background: #fff;
+    }
+    .ml-table-wrap table {
+        min-width: 1040px;
+        margin-bottom: 0;
+    }
     .ml-empty {
         text-align: center;
         padding: 3rem 1rem;
@@ -217,6 +226,20 @@
         .ml-hero h1 { font-size: 1.2rem; }
         .ml-stat-card { padding: 1rem; }
         .ml-stat-value { font-size: 1.4rem; }
+        .ml-hero .btn,
+        #btn_apply_filter {
+            width: 100%;
+            justify-content: center;
+        }
+        .alert .fs-8 span {
+            display: block;
+            margin-bottom: .35rem;
+            word-break: break-word;
+        }
+        pre.payload-pre {
+            max-height: 320px;
+            font-size: .75rem;
+        }
     }
 </style>
 @endpush
@@ -368,7 +391,7 @@
             </div>
             <div class="text-muted fs-8"><i class="fas fa-clock me-1"></i>Auto-refresh setiap 30 detik (saat di halaman 1)</div>
         </div>
-        <div class="table-responsive">
+        <div class="table-responsive ml-table-wrap">
             <table class="table table-hover table-row-bordered align-middle" id="machine_logs_table">
                 <thead>
                     <tr>

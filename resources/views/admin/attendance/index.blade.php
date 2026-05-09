@@ -78,6 +78,18 @@
         padding: 1.25rem;
         margin-bottom: 1.5rem;
     }
+    .att-form-card.in-modal {
+        border: 0;
+        border-radius: 0;
+        padding: 0;
+        margin-bottom: 0;
+        box-shadow: none;
+    }
+    .att-form-card.in-modal + .att-form-card.in-modal {
+        border-top: 1px dashed #e4e6ef;
+        padding-top: 1.25rem;
+        margin-top: 1.25rem;
+    }
     .att-form-head {
         display: flex;
         align-items: center;
@@ -182,6 +194,49 @@
         color: #a1a5b7;
     }
     .att-toolbar .search-wrap input { padding-left: 2.4rem; }
+    .att-toolbar-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .5rem;
+        justify-content: flex-end;
+    }
+
+    .attendance-table-wrap {
+        border: 1px solid #eef0f8;
+        border-radius: .85rem;
+        background: #fff;
+    }
+    .attendance-table-wrap table {
+        margin-bottom: 0;
+        min-width: 980px;
+    }
+    .attendance-table-wrap thead th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background: #f9fafc;
+        border-bottom: 1px solid #eef0f8;
+        font-size: .72rem;
+        letter-spacing: .04em;
+    }
+    .attendance-table-wrap tbody td {
+        vertical-align: middle;
+    }
+    .attendance-row-actions {
+        display: flex;
+        gap: .5rem;
+        flex-wrap: nowrap;
+    }
+    .attendance-form-bank {
+        display: none;
+    }
+    .attendance-form-empty {
+        border: 1px dashed #e4e6ef;
+        border-radius: .85rem;
+        padding: 1rem;
+        color: #7e8299;
+        background: #f9fafc;
+    }
 
     /* ===== Form helpers ===== */
     .form-label.fw-bold { color: #3f4254; font-size: .8rem; }
@@ -203,6 +258,29 @@
         .att-form-card { padding: 1rem; }
         .att-toolbar { flex-direction: column; align-items: stretch; }
         .att-toolbar .search-wrap { max-width: 100%; }
+        .att-toolbar-actions,
+        .att-toolbar-actions .btn,
+        #attendance_refresh_tab {
+            width: 100%;
+        }
+        .att-toolbar-actions .btn,
+        #attendance_refresh_tab {
+            justify-content: center;
+        }
+        .attendance-form-section {
+            padding: .85rem;
+        }
+        #attendance_schedule_calendar { min-height: 560px; }
+        #attendance_schedule_calendar .fc-toolbar {
+            flex-direction: column;
+            gap: .75rem;
+        }
+        .modal-dialog {
+            margin: .75rem;
+        }
+        .modal-body {
+            padding: 1rem;
+        }
     }
 </style>
 @endpush
@@ -268,9 +346,13 @@
                 <i class="fas fa-search"></i>
                 <input type="text" class="form-control form-control-solid" placeholder="Cari data pada tab aktif..." id="attendance_search" />
             </div>
-            <div class="text-muted fs-7">
-                <i class="fas fa-info-circle me-1 text-primary"></i>
-                Pencarian berlaku untuk data tabel pada tab yang sedang aktif.
+            <div class="att-toolbar-actions">
+                <button type="button" class="btn btn-primary" id="attendance_open_form" data-active-section="{{ $activeSection }}">
+                    <i class="fas fa-plus me-1"></i><span>Tambah {{ $activeSectionLabel }}</span>
+                </button>
+                <button type="button" class="btn btn-light" id="attendance_clear_search">
+                    <i class="fas fa-times me-1"></i>Reset Cari
+                </button>
             </div>
         </div>
 
@@ -730,6 +812,26 @@
     </div>
 </div>
 
+<div id="attendance_form_bank" class="attendance-form-bank"></div>
+
+{{-- ===== Modal Create/Edit ===== --}}
+<div class="modal fade" id="attendance_form_modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h2 class="fw-bolder mb-1" id="attendance_form_modal_title">
+                        <i class="{{ $activeSectionIcon }} text-primary me-2"></i>{{ $activeSectionLabel }}
+                    </h2>
+                    <div class="text-muted fs-7" id="attendance_form_modal_subtitle">Isi form lalu simpan. Data tabel akan dimuat ulang otomatis.</div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="attendance_form_modal_body"></div>
+        </div>
+    </div>
+</div>
+
 {{-- ===== Modal Jabatan ===== --}}
 <div class="modal fade" id="modal_positions" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-xl">
@@ -782,6 +884,8 @@ const assignTemplateUrl = '{{ route('admin.attendance.templates.assign') }}';
 const positionStoreUrl = '{{ route('admin.attendance.positions.store') }}';
 const positionUpdateTpl = '{{ route('admin.attendance.positions.update', ':id') }}';
 const positionDeleteTpl = '{{ route('admin.attendance.positions.destroy', ':id') }}';
+const activeSectionKey = @json($activeSection);
+const sectionLinks = @json($sectionLinks);
 const crudUrls = {
     employees_table: { update: '{{ route('admin.attendance.employees.update', ':id') }}', destroy: '{{ route('admin.attendance.employees.destroy', ':id') }}' },
     devices_table: { update: '{{ route('admin.attendance.devices.update', ':id') }}', destroy: '{{ route('admin.attendance.devices.destroy', ':id') }}' },
@@ -866,6 +970,18 @@ const tabTableMap = {
     tab_raw_logs: ['raw_logs_table'],
     tab_attendances: ['attendances_table'],
 };
+const tableSectionMap = {
+    employees_table: 'employees',
+    devices_table: 'devices',
+    fingerprints_table: 'fingerprints',
+    shifts_table: 'shifts',
+    schedules_table: 'schedules',
+    holidays_table: 'holidays',
+    templates_table: 'templates',
+    leaves_table: 'leaves',
+    raw_logs_table: 'raw_logs',
+    attendances_table: 'attendances',
+};
 
 const escapeAttr = (value) => String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -879,7 +995,7 @@ const renderCrudActions = (tableId, row) => {
     const payload = escapeAttr(encodeURIComponent(JSON.stringify(row)));
 
     return `
-        <div class="d-flex gap-2">
+        <div class="attendance-row-actions">
             <button type="button" class="btn btn-sm btn-light-primary btn-crud-edit" data-table="${tableId}" data-row="${payload}"><i class="fas fa-pen me-1"></i>Edit</button>
             <button type="button" class="btn btn-sm btn-light-danger btn-crud-delete" data-table="${tableId}" data-id="${row.id}"><i class="fas fa-trash me-1"></i>Hapus</button>
         </div>
@@ -896,10 +1012,155 @@ const renderValue = (value) => {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
+    const formBank = document.getElementById('attendance_form_bank');
+    const formModalEl = document.getElementById('attendance_form_modal');
+    const formModalBody = document.getElementById('attendance_form_modal_body');
+    const formModalTitle = document.getElementById('attendance_form_modal_title');
+    const formModalSubtitle = document.getElementById('attendance_form_modal_subtitle');
+    const openFormButton = document.getElementById('attendance_open_form');
+    const formCardsBySection = {};
+    const formModal = formModalEl && typeof bootstrap !== 'undefined'
+        ? bootstrap.Modal.getOrCreateInstance(formModalEl)
+        : null;
+
+    document.querySelectorAll('.tab-pane').forEach((tabPane) => {
+        const section = tabPane.id.replace('tab_', '');
+        formCardsBySection[section] = [];
+        tabPane.querySelectorAll(':scope > .att-form-card').forEach((card) => {
+            if (!card.querySelector('form.ajax-form')) return;
+            card.classList.add('in-modal');
+            card.dataset.section = section;
+            formCardsBySection[section].push(card);
+            formBank?.appendChild(card);
+        });
+    });
+    const shouldMaskAutocompleteField = (field) => {
+        if (field.tagName !== 'INPUT' || field.readOnly) return false;
+        return !['hidden', 'checkbox', 'radio', 'file'].includes(field.type);
+    };
+    const maskAutocompleteFields = (scope = document) => {
+        const forms = scope.matches?.('form')
+            ? [scope]
+            : [...scope.querySelectorAll('#attendance_form_bank form, #attendance_form_modal form, #modal_positions form')];
+        forms.forEach((form, formIndex) => {
+            form.setAttribute('autocomplete', 'off');
+            form.setAttribute('data-form-type', 'other');
+            form.querySelectorAll('input, select, textarea').forEach((field, fieldIndex) => {
+                const originalName = field.dataset.originalName || field.getAttribute('name') || '';
+                if (originalName) field.dataset.originalName = originalName;
+
+                const randomToken = `no_history_${Date.now()}_${formIndex}_${fieldIndex}`;
+                field.setAttribute('autocomplete', randomToken);
+                field.setAttribute('autocorrect', 'off');
+                field.setAttribute('autocapitalize', 'off');
+                field.setAttribute('spellcheck', 'false');
+                field.setAttribute('data-lpignore', 'true');
+                field.setAttribute('data-1p-ignore', 'true');
+                field.setAttribute('data-form-type', 'other');
+
+                if (shouldMaskAutocompleteField(field) && originalName) {
+                    field.setAttribute('name', `${randomToken}_${originalName}`);
+                }
+            });
+        });
+    };
+    const restoreOriginalNames = (scope) => {
+        scope.querySelectorAll('[data-original-name]').forEach((field) => {
+            field.setAttribute('name', field.dataset.originalName);
+        });
+    };
+
+    maskAutocompleteFields(document);
+
+    const activeSection = () => document.querySelector('.tab-pane.active')?.id.replace('tab_', '') || activeSectionKey;
+    const sectionLabel = (section) => sectionLinks?.[section]?.label || 'Absensi';
+    const sectionIcon = (section) => sectionLinks?.[section]?.icon || 'fas fa-user-clock';
+    const updateOpenFormButton = () => {
+        if (!openFormButton) return;
+
+        const section = activeSection();
+        const cards = formCardsBySection[section] || [];
+        const hasCreateForm = cards.some((card) => {
+            const form = card.querySelector('form.ajax-form');
+            return form && form.getAttribute('action') !== '#';
+        });
+
+        openFormButton.classList.toggle('d-none', !hasCreateForm);
+        openFormButton.dataset.activeSection = section;
+        openFormButton.querySelector('span').textContent = section === 'raw_logs'
+            ? 'Input Manual Raw Log'
+            : section === 'templates'
+                ? 'Kelola Template'
+                : `Tambah ${sectionLabel(section)}`;
+    };
+
+    const moveCardsToBank = () => {
+        if (!formBank || !formModalBody) return;
+        formModalBody.querySelectorAll('.att-form-card.in-modal').forEach((card) => {
+            formBank.appendChild(card);
+        });
+    };
+
+    const openAttendanceFormModal = (section, options = {}) => {
+        if (!formModalBody || !formModal) return;
+
+        moveCardsToBank();
+        formModalBody.innerHTML = '';
+
+        const cards = [...(formCardsBySection[section] || [])];
+        const editFormSelector = options.tableId === 'templates_table'
+            ? '.template-days-form'
+            : `form.ajax-form[data-table="${options.tableId}"]`;
+        const visibleCards = options.tableId
+            ? cards.filter((card) => card.querySelector(editFormSelector))
+            : cards.filter((card) => {
+                const form = card.querySelector('form.ajax-form');
+                return form && form.getAttribute('action') !== '#';
+            });
+
+        visibleCards.forEach((card) => formModalBody.appendChild(card));
+
+        if (!visibleCards.length) {
+            formModalBody.innerHTML = '<div class="attendance-form-empty">Form hanya tersedia dari tombol Edit pada tabel.</div>';
+        }
+
+        const icon = sectionIcon(section);
+        const label = sectionLabel(section);
+        formModalTitle.innerHTML = `<i class="${icon} text-primary me-2"></i>${options.mode === 'edit' ? 'Edit' : 'Form'} ${label}`;
+        formModalSubtitle.textContent = options.mode === 'edit'
+            ? 'Perbarui data dengan teliti lalu simpan perubahan.'
+            : 'Isi data baru pada form ini. Halaman list tetap bersih dan tabel akan refresh otomatis.';
+
+        if (options.mode !== 'edit') {
+            visibleCards.forEach((card) => {
+                card.querySelectorAll('form.ajax-form').forEach((form) => {
+                    form.reset();
+                    clearEditState(form);
+                    if (typeof $ !== 'undefined') {
+                        $(form).find('select').trigger('change.select2');
+                    }
+                    updateTemplateShiftState(form);
+                });
+            });
+        }
+
+        formModal.show();
+        maskAutocompleteFields(formModalBody);
+        setTimeout(() => visibleCards[0]?.querySelector('input, select, textarea')?.focus(), 250);
+    };
+
+    openFormButton?.addEventListener('click', () => {
+        openAttendanceFormModal(openFormButton.dataset.activeSection || activeSection(), { mode: 'create' });
+    });
+    formModalEl?.addEventListener('hidden.bs.modal', () => {
+        moveCardsToBank();
+        formBank?.querySelectorAll('form.ajax-form').forEach((form) => clearEditState(form));
+    });
+
     if (typeof $ !== 'undefined' && $.fn.select2) {
-        document.querySelectorAll('#tab_employees select, #tab_fingerprints select, #tab_schedules select, #tab_holidays select, #tab_templates select, #tab_leaves select, #tab_raw_logs select, #tab_attendances select, #modal_positions select').forEach((select) => {
+        document.querySelectorAll('#attendance_form_bank select, #attendance_form_modal select, #modal_positions select').forEach((select) => {
             const allowClear = select.querySelector('option[value=""]') !== null;
-            const parentModal = select.closest('.modal');
+            const parentModal = select.closest('.modal') || (select.closest('#attendance_form_bank') ? formModalEl : null);
             $(select).select2({
                 width: '100%',
                 allowClear,
@@ -1009,17 +1270,17 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     const resetFormsInTab = (tabId) => {
-        const tab = document.getElementById(tabId);
-        if (!tab) return;
+        const section = tabId.replace('tab_', '');
+        const cards = formCardsBySection[section] || [];
 
-        tab.querySelectorAll('form.ajax-form').forEach((form) => {
+        cards.forEach((card) => card.querySelectorAll('form.ajax-form').forEach((form) => {
             form.reset();
             clearEditState(form);
             if (typeof $ !== 'undefined') {
                 $(form).find('select').trigger('change.select2');
             }
-        });
-        updateTemplateShiftState(tab);
+            updateTemplateShiftState(form);
+        }));
     };
 
     const refreshAttendanceTab = (tabId, options = {}) => {
@@ -1117,7 +1378,16 @@ document.addEventListener('DOMContentLoaded', () => {
             if (tabId) {
                 initTablesForTab(tabId);
                 refreshAttendanceTab(tabId);
+                updateOpenFormButton();
             }
+        });
+    });
+    updateOpenFormButton();
+    document.getElementById('attendance_clear_search')?.addEventListener('click', () => {
+        if (searchInput) searchInput.value = '';
+        const activeTabId = document.querySelector('.tab-pane.active')?.id;
+        (tabTableMap[activeTabId] || []).forEach((tableId) => {
+            initAttendanceTable(tableId)?.ajax.reload();
         });
     });
     document.getElementById('modal_positions')?.addEventListener('shown.bs.modal', () => {
@@ -1141,7 +1411,10 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     const formForTable = (tableId) => document.querySelector(formSelectorByTable[tableId] || `form.ajax-form[data-table="${tableId}"]`);
     const setFieldValue = (form, name, value) => {
-        const field = form.querySelector(`[name="${name}"][type="checkbox"]`) || form.querySelector(`[name="${name}"]`);
+        const field = form.querySelector(`[data-original-name="${name}"][type="checkbox"]`)
+            || form.querySelector(`[name="${name}"][type="checkbox"]`)
+            || form.querySelector(`[data-original-name="${name}"]`)
+            || form.querySelector(`[name="${name}"]`);
         if (!field) return;
 
         if (field.type === 'checkbox') {
@@ -1188,6 +1461,8 @@ document.addEventListener('DOMContentLoaded', () => {
         updateTemplateShiftState(form);
     };
     const fillCrudForm = (tableId, row) => {
+        const section = tableSectionMap[tableId] || activeSection();
+        openAttendanceFormModal(section, { mode: 'edit', tableId });
         const form = formForTable(tableId);
         if (!form || !crudUrls[tableId]?.update) return;
 
@@ -1198,13 +1473,15 @@ document.addEventListener('DOMContentLoaded', () => {
             Object.entries(row).forEach(([key, value]) => setFieldValue(form, key, value));
         }
         setEditState(form, tableId, row);
-        form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        setTimeout(() => form.querySelector('input, select, textarea')?.focus(), 250);
     };
 
     document.querySelectorAll('.ajax-form').forEach((form) => {
         form.addEventListener('submit', async (event) => {
             event.preventDefault();
+            restoreOriginalNames(form);
             const formData = new FormData(form);
+            maskAutocompleteFields(form);
             const isEditing = Boolean(form.dataset.editUrl);
             if (isEditing) {
                 formData.append('_method', 'PUT');
@@ -1260,6 +1537,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     tables.schedules_table?.ajax.reload();
                 }
                 scheduleCalendar?.refetchEvents();
+                formModal?.hide();
             } catch (error) {
                 Swal?.fire('Error', 'Gagal mengirim request', 'error');
             }
@@ -1365,7 +1643,9 @@ document.addEventListener('DOMContentLoaded', () => {
     positionForm?.addEventListener('submit', async (event) => {
         event.preventDefault();
         const id = positionId?.value || '';
+        restoreOriginalNames(positionForm);
         const formData = new FormData(positionForm);
+        maskAutocompleteFields(positionForm);
         if (id) formData.append('_method', 'PUT');
 
         try {

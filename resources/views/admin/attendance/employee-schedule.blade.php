@@ -101,6 +101,22 @@
         border-radius: 0.475rem;
         padding: 0.125rem 0.25rem;
     }
+    .es-table-wrap {
+        border: 1px solid #eef0f8;
+        border-radius: .85rem;
+        background: #fff;
+    }
+    .es-table-wrap table {
+        min-width: 760px;
+        margin-bottom: 0;
+    }
+    .es-table-wrap thead th {
+        position: sticky;
+        top: 0;
+        background: #f9fafc;
+        z-index: 1;
+        border-bottom: 1px solid #eef0f8;
+    }
     .es-legend {
         display: flex;
         flex-wrap: wrap;
@@ -143,6 +159,23 @@
         .es-hero h1 { font-size: 1.2rem; }
         .es-stat-value { font-size: 1.5rem; }
         .es-empty { padding: 2.5rem 1rem; }
+        #emp_calendar { min-height: 560px; }
+        #emp_calendar .fc-toolbar {
+            flex-direction: column;
+            gap: .75rem;
+        }
+        .card-header {
+            gap: .75rem;
+        }
+        .card-toolbar,
+        #btn_load,
+        .es-hero .btn {
+            width: 100%;
+        }
+        .es-legend {
+            width: 100%;
+            gap: .55rem .8rem;
+        }
     }
 </style>
 @endpush
@@ -261,7 +294,7 @@
             <h3 class="card-title fw-bold mb-0" id="table_title"><i class="fas fa-list text-primary me-2"></i>Detail Jadwal</h3>
         </div>
         <div class="card-body py-3">
-            <div class="table-responsive">
+            <div class="table-responsive es-table-wrap">
                 <table class="table align-middle table-row-dashed fs-6 gy-4">
                     <thead>
                         <tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0">

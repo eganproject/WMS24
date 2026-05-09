@@ -20,4 +20,14 @@ class EmployeeScheduleAssignment extends Model
         'effective_from' => 'date',
         'effective_until' => 'date',
     ];
+
+    public function employee()
+    {
+        return $this->belongsTo(Employee::class);
+    }
+
+    public function template()
+    {
+        return $this->belongsTo(WeeklyScheduleTemplate::class, 'weekly_schedule_template_id');
+    }
 }

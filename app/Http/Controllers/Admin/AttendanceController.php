@@ -55,7 +55,10 @@ class AttendanceController extends Controller
             'employees' => Employee::query()->orderBy('name')->get(['id', 'employee_code', 'name']),
             'devices' => AttendanceDevice::query()->orderBy('name')->get(['id', 'name']),
             'shifts' => WorkShift::query()->orderBy('name')->get(['id', 'name', 'start_time', 'end_time']),
-            'templates' => WeeklyScheduleTemplate::query()->orderBy('name')->get(['id', 'name']),
+            'templates' => WeeklyScheduleTemplate::query()
+                ->with(['days.shift:id,name'])
+                ->orderBy('name')
+                ->get(['id', 'name', 'is_active']),
             'nextEmployeeCode' => $this->generateEmployeeCode(),
         ]);
     }
@@ -876,16 +879,26 @@ class AttendanceController extends Controller
             ], 422);
         }
 
-        $assignment = DB::transaction(function () use ($validated, $from, $until) {
+        $generatedCount = 0;
+        $assignment = DB::transaction(function () use ($validated, $from, $until, &$generatedCount) {
             $assignment = EmployeeScheduleAssignment::create($validated);
-            $this->materializeTemplateSchedules($assignment, $from, $until);
+            $generatedCount = $this->materializeTemplateSchedules($assignment, $from, $until);
 
             return $assignment;
         });
 
+        $assignment->load(['employee:id,employee_code,name', 'template:id,name']);
+
         return response()->json([
             'message' => 'Template jadwal berhasil ditetapkan ke karyawan dan jadwal sudah dibuat.',
             'assignment' => $assignment,
+            'assignment_summary' => [
+                'employee' => $assignment->employee ? "{$assignment->employee->employee_code} - {$assignment->employee->name}" : '-',
+                'template' => $assignment->template?->name ?? '-',
+                'effective_from' => $assignment->effective_from?->toDateString(),
+                'effective_until' => $assignment->effective_until?->toDateString(),
+            ],
+            'generated_count' => $generatedCount,
             'generated_until' => $until->toDateString(),
         ]);
     }
@@ -1434,7 +1447,7 @@ class AttendanceController extends Controller
         }
     }
 
-    private function materializeTemplateSchedules(EmployeeScheduleAssignment $assignment, Carbon $from, Carbon $until): void
+    private function materializeTemplateSchedules(EmployeeScheduleAssignment $assignment, Carbon $from, Carbon $until): int
     {
         $templateDays = WeeklyScheduleTemplateDay::query()
             ->where('weekly_schedule_template_id', $assignment->weekly_schedule_template_id)
@@ -1443,6 +1456,7 @@ class AttendanceController extends Controller
 
         $employee = Employee::findOrFail($assignment->employee_id);
         $current = $from->copy();
+        $generatedCount = 0;
 
         while ($current->lte($until)) {
             $templateDay = $templateDays->get((int) $current->dayOfWeekIso);
@@ -1462,10 +1476,13 @@ class AttendanceController extends Controller
                 );
 
                 app(AttendanceProcessor::class)->rebuildDailyAttendance($employee, $schedule->schedule_date);
+                $generatedCount++;
             }
 
             $current->addDay();
         }
+
+        return $generatedCount;
     }
 
     private function applySearch($query, Request $request, array $columns): void

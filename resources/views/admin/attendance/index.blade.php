@@ -251,6 +251,103 @@
         border-radius: .55rem;
     }
 
+    /* ===== Template assignment workspace ===== */
+    .att-assignment-panel {
+        display: grid;
+        grid-template-columns: minmax(0, 1.05fr) minmax(320px, .95fr);
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+    .att-assignment-card {
+        background: #fff;
+        border: 1px solid #eef0f8;
+        border-radius: .85rem;
+        padding: 1.15rem;
+        min-width: 0;
+    }
+    .att-assignment-title {
+        display: flex;
+        align-items: flex-start;
+        gap: .75rem;
+        padding-bottom: .85rem;
+        margin-bottom: 1rem;
+        border-bottom: 1px dashed #e4e6ef;
+    }
+    .att-assignment-title .icon {
+        width: 38px;
+        height: 38px;
+        border-radius: .55rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 38px;
+        background: #ecfdf3;
+        color: #17c653;
+    }
+    .att-assignment-title h3 { font-size: 1rem; font-weight: 800; color: #1e1e2d; margin: 0; }
+    .att-assignment-title p { color: #7e8299; font-size: .8rem; margin: .15rem 0 0; }
+    .att-template-preview {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: .55rem;
+    }
+    .att-template-day {
+        border: 1px solid #eef0f8;
+        border-radius: .65rem;
+        padding: .7rem;
+        background: #f9fafc;
+        min-width: 0;
+    }
+    .att-template-day .day {
+        font-size: .72rem;
+        font-weight: 800;
+        color: #3f4254;
+        text-transform: uppercase;
+    }
+    .att-template-day .meta {
+        font-size: .78rem;
+        color: #7e8299;
+        margin-top: .25rem;
+        overflow-wrap: anywhere;
+    }
+    .att-template-day.work {
+        background: #f1faff;
+        border-color: #d7efff;
+    }
+    .att-assignment-result {
+        border: 1px solid #d7f5e5;
+        background: #f3fff8;
+        border-radius: .75rem;
+        padding: 1rem;
+        margin-top: 1rem;
+    }
+    .att-assignment-result.d-none { display: none !important; }
+    .att-result-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: .75rem;
+        margin-top: .75rem;
+    }
+    .att-result-item {
+        background: #fff;
+        border: 1px solid #d7f5e5;
+        border-radius: .6rem;
+        padding: .7rem;
+    }
+    .att-result-item .label {
+        color: #7e8299;
+        font-size: .72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+    }
+    .att-result-item .value {
+        color: #1e1e2d;
+        font-size: .9rem;
+        font-weight: 700;
+        margin-top: .2rem;
+        overflow-wrap: anywhere;
+    }
+
     /* ===== Responsive tweaks ===== */
     @media (max-width: 768px) {
         .att-hero { padding: 1rem; }
@@ -269,6 +366,13 @@
         }
         .attendance-form-section {
             padding: .85rem;
+        }
+        .att-assignment-panel {
+            grid-template-columns: 1fr;
+        }
+        .att-template-preview,
+        .att-result-grid {
+            grid-template-columns: 1fr;
         }
         #attendance_schedule_calendar { min-height: 560px; }
         #attendance_schedule_calendar .fc-toolbar {
@@ -697,24 +801,89 @@
                     </form>
                 </div>
 
-                <div class="att-form-card">
-                    <div class="att-form-head">
-                        <span class="icon"><i class="fas fa-link"></i></span>
-                        <div>
-                            <h3>Assign Template ke Karyawan</h3>
-                            <p>Tetapkan template mingguan ke karyawan tertentu untuk periode tertentu.</p>
+                <div class="att-assignment-panel" id="template_assignment_panel">
+                    <div class="att-assignment-card">
+                        <div class="att-assignment-title">
+                            <span class="icon"><i class="fas fa-link"></i></span>
+                            <div>
+                                <h3>Tetapkan Template ke Karyawan</h3>
+                                <p>Pilih karyawan, template, dan periode. Jadwal harian akan dibuat otomatis.</p>
+                            </div>
+                        </div>
+                        <form class="row g-3 ajax-form" id="template_assignment_form" data-table="templates_table" action="{{ route('admin.attendance.templates.assign') }}">
+                            @csrf
+                            <div class="col-12">
+                                <label class="form-label fw-bold">Karyawan</label>
+                                <select name="employee_id" class="form-select form-select-solid" required>
+                                    @foreach($employees as $employee)
+                                        <option value="{{ $employee->id }}">{{ $employee->employee_code }} - {{ $employee->name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-bold">Template Jadwal</label>
+                                <select name="weekly_schedule_template_id" class="form-select form-select-solid" required id="template_assignment_template">
+                                    @foreach($templates as $template)
+                                        <option value="{{ $template->id }}">{{ $template->name }}{{ $template->is_active ? '' : ' (Nonaktif)' }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label class="form-label fw-bold">Berlaku Dari</label>
+                                <input type="text" name="effective_from" class="form-control form-control-solid js-date" placeholder="YYYY-MM-DD" required>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label class="form-label fw-bold">Berlaku Sampai</label>
+                                <input type="text" name="effective_until" class="form-control form-control-solid js-date" placeholder="Akhir bulan otomatis">
+                            </div>
+                            <div class="col-12 d-grid d-md-flex justify-content-md-end gap-2 pt-2">
+                                <a href="{{ route('admin.attendance.schedules.index') }}" class="btn btn-light">
+                                    <i class="fas fa-calendar-alt me-1"></i>Lihat Jadwal
+                                </a>
+                                <button class="btn btn-success">
+                                    <i class="fas fa-check me-1"></i>Tetapkan Jadwal
+                                </button>
+                            </div>
+                        </form>
+
+                        <div class="att-assignment-result d-none" id="template_assignment_result">
+                            <div class="d-flex align-items-start gap-3">
+                                <span class="badge badge-light-success mt-1">Berhasil</span>
+                                <div>
+                                    <div class="fw-bold text-gray-900">Jadwal sudah dibuat dan siap dicek.</div>
+                                    <div class="text-muted fs-8">Gunakan tombol Lihat Jadwal untuk memeriksa hasil penetapan.</div>
+                                </div>
+                            </div>
+                            <div class="att-result-grid">
+                                <div class="att-result-item">
+                                    <div class="label">Karyawan</div>
+                                    <div class="value" data-result="employee">-</div>
+                                </div>
+                                <div class="att-result-item">
+                                    <div class="label">Template</div>
+                                    <div class="value" data-result="template">-</div>
+                                </div>
+                                <div class="att-result-item">
+                                    <div class="label">Periode</div>
+                                    <div class="value" data-result="period">-</div>
+                                </div>
+                                <div class="att-result-item">
+                                    <div class="label">Jumlah Jadwal</div>
+                                    <div class="value" data-result="count">-</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                    <form class="row g-3 ajax-form" data-table="templates_table" action="{{ route('admin.attendance.templates.assign') }}">
-                        @csrf
-                        <div class="col-12 col-md-6 col-lg-4"><label class="form-label fw-bold">Karyawan</label><select name="employee_id" class="form-select form-select-solid" required>@foreach($employees as $employee)<option value="{{ $employee->id }}">{{ $employee->employee_code }} - {{ $employee->name }}</option>@endforeach</select></div>
-                        <div class="col-12 col-md-6 col-lg-4"><label class="form-label fw-bold">Template</label><select name="weekly_schedule_template_id" class="form-select form-select-solid" required>@foreach($templates as $template)<option value="{{ $template->id }}">{{ $template->name }}</option>@endforeach</select></div>
-                        <div class="col-6 col-md-6 col-lg-2"><label class="form-label fw-bold">Berlaku Dari</label><input type="text" name="effective_from" class="form-control form-control-solid js-date" placeholder="YYYY-MM-DD" required></div>
-                        <div class="col-6 col-md-6 col-lg-2"><label class="form-label fw-bold">Berlaku Sampai</label><input type="text" name="effective_until" class="form-control form-control-solid js-date" placeholder="Opsional"></div>
-                        <div class="col-12 d-flex justify-content-end pt-2">
-                            <button class="btn btn-light-primary"><i class="fas fa-link me-1"></i>Assign Template</button>
+                    <div class="att-assignment-card">
+                        <div class="att-assignment-title">
+                            <span class="icon"><i class="fas fa-eye"></i></span>
+                            <div>
+                                <h3>Preview Pola Template</h3>
+                                <p>Cek pola mingguan sebelum ditempelkan ke karyawan.</p>
+                            </div>
                         </div>
-                    </form>
+                        <div class="att-template-preview" id="template_assignment_preview"></div>
+                    </div>
                 </div>
 
                 <x-attendance-table id="templates_table" :headers="['Nama','Aktif','Isi Hari','Aksi']" />
@@ -939,6 +1108,17 @@ const assignTemplateUrl = '{{ route('admin.attendance.templates.assign') }}';
 const employeeImportUrl = '{{ route('admin.attendance.employees.import') }}';
 const employeeImportTemplateUrl = '{{ route('admin.attendance.employees.import-template') }}';
 const nextEmployeeCode = @json($nextEmployeeCode ?? 'K0001');
+const weeklyTemplateOptions = @json($templates->map(fn ($template) => [
+    'id' => $template->id,
+    'name' => $template->name,
+    'is_active' => $template->is_active,
+    'days' => $template->days->sortBy('day_of_week')->map(fn ($day) => [
+        'day_of_week' => $day->day_of_week,
+        'schedule_type' => $day->schedule_type,
+        'shift' => $day->shift?->name,
+        'work_shift_id' => $day->work_shift_id,
+    ])->values(),
+])->values());
 const positionStoreUrl = '{{ route('admin.attendance.positions.store') }}';
 const positionUpdateTpl = '{{ route('admin.attendance.positions.update', ':id') }}';
 const positionDeleteTpl = '{{ route('admin.attendance.positions.destroy', ':id') }}';
@@ -1089,6 +1269,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const formModal = formModalEl && typeof bootstrap !== 'undefined'
         ? bootstrap.Modal.getOrCreateInstance(formModalEl)
         : null;
+    const templateAssignmentForm = document.getElementById('template_assignment_form');
+    const templateAssignmentTemplate = document.getElementById('template_assignment_template');
+    const templateAssignmentPreview = document.getElementById('template_assignment_preview');
+    const templateAssignmentResult = document.getElementById('template_assignment_result');
+    const dayLabels = {
+        1: 'Senin',
+        2: 'Selasa',
+        3: 'Rabu',
+        4: 'Kamis',
+        5: 'Jumat',
+        6: 'Sabtu',
+        7: 'Minggu',
+    };
 
     document.querySelectorAll('.tab-pane').forEach((tabPane) => {
         const section = tabPane.id.replace('tab_', '');
@@ -1108,7 +1301,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const maskAutocompleteFields = (scope = document) => {
         const forms = scope.matches?.('form')
             ? [scope]
-            : [...scope.querySelectorAll('#attendance_form_bank form, #attendance_form_modal form, #modal_positions form')];
+            : [...scope.querySelectorAll('#attendance_form_bank form, #attendance_form_modal form, #modal_positions form, #template_assignment_panel form')];
         forms.forEach((form, formIndex) => {
             form.setAttribute('autocomplete', 'off');
             form.setAttribute('data-form-type', 'other');
@@ -1158,7 +1351,7 @@ document.addEventListener('DOMContentLoaded', () => {
         openFormButton.querySelector('span').textContent = section === 'raw_logs'
             ? 'Input Manual Raw Log'
             : section === 'templates'
-                ? 'Kelola Template'
+                ? 'Buat Template'
                 : `Tambah ${sectionLabel(section)}`;
     };
 
@@ -1229,7 +1422,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     if (typeof $ !== 'undefined' && $.fn.select2) {
-        document.querySelectorAll('#attendance_form_bank select, #attendance_form_modal select, #modal_positions select').forEach((select) => {
+        document.querySelectorAll('#attendance_form_bank select, #attendance_form_modal select, #modal_positions select, #template_assignment_panel select').forEach((select) => {
             const allowClear = select.querySelector('option[value=""]') !== null;
             const parentModal = select.closest('.modal') || (select.closest('#attendance_form_bank') ? formModalEl : null);
             $(select).select2({
@@ -1241,6 +1434,56 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
     }
+
+    const currentAssignmentTemplate = () => weeklyTemplateOptions.find((template) => String(template.id) === String(templateAssignmentTemplate?.value));
+    const renderTemplateAssignmentPreview = () => {
+        if (!templateAssignmentPreview) return;
+
+        const template = currentAssignmentTemplate();
+        if (!template) {
+            templateAssignmentPreview.innerHTML = '<div class="attendance-form-empty">Pilih template untuk melihat pola mingguan.</div>';
+            return;
+        }
+
+        const days = Array.isArray(template.days) ? template.days : [];
+        templateAssignmentPreview.innerHTML = Object.entries(dayLabels).map(([day, label]) => {
+            const item = days.find((row) => String(row.day_of_week) === String(day));
+            const isWork = item?.schedule_type === 'work';
+            const meta = isWork ? (item?.shift || 'Shift belum dipilih') : 'Tidak membuat jadwal kerja';
+
+            return `
+                <div class="att-template-day ${isWork ? 'work' : ''}">
+                    <div class="day">${label}</div>
+                    <div class="mt-2">${isWork ? '<span class="badge badge-light-primary">Masuk</span>' : '<span class="badge badge-light-secondary">Libur</span>'}</div>
+                    <div class="meta">${escapeAttr(meta)}</div>
+                </div>
+            `;
+        }).join('');
+    };
+
+    const setAssignmentResult = (json) => {
+        if (!templateAssignmentResult) return;
+
+        const assignment = json?.assignment || {};
+        const summary = json?.assignment_summary || {};
+        const employee = summary.employee || (assignment.employee
+            ? `${assignment.employee.employee_code} - ${assignment.employee.name}`
+            : templateAssignmentForm?.querySelector('[name="employee_id"] option:checked')?.textContent?.trim() || '-');
+        const template = summary.template || assignment.template?.name
+            || templateAssignmentForm?.querySelector('[name="weekly_schedule_template_id"] option:checked')?.textContent?.trim()
+            || '-';
+        const from = summary.effective_from || assignment.effective_from || templateAssignmentForm?.querySelector('[name="effective_from"]')?.value || '-';
+        const until = json?.generated_until || summary.effective_until || assignment.effective_until || templateAssignmentForm?.querySelector('[name="effective_until"]')?.value || 'akhir bulan';
+
+        templateAssignmentResult.querySelector('[data-result="employee"]').textContent = employee;
+        templateAssignmentResult.querySelector('[data-result="template"]').textContent = template;
+        templateAssignmentResult.querySelector('[data-result="period"]').textContent = `${from} s/d ${until}`;
+        templateAssignmentResult.querySelector('[data-result="count"]').textContent = `${json?.generated_count ?? 0} jadwal`;
+        templateAssignmentResult.classList.remove('d-none');
+    };
+
+    templateAssignmentTemplate?.addEventListener('change', renderTemplateAssignmentPreview);
+    renderTemplateAssignmentPreview();
 
     if (typeof flatpickr !== 'undefined') {
         document.querySelectorAll('.js-date').forEach((input) => {
@@ -1648,10 +1891,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                     Swal?.fire('Berhasil', json?.message || 'Data tersimpan', 'success');
                 }
+                if (form.action === assignTemplateUrl) {
+                    setAssignmentResult(json);
+                }
                 form.reset();
                 clearEditState(form);
                 $(form).find('select').trigger('change.select2');
                 updateTemplateShiftState(form);
+                if (form.id === 'template_assignment_form') {
+                    renderTemplateAssignmentPreview();
+                }
                 const tableId = form.getAttribute('data-table');
                 tables[tableId]?.ajax.reload();
                 if (form.action === assignTemplateUrl) {

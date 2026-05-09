@@ -46,6 +46,11 @@ class AttendanceController extends Controller
 
     public function section(string $section)
     {
+        $templates = WeeklyScheduleTemplate::query()
+            ->with(['days.shift:id,name'])
+            ->orderBy('name')
+            ->get(['id', 'name', 'is_active']);
+
         return view('admin.attendance.index', [
             'activeSection' => $section,
             'sectionLinks' => $this->sectionLinks(),
@@ -55,10 +60,18 @@ class AttendanceController extends Controller
             'employees' => Employee::query()->orderBy('name')->get(['id', 'employee_code', 'name']),
             'devices' => AttendanceDevice::query()->orderBy('name')->get(['id', 'name']),
             'shifts' => WorkShift::query()->orderBy('name')->get(['id', 'name', 'start_time', 'end_time']),
-            'templates' => WeeklyScheduleTemplate::query()
-                ->with(['days.shift:id,name'])
-                ->orderBy('name')
-                ->get(['id', 'name', 'is_active']),
+            'templates' => $templates,
+            'templateOptions' => $templates->map(fn ($template) => [
+                'id' => $template->id,
+                'name' => $template->name,
+                'is_active' => $template->is_active,
+                'days' => $template->days->sortBy('day_of_week')->map(fn ($day) => [
+                    'day_of_week' => $day->day_of_week,
+                    'schedule_type' => $day->schedule_type,
+                    'shift' => $day->shift?->name,
+                    'work_shift_id' => $day->work_shift_id,
+                ])->values(),
+            ])->values(),
             'nextEmployeeCode' => $this->generateEmployeeCode(),
         ]);
     }

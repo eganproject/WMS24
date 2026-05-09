@@ -1108,17 +1108,7 @@ const assignTemplateUrl = '{{ route('admin.attendance.templates.assign') }}';
 const employeeImportUrl = '{{ route('admin.attendance.employees.import') }}';
 const employeeImportTemplateUrl = '{{ route('admin.attendance.employees.import-template') }}';
 const nextEmployeeCode = @json($nextEmployeeCode ?? 'K0001');
-const weeklyTemplateOptions = @json($templates->map(fn ($template) => [
-    'id' => $template->id,
-    'name' => $template->name,
-    'is_active' => $template->is_active,
-    'days' => $template->days->sortBy('day_of_week')->map(fn ($day) => [
-        'day_of_week' => $day->day_of_week,
-        'schedule_type' => $day->schedule_type,
-        'shift' => $day->shift?->name,
-        'work_shift_id' => $day->work_shift_id,
-    ])->values(),
-])->values());
+const weeklyTemplateOptions = @json($templateOptions ?? []);
 const positionStoreUrl = '{{ route('admin.attendance.positions.store') }}';
 const positionUpdateTpl = '{{ route('admin.attendance.positions.update', ':id') }}';
 const positionDeleteTpl = '{{ route('admin.attendance.positions.destroy', ':id') }}';

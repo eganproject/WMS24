@@ -537,7 +537,8 @@ class ResiImportController extends Controller
         }
 
         $pickedQty = $this->getPickedQty($date, $sku);
-        $remaining = $listQty - $pickedQty;
+        $effectivePickedQty = $pickedQty + $this->getSubstitutedOutQty($date, $sku);
+        $remaining = $listQty - $effectivePickedQty;
         if ($remaining < 0) {
             $remaining = 0;
         }
@@ -566,6 +567,17 @@ class ResiImportController extends Controller
             ->whereDate('r.tanggal_upload', $date)
             ->where('qci.sku', $sku)
             ->sum('qci.expected_qty');
+    }
+
+    private function getSubstitutedOutQty(string $date, string $sku): int
+    {
+        return (int) DB::table('qc_resi_scan_substitutions as sub')
+            ->join('qc_resi_scans as qc', 'qc.id', '=', 'sub.qc_resi_scan_id')
+            ->join('resis as r', 'r.id', '=', 'qc.resi_id')
+            ->where('qc.status', 'passed')
+            ->whereDate('r.tanggal_upload', $date)
+            ->where('sub.original_sku', $sku)
+            ->sum('sub.qty');
     }
 
     private function syncPickingException(string $date, string $sku, int $exceptionQty): void

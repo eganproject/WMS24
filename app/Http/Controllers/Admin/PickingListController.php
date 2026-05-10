@@ -250,12 +250,32 @@ class PickingListController extends Controller
                 $picked[$sku] = $qty;
             }
 
+            $substitutionRows = DB::table('qc_resi_scan_substitutions as sub')
+                ->join('qc_resi_scans as qc', 'qc.id', '=', 'sub.qc_resi_scan_id')
+                ->join('resis as r', 'r.id', '=', 'qc.resi_id')
+                ->where('qc.status', 'passed')
+                ->whereDate('r.tanggal_upload', $listDate)
+                ->select('sub.original_sku', DB::raw('SUM(sub.qty) as qty'))
+                ->groupBy('sub.original_sku')
+                ->get();
+
+            $substitutedOut = [];
+            foreach ($substitutionRows as $row) {
+                $sku = trim((string) ($row->original_sku ?? ''));
+                $qty = (int) ($row->qty ?? 0);
+                if ($sku === '' || $qty <= 0) {
+                    continue;
+                }
+                $substitutedOut[$sku] = $qty;
+            }
+
             $existingListSkus = PickingList::where('list_date', $listDate)->pluck('sku')->all();
             $existingExceptionSkus = PickingListException::where('list_date', $listDate)->pluck('sku')->all();
 
             $allSkus = array_values(array_unique(array_merge(
                 array_keys($required),
                 array_keys($picked),
+                array_keys($substitutedOut),
                 $existingListSkus,
                 $existingExceptionSkus
             )));
@@ -272,7 +292,8 @@ class PickingListController extends Controller
 
                 $listQty = (int) ($required[$sku] ?? 0);
                 $pickedQty = (int) ($picked[$sku] ?? 0);
-                $remaining = max(0, $listQty - $pickedQty);
+                $effectivePickedQty = $pickedQty + (int) ($substitutedOut[$sku] ?? 0);
+                $remaining = max(0, $listQty - $effectivePickedQty);
                 $exceptionQty = max(0, $pickedQty - $listQty);
 
                 $listRow = PickingList::where('list_date', $listDate)
@@ -519,7 +540,8 @@ class PickingListController extends Controller
         }
 
         $pickedQty = $this->getPickedQty($date, $sku);
-        $remaining = $listQty - $pickedQty;
+        $effectivePickedQty = $pickedQty + $this->getSubstitutedOutQty($date, $sku);
+        $remaining = $listQty - $effectivePickedQty;
         if ($remaining < 0) {
             $remaining = 0;
         }
@@ -551,6 +573,17 @@ class PickingListController extends Controller
             ->whereDate('r.tanggal_upload', $date)
             ->where('qci.sku', $sku)
             ->sum('qci.expected_qty');
+    }
+
+    private function getSubstitutedOutQty(string $date, string $sku): int
+    {
+        return (int) DB::table('qc_resi_scan_substitutions as sub')
+            ->join('qc_resi_scans as qc', 'qc.id', '=', 'sub.qc_resi_scan_id')
+            ->join('resis as r', 'r.id', '=', 'qc.resi_id')
+            ->where('qc.status', 'passed')
+            ->whereDate('r.tanggal_upload', $date)
+            ->where('sub.original_sku', $sku)
+            ->sum('sub.qty');
     }
 
     private function syncPickingException(string $date, string $sku, int $exceptionQty): void

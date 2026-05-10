@@ -26,7 +26,9 @@ class PickingListBalanceService
 
             $listQty = (int) ($listRow?->qty ?? 0);
             $pickedQty = self::pickedQty($date, $sku);
-            $remainingQty = max(0, $listQty - $pickedQty);
+            $substitutedOutQty = self::substitutedOutQty($date, $sku);
+            $effectivePickedQty = $pickedQty + $substitutedOutQty;
+            $remainingQty = max(0, $listQty - $effectivePickedQty);
             $exceptionQty = max(0, $pickedQty - $listQty);
 
             if ($listRow) {
@@ -89,5 +91,16 @@ class PickingListBalanceService
         if ($exception) {
             $exception->delete();
         }
+    }
+
+    private static function substitutedOutQty(string $date, string $sku): int
+    {
+        return (int) DB::table('qc_resi_scan_substitutions as sub')
+            ->join('qc_resi_scans as qc', 'qc.id', '=', 'sub.qc_resi_scan_id')
+            ->join('resis as r', 'r.id', '=', 'qc.resi_id')
+            ->where('qc.status', 'passed')
+            ->whereDate('r.tanggal_upload', $date)
+            ->where('sub.original_sku', $sku)
+            ->sum('sub.qty');
     }
 }

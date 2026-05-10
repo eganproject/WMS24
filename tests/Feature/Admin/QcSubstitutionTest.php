@@ -6,6 +6,8 @@ use App\Http\Middleware\AuthorizeMenuPermission;
 use App\Models\Item;
 use App\Models\ItemStock;
 use App\Models\Kurir;
+use App\Models\PickingList;
+use App\Models\PickingListException;
 use App\Models\QcResiScan;
 use App\Models\Resi;
 use App\Models\ResiDetail;
@@ -32,6 +34,12 @@ class QcSubstitutionTest extends TestCase
         $kab3 = Item::create(['sku' => 'KAB3', 'name' => 'Kabel 3', 'category_id' => 0]);
         ItemStock::create(['item_id' => $kab2->id, 'warehouse_id' => $display->id, 'stock' => 10]);
         ItemStock::create(['item_id' => $kab3->id, 'warehouse_id' => $display->id, 'stock' => 5]);
+        PickingList::create([
+            'list_date' => now()->toDateString(),
+            'sku' => 'KAB2',
+            'qty' => 2,
+            'remaining_qty' => 2,
+        ]);
 
         $resi = Resi::create([
             'id_pesanan' => 'ORD-SUB-001',
@@ -119,6 +127,8 @@ class QcSubstitutionTest extends TestCase
             'warehouse_id' => $display->id,
             'stock' => 4,
         ]);
+        $this->assertSame(0, (int) PickingList::where('sku', 'KAB2')->value('remaining_qty'));
+        $this->assertSame(1, (int) PickingListException::where('sku', 'KAB3')->value('qty'));
     }
 
     private function createUserWithRole(string $slug): User

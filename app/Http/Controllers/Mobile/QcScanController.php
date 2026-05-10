@@ -609,9 +609,13 @@ class QcScanController extends Controller
 
             $uploadDate = $qc->resi?->tanggal_upload?->format('Y-m-d');
             if ($uploadDate) {
+                $substitutionSkus = ($qc->substitutions ?? collect())
+                    ->flatMap(fn ($row) => [$row->original_sku, $row->replacement_sku])
+                    ->filter()
+                    ->values();
                 PickingListBalanceService::syncForDateSkus(
                     $uploadDate,
-                    $items->pluck('sku')->all()
+                    $items->pluck('sku')->merge($substitutionSkus)->all()
                 );
             }
 

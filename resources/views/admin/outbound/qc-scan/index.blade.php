@@ -122,6 +122,9 @@
         display: grid;
         gap: 14px;
     }
+    .qc-field-grid[hidden] {
+        display: none;
+    }
     .qc-field-label {
         font-size: 12px;
         font-weight: 700;
@@ -619,7 +622,7 @@
                 <div class="qc-panel-desc">Area ini dibuat besar agar nyaman dipakai operator QC sepanjang shift.</div>
             </div>
             <div class="qc-panel-body">
-                <div class="qc-field-grid">
+                <div class="qc-field-grid" id="resi_scan_section">
                     <div>
                         <label class="qc-field-label" for="resi_type">Jenis Pencarian Resi</label>
                         <select class="qc-select" id="resi_type">
@@ -639,7 +642,9 @@
                     <div class="qc-status-box" id="resi_status">
                         Siap menerima scan resi pertama.
                     </div>
+                </div>
 
+                <div class="qc-field-grid">
                     <div>
                         <label class="qc-field-label" for="sku_code">Scan SKU</label>
                         <div class="qc-input-row">
@@ -666,7 +671,6 @@
                 <div class="qc-action-grid">
                     <button type="button" class="qc-secondary-btn" id="btn_hold_qc">Tunda QC</button>
                     <button type="button" class="qc-danger-btn" id="btn_reset_qc">Reset QC</button>
-                    <button type="button" class="qc-primary-btn" id="btn_complete_qc">Selesaikan QC</button>
                 </div>
 
                 <div class="qc-toolbar-links">
@@ -738,6 +742,7 @@
     const csrfToken = '{{ csrf_token() }}';
 
     const el = {
+        resiSection: document.getElementById('resi_scan_section'),
         resiType: document.getElementById('resi_type'),
         resiCode: document.getElementById('resi_code'),
         btnScanResi: document.getElementById('btn_scan_resi'),
@@ -787,6 +792,7 @@
     let activityLogEntries = [];
     let audioContext = null;
     let pasteSubmitTimer = null;
+    let scannerFocusPaused = false;
 
     const setStatusBox = (node, message, type = 'default') => {
         node.textContent = message;
@@ -859,21 +865,31 @@
             return (window.prompt(title) || '').trim();
         }
 
-        const result = await Swal.fire({
-            title,
-            input: 'text',
-            inputPlaceholder: placeholder,
-            inputAttributes: { maxlength: '500' },
-            showCancelButton: true,
-            confirmButtonText,
-            cancelButtonText: 'Batal',
-            inputValidator: (value) => {
-                if (!value || !value.trim()) {
-                    return 'Alasan wajib diisi.';
-                }
-                return null;
-            },
-        });
+        scannerFocusPaused = true;
+        let result;
+        try {
+            result = await Swal.fire({
+                title,
+                input: 'text',
+                inputPlaceholder: placeholder,
+                inputAttributes: { maxlength: '500' },
+                showCancelButton: true,
+                confirmButtonText,
+                cancelButtonText: 'Batal',
+                didOpen: () => {
+                    const input = Swal.getInput();
+                    if (input) input.focus();
+                },
+                inputValidator: (value) => {
+                    if (!value || !value.trim()) {
+                        return 'Alasan wajib diisi.';
+                    }
+                    return null;
+                },
+            });
+        } finally {
+            scannerFocusPaused = false;
+        }
 
         if (!result.isConfirmed) {
             return null;
@@ -895,8 +911,14 @@
         return 'Menunggu';
     };
 
+    const isScannerFocusPaused = () => {
+        return scannerFocusPaused || !!document.querySelector('.swal2-container.swal2-shown');
+    };
+
     const focusResi = () => {
+        if (isScannerFocusPaused()) return;
         window.setTimeout(() => {
+            if (isScannerFocusPaused()) return;
             el.resiCode.focus();
             el.resiCode.select();
             el.resiCode.classList.add('is-priority');
@@ -905,7 +927,9 @@
     };
 
     const focusSku = () => {
+        if (isScannerFocusPaused()) return;
         window.setTimeout(() => {
+            if (isScannerFocusPaused()) return;
             el.skuCode.focus();
             el.skuCode.select();
             el.skuCode.classList.add('is-priority');
@@ -914,6 +938,7 @@
     };
 
     const preferredScanFocus = () => {
+        if (isScannerFocusPaused()) return;
         if (qcState.id && qcState.status !== 'passed') {
             focusSku();
             return;
@@ -1095,6 +1120,11 @@
         const summary = qc.summary || { total_expected: 0, total_scanned: 0, remaining: 0 };
         const audit = qc.audit || {};
         const hasQc = !!qc.id;
+        const hasActiveQc = hasQc && qc.status !== 'passed';
+
+        if (el.resiSection) {
+            el.resiSection.hidden = hasActiveQc;
+        }
 
         el.summaryQcId.textContent = hasQc ? `#${qc.id}` : '-';
         el.summaryResiLine.textContent = hasQc
@@ -1163,7 +1193,9 @@
         const disableAction = !hasQc || actionBusy || resiBusy || skuBusy || qc.status === 'passed';
         el.btnHoldQc.disabled = disableAction;
         el.btnResetQc.disabled = disableAction;
-        el.btnCompleteQc.disabled = disableAction || summary.remaining > 0;
+        if (el.btnCompleteQc) {
+            el.btnCompleteQc.disabled = disableAction || summary.remaining > 0;
+        }
     };
 
     const syncQcState = (payload) => {
@@ -1451,6 +1483,9 @@
     };
 
     document.addEventListener('keydown', (event) => {
+        if (isScannerFocusPaused()) {
+            return;
+        }
         if (event.key === 'F1') {
             event.preventDefault();
             focusResi();
@@ -1487,25 +1522,32 @@
     });
 
     document.addEventListener('click', (event) => {
+        if (isScannerFocusPaused()) return;
         const interactive = event.target.closest('button, a, select, input, textarea, [contenteditable="true"], .swal2-container');
         if (interactive) return;
         preferredScanFocus();
     });
 
     document.addEventListener('visibilitychange', () => {
+        if (isScannerFocusPaused()) return;
         if (!document.hidden) preferredScanFocus();
     });
 
-    window.addEventListener('focus', preferredScanFocus);
+    window.addEventListener('focus', () => {
+        if (isScannerFocusPaused()) return;
+        preferredScanFocus();
+    });
 
     el.resiCode.addEventListener('paste', () => schedulePasteSubmit(submitResi));
     el.skuCode.addEventListener('paste', () => schedulePasteSubmit(submitSku));
 
     el.resiCode.addEventListener('blur', () => {
+        if (isScannerFocusPaused()) return;
         if (!qcState.id && !isTextEntryTarget(document.activeElement)) focusResi();
     });
 
     el.skuCode.addEventListener('blur', () => {
+        if (isScannerFocusPaused()) return;
         if (qcState.id && qcState.status !== 'passed' && !isTextEntryTarget(document.activeElement)) focusSku();
     });
 
@@ -1520,7 +1562,9 @@
     el.btnScanSku.addEventListener('click', submitSku);
     el.btnHoldQc.addEventListener('click', holdQc);
     el.btnResetQc.addEventListener('click', resetQc);
-    el.btnCompleteQc.addEventListener('click', completeQc);
+    if (el.btnCompleteQc) {
+        el.btnCompleteQc.addEventListener('click', completeQc);
+    }
     if (el.btnToggleHelp) {
         el.btnToggleHelp.addEventListener('click', () => {
             helpOpen = !helpOpen;

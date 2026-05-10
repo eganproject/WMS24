@@ -10,7 +10,7 @@ use Maatwebsite\Excel\Concerns\WithHeadingRow;
 
 class ResiImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
 {
-    /** @var array<string,array{id_pesanan:string,no_resi:string,kurir:string,tanggal_pesanan:string,items:array<string,array{sku:string,qty:int}>}> */
+    /** @var array<string,array{id_pesanan:string,no_resi:?string,kurir:?string,tanggal_pesanan:string,catatan_pembeli:?string,items:array<string,array{sku:string,qty:int}>}> */
     public array $groups = [];
     /** @var array<int,string> */
     private array $requiredHeaders = [
@@ -49,6 +49,7 @@ class ResiImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             $idPesanan = trim((string) ($rowData['id_pesanan'] ?? ''));
             $noResi = trim((string) ($rowData['awb_no_tracking'] ?? ''));
             $kurir = trim((string) ($rowData['kurir'] ?? ''));
+            $catatanPembeli = trim((string) ($rowData['catatan_pembeli'] ?? ''));
             $sku = trim((string) ($rowData['sku'] ?? ''));
             $qty = $this->parseQty($rowData['jumlah'] ?? null);
             $tanggalPesanan = trim((string) ($rowData['tanggal_pembuatan'] ?? ''));
@@ -70,6 +71,7 @@ class ResiImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
                     'no_resi' => $noResi !== '' ? $noResi : null,
                     'kurir' => $kurir !== '' ? $kurir : null,
                     'tanggal_pesanan' => $tanggalPesanan,
+                    'catatan_pembeli' => $catatanPembeli !== '' ? $catatanPembeli : null,
                     'items' => [],
                 ];
             } elseif ($this->groups[$groupKey]['no_resi'] === null && $noResi !== '') {
@@ -77,6 +79,9 @@ class ResiImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             }
             if ($this->groups[$groupKey]['kurir'] === null && $kurir !== '') {
                 $this->groups[$groupKey]['kurir'] = $kurir;
+            }
+            if ($this->groups[$groupKey]['catatan_pembeli'] === null && $catatanPembeli !== '') {
+                $this->groups[$groupKey]['catatan_pembeli'] = $catatanPembeli;
             }
 
             if (!isset($this->groups[$groupKey]['items'][$sku])) {
@@ -148,6 +153,9 @@ class ResiImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
         }
         if (in_array($key, ['kurir', 'courier', 'ekspedisi', 'expedisi', 'jasa_kurir'], true)) {
             return 'kurir';
+        }
+        if (in_array($key, ['catatan_pembeli', 'buyer_note', 'buyer_notes', 'buyer_remark', 'customer_note', 'customer_notes', 'note_pembeli'], true)) {
+            return 'catatan_pembeli';
         }
         return $key;
     }

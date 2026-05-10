@@ -45,6 +45,7 @@ class ResiImportController extends Controller
         return view('admin.inventory.resi-import.index', [
             'importUrl' => route('admin.inventory.resi-import.import'),
             'dataUrl' => route('admin.inventory.resi-import.data'),
+            'buyerNotesUrl' => route('admin.inventory.resi-import.buyer-notes'),
             'filterDate' => $filterDate,
             'filterSearch' => $search,
             'filterStatus' => $status,
@@ -204,6 +205,48 @@ class ResiImportController extends Controller
         ]);
     }
 
+    public function buyerNotes(Request $request)
+    {
+        $today = now()->toDateString();
+        $filterDate = trim((string) $request->input('date', ''));
+        if ($filterDate === '') {
+            $filterDate = $today;
+        }
+        $search = trim((string) $request->input('q', ''));
+        $status = $this->normalizeStatusFilter($request->input('status'));
+        $flowStatus = $this->normalizeFlowStatusFilter($request->input('flow_status'));
+
+        $query = Resi::query()
+            ->select(['id', 'id_pesanan', 'no_resi', 'tanggal_pesanan', 'kurir_id', 'catatan_pembeli', 'status'])
+            ->with('kurir:id,name')
+            ->whereDate('tanggal_upload', $filterDate)
+            ->whereNotNull('catatan_pembeli')
+            ->where('catatan_pembeli', '<>', '')
+            ->orderByDesc('id');
+
+        $this->applySearch($query, $search, $this->isExactSearch($request));
+        $this->applyStatusFilter($query, $status);
+        $this->applyFlowStatusFilter($query, $flowStatus);
+
+        $rows = $query->get()->map(function ($row) {
+            return [
+                'id' => $row->id,
+                'no_resi' => $row->no_resi ?? '-',
+                'id_pesanan' => $row->id_pesanan ?? '-',
+                'kurir' => $row->kurir?->name ?? '-',
+                'tanggal_pesanan' => $row->tanggal_pesanan?->format('Y-m-d') ?? $row->tanggal_pesanan ?? '-',
+                'status' => $row->status ?? 'active',
+                'catatan_pembeli' => $row->catatan_pembeli,
+            ];
+        });
+
+        return response()->json([
+            'date' => $filterDate,
+            'total' => $rows->count(),
+            'data' => $rows,
+        ]);
+    }
+
     public function import(Request $request)
     {
         $request->validate([
@@ -255,6 +298,7 @@ class ResiImportController extends Controller
                     'tanggal_pesanan' => $tanggalPesanan,
                     'tanggal_upload' => $today,
                     'uploader_id' => auth()->id(),
+                    'catatan_pembeli' => $group['catatan_pembeli'] ?? null,
                 ];
                 $kurirId = $this->resolveKurirId($group['kurir'] ?? null, $defaultKurirId);
                 if ($kurirId) {

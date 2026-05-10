@@ -644,7 +644,7 @@
                     </div>
                 </div>
 
-                <div class="qc-field-grid">
+                <div class="qc-field-grid" id="sku_scan_section">
                     <div>
                         <label class="qc-field-label" for="sku_code">Scan SKU</label>
                         <div class="qc-input-row">
@@ -743,6 +743,7 @@
 
     const el = {
         resiSection: document.getElementById('resi_scan_section'),
+        skuSection: document.getElementById('sku_scan_section'),
         resiType: document.getElementById('resi_type'),
         resiCode: document.getElementById('resi_code'),
         btnScanResi: document.getElementById('btn_scan_resi'),
@@ -1124,6 +1125,9 @@
 
         if (el.resiSection) {
             el.resiSection.hidden = hasActiveQc;
+        }
+        if (el.skuSection) {
+            el.skuSection.hidden = !hasActiveQc;
         }
 
         el.summaryQcId.textContent = hasQc ? `#${qc.id}` : '-';

@@ -119,6 +119,34 @@
         border-color: #1b84ff;
         box-shadow: 0 0 0 4px rgba(27, 132, 255, .12);
     }
+    .scan-input.is-priority {
+        border-color: #1b84ff;
+        background: #f2f8ff;
+        box-shadow: 0 0 0 4px rgba(27, 132, 255, .10);
+    }
+    .scanner-state {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: .75rem;
+        margin: -.25rem 0 1rem;
+        color: #7e8299;
+        font-size: .78rem;
+        font-weight: 700;
+    }
+    .scanner-state-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: .4rem;
+        border-radius: 999px;
+        background: #e8fff3;
+        color: #0e9f6e;
+        padding: .4rem .7rem;
+        white-space: nowrap;
+    }
+    .scanner-state-pill i {
+        font-size: .72rem;
+    }
     .scan-controls {
         display: grid;
         grid-template-columns: minmax(0, 1fr) auto auto;
@@ -338,6 +366,10 @@
         .scan-controls .btn {
             width: 100%;
         }
+        .scanner-state {
+            align-items: flex-start;
+            flex-direction: column;
+        }
     }
 </style>
 
@@ -372,6 +404,10 @@
         <div class="scan-input-wrap">
             <i class="fas fa-barcode"></i>
             <input type="text" id="scan_code" class="form-control scan-input" placeholder="Scan No Resi di sini" autocomplete="off" inputmode="none">
+        </div>
+        <div class="scanner-state">
+            <span class="scanner-state-pill" id="scanner_state"><i class="fas fa-circle"></i>Scanner siap</span>
+            <span>Enter, Tab, atau paste barcode akan langsung diproses. F1 No Resi, F2 ID Pesanan.</span>
         </div>
 
         <div class="scan-controls">
@@ -456,6 +492,7 @@ const el = {
     btnClear: document.getElementById('btn_clear'),
     btnRefocus: document.getElementById('btn_refocus'),
     btnRefreshRecent: document.getElementById('btn_refresh_recent'),
+    scannerState: document.getElementById('scanner_state'),
     feedback: document.getElementById('scan_feedback'),
     feedbackIcon: document.getElementById('feedback_icon'),
     feedbackTitle: document.getElementById('feedback_title'),
@@ -470,11 +507,27 @@ const el = {
 
 let isSubmitting = false;
 let audioCtx = null;
+let scannerFocusPaused = false;
+let pasteSubmitTimer = null;
 
 const selectedType = () => document.querySelector('input[name="scan_type"]:checked')?.value || 'no_resi';
+const isScannerFocusPaused = () => scannerFocusPaused || !!document.querySelector('.swal2-container.swal2-shown');
+const setScannerState = (message, type = 'ready') => {
+    if (!el.scannerState) return;
+    const icon = type === 'pending' ? 'fa-spinner fa-spin' : type === 'error' ? 'fa-exclamation-circle' : 'fa-circle';
+    el.scannerState.innerHTML = `<i class="fas ${icon}"></i>${escapeHtml(message)}`;
+    el.scannerState.style.background = type === 'error' ? '#fff5f8' : type === 'pending' ? '#fff8dd' : '#e8fff3';
+    el.scannerState.style.color = type === 'error' ? '#f1416c' : type === 'pending' ? '#b58a00' : '#0e9f6e';
+};
 const focusScanner = () => {
-    el.code.focus({ preventScroll: true });
-    el.code.select();
+    if (isScannerFocusPaused()) return;
+    window.setTimeout(() => {
+        if (isScannerFocusPaused()) return;
+        el.code.focus({ preventScroll: true });
+        el.code.select();
+        el.code.classList.add('is-priority');
+        setScannerState('Scanner siap');
+    }, 30);
 };
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
     '&': '&amp;',
@@ -536,6 +589,10 @@ const rejectionTitle = (payload = {}) => {
     return 'Scan Ditolak';
 };
 const rejectionMessage = (error) => {
+    if (error.status === 419) {
+        return 'Sesi halaman sudah kedaluwarsa atau token keamanan tidak cocok. Refresh halaman, lalu scan ulang. Jika masih terjadi, login ulang.';
+    }
+
     const payload = error.payload || {};
     return [error.message || 'Gagal memproses scan out.', payload.detail || '']
         .filter(Boolean)
@@ -547,18 +604,34 @@ const fetchJson = async (url, options = {}) => {
         headers: {
             'Accept': 'application/json',
             'X-CSRF-TOKEN': csrfToken,
+            'X-Requested-With': 'XMLHttpRequest',
             ...(options.headers || {}),
         },
         ...options,
     });
     const json = await response.json().catch(() => ({}));
     if (!response.ok) {
-        const error = new Error(json?.message || 'Request gagal.');
+        const error = new Error(
+            response.status === 419
+                ? 'Sesi kedaluwarsa atau token keamanan tidak valid.'
+                : (json?.message || 'Request gagal.')
+        );
         error.payload = json;
         error.status = response.status;
         throw error;
     }
     return json;
+};
+const schedulePasteSubmit = () => {
+    window.clearTimeout(pasteSubmitTimer);
+    pasteSubmitTimer = window.setTimeout(() => submitScan(), 80);
+};
+const selectScanType = (type) => {
+    const input = document.querySelector(`input[name="scan_type"][value="${type}"]`);
+    if (!input) return;
+    input.checked = true;
+    el.code.placeholder = type === 'id_pesanan' ? 'Scan ID Pesanan di sini' : 'Scan No Resi di sini';
+    focusScanner();
 };
 const renderRecent = (items = []) => {
     if (!items.length) {
@@ -592,30 +665,36 @@ const submitScan = async () => {
     const code = el.code.value.trim();
     if (!code) {
         setFeedback('error', 'Kode Kosong', 'Scan atau masukkan nomor terlebih dahulu.');
+        setScannerState('Kode kosong', 'error');
         beep(280, 160, .28);
         focusScanner();
         return;
     }
     isSubmitting = true;
     el.btnScan.disabled = true;
+    setScannerState('Memproses scan...', 'pending');
     setFeedback('pending', 'Memproses', `Memvalidasi ${code}...`);
     try {
         const data = await fetchJson(routes.scan, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type: selectedType(), code }),
+            body: JSON.stringify({ type: selectedType(), code, _token: csrfToken }),
         });
         beep(1180, 120, .4);
         setFeedback('success', 'Scan Out Berhasil', data?.message || 'Resi berhasil discan keluar.', data?.scan_out);
+        setScannerState('Scan berhasil, siap berikutnya');
         el.code.value = '';
         await refreshRecent();
     } catch (error) {
         beep(220, 180, .3);
-        const title = rejectionTitle(error.payload || {});
+        const isSessionExpired = error.status === 419;
+        const title = isSessionExpired ? 'Sesi Kedaluwarsa' : rejectionTitle(error.payload || {});
         const message = rejectionMessage(error);
         const context = scanContextFromPayload(error.payload || {});
+        setScannerState(isSessionExpired ? 'Sesi kedaluwarsa' : 'Scan ditolak', 'error');
         setFeedback('error', title, message, context);
         if (typeof Swal !== 'undefined') {
+            scannerFocusPaused = isSessionExpired;
             Swal.fire({
                 icon: 'error',
                 title,
@@ -630,8 +709,16 @@ const submitScan = async () => {
                         </div>
                     </div>
                 `,
-                timer: 4200,
-                showConfirmButton: false,
+                timer: isSessionExpired ? undefined : 4200,
+                showConfirmButton: isSessionExpired,
+                confirmButtonText: 'Refresh Halaman',
+            }).then((result) => {
+                if (isSessionExpired && result.isConfirmed) {
+                    window.location.reload();
+                    return;
+                }
+                scannerFocusPaused = false;
+                focusScanner();
             });
         }
     } finally {
@@ -643,26 +730,71 @@ const submitScan = async () => {
 
 document.querySelectorAll('input[name="scan_type"]').forEach((input) => {
     input.addEventListener('change', () => {
-        el.code.placeholder = selectedType() === 'id_pesanan' ? 'Scan ID Pesanan di sini' : 'Scan No Resi di sini';
-        focusScanner();
+        selectScanType(input.value);
     });
 });
 el.code.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') {
+    if (event.key === 'Enter' || event.key === 'Tab') {
         event.preventDefault();
         submitScan();
     }
 });
+el.code.addEventListener('paste', schedulePasteSubmit);
 el.btnScan.addEventListener('click', submitScan);
 el.btnClear.addEventListener('click', () => {
     el.code.value = '';
     setFeedback('', 'Siap Scan', 'Input dibersihkan. Arahkan scanner ke barcode berikutnya.');
+    setScannerState('Scanner siap');
     focusScanner();
 });
 el.btnRefocus.addEventListener('click', focusScanner);
 el.btnRefreshRecent.addEventListener('click', refreshRecent);
+document.addEventListener('keydown', (event) => {
+    if (isScannerFocusPaused()) return;
+    if (event.key === 'F1') {
+        event.preventDefault();
+        selectScanType('no_resi');
+        return;
+    }
+    if (event.key === 'F2') {
+        event.preventDefault();
+        selectScanType('id_pesanan');
+        return;
+    }
+    if (event.key === 'Escape') {
+        event.preventDefault();
+        el.code.value = '';
+        setFeedback('', 'Siap Scan', 'Input dibersihkan. Arahkan scanner ke barcode berikutnya.');
+        setScannerState('Scanner siap');
+        focusScanner();
+        return;
+    }
+    if (!event.ctrlKey && !event.altKey && !event.metaKey && event.key.length === 1 && document.activeElement !== el.code) {
+        const target = event.target;
+        const tag = (target?.tagName || '').toLowerCase();
+        const isTextTarget = tag === 'input' || tag === 'textarea' || tag === 'select' || target?.isContentEditable;
+        if (isTextTarget) return;
+        event.preventDefault();
+        el.code.focus({ preventScroll: true });
+        el.code.value = `${el.code.value || ''}${event.key}`;
+        el.code.classList.add('is-priority');
+        setScannerState('Scanner siap');
+    }
+});
 document.addEventListener('click', (event) => {
+    if (isScannerFocusPaused()) return;
     if (event.target.closest('a, button, input, label, select, textarea')) return;
+    focusScanner();
+});
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) focusScanner();
+});
+window.addEventListener('focus', focusScanner);
+el.code.addEventListener('blur', () => {
+    if (isScannerFocusPaused()) return;
+    const active = document.activeElement;
+    const tag = (active?.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select' || active?.isContentEditable) return;
     focusScanner();
 });
 document.addEventListener('DOMContentLoaded', () => {

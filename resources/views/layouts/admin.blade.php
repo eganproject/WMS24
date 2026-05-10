@@ -55,6 +55,19 @@
             z-index: 2065 !important;
         }
 
+        .flatpickr-calendar .app-flatpickr-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.5rem;
+            padding: 0.75rem;
+            border-top: 1px solid #e4e6ef;
+            background: #fff;
+        }
+
+        .flatpickr-calendar .app-flatpickr-apply {
+            min-width: 74px;
+        }
+
         .modal .select2-dropdown {
             z-index: 2065 !important;
         }
@@ -531,20 +544,64 @@
 
                 const originalFlatpickr = window.flatpickr;
 
+                const appendFlatpickrApplyButton = (instance) => {
+                    const calendar = instance?.calendarContainer;
+                    if (!calendar || calendar.querySelector('.app-flatpickr-footer')) {
+                        return;
+                    }
+
+                    const footer = document.createElement('div');
+                    footer.className = 'app-flatpickr-footer';
+
+                    const applyButton = document.createElement('button');
+                    applyButton.type = 'button';
+                    applyButton.className = 'btn btn-sm btn-primary app-flatpickr-apply';
+                    applyButton.textContent = 'Apply';
+                    applyButton.addEventListener('click', () => {
+                        instance.close();
+                    });
+
+                    footer.appendChild(applyButton);
+                    calendar.appendChild(footer);
+                };
+
+                const toHookArray = (hook) => {
+                    if (!hook) {
+                        return [];
+                    }
+                    return Array.isArray(hook) ? hook : [hook];
+                };
+
                 const buildConfig = (element, config) => {
-                    if (!element || typeof config !== 'object' || Array.isArray(config)) {
+                    if (typeof config !== 'object' || Array.isArray(config)) {
                         return config;
+                    }
+
+                    const nextConfig = {
+                        ...config,
+                        closeOnSelect: config.closeOnSelect ?? false,
+                        disableMobile: config.disableMobile ?? true,
+                        onReady: [
+                            ...toHookArray(config.onReady),
+                            function (_selectedDates, _dateStr, instance) {
+                                appendFlatpickrApplyButton(instance);
+                            },
+                        ],
+                    };
+
+                    if (!element) {
+                        return nextConfig;
                     }
 
                     const floatingParent = getModalFloatingParent(element);
                     if (!floatingParent) {
-                        return config;
+                        return nextConfig;
                     }
 
                     return {
-                        ...config,
-                        appendTo: config.appendTo || floatingParent,
-                        positionElement: config.positionElement || element,
+                        ...nextConfig,
+                        appendTo: nextConfig.appendTo || floatingParent,
+                        positionElement: nextConfig.positionElement || element,
                     };
                 };
 

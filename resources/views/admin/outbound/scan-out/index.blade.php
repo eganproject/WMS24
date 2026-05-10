@@ -709,9 +709,9 @@ const submitScan = async () => {
                         </div>
                     </div>
                 `,
-                timer: isSessionExpired ? undefined : 4200,
-                showConfirmButton: isSessionExpired,
-                confirmButtonText: 'Refresh Halaman',
+                timer: undefined,
+                showConfirmButton: true,
+                confirmButtonText: isSessionExpired ? 'Refresh Halaman' : 'OK',
             }).then((result) => {
                 if (isSessionExpired && result.isConfirmed) {
                     window.location.reload();

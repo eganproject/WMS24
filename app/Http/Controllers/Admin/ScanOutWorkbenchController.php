@@ -82,11 +82,26 @@ class ScanOutWorkbenchController extends Controller
                 ->lockForUpdate()
                 ->first();
 
-            if (!$qc || $qc->status !== QcTransitStatus::PASSED) {
+            if (!$qc) {
                 DB::rollBack();
 
                 return response()->json([
-                    'message' => 'Resi belum lolos QC dan belum siap scan out.',
+                    'message' => 'Resi belum pernah diproses QC. Scan out ditolak.',
+                    'reason_code' => 'qc_not_started',
+                    'detail' => 'Lakukan QC scan untuk resi ini sampai selesai sebelum scan out.',
+                    'resi' => $this->formatResi($resi),
+                ], 422);
+            }
+
+            if ($qc->status !== QcTransitStatus::PASSED) {
+                DB::rollBack();
+
+                return response()->json([
+                    'message' => 'QC resi belum selesai. Scan out ditolak.',
+                    'reason_code' => 'qc_not_passed',
+                    'detail' => 'Status QC saat ini: '.QcTransitStatus::scanStatusLabel($qc->status).'. Selesaikan QC sampai status Lolos QC sebelum scan out.',
+                    'resi' => $this->formatResi($resi),
+                    'qc' => $this->formatQc($qc),
                 ], 422);
             }
 
@@ -134,11 +149,7 @@ class ScanOutWorkbenchController extends Controller
         return response()->json([
             'message' => 'Scan out berhasil.',
             'scan_out' => $this->formatScanOut($scanOut),
-            'resi' => [
-                'id_pesanan' => $resi->id_pesanan,
-                'no_resi' => $resi->no_resi,
-                'kurir' => $resi->kurir?->name,
-            ],
+            'resi' => $this->formatResi($resi),
         ]);
     }
 
@@ -159,6 +170,27 @@ class ScanOutWorkbenchController extends Controller
             'scanned_at' => $scan->scanned_at?->format('Y-m-d H:i:s') ?? '-',
             'scanned_time' => $scan->scanned_at?->format('H:i:s') ?? '-',
             'scanner' => $scan->scanner?->name ?? '-',
+        ];
+    }
+
+    private function formatResi(Resi $resi): array
+    {
+        return [
+            'id_pesanan' => $resi->id_pesanan ?? '-',
+            'no_resi' => $resi->no_resi ?? '-',
+            'kurir' => $resi->kurir?->name ?? '-',
+            'status' => $resi->status ?? '-',
+        ];
+    }
+
+    private function formatQc(QcResiScan $qc): array
+    {
+        return [
+            'id' => $qc->id,
+            'status' => $qc->status,
+            'status_label' => QcTransitStatus::scanStatusLabel($qc->status),
+            'started_at' => $qc->started_at?->format('Y-m-d H:i:s'),
+            'completed_at' => $qc->completed_at?->format('Y-m-d H:i:s'),
         ];
     }
 }

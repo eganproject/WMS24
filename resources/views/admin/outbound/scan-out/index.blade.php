@@ -519,6 +519,28 @@ const setFeedback = (state, title, message, scanOut = null) => {
     el.metaResi.textContent = scanOut?.no_resi || '-';
     el.metaKurir.textContent = scanOut?.kurir || '-';
 };
+const scanContextFromPayload = (payload = {}) => {
+    const resi = payload?.resi || {};
+    const qc = payload?.qc || {};
+    const scanOut = payload?.scan_out || {};
+
+    return {
+        id_pesanan: scanOut.id_pesanan || resi.id_pesanan || '-',
+        no_resi: scanOut.no_resi || resi.no_resi || '-',
+        kurir: scanOut.kurir || resi.kurir || qc.status_label || '-',
+    };
+};
+const rejectionTitle = (payload = {}) => {
+    if (payload.reason_code === 'qc_not_started') return 'Belum QC Scan';
+    if (payload.reason_code === 'qc_not_passed') return 'QC Belum Selesai';
+    return 'Scan Ditolak';
+};
+const rejectionMessage = (error) => {
+    const payload = error.payload || {};
+    return [error.message || 'Gagal memproses scan out.', payload.detail || '']
+        .filter(Boolean)
+        .join(' ');
+};
 const fetchJson = async (url, options = {}) => {
     const response = await fetch(url, {
         credentials: 'same-origin',
@@ -589,13 +611,26 @@ const submitScan = async () => {
         await refreshRecent();
     } catch (error) {
         beep(220, 180, .3);
-        setFeedback('error', 'Scan Ditolak', error.message || 'Gagal memproses scan out.', error.payload?.scan_out || null);
+        const title = rejectionTitle(error.payload || {});
+        const message = rejectionMessage(error);
+        const context = scanContextFromPayload(error.payload || {});
+        setFeedback('error', title, message, context);
         if (typeof Swal !== 'undefined') {
             Swal.fire({
                 icon: 'error',
-                title: 'Scan Ditolak',
-                text: error.message || 'Gagal memproses scan out.',
-                timer: 2200,
+                title,
+                html: `
+                    <div class="text-start">
+                        <div class="fw-bold mb-2">${escapeHtml(error.message || 'Gagal memproses scan out.')}</div>
+                        ${error.payload?.detail ? `<div class="mb-2">${escapeHtml(error.payload.detail)}</div>` : ''}
+                        <div class="text-muted small">
+                            ID Pesanan: ${escapeHtml(context.id_pesanan)}<br>
+                            No Resi: ${escapeHtml(context.no_resi)}<br>
+                            Kurir/Status: ${escapeHtml(context.kurir)}
+                        </div>
+                    </div>
+                `,
+                timer: 4200,
                 showConfirmButton: false,
             });
         }

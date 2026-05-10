@@ -162,6 +162,11 @@
         border-color: #0f766e;
         box-shadow: 0 0 0 5px rgba(15, 118, 110, 0.14);
     }
+    .qc-input.is-priority {
+        border-color: #0f766e;
+        background: #f0fdfa;
+        box-shadow: 0 0 0 5px rgba(15, 118, 110, 0.10);
+    }
     .qc-input::placeholder {
         color: #94a3b8;
         font-weight: 700;
@@ -212,6 +217,34 @@
     .qc-action-grid {
         display: grid;
         gap: 10px;
+    }
+    .qc-speed-mode {
+        border: 1px solid #ccfbf1;
+        border-radius: 16px;
+        background: #f0fdfa;
+        color: #0f766e;
+        padding: 12px 14px;
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        font-size: 13px;
+        line-height: 1.5;
+        font-weight: 700;
+    }
+    .qc-speed-mode input {
+        margin-top: 3px;
+        accent-color: #0f766e;
+        flex: 0 0 auto;
+    }
+    .qc-speed-mode span {
+        display: block;
+    }
+    .qc-speed-mode small {
+        display: block;
+        color: #64748b;
+        font-size: 12px;
+        font-weight: 600;
+        margin-top: 2px;
     }
     .qc-inline-tools {
         display: flex;
@@ -548,11 +581,11 @@
         <div class="qc-help-panel" id="help_panel">
             <div class="qc-help-card">
                 <div class="qc-help-label">Shortcut</div>
-                <div class="qc-help-value">`F1` fokus resi, `F2` fokus SKU, `Ctrl + Enter` untuk selesaikan QC.</div>
+                <div class="qc-help-value">`F1` fokus resi, `F2` fokus SKU, `Ctrl + Enter` untuk selesaikan QC. Enter, Tab, atau paste dari scanner langsung diproses.</div>
             </div>
             <div class="qc-help-card">
                 <div class="qc-help-label">Mode Scanner</div>
-                <div class="qc-help-value">Scanner tipe keyboard bisa langsung dipakai. Setelah barcode terbaca, tekan `Enter` untuk kirim.</div>
+                <div class="qc-help-value">Scanner tipe keyboard bisa langsung dipakai. Fokus akan kembali otomatis ke input yang sedang dibutuhkan.</div>
             </div>
             <div class="qc-help-card">
                 <div class="qc-help-label">Catatan</div>
@@ -620,6 +653,14 @@
                     <div class="qc-status-box" id="sku_status">
                         Menunggu resi aktif sebelum scan SKU.
                     </div>
+
+                    <label class="qc-speed-mode" for="auto_complete_qc">
+                        <input type="checkbox" id="auto_complete_qc" checked>
+                        <span>
+                            Auto selesai QC saat semua SKU terpenuhi
+                            <small>Setelah scan item terakhir berhasil, sistem langsung menyelesaikan QC dan kembali siap scan resi berikutnya.</small>
+                        </span>
+                    </label>
                 </div>
 
                 <div class="qc-action-grid">
@@ -705,6 +746,7 @@
         skuQty: document.getElementById('sku_qty'),
         btnScanSku: document.getElementById('btn_scan_sku'),
         skuStatus: document.getElementById('sku_status'),
+        autoCompleteQc: document.getElementById('auto_complete_qc'),
         btnHoldQc: document.getElementById('btn_hold_qc'),
         btnResetQc: document.getElementById('btn_reset_qc'),
         btnCompleteQc: document.getElementById('btn_complete_qc'),
@@ -737,10 +779,14 @@
     };
 
     let actionBusy = false;
+    let resiBusy = false;
+    let skuBusy = false;
+    let pendingAutoComplete = false;
     let helpOpen = false;
     let auditOpen = false;
     let activityLogEntries = [];
     let audioContext = null;
+    let pasteSubmitTimer = null;
 
     const setStatusBox = (node, message, type = 'default') => {
         node.textContent = message;
@@ -853,6 +899,8 @@
         window.setTimeout(() => {
             el.resiCode.focus();
             el.resiCode.select();
+            el.resiCode.classList.add('is-priority');
+            el.skuCode.classList.remove('is-priority');
         }, 30);
     };
 
@@ -860,7 +908,41 @@
         window.setTimeout(() => {
             el.skuCode.focus();
             el.skuCode.select();
+            el.skuCode.classList.add('is-priority');
+            el.resiCode.classList.remove('is-priority');
         }, 30);
+    };
+
+    const preferredScanFocus = () => {
+        if (qcState.id && qcState.status !== 'passed') {
+            focusSku();
+            return;
+        }
+        focusResi();
+    };
+
+    const isTextEntryTarget = (target) => {
+        if (!target) return false;
+        const tag = (target.tagName || '').toLowerCase();
+        return tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable;
+    };
+
+    const schedulePasteSubmit = (submitter) => {
+        window.clearTimeout(pasteSubmitTimer);
+        pasteSubmitTimer = window.setTimeout(() => {
+            submitter();
+        }, 80);
+    };
+
+    const shouldAutoComplete = () => {
+        const summary = qcState.summary || {};
+        return !!(
+            el.autoCompleteQc?.checked
+            && qcState.id
+            && qcState.status !== 'passed'
+            && Number(summary.total_expected || 0) > 0
+            && Number(summary.remaining || 0) === 0
+        );
     };
 
     const nowLabel = () => {
@@ -1078,7 +1160,7 @@
             <div class="qc-audit-item"><strong>Tip:</strong> gunakan qty jika scanner membaca satu SKU yang mewakili lebih dari satu unit.</div>
         `;
 
-        const disableAction = !hasQc || actionBusy || qc.status === 'passed';
+        const disableAction = !hasQc || actionBusy || resiBusy || skuBusy || qc.status === 'passed';
         el.btnHoldQc.disabled = disableAction;
         el.btnResetQc.disabled = disableAction;
         el.btnCompleteQc.disabled = disableAction || summary.remaining > 0;
@@ -1098,6 +1180,8 @@
     };
 
     const submitResi = async () => {
+        if (resiBusy) return;
+
         const code = el.resiCode.value.trim();
         if (!code) {
             const message = 'Masukkan atau scan resi terlebih dahulu.';
@@ -1112,6 +1196,8 @@
             return;
         }
 
+        resiBusy = true;
+        renderQc();
         el.btnScanResi.disabled = true;
         setStatusBox(el.resiStatus, 'Memproses resi...', 'pending');
 
@@ -1145,17 +1231,30 @@
                 tone: 'success',
             });
             el.resiCode.value = '';
-            focusSku();
+            if (shouldAutoComplete()) {
+                pendingAutoComplete = true;
+                setStatusBox(el.qcStatus, 'Semua SKU sudah terpenuhi. Menyelesaikan QC otomatis...', 'pending');
+                window.setTimeout(() => {
+                    pendingAutoComplete = false;
+                    completeQc({ auto: true });
+                }, 180);
+            } else {
+                focusSku();
+            }
         } catch (error) {
             setStatusBox(el.resiStatus, error.message || 'Gagal memproses resi.', 'error');
             showError(error.message || 'Gagal memproses resi.', error.details || []);
             focusResi();
         } finally {
+            resiBusy = false;
             el.btnScanResi.disabled = false;
+            renderQc();
         }
     };
 
     const submitSku = async () => {
+        if (skuBusy || pendingAutoComplete) return;
+
         if (!qcState.id) {
             const message = 'Belum ada resi aktif. Scan resi lebih dulu.';
             setStatusBox(el.skuStatus, message, 'error');
@@ -1196,6 +1295,8 @@
             return;
         }
 
+        skuBusy = true;
+        renderQc();
         el.btnScanSku.disabled = true;
         setStatusBox(el.skuStatus, 'Memproses SKU...', 'pending');
 
@@ -1219,13 +1320,24 @@
             });
             el.skuCode.value = '';
             el.skuQty.value = '1';
-            focusSku();
+            if (shouldAutoComplete()) {
+                pendingAutoComplete = true;
+                setStatusBox(el.qcStatus, 'Semua SKU terpenuhi. Menyelesaikan QC otomatis...', 'pending');
+                window.setTimeout(() => {
+                    pendingAutoComplete = false;
+                    completeQc({ auto: true });
+                }, 180);
+            } else {
+                focusSku();
+            }
         } catch (error) {
             setStatusBox(el.skuStatus, error.message || 'Gagal memproses SKU.', 'error');
             showError(error.message || 'Gagal memproses SKU.', error.details || []);
             focusSku();
         } finally {
+            skuBusy = false;
             el.btnScanSku.disabled = false;
+            renderQc();
         }
     };
 
@@ -1303,7 +1415,7 @@
         }
     };
 
-    const completeQc = async () => {
+    const completeQc = async (options = {}) => {
         if (!qcState.id || actionBusy) return;
 
         actionBusy = true;
@@ -1323,9 +1435,11 @@
                 title: payload.message || 'QC selesai.',
                 message: qcState.resi?.no_resi || '',
                 type: 'success',
-                detail: 'Resi siap ke tahap scan out.',
+                detail: options.auto ? 'Auto selesai dari scan item terakhir.' : 'Resi siap ke tahap scan out.',
                 tone: 'complete',
             });
+            el.skuCode.value = '';
+            el.skuQty.value = '1';
             focusResi();
         } catch (error) {
             setStatusBox(el.qcStatus, error.message || 'Gagal menyelesaikan QC.', 'error');
@@ -1347,12 +1461,20 @@
             focusSku();
             return;
         }
-        if (event.key === 'Enter' && document.activeElement === el.resiCode) {
+        if (!event.ctrlKey && !event.altKey && !event.metaKey && event.key.length === 1 && !isTextEntryTarget(event.target)) {
+            event.preventDefault();
+            const target = qcState.id && qcState.status !== 'passed' ? el.skuCode : el.resiCode;
+            target.focus();
+            target.value = `${target.value || ''}${event.key}`;
+            target.classList.add('is-priority');
+            return;
+        }
+        if ((event.key === 'Enter' || event.key === 'Tab') && document.activeElement === el.resiCode) {
             event.preventDefault();
             submitResi();
             return;
         }
-        if (event.key === 'Enter' && (document.activeElement === el.skuCode || document.activeElement === el.skuQty)) {
+        if ((event.key === 'Enter' || event.key === 'Tab') && (document.activeElement === el.skuCode || document.activeElement === el.skuQty)) {
             event.preventDefault();
             submitSku();
             return;
@@ -1362,6 +1484,29 @@
             completeQc();
             return;
         }
+    });
+
+    document.addEventListener('click', (event) => {
+        const interactive = event.target.closest('button, a, select, input, textarea, [contenteditable="true"], .swal2-container');
+        if (interactive) return;
+        preferredScanFocus();
+    });
+
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) preferredScanFocus();
+    });
+
+    window.addEventListener('focus', preferredScanFocus);
+
+    el.resiCode.addEventListener('paste', () => schedulePasteSubmit(submitResi));
+    el.skuCode.addEventListener('paste', () => schedulePasteSubmit(submitSku));
+
+    el.resiCode.addEventListener('blur', () => {
+        if (!qcState.id && !isTextEntryTarget(document.activeElement)) focusResi();
+    });
+
+    el.skuCode.addEventListener('blur', () => {
+        if (qcState.id && qcState.status !== 'passed' && !isTextEntryTarget(document.activeElement)) focusSku();
     });
 
     el.resiType.addEventListener('change', () => {

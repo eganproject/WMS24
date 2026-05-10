@@ -669,6 +669,7 @@
                 </div>
 
                 <div class="qc-action-grid">
+                    <button type="button" class="qc-secondary-btn" id="btn_substitute_qc">Substitusi SKU</button>
                     <button type="button" class="qc-secondary-btn" id="btn_hold_qc">Tunda QC</button>
                     <button type="button" class="qc-danger-btn" id="btn_reset_qc">Reset QC</button>
                 </div>
@@ -753,6 +754,7 @@
         btnScanSku: document.getElementById('btn_scan_sku'),
         skuStatus: document.getElementById('sku_status'),
         autoCompleteQc: document.getElementById('auto_complete_qc'),
+        btnSubstituteQc: document.getElementById('btn_substitute_qc'),
         btnHoldQc: document.getElementById('btn_hold_qc'),
         btnResetQc: document.getElementById('btn_reset_qc'),
         btnCompleteQc: document.getElementById('btn_complete_qc'),
@@ -779,6 +781,7 @@
         id: null,
         status: null,
         items: [],
+        substitutions: [],
         summary: null,
         resi: null,
         audit: null,
@@ -802,6 +805,14 @@
         if (type === 'success') node.classList.add('success');
         if (type === 'pending') node.classList.add('pending');
     };
+
+    const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;',
+    }[char]));
 
     const buildErrorMessage = (res, json) => {
         if (json?.message) return json.message;
@@ -897,6 +908,104 @@
         }
 
         return (result.value || '').trim();
+    };
+
+    const askSubstitution = async () => {
+        const rows = (qcState.items || [])
+            .map((item) => {
+                const expected = Number(item.expected_qty || 0);
+                const scanned = Number(item.scanned_qty || 0);
+                return {
+                    sku: item.sku || '',
+                    remaining: Math.max(0, expected - scanned),
+                    expected,
+                    scanned,
+                };
+            })
+            .filter((item) => item.sku && item.remaining > 0);
+
+        if (!rows.length) {
+            showError('Tidak ada sisa SKU yang bisa disubstitusi.');
+            return null;
+        }
+
+        if (typeof Swal === 'undefined') {
+            return {
+                original_sku: (window.prompt('SKU asal') || '').trim(),
+                replacement_sku: (window.prompt('SKU pengganti') || '').trim(),
+                qty: parseInt(window.prompt('Qty substitusi') || '1', 10),
+                reason: (window.prompt('Alasan substitusi') || '').trim(),
+            };
+        }
+
+        scannerFocusPaused = true;
+        let result;
+        const options = rows.map((row) => (
+            `<option value="${escapeHtml(row.sku)}">${escapeHtml(row.sku)} - sisa ${row.remaining} dari ${row.expected}</option>`
+        )).join('');
+        const buyerNote = qcState.resi?.catatan_pembeli
+            ? `<div class="alert alert-warning text-start py-2 mb-3"><strong>Catatan pembeli:</strong><br>${escapeHtml(qcState.resi.catatan_pembeli)}</div>`
+            : '';
+
+        try {
+            result = await Swal.fire({
+                title: 'Substitusi SKU QC',
+                html: `
+                    <div class="text-start">
+                        ${buyerNote}
+                        <label class="form-label fw-bold">SKU asal</label>
+                        <select id="sub_original_sku" class="form-select mb-3">${options}</select>
+                        <label class="form-label fw-bold">SKU pengganti</label>
+                        <input id="sub_replacement_sku" class="form-control mb-3" placeholder="Contoh: KAB3" autocomplete="off">
+                        <label class="form-label fw-bold">Qty</label>
+                        <input id="sub_qty" type="number" min="1" value="1" class="form-control mb-3">
+                        <label class="form-label fw-bold">Alasan</label>
+                        <input id="sub_reason" class="form-control" placeholder="Contoh: sesuai catatan pembeli" autocomplete="off">
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Simpan Substitusi',
+                cancelButtonText: 'Batal',
+                didOpen: () => {
+                    document.getElementById('sub_replacement_sku')?.focus();
+                },
+                preConfirm: () => {
+                    const original = document.getElementById('sub_original_sku')?.value || '';
+                    const replacement = (document.getElementById('sub_replacement_sku')?.value || '').trim();
+                    const qty = parseInt(document.getElementById('sub_qty')?.value || '0', 10);
+                    const reason = (document.getElementById('sub_reason')?.value || '').trim();
+                    const source = rows.find((row) => row.sku === original);
+
+                    if (!original || !replacement || !qty || qty <= 0 || !reason) {
+                        Swal.showValidationMessage('SKU asal, SKU pengganti, qty, dan alasan wajib diisi.');
+                        return false;
+                    }
+                    if (source && qty > source.remaining) {
+                        Swal.showValidationMessage(`Qty maksimal untuk ${source.sku} adalah ${source.remaining}.`);
+                        return false;
+                    }
+                    if (original.toLowerCase() === replacement.toLowerCase()) {
+                        Swal.showValidationMessage('SKU pengganti harus berbeda dari SKU asal.');
+                        return false;
+                    }
+
+                    return {
+                        original_sku: original,
+                        replacement_sku: replacement,
+                        qty,
+                        reason,
+                    };
+                },
+            });
+        } finally {
+            scannerFocusPaused = false;
+        }
+
+        if (!result.isConfirmed) {
+            return null;
+        }
+
+        return result.value;
     };
 
     const badgeClass = (status) => {
@@ -1122,6 +1231,7 @@
         const audit = qc.audit || {};
         const hasQc = !!qc.id;
         const hasActiveQc = hasQc && qc.status !== 'passed';
+        const substitutions = qc.substitutions || [];
 
         if (el.resiSection) {
             el.resiSection.hidden = hasActiveQc;
@@ -1154,6 +1264,7 @@
                 qc.resi?.id_pesanan ? `ID Pesanan: ${qc.resi.id_pesanan}` : null,
                 qc.resi?.no_resi ? `No Resi: ${qc.resi.no_resi}` : null,
                 qc.resi?.tanggal_pesanan ? `Tanggal Order: ${qc.resi.tanggal_pesanan}` : null,
+                qc.resi?.catatan_pembeli ? `Catatan: ${qc.resi.catatan_pembeli}` : null,
               ].filter(Boolean).join(' | ')
             : 'Scan resi terlebih dahulu untuk menampilkan detail SKU yang harus diperiksa.';
         el.detailBadge.textContent = hasQc ? badgeLabel(qc.status) : 'Menunggu';
@@ -1182,6 +1293,12 @@
             }).join('');
         }
 
+        const substitutionHtml = substitutions.length
+            ? `<div class="qc-audit-item" style="grid-column:1/-1;"><strong>Substitusi:</strong><br>${substitutions.map((row) => (
+                `${escapeHtml(row.original_sku)} -> ${escapeHtml(row.replacement_sku)} qty ${row.qty} | ${escapeHtml(row.reason)} (${escapeHtml(row.created_by || '-')}${row.created_at ? ` @ ${escapeHtml(row.created_at)}` : ''})`
+            )).join('<br>')}</div>`
+            : '';
+
         el.detailAudit.innerHTML = hasQc ? `
             <div class="qc-audit-item"><strong>Mulai oleh:</strong> ${audit.started_by || '-'}</div>
             <div class="qc-audit-item"><strong>Scan terakhir:</strong> ${(audit.last_scanned_by || '-')}${audit.last_scanned_at ? ` @ ${audit.last_scanned_at}` : ''}</div>
@@ -1189,12 +1306,15 @@
             <div class="qc-audit-item"><strong>Reset:</strong> ${(audit.reset_count || 0)}x${audit.reset_reason ? ` | ${audit.reset_reason}` : ''}</div>
             <div class="qc-audit-item"><strong>Selesai oleh:</strong> ${audit.completed_by || '-'}</div>
             <div class="qc-audit-item"><strong>Status:</strong> ${badgeLabel(qc.status)}</div>
+            <div class="qc-audit-item" style="grid-column:1/-1;"><strong>Catatan pembeli:</strong> ${escapeHtml(qc.resi?.catatan_pembeli || '-')}</div>
+            ${substitutionHtml}
         ` : `
             <div class="qc-audit-item"><strong>Petunjuk:</strong> fokus otomatis kembali ke input scanner agar operator tidak perlu klik ulang.</div>
             <div class="qc-audit-item"><strong>Tip:</strong> gunakan qty jika scanner membaca satu SKU yang mewakili lebih dari satu unit.</div>
         `;
 
         const disableAction = !hasQc || actionBusy || resiBusy || skuBusy || qc.status === 'passed';
+        el.btnSubstituteQc.disabled = disableAction;
         el.btnHoldQc.disabled = disableAction;
         el.btnResetQc.disabled = disableAction;
         if (el.btnCompleteQc) {
@@ -1208,6 +1328,7 @@
             id: payload?.qc?.id || qcState.id,
             status: payload?.qc?.status || qcState.status,
             items: payload?.qc?.items || qcState.items,
+            substitutions: payload?.qc?.substitutions || qcState.substitutions || [],
             summary: payload?.qc?.summary || qcState.summary,
             resi: payload?.resi || qcState.resi,
             audit: payload?.qc?.audit || qcState.audit,
@@ -1248,6 +1369,7 @@
                 id: null,
                 status: null,
                 items: [],
+                substitutions: [],
                 summary: null,
                 resi: null,
                 audit: null,
@@ -1414,6 +1536,50 @@
         }
     };
 
+    const substituteQc = async () => {
+        if (!qcState.id || actionBusy) return;
+
+        const form = await askSubstitution();
+        if (!form) {
+            focusSku();
+            return;
+        }
+
+        actionBusy = true;
+        renderQc();
+        setStatusBox(el.qcStatus, 'Menyimpan substitusi SKU...', 'pending');
+
+        try {
+            const payload = await fetchJson(routes.substitute, {
+                qc_id: qcState.id,
+                original_sku: form.original_sku,
+                replacement_sku: form.replacement_sku,
+                qty: form.qty,
+                reason: form.reason,
+                _token: csrfToken,
+            });
+
+            syncQcState(payload);
+            setStatusBox(el.qcStatus, payload.message || 'Substitusi berhasil disimpan.', 'success');
+            notify({
+                label: 'Substitusi',
+                title: payload.message || 'Substitusi berhasil disimpan.',
+                message: `${form.original_sku} -> ${form.replacement_sku}`,
+                type: 'success',
+                detail: `Qty ${form.qty} | ${form.reason}`,
+                tone: 'success',
+            });
+            focusSku();
+        } catch (error) {
+            setStatusBox(el.qcStatus, error.message || 'Gagal menyimpan substitusi.', 'error');
+            showError(error.message || 'Gagal menyimpan substitusi.', error.details || []);
+            focusSku();
+        } finally {
+            actionBusy = false;
+            renderQc();
+        }
+    };
+
     const resetQc = async () => {
         if (!qcState.id || actionBusy) return;
 
@@ -1564,6 +1730,7 @@
 
     el.btnScanResi.addEventListener('click', submitResi);
     el.btnScanSku.addEventListener('click', submitSku);
+    el.btnSubstituteQc.addEventListener('click', substituteQc);
     el.btnHoldQc.addEventListener('click', holdQc);
     el.btnResetQc.addEventListener('click', resetQc);
     if (el.btnCompleteQc) {

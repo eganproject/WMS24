@@ -12,6 +12,7 @@ class QcScanWorkbenchController extends BaseQcScanController
             'routes' => [
                 'scanResi' => route('admin.outbound.qc-scan.scan'),
                 'scanSku' => route('admin.outbound.qc-scan.scan-sku'),
+                'substitute' => route('admin.outbound.qc-scan.substitute'),
                 'hold' => route('admin.outbound.qc-scan.hold'),
                 'complete' => route('admin.outbound.qc-scan.complete'),
                 'reset' => route('admin.outbound.qc-scan.reset'),

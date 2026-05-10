@@ -71,4 +71,9 @@ class QcResiScan extends Model
     {
         return $this->hasMany(QcResiScanItem::class, 'qc_resi_scan_id');
     }
+
+    public function substitutions()
+    {
+        return $this->hasMany(QcResiScanSubstitution::class, 'qc_resi_scan_id');
+    }
 }

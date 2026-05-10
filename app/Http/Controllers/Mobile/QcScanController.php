@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Mobile;
 
 use App\Http\Controllers\Controller;
+use App\Models\Item;
 use App\Models\QcResiScan;
 use App\Models\QcResiScanItem;
+use App\Models\QcResiScanSubstitution;
 use App\Models\Resi;
 use App\Models\ResiDetail;
 use App\Models\ShipmentScanOut;
@@ -170,6 +172,7 @@ class QcScanController extends Controller
                 'id_pesanan' => $resi->id_pesanan,
                 'no_resi' => $resi->no_resi,
                 'tanggal_pesanan' => $resi->tanggal_pesanan?->format('Y-m-d'),
+                'catatan_pembeli' => $resi->catatan_pembeli,
             ],
         ]);
     }
@@ -280,6 +283,180 @@ class QcScanController extends Controller
         return response()->json([
             'message' => 'SKU berhasil discan.',
             'qc' => $this->serializeQc($qc),
+        ]);
+    }
+
+    public function substitute(Request $request)
+    {
+        $validated = $request->validate([
+            'qc_id' => ['required', 'integer', 'exists:qc_resi_scans,id'],
+            'original_sku' => ['required', 'string', 'max:100'],
+            'replacement_sku' => ['required', 'string', 'max:100'],
+            'qty' => ['required', 'integer', 'min:1'],
+            'reason' => ['required', 'string', 'max:500'],
+        ]);
+
+        $originalSku = trim((string) $validated['original_sku']);
+        $replacementSku = trim((string) $validated['replacement_sku']);
+        $qty = (int) $validated['qty'];
+        $reason = trim((string) $validated['reason']);
+
+        if ($originalSku === '' || $replacementSku === '' || $reason === '') {
+            return response()->json([
+                'message' => 'SKU asal, SKU pengganti, qty, dan alasan wajib diisi.',
+            ], 422);
+        }
+
+        if (strtolower($originalSku) === strtolower($replacementSku)) {
+            return response()->json([
+                'message' => 'SKU pengganti harus berbeda dari SKU asal.',
+            ], 422);
+        }
+
+        DB::beginTransaction();
+        try {
+            $qc = QcResiScan::where('id', (int) $validated['qc_id'])
+                ->with('resi')
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if (!in_array($qc->status, [QcTransitStatus::DRAFT, QcTransitStatus::HOLD], true)) {
+                DB::rollBack();
+                return response()->json([
+                    'message' => 'QC sudah selesai, substitusi tidak bisa diubah.',
+                ], 422);
+            }
+
+            $replacementItem = Item::query()
+                ->whereRaw('LOWER(sku) = ?', [strtolower($replacementSku)])
+                ->where('item_type', Item::TYPE_SINGLE)
+                ->first(['id', 'sku', 'name']);
+
+            if (!$replacementItem) {
+                DB::rollBack();
+                return response()->json([
+                    'message' => 'SKU pengganti tidak ditemukan atau bukan item stok fisik.',
+                    'details' => [[
+                        'sku' => $replacementSku,
+                        'reason' => 'Master item pengganti tidak valid',
+                    ]],
+                ], 422);
+            }
+
+            $items = QcResiScanItem::where('qc_resi_scan_id', $qc->id)
+                ->lockForUpdate()
+                ->get();
+
+            $source = $items->first(function ($row) use ($originalSku) {
+                return strtolower((string) $row->sku) === strtolower($originalSku);
+            });
+
+            if (!$source) {
+                DB::rollBack();
+                return response()->json([
+                    'message' => 'SKU asal tidak ada di QC resi ini.',
+                    'details' => [[
+                        'sku' => $originalSku,
+                        'reason' => 'SKU asal tidak ada pada snapshot QC',
+                    ]],
+                ], 422);
+            }
+
+            $sourceExpected = (int) $source->expected_qty;
+            $sourceScanned = (int) $source->scanned_qty;
+            $availableToSubstitute = max(0, $sourceExpected - $sourceScanned);
+
+            if ($qty > $availableToSubstitute) {
+                DB::rollBack();
+                return response()->json([
+                    'message' => 'Qty substitusi melebihi sisa qty SKU asal yang belum discan.',
+                    'details' => [[
+                        'sku' => $source->sku,
+                        'required' => $sourceExpected,
+                        'scanned' => $sourceScanned,
+                        'available' => $availableToSubstitute,
+                        'attempt' => $qty,
+                    ]],
+                ], 422);
+            }
+
+            $availability = QcInventoryService::availableQtyForAdditionalScan((string) $replacementItem->sku, $qc->id);
+            if (($availability['available'] ?? 0) < $qty) {
+                DB::rollBack();
+                return response()->json([
+                    'message' => 'Stok display SKU pengganti tidak mencukupi.',
+                    'details' => [[
+                        'sku' => $replacementItem->sku,
+                        'required' => $qty,
+                        'available' => (int) ($availability['available'] ?? 0),
+                        'reason' => $availability['reason'] ?? 'Stok display tidak mencukupi',
+                    ]],
+                ], 422);
+            }
+
+            $source->expected_qty = $sourceExpected - $qty;
+            if ((int) $source->expected_qty <= 0 && (int) $source->scanned_qty === 0) {
+                $source->delete();
+            } else {
+                $source->save();
+            }
+
+            $target = $items->first(function ($row) use ($replacementItem) {
+                return strtolower((string) $row->sku) === strtolower((string) $replacementItem->sku);
+            });
+
+            if ($target) {
+                $target->expected_qty = (int) $target->expected_qty + $qty;
+                $target->save();
+            } else {
+                QcResiScanItem::create([
+                    'qc_resi_scan_id' => $qc->id,
+                    'sku' => $replacementItem->sku,
+                    'expected_qty' => $qty,
+                    'scanned_qty' => 0,
+                ]);
+            }
+
+            QcResiScanSubstitution::create([
+                'qc_resi_scan_id' => $qc->id,
+                'original_sku' => $source->sku,
+                'replacement_sku' => $replacementItem->sku,
+                'qty' => $qty,
+                'reason' => $reason,
+                'buyer_note_snapshot' => $qc->resi?->catatan_pembeli,
+                'created_by' => auth()->id(),
+            ]);
+
+            if (($qc->status ?? '') === QcTransitStatus::HOLD) {
+                $qc->status = QcTransitStatus::DRAFT;
+            }
+            $qc->last_scanned_by = auth()->id();
+            $qc->last_scanned_at = now();
+            $qc->save();
+
+            $this->loadQcRelations($qc);
+
+            DB::commit();
+        } catch (ValidationException $e) {
+            DB::rollBack();
+            throw $e;
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return response()->json([
+                'message' => 'Gagal menyimpan substitusi QC.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+
+        return response()->json([
+            'message' => 'Substitusi QC berhasil disimpan.',
+            'qc' => $this->serializeQc($qc),
+            'resi' => [
+                'id_pesanan' => $qc->resi?->id_pesanan,
+                'no_resi' => $qc->resi?->no_resi,
+                'tanggal_pesanan' => $qc->resi?->tanggal_pesanan?->format('Y-m-d'),
+                'catatan_pembeli' => $qc->resi?->catatan_pembeli,
+            ],
         ]);
     }
 
@@ -517,6 +694,8 @@ class QcScanController extends Controller
     {
         return $qc->load([
             'items',
+            'substitutions.creator:id,name',
+            'resi:id,id_pesanan,no_resi,tanggal_pesanan,catatan_pembeli',
             'scanner:id,name',
             'completer:id,name',
             'lastScanner:id,name',
@@ -548,6 +727,18 @@ class QcScanController extends Controller
             'started_at' => $qc->started_at?->format('Y-m-d H:i'),
             'completed_at' => $qc->completed_at?->format('Y-m-d H:i'),
             'items' => $rows,
+            'substitutions' => ($qc->substitutions ?? collect())->map(function ($row) {
+                return [
+                    'id' => $row->id,
+                    'original_sku' => $row->original_sku,
+                    'replacement_sku' => $row->replacement_sku,
+                    'qty' => (int) $row->qty,
+                    'reason' => $row->reason,
+                    'buyer_note_snapshot' => $row->buyer_note_snapshot,
+                    'created_by' => $row->creator?->name ?? '-',
+                    'created_at' => $row->created_at?->format('Y-m-d H:i'),
+                ];
+            })->values(),
             'summary' => [
                 'total_expected' => $totalExpected,
                 'total_scanned' => $totalScanned,

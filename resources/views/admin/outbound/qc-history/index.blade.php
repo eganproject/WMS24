@@ -38,6 +38,7 @@
         <div class="d-flex flex-wrap align-items-center gap-6 mb-4">
             <div class="fw-bold">QC Berjalan: <span id="summary_draft">0</span></div>
             <div class="fw-bold">Lolos QC: <span id="summary_passed">0</span></div>
+            <div class="fw-bold">Ada Substitusi: <span id="summary_substitutions">0</span></div>
         </div>
         <div class="table-responsive">
             <table class="table align-middle table-row-dashed fs-6 gy-5" id="qc_history_table">
@@ -53,7 +54,9 @@
                         <th>Kode Scan</th>
                         <th>ID Pesanan</th>
                         <th>No Resi</th>
+                        <th>Catatan Pembeli</th>
                         <th>SKU</th>
+                        <th>Substitusi</th>
                         <th>Total SKU</th>
                         <th>Expected Qty</th>
                         <th>Scanned Qty</th>
@@ -83,6 +86,7 @@
         const dateResetBtn = document.getElementById('filter_date_reset');
         const summaryDraftEl = document.getElementById('summary_draft');
         const summaryPassedEl = document.getElementById('summary_passed');
+        const summarySubstitutionsEl = document.getElementById('summary_substitutions');
         let fpFrom = null;
         let fpTo = null;
 
@@ -163,7 +167,12 @@
                 { data: 'scan_code' },
                 { data: 'id_pesanan' },
                 { data: 'no_resi' },
+                { data: 'catatan_pembeli', render: (data) => data ? escapeHtml(data) : '<span class="text-muted">-</span>' },
                 { data: 'sku_list' },
+                { data: 'substitution_list', render: (data, type, row) => {
+                    if (!row.substitution_count) return '<span class="text-muted">-</span>';
+                    return `<span class="badge badge-light-warning mb-1">${escapeHtml(row.substitution_count)} substitusi</span><div>${escapeHtml(data || '-')}</div>`;
+                }},
                 { data: 'total_sku' },
                 { data: 'total_expected_qty' },
                 { data: 'total_scanned_qty' },
@@ -175,6 +184,7 @@
             if (json?.summary) {
                 if (summaryDraftEl) summaryDraftEl.textContent = json.summary.draft ?? '0';
                 if (summaryPassedEl) summaryPassedEl.textContent = json.summary.passed ?? '0';
+                if (summarySubstitutionsEl) summarySubstitutionsEl.textContent = json.summary.substitutions ?? '0';
             }
         });
 

@@ -381,6 +381,7 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/qc-scan', [QcScanWorkbenchController::class, 'index'])->name('qc-scan.index');
         Route::post('/qc-scan/scan', [QcScanWorkbenchController::class, 'scanResi'])->name('qc-scan.scan');
         Route::post('/qc-scan/scan-sku', [QcScanWorkbenchController::class, 'scanSku'])->name('qc-scan.scan-sku');
+        Route::post('/qc-scan/substitute', [QcScanWorkbenchController::class, 'substitute'])->name('qc-scan.substitute');
         Route::post('/qc-scan/hold', [QcScanWorkbenchController::class, 'hold'])->name('qc-scan.hold');
         Route::post('/qc-scan/complete', [QcScanWorkbenchController::class, 'complete'])->name('qc-scan.complete');
         Route::post('/qc-scan/reset', [QcScanWorkbenchController::class, 'reset'])->name('qc-scan.reset');

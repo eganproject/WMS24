@@ -24,7 +24,7 @@ class QcHistoryController extends Controller
     public function data(Request $request)
     {
         $baseQuery = QcResiScan::query()
-            ->with(['resi', 'scanner', 'items', 'completer', 'lastScanner', 'resetter'])
+            ->with(['resi', 'scanner', 'items', 'substitutions.creator', 'completer', 'lastScanner', 'resetter'])
             ->select('qc_resi_scans.*')
             ->selectSub(function ($q) {
                 $q->from('qc_resi_scan_items')
@@ -41,6 +41,11 @@ class QcHistoryController extends Controller
                     ->selectRaw('COALESCE(SUM(scanned_qty), 0)')
                     ->whereColumn('qc_resi_scan_items.qc_resi_scan_id', 'qc_resi_scans.id');
             }, 'total_scanned_qty')
+            ->selectSub(function ($q) {
+                $q->from('qc_resi_scan_substitutions')
+                    ->selectRaw('COUNT(*)')
+                    ->whereColumn('qc_resi_scan_substitutions.qc_resi_scan_id', 'qc_resi_scans.id');
+            }, 'substitution_count')
             ->orderByDesc('started_at')
             ->orderByDesc('id');
 
@@ -63,6 +68,10 @@ class QcHistoryController extends Controller
                     $this->applyTextSearch($resiQ, 'no_resi', $search, $exact, 'or');
                 })->orWhereHas('items', function ($itemQ) use ($search, $exact) {
                     $this->applyTextSearch($itemQ, 'sku', $search, $exact);
+                })->orWhereHas('substitutions', function ($subQ) use ($search, $exact) {
+                    $this->applyTextSearch($subQ, 'original_sku', $search, $exact);
+                    $this->applyTextSearch($subQ, 'replacement_sku', $search, $exact, 'or');
+                    $this->applyTextSearch($subQ, 'reason', $search, $exact, 'or');
                 })->orWhereHas('scanner', function ($userQ) use ($search, $exact) {
                     $this->applyTextSearch($userQ, 'name', $search, $exact);
                     $this->applyTextSearch($userQ, 'email', $search, $exact, 'or');
@@ -100,6 +109,19 @@ class QcHistoryController extends Controller
                 })
                 ->implode(', ');
 
+            $substitutionList = ($row->substitutions ?? collect())
+                ->map(function ($sub) {
+                    return sprintf(
+                        '%s -> %s qty %d%s%s',
+                        $sub->original_sku ?? '-',
+                        $sub->replacement_sku ?? '-',
+                        (int) ($sub->qty ?? 0),
+                        $sub->reason ? ' | '.$sub->reason : '',
+                        $sub->creator?->name ? ' | '.$sub->creator->name : ''
+                    );
+                })
+                ->implode(', ');
+
             return [
                 'id' => $row->id,
                 'started_at' => $row->started_at?->format('Y-m-d H:i') ?? '-',
@@ -112,6 +134,7 @@ class QcHistoryController extends Controller
                 'scan_code' => $row->scan_code ?? '-',
                 'id_pesanan' => $row->resi?->id_pesanan ?? '-',
                 'no_resi' => $row->resi?->no_resi ?? '-',
+                'catatan_pembeli' => $row->resi?->catatan_pembeli ?? '',
                 'completed_by' => $row->completer?->name ?? '-',
                 'last_scanned_by' => $row->lastScanner?->name ?? '-',
                 'last_scanned_at' => $row->last_scanned_at?->format('Y-m-d H:i') ?? '-',
@@ -120,6 +143,8 @@ class QcHistoryController extends Controller
                 'reset_at' => $row->reset_at?->format('Y-m-d H:i') ?? '-',
                 'reset_reason' => $row->reset_reason ?? '',
                 'sku_list' => $skuList !== '' ? $skuList : '-',
+                'substitution_list' => $substitutionList !== '' ? $substitutionList : '-',
+                'substitution_count' => (int) ($row->substitution_count ?? 0),
                 'total_sku' => (int) ($row->total_sku ?? 0),
                 'total_expected_qty' => (int) ($row->total_expected_qty ?? 0),
                 'total_scanned_qty' => (int) ($row->total_scanned_qty ?? 0),
@@ -133,6 +158,7 @@ class QcHistoryController extends Controller
             'summary' => [
                 'draft' => (clone $baseQuery)->where('status', 'draft')->count(),
                 'passed' => (clone $baseQuery)->where('status', 'passed')->count(),
+                'substitutions' => (clone $baseQuery)->whereHas('substitutions')->count(),
             ],
             'data' => $data,
         ]);

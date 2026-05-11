@@ -89,7 +89,15 @@ class DashboardController extends Controller
                     'remaining' => max(0, $activeTotal - $scanTotal),
                     'last_update' => $latestTime,
                 ];
-            });
+            })
+            ->sort(function (array $a, array $b) {
+                $byResiTotal = $b['resi_total'] <=> $a['resi_total'];
+
+                return $byResiTotal !== 0
+                    ? $byResiTotal
+                    : strcasecmp($a['name'], $b['name']);
+            })
+            ->values();
 
         return view('admin.dashboard', [
             'today' => $selectedDate,

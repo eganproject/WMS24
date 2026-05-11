@@ -797,6 +797,7 @@
     let audioContext = null;
     let pasteSubmitTimer = null;
     let scannerFocusPaused = false;
+    let scannerFocusSuppressedUntil = 0;
 
     const setStatusBox = (node, message, type = 'default') => {
         node.textContent = message;
@@ -1022,7 +1023,17 @@
     };
 
     const isScannerFocusPaused = () => {
-        return scannerFocusPaused || !!document.querySelector('.swal2-container.swal2-shown');
+        return scannerFocusPaused
+            || Date.now() < scannerFocusSuppressedUntil
+            || !!document.querySelector('.swal2-container.swal2-shown');
+    };
+
+    const pauseScannerFocus = (duration = 800) => {
+        scannerFocusSuppressedUntil = Date.now() + duration;
+    };
+
+    const isNavigationTarget = (target) => {
+        return !!target?.closest('a, [data-kt-menu-trigger], #kt_header_menu, #kt_header_nav, #kt_header, .menu-link, .menu-sub');
     };
 
     const focusResi = () => {
@@ -1693,10 +1704,16 @@
 
     document.addEventListener('click', (event) => {
         if (isScannerFocusPaused()) return;
-        const interactive = event.target.closest('button, a, select, input, textarea, [contenteditable="true"], .swal2-container');
+        const interactive = event.target.closest('button, a, select, input, textarea, [contenteditable="true"], .swal2-container, [data-kt-menu-trigger], .menu-link, .menu-sub');
         if (interactive) return;
         preferredScanFocus();
     });
+
+    document.addEventListener('pointerdown', (event) => {
+        if (isNavigationTarget(event.target)) {
+            pauseScannerFocus(1200);
+        }
+    }, true);
 
     document.addEventListener('visibilitychange', () => {
         if (isScannerFocusPaused()) return;

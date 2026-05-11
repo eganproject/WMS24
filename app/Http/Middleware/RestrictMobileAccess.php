@@ -2,6 +2,8 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\Menu;
+use App\Support\Permission as Perm;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -47,6 +49,7 @@ class RestrictMobileAccess
         $isLogoutRoute = $routeName === 'logout';
         $isDesktopQcRoute = str_starts_with($routeName, 'admin.outbound.qc-scan.')
             || str_starts_with($path, 'admin/outbound/qc-scan');
+        $isPermittedAdminMenuRoute = $this->isPermittedAdminMenuRoute($user, $routeName);
 
         if ($isDashboardRoute || $isLogoutRoute || $isOpnameRoute) {
             return $next($request);
@@ -65,6 +68,9 @@ class RestrictMobileAccess
         if ($hasAdminScan && $isScanOutRoute) {
             $allowed = true;
         }
+        if ($isPermittedAdminMenuRoute) {
+            $allowed = true;
+        }
 
         if ($allowed) {
             return $next($request);
@@ -77,5 +83,19 @@ class RestrictMobileAccess
         }
 
         return redirect()->route('mobile.dashboard');
+    }
+
+    private function isPermittedAdminMenuRoute($user, string $routeName): bool
+    {
+        if (!str_starts_with($routeName, 'admin.')) {
+            return false;
+        }
+
+        $baseRoute = Perm::resolveBaseRoute($routeName);
+        if (!Menu::where('route', $baseRoute)->exists()) {
+            return false;
+        }
+
+        return Perm::can($user, $routeName);
     }
 }

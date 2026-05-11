@@ -70,6 +70,7 @@ class MenuSeeder extends Seeder
             ['name' => 'Raw Log Fingerprint', 'slug' => 'attendance-raw-logs', 'route' => 'admin.attendance.raw-logs.index', 'icon' => 'fas fa-list', 'parent_slug' => 'attendance', 'sort_order' => 9],
             ['name' => 'Rekap Absensi', 'slug' => 'attendance-recap', 'route' => 'admin.attendance.attendances.index', 'icon' => 'fas fa-clipboard-check', 'parent_slug' => 'attendance', 'sort_order' => 10],
             ['name' => 'Monitor Harian', 'slug' => 'attendance-absences', 'route' => 'admin.attendance.absences.index', 'icon' => 'fas fa-user-check', 'parent_slug' => 'attendance', 'sort_order' => 10.5],
+            ['name' => 'Live Display', 'slug' => 'attendance-live-display', 'route' => 'admin.attendance.live-display.index', 'icon' => 'fas fa-tv', 'parent_slug' => 'attendance', 'sort_order' => 10.7],
             ['name' => 'Machine Log', 'slug' => 'attendance-machine-logs', 'route' => 'admin.attendance.machine-logs.index', 'icon' => 'fas fa-satellite-dish', 'parent_slug' => 'attendance', 'sort_order' => 11],
         ];
 

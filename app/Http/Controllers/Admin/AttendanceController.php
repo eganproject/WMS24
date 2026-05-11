@@ -95,8 +95,85 @@ class AttendanceController extends Controller
             'leaves' => ['label' => 'Cuti/Izin', 'route' => 'admin.attendance.leaves.index', 'icon' => 'fas fa-plane-departure'],
             'raw_logs' => ['label' => 'Raw Log', 'route' => 'admin.attendance.raw-logs.index', 'icon' => 'fas fa-list'],
             'attendances' => ['label' => 'Rekap', 'route' => 'admin.attendance.attendances.index', 'icon' => 'fas fa-clipboard-check'],
+            'live_display' => ['label' => 'Live Display', 'route' => 'admin.attendance.live-display.index', 'icon' => 'fas fa-tv'],
             'absences' => ['label' => 'Monitor Harian', 'route' => 'admin.attendance.absences.index', 'icon' => 'fas fa-user-check'],
             'machine_logs' => ['label' => 'Machine Log', 'route' => 'admin.attendance.machine-logs.index', 'icon' => 'fas fa-satellite-dish'],
+        ];
+    }
+
+    public function liveDisplay()
+    {
+        return view('admin.attendance.live-display', [
+            'sectionLinks' => $this->sectionLinks(),
+            'feedUrl' => route('admin.attendance.live-display.feed'),
+            'today' => now()->toDateString(),
+        ]);
+    }
+
+    public function liveDisplayFeed(Request $request)
+    {
+        $date = $this->parseOptionalDate($request->input('date')) ?: now()->toDateString();
+        $latestId = (int) $request->input('latest_id', 0);
+
+        $logs = AttendanceRawLog::query()
+            ->with(['employee:id,employee_code,name,position,position_id', 'employee.positionRelation:id,name', 'device:id,name,location'])
+            ->whereDate('scan_at', $date)
+            ->latest('scan_at')
+            ->latest('id')
+            ->limit(12)
+            ->get();
+
+        $newLogs = $latestId > 0
+            ? AttendanceRawLog::query()
+                ->with(['employee:id,employee_code,name,position,position_id', 'employee.positionRelation:id,name', 'device:id,name,location'])
+                ->whereDate('scan_at', $date)
+                ->where('id', '>', $latestId)
+                ->orderBy('scan_at')
+                ->orderBy('id')
+                ->get()
+            : collect();
+
+        $attendanceBase = Attendance::query()->whereDate('attendance_date', $date);
+
+        return response()->json([
+            'server_time' => now()->format('Y-m-d H:i:s'),
+            'date' => $date,
+            'latest_id' => (int) ($logs->max('id') ?? $latestId),
+            'summary' => [
+                'checked_in' => (clone $attendanceBase)->whereNotNull('check_in_at')->count(),
+                'checked_out' => (clone $attendanceBase)->whereNotNull('check_out_at')->count(),
+                'incomplete' => (clone $attendanceBase)->whereNotNull('check_in_at')->whereNull('check_out_at')->count(),
+                'late' => (clone $attendanceBase)->where('late_minutes', '>', 0)->count(),
+            ],
+            'latest' => $logs->first() ? $this->serializeLiveAttendanceLog($logs->first()) : null,
+            'recent' => $logs->map(fn (AttendanceRawLog $log) => $this->serializeLiveAttendanceLog($log))->values(),
+            'new_events' => $newLogs->map(fn (AttendanceRawLog $log) => $this->serializeLiveAttendanceLog($log))->values(),
+        ]);
+    }
+
+    private function serializeLiveAttendanceLog(AttendanceRawLog $log): array
+    {
+        $state = strtolower((string) ($log->state ?? ''));
+        $isCheckOut = in_array($state, ['check_out', 'break_out', 'overtime_out', '1'], true);
+        $isCheckIn = in_array($state, ['check_in', 'break_in', 'overtime_in', '0'], true);
+        $eventType = $isCheckOut ? 'out' : 'in';
+        $employee = $log->employee;
+        $position = $employee?->positionRelation?->name ?: $employee?->position;
+
+        return [
+            'id' => $log->id,
+            'event_type' => $eventType,
+            'event_label' => $isCheckOut ? 'Check-out' : ($isCheckIn ? 'Check-in' : 'Scan Absensi'),
+            'greeting' => $isCheckOut ? 'Terima kasih, sampai jumpa!' : 'Selamat datang, semangat bekerja!',
+            'employee_name' => $employee?->name ?? 'Karyawan belum terhubung',
+            'employee_code' => $employee?->employee_code ?? $log->device_user_id,
+            'position' => $position ?: '-',
+            'device' => $log->device?->name ?? '-',
+            'location' => $log->device?->location ?? '-',
+            'scan_date' => $log->scan_at?->format('Y-m-d') ?? '-',
+            'scan_time' => $log->scan_at?->format('H:i:s') ?? '-',
+            'state' => $log->state ?? '-',
+            'verify_type' => $log->verify_type ?? '-',
         ];
     }
 
@@ -1490,6 +1567,19 @@ class AttendanceController extends Controller
     private function monitorDate(Request $request): string
     {
         return Carbon::parse($request->input('date') ?: now()->toDateString())->toDateString();
+    }
+
+    private function parseOptionalDate(mixed $value): ?string
+    {
+        if (!$value) {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($value)->toDateString();
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     private function validateEmployee(Request $request, ?Employee $employee = null): array

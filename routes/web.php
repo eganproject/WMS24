@@ -435,6 +435,8 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/leaves', [AttendanceController::class, 'sectionPage'])->defaults('section', 'leaves')->name('leaves.index');
         Route::get('/raw-logs', [AttendanceController::class, 'sectionPage'])->defaults('section', 'raw_logs')->name('raw-logs.index');
         Route::get('/attendances', [AttendanceController::class, 'sectionPage'])->defaults('section', 'attendances')->name('attendances.index');
+        Route::get('/live-display', [AttendanceController::class, 'liveDisplay'])->name('live-display.index');
+        Route::get('/live-display/feed', [AttendanceController::class, 'liveDisplayFeed'])->name('live-display.feed');
         Route::get('/absences', [AttendanceController::class, 'absencesIndex'])->name('absences.index');
         Route::get('/absences/data', [AttendanceController::class, 'absencesData'])->name('absences.data');
         Route::get('/absences/export', [AttendanceController::class, 'exportAbsences'])->name('absences.export');

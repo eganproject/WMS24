@@ -6,9 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\OutboundQcSession;
 use App\Models\OutboundQcSessionItem;
 use App\Models\OutboundTransaction;
-use App\Models\StockMutation;
 use App\Support\OutboundManualQcStatus;
-use App\Support\StockService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -168,6 +166,11 @@ class OutboundManualQcController extends Controller
                 return response()->json(['message' => 'QC outbound manual sudah selesai.'], 422);
             }
 
+            if (!in_array($transaction->status ?? '', [OutboundManualQcStatus::PENDING_QC, OutboundManualQcStatus::QC_SCANNING], true)) {
+                DB::rollBack();
+                return response()->json(['message' => 'QC outbound manual sudah selesai dan menunggu approval.'], 422);
+            }
+
             $items = OutboundQcSessionItem::where('outbound_qc_session_id', $session->id)
                 ->lockForUpdate()
                 ->get();
@@ -251,6 +254,11 @@ class OutboundManualQcController extends Controller
                 return response()->json(['message' => 'QC outbound manual sudah selesai sebelumnya.'], 422);
             }
 
+            if (!in_array($transaction->status ?? '', [OutboundManualQcStatus::PENDING_QC, OutboundManualQcStatus::QC_SCANNING], true)) {
+                DB::rollBack();
+                return response()->json(['message' => 'QC outbound manual sudah selesai dan menunggu approval.'], 422);
+            }
+
             $items = OutboundQcSessionItem::where('outbound_qc_session_id', $session->id)
                 ->lockForUpdate()
                 ->get();
@@ -274,26 +282,10 @@ class OutboundManualQcController extends Controller
                 ], 422);
             }
 
-            $hasMutations = StockMutation::where('source_type', 'outbound')
-                ->where('source_id', $transaction->id)
-                ->exists();
-
             $completedAt = now();
-            if (!$hasMutations) {
-                StockService::depleteSellableRows($transaction->items, (int) $transaction->warehouse_id, [
-                    'source_type' => 'outbound',
-                    'source_subtype' => $transaction->type,
-                    'source_id' => $transaction->id,
-                    'source_code' => $transaction->code,
-                    'note' => 'Outbound manual completed by QC',
-                    'occurred_at' => $completedAt,
-                    'created_by' => auth()->id(),
-                ]);
-            }
-
-            $transaction->status = OutboundManualQcStatus::APPROVED;
-            $transaction->approved_at = $completedAt;
-            $transaction->approved_by = auth()->id();
+            $transaction->status = OutboundManualQcStatus::PENDING;
+            $transaction->approved_at = null;
+            $transaction->approved_by = null;
             $transaction->save();
 
             $session->completed_by = auth()->id();
@@ -317,7 +309,7 @@ class OutboundManualQcController extends Controller
         $transaction = $this->loadTransaction($session->outbound_transaction_id);
 
         return response()->json([
-            'message' => 'QC outbound manual selesai dan stok sudah keluar.',
+            'message' => 'QC outbound manual selesai dan menunggu approval.',
             'transaction' => $this->serializeTransactionDetail($transaction),
         ]);
     }
@@ -348,6 +340,11 @@ class OutboundManualQcController extends Controller
             if (($transaction->status ?? '') === OutboundManualQcStatus::APPROVED) {
                 DB::rollBack();
                 return response()->json(['message' => 'QC yang sudah selesai tidak bisa direset.'], 422);
+            }
+
+            if (!in_array($transaction->status ?? '', [OutboundManualQcStatus::PENDING_QC, OutboundManualQcStatus::QC_SCANNING], true)) {
+                DB::rollBack();
+                return response()->json(['message' => 'QC yang sudah menunggu approval tidak bisa direset.'], 422);
             }
 
             OutboundQcSessionItem::where('outbound_qc_session_id', $session->id)

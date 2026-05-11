@@ -63,7 +63,7 @@ class DeliveryNoteController extends Controller
             ->where('outbound_transactions.id', $id)
             ->firstOrFail();
 
-        $canPrint = in_array($transaction->status ?? 'pending', ['pending_qc', 'qc_scanning', 'approved'], true);
+        $canPrint = ($transaction->status ?? 'pending') === 'approved';
         abort_if(!$canPrint, 403, 'Surat jalan hanya bisa dilihat atau dicetak setelah outbound di-approve.');
 
         $totalQty = (int) $transaction->items->sum('qty');

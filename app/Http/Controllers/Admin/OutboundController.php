@@ -193,7 +193,7 @@ class OutboundController extends Controller
                     'warehouse_id' => $warehouseId,
                     'transacted_at' => $transactedAt,
                     'created_by' => auth()->id(),
-                    'status' => 'pending',
+                    'status' => OutboundManualQcStatus::PENDING_QC,
                 ]);
                 $createdTx++;
 
@@ -211,7 +211,7 @@ class OutboundController extends Controller
             DB::commit();
 
             return response()->json([
-                'message' => 'Import outbound manual berhasil',
+                'message' => 'Import outbound manual berhasil dan masuk tahap QC.',
                 'transactions' => $createdTx,
                 'items' => $createdItems,
             ]);
@@ -638,7 +638,7 @@ class OutboundController extends Controller
                 'warehouse_id' => $warehouseId,
                 'transacted_at' => $transactedAt,
                 'created_by' => auth()->id(),
-                'status' => 'pending',
+                'status' => $type === 'manual' ? OutboundManualQcStatus::PENDING_QC : 'pending',
             ]);
 
             foreach ($validated['items'] as $row) {
@@ -663,7 +663,9 @@ class OutboundController extends Controller
         }
 
         return response()->json([
-            'message' => 'Outbound berhasil disimpan dan menunggu approval.',
+            'message' => $type === 'manual'
+                ? 'Outbound manual berhasil disimpan dan masuk tahap QC.'
+                : 'Outbound berhasil disimpan dan menunggu approval.',
         ]);
     }
 
@@ -786,7 +788,7 @@ class OutboundController extends Controller
             if ($type === 'manual') {
                 if (($tx->status ?? '') === OutboundManualQcStatus::PENDING_QC) {
                     DB::rollBack();
-                    return response()->json(['message' => 'Outbound manual sudah menunggu QC.']);
+                    return response()->json(['message' => 'Outbound manual masih menunggu QC.']);
                 }
 
                 if (($tx->status ?? '') === OutboundManualQcStatus::QC_SCANNING) {
@@ -794,16 +796,42 @@ class OutboundController extends Controller
                     return response()->json(['message' => 'Outbound manual sedang diproses QC.']);
                 }
 
-                StockService::assertSellableAvailable($tx->items, (int) $tx->warehouse_id);
+                if (($tx->status ?? '') !== OutboundManualQcStatus::PENDING) {
+                    DB::rollBack();
+                    return response()->json(['message' => 'Outbound manual belum siap approval.']);
+                }
 
-                $tx->status = OutboundManualQcStatus::PENDING_QC;
-                $tx->approved_at = null;
-                $tx->approved_by = null;
+                $qcSession = $tx->qcSession()->first();
+                if (!$qcSession || !$qcSession->completed_at) {
+                    DB::rollBack();
+                    return response()->json(['message' => 'QC manual harus diselesaikan sebelum approval.'], 422);
+                }
+
+                $hasMutations = StockMutation::where('source_type', 'outbound')
+                    ->where('source_id', $tx->id)
+                    ->exists();
+
+                $approvedAt = now();
+                if (!$hasMutations) {
+                    StockService::depleteSellableRows($tx->items, (int) $tx->warehouse_id, [
+                        'source_type' => 'outbound',
+                        'source_subtype' => $tx->type,
+                        'source_id' => $tx->id,
+                        'source_code' => $tx->code,
+                        'note' => 'Outbound manual approved after QC',
+                        'occurred_at' => $approvedAt,
+                        'created_by' => auth()->id(),
+                    ]);
+                }
+
+                $tx->status = OutboundManualQcStatus::APPROVED;
+                $tx->approved_at = $approvedAt;
+                $tx->approved_by = auth()->id();
                 $tx->save();
 
                 DB::commit();
 
-                return response()->json(['message' => 'Outbound manual masuk tahap QC. Silakan proses di menu QC Manual.']);
+                return response()->json(['message' => 'Outbound manual berhasil di-approve dan siap cetak surat jalan.']);
             }
 
             $hasMutations = StockMutation::where('source_type', 'outbound')

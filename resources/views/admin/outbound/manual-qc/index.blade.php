@@ -392,7 +392,7 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
         }).join('');
 
-        const completed = transaction.status === 'approved';
+        const completed = ['pending', 'approved'].includes(transaction.status);
         skuInput.disabled = completed;
         qtyInput.disabled = completed;
         document.getElementById('btn_complete_qc').disabled = completed;

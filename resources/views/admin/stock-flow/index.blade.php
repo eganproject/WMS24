@@ -1129,7 +1129,7 @@
                     const detailItem = `<div class="menu-item px-3"><a href="${resolveRoute(rowType, 'detail').replace(':id', data)}" class="menu-link px-3">Detail</a></div>`;
                     const deliveryNoteRoute = resolveRoute(rowType, 'delivery_note');
                     const deliveryNotePrintRoute = resolveRoute(rowType, 'delivery_note_print');
-                    const canPrintDeliveryNote = ['pending_qc', 'qc_scanning', 'approved'].includes(row?.status);
+                    const canPrintDeliveryNote = row?.status === 'approved';
                     const deliveryNoteItem = (['manual', 'return'].includes(rowType) && row?.surat_jalan_no && canPrintDeliveryNote && deliveryNoteRoute)
                         ? `<div class="menu-item px-3"><a href="${deliveryNoteRoute.replace(':id', data)}" class="menu-link px-3">Detail Surat Jalan</a></div>`
                         : '';
@@ -1140,7 +1140,12 @@
                     const qrPdfItem = (rowType === 'receipt' && qrPdfRoute)
                         ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-download-qr" data-url="${qrPdfRoute.replace(':id', data)}">Unduh QR Code</a></div>`
                         : '';
-                    const approveItem = (showApproveAction && !isLocked && perms.update)
+                    const canApprove = showApproveAction && perms.update && (
+                        rowType === 'manual'
+                            ? row?.status === 'pending'
+                            : !isLocked
+                    );
+                    const approveItem = canApprove
                         ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 text-success btn-approve" data-id="${data}" data-type="${rowType}">Approve</a></div>`
                         : '';
                     const editItem = (!isLocked && perms.update)

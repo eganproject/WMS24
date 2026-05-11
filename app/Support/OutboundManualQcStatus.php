@@ -22,6 +22,7 @@ class OutboundManualQcStatus
     public static function lockedForEdit(): array
     {
         return [
+            self::PENDING,
             self::PENDING_QC,
             self::QC_SCANNING,
             self::APPROVED,

@@ -848,6 +848,30 @@
                 return;
             }
 
+            if (typeof Swal !== 'undefined') {
+                const sign = payload.direction === 'in' ? '+' : '-';
+                const koliText = payload.koli ? ` (${payload.koli} koli)` : '';
+                const confirmation = await Swal.fire({
+                    title: 'Simpan penyesuaian stok?',
+                    text: `Stok akan disesuaikan ${sign}${formatStockNumber(payload.qty)} pcs${koliText} dan langsung disetujui otomatis.`,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Ya, simpan',
+                    cancelButtonText: 'Batal',
+                    buttonsStyling: false,
+                    customClass: {
+                        confirmButton: 'btn btn-primary',
+                        cancelButton: 'btn btn-light',
+                    },
+                });
+
+                if (!confirmation.isConfirmed) {
+                    return;
+                }
+            } else if (!window.confirm('Simpan penyesuaian stok dan approve otomatis?')) {
+                return;
+            }
+
             const formData = new FormData();
             formData.append('auto_approve', '1');
             formData.append('warehouse_id', payload.warehouseId);

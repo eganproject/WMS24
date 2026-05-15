@@ -286,6 +286,7 @@ class ResiImportController extends Controller
                 $oldDetails = $existing
                     ? ResiDetail::where('resi_id', $existing->id)->get(['sku', 'qty'])
                     : collect();
+                $oldWasCanceled = $existing && ($existing->status ?? 'active') === 'canceled';
 
                 $tanggalPesanan = $this->parseTanggalPesanan($group['tanggal_pesanan'] ?? null);
                 if ($tanggalPesanan === null) {
@@ -300,6 +301,23 @@ class ResiImportController extends Controller
                     'uploader_id' => auth()->id(),
                     'catatan_pembeli' => $group['catatan_pembeli'] ?? null,
                 ];
+                $importedStatus = $group['status'] ?? null;
+                if ($importedStatus === 'canceled') {
+                    $payload['status'] = 'canceled';
+                    $payload['canceled_at'] = $existing?->canceled_at ?? now();
+                    $payload['canceled_by'] = $existing?->canceled_by ?? auth()->id();
+                    $payload['cancel_reason'] = $group['status_raw']
+                        ? 'Status import: '.$group['status_raw']
+                        : 'Status import: dibatalkan';
+                    $payload['uncanceled_at'] = null;
+                    $payload['uncanceled_by'] = null;
+                } elseif ($importedStatus === 'active') {
+                    $payload['status'] = 'active';
+                    if (($existing?->status ?? 'active') === 'canceled') {
+                        $payload['uncanceled_at'] = now();
+                        $payload['uncanceled_by'] = auth()->id();
+                    }
+                }
                 $kurirId = $this->resolveKurirId($group['kurir'] ?? null, $defaultKurirId);
                 if ($kurirId) {
                     $payload['kurir_id'] = $kurirId;
@@ -325,10 +343,14 @@ class ResiImportController extends Controller
                     $createdDetails++;
                 }
 
-                if ($existing && $oldTanggalUpload) {
+                $newIsCanceled = ($resi->status ?? 'active') === 'canceled';
+
+                if ($existing && $oldTanggalUpload && !$oldWasCanceled) {
                     $this->adjustPickingList($oldTanggalUpload, $oldDetails, -1);
                 }
-                $this->adjustPickingList($today, $group['items'], 1);
+                if (!$newIsCanceled) {
+                    $this->adjustPickingList($today, $group['items'], 1);
+                }
             }
 
             DB::commit();

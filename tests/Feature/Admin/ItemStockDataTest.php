@@ -4,6 +4,8 @@ namespace Tests\Feature\Admin;
 
 use App\Models\Item;
 use App\Models\ItemStock;
+use App\Models\StockAdjustment;
+use App\Models\StockMutation;
 use App\Models\Warehouse;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Collection;
@@ -109,5 +111,65 @@ class ItemStockDataTest extends TestCase
         $this->assertNull($bundleRow['stock_main_koli_remainder']);
         $this->assertFalse($bundleRow['is_main_below_safety']);
         $this->assertFalse($bundleRow['is_display_below_safety']);
+    }
+
+    public function test_item_stock_edit_adjustment_can_be_auto_approved(): void
+    {
+        $displayWarehouse = Warehouse::firstOrCreate([
+            'code' => 'GUDANG_DISPLAY',
+        ], [
+            'name' => 'Gudang Display',
+            'type' => 'display',
+        ]);
+
+        $item = Item::create([
+            'sku' => 'SKU-AUTO-ADJ-001',
+            'name' => 'Item Auto Adjustment',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+            'safety_stock' => 0,
+        ]);
+
+        ItemStock::create([
+            'item_id' => $item->id,
+            'warehouse_id' => $displayWarehouse->id,
+            'stock' => 10,
+        ]);
+
+        $response = $this->withoutMiddleware()->postJson(route('admin.inventory.stock-adjustments.store'), [
+            'auto_approve' => true,
+            'warehouse_id' => $displayWarehouse->id,
+            'transacted_at' => now()->format('Y-m-d H:i'),
+            'note' => 'Edit stok dari halaman Item Stocks.',
+            'items' => [
+                [
+                    'item_id' => $item->id,
+                    'direction' => 'in',
+                    'qty' => 5,
+                    'note' => 'Set stok akhir 15 pcs',
+                ],
+            ],
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('status', 'approved');
+
+        $this->assertSame(15, (int) ItemStock::where('item_id', $item->id)
+            ->where('warehouse_id', $displayWarehouse->id)
+            ->value('stock'));
+
+        $adjustment = StockAdjustment::first();
+        $this->assertNotNull($adjustment);
+        $this->assertSame('approved', $adjustment->status);
+        $this->assertNotNull($adjustment->approved_at);
+
+        $mutation = StockMutation::where('source_type', 'adjustment')
+            ->where('source_id', $adjustment->id)
+            ->first();
+
+        $this->assertNotNull($mutation);
+        $this->assertSame('auto_approve', $mutation->source_subtype);
+        $this->assertSame('in', $mutation->direction);
+        $this->assertSame(5, (int) $mutation->qty);
     }
 }

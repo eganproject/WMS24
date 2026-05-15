@@ -849,6 +849,7 @@
             }
 
             const formData = new FormData();
+            formData.append('auto_approve', '1');
             formData.append('warehouse_id', payload.warehouseId);
             formData.append('transacted_at', getJakartaNow());
             formData.append('note', payload.note || 'Edit stok dari halaman Item Stocks.');
@@ -880,7 +881,7 @@
                     if (typeof Swal !== 'undefined') Swal.fire('Error', firstError || json.message || 'Gagal menyimpan penyesuaian stok', 'error');
                     return;
                 }
-                if (typeof Swal !== 'undefined') Swal.fire('Berhasil', json.message || 'Penyesuaian stok berhasil dibuat dan menunggu approval.', 'success');
+                if (typeof Swal !== 'undefined') Swal.fire('Berhasil', json.message || 'Penyesuaian stok berhasil disetujui otomatis.', 'success');
                 editStockModal?.hide();
                 reloadTable();
             } catch (err) {

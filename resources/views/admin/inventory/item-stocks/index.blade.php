@@ -3,6 +3,11 @@
 @section('title', 'Item Stocks')
 @section('page_title', 'Item Stocks')
 
+@php
+    use App\Support\Permission as Perm;
+    $canCreateStockAdjustment = Perm::can(auth()->user(), 'admin.inventory.stock-adjustments.index', 'create');
+@endphp
+
 @section('content')
 <div class="card">
     <div class="card-header border-0 pt-6">
@@ -159,6 +164,93 @@
                         </table>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modal_edit_stock" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered mw-650px">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h2 class="fw-bolder mb-1">Edit Stok</h2>
+                    <div class="text-muted fs-7" id="edit_stock_subtitle">-</div>
+                </div>
+                <div class="btn btn-icon btn-sm btn-active-icon-primary" data-bs-dismiss="modal">
+                    <span class="svg-icon svg-icon-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+                            <rect opacity="0.5" x="6" y="17.3137" width="16" height="2" rx="1" transform="rotate(-45 6 17.3137)" fill="black" />
+                            <rect x="7.41422" y="6" width="16" height="2" rx="1" transform="rotate(45 7.41422 6)" fill="black" />
+                        </svg>
+                    </span>
+                </div>
+            </div>
+            <div class="modal-body scroll-y mx-5 mx-xl-15 my-7">
+                <form class="form" id="edit_stock_form">
+                    @csrf
+                    <input type="hidden" id="edit_stock_item_id" />
+                    <input type="hidden" id="edit_stock_warehouse_id" />
+                    <input type="hidden" id="edit_stock_mode" />
+                    <input type="hidden" id="edit_stock_current" />
+                    <input type="hidden" id="edit_stock_koli_qty" />
+                    <input type="hidden" id="edit_stock_current_koli" />
+                    <input type="hidden" id="edit_stock_current_remainder" />
+
+                    <div class="row g-6 mb-6">
+                        <div class="col-md-7">
+                            <div class="text-muted fs-7">Item</div>
+                            <div class="fw-bold" id="edit_stock_item_label">-</div>
+                        </div>
+                        <div class="col-md-5">
+                            <div class="text-muted fs-7">Gudang</div>
+                            <div class="fw-bold" id="edit_stock_warehouse_label">-</div>
+                        </div>
+                    </div>
+
+                    <div class="row g-6 mb-6">
+                        <div class="col-md-6">
+                            <label class="fs-6 fw-bold form-label mb-2">Stok Saat Ini</label>
+                            <input type="text" class="form-control form-control-solid" id="edit_stock_current_label" readonly />
+                        </div>
+                        <div class="col-md-6" id="edit_stock_target_pcs_wrap">
+                            <label class="required fs-6 fw-bold form-label mb-2">Stok Akhir (pcs)</label>
+                            <input type="number" min="0" step="1" class="form-control form-control-solid" id="edit_stock_target_pcs" />
+                        </div>
+                        <div class="col-md-6" id="edit_stock_target_koli_wrap" style="display:none;">
+                            <label class="required fs-6 fw-bold form-label mb-2">Stok Akhir (koli)</label>
+                            <input type="number" min="0" step="1" class="form-control form-control-solid" id="edit_stock_target_koli" />
+                            <div class="form-text text-muted" id="edit_stock_koli_hint"></div>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-primary d-flex align-items-start p-5 mb-6">
+                        <span class="svg-icon svg-icon-2hx svg-icon-primary me-4">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+                                <path opacity="0.3" d="M12 22C17.5 22 22 17.5 22 12S17.5 2 12 2 2 6.5 2 12s4.5 10 10 10Z" fill="black"/>
+                                <path d="M12 7C11.4 7 11 7.4 11 8s.4 1 1 1 1-.4 1-1-.4-1-1-1Zm1 5c0-.6-.4-1-1-1s-1 .4-1 1v5c0 .6.4 1 1 1s1-.4 1-1v-5Z" fill="black"/>
+                            </svg>
+                        </span>
+                        <div>
+                            <div class="fw-bold" id="edit_stock_adjustment_title">Penyesuaian stok</div>
+                            <div class="text-muted" id="edit_stock_adjustment_preview">Isi stok akhir untuk melihat selisih.</div>
+                        </div>
+                    </div>
+
+                    <div class="fv-row mb-6">
+                        <label class="fs-6 fw-bold form-label mb-2">Catatan</label>
+                        <textarea class="form-control form-control-solid" id="edit_stock_note" rows="3"></textarea>
+                    </div>
+
+                    <div class="text-end pt-3">
+                        <button type="button" class="btn btn-light me-3" data-bs-dismiss="modal">Batal</button>
+                        <button type="submit" class="btn btn-primary">
+                            <span class="indicator-label">Simpan Penyesuaian</span>
+                            <span class="indicator-progress">Please wait...
+                            <span class="spinner-border spinner-border-sm align-middle ms-2"></span></span>
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
@@ -329,6 +421,8 @@
     const dataUrl = '{{ route('admin.inventory.item-stocks.data') }}';
     const exportUrl = '{{ route('admin.inventory.item-stocks.export') }}';
     const updateSafetyUrl = '{{ $updateSafetyUrl ?? '' }}';
+    const stockAdjustmentStoreUrl = '{{ route('admin.inventory.stock-adjustments.store') }}';
+    const canCreateStockAdjustment = {{ $canCreateStockAdjustment ? 'true' : 'false' }};
     const mutationsDataUrl = '{{ route('admin.inventory.stock-mutations.data') }}';
     const mutationDetailUrlTpl = '{{ route('admin.inventory.stock-mutations.show', ':id') }}';
     const defaultWarehouseId = {{ !empty($defaultWarehouseId) ? (int) $defaultWarehouseId : 'null' }};
@@ -349,6 +443,9 @@
         const safetyDisplay = document.getElementById('safety_display');
         const itemDetailModalEl = document.getElementById('modal_item_detail');
         const itemDetailModal = itemDetailModalEl ? new bootstrap.Modal(itemDetailModalEl) : null;
+        const editStockModalEl = document.getElementById('modal_edit_stock');
+        const editStockModal = editStockModalEl ? new bootstrap.Modal(editStockModalEl) : null;
+        const editStockForm = document.getElementById('edit_stock_form');
 
         if (!tableEl.length || !$.fn.DataTable) {
             console.error('DataTables unavailable');
@@ -388,6 +485,25 @@
             `;
         };
 
+        const renderEditStockButton = (row, options) => {
+            if (!canCreateStockAdjustment || row.item_type === 'bundle' || !options?.warehouseId) {
+                return '';
+            }
+
+            return `
+                <button type="button"
+                    class="btn btn-icon btn-sm btn-light-primary ms-2 btn-edit-stock"
+                    title="Edit stok"
+                    data-id="${row.id}"
+                    data-warehouse-id="${options.warehouseId}"
+                    data-warehouse-label="${escapeHtml(options.warehouseLabel || '')}"
+                    data-stock-key="${options.stockKey}"
+                    data-mode="${options.mode || 'pcs'}">
+                    <i class="fas fa-pencil-alt fs-8"></i>
+                </button>
+            `;
+        };
+
         const renderWarehouseStock = (value, type, row, virtualKey, lowFlagKey, options = {}) => {
             if (row.item_type === 'bundle') {
                 const virtualValue = Number.isFinite(Number(row[virtualKey])) ? Number(row[virtualKey]) : 0;
@@ -400,11 +516,13 @@
 
             if (row[lowFlagKey]) {
                 const stockHtml = `<span class="fw-bold text-danger">${formatStockNumber(stockValue)}</span>`;
-                return options.showKoli ? stockHtml + renderMainWarehouseKoli(row) : stockHtml;
+                const stockWithButton = `<span class="d-inline-flex align-items-center justify-content-end">${stockHtml}${renderEditStockButton(row, options)}</span>`;
+                return options.showKoli ? stockWithButton + renderMainWarehouseKoli(row) : stockWithButton;
             }
 
             const stockHtml = `<span class="fw-bold">${formatStockNumber(stockValue)}</span>`;
-            return options.showKoli ? stockHtml + renderMainWarehouseKoli(row) : stockHtml;
+            const stockWithButton = `<span class="d-inline-flex align-items-center justify-content-end">${stockHtml}${renderEditStockButton(row, options)}</span>`;
+            return options.showKoli ? stockWithButton + renderMainWarehouseKoli(row) : stockWithButton;
         };
 
         const renderItemTypeBadge = (type) => type === 'bundle'
@@ -423,10 +541,158 @@
 
         const stockLabel = (value) => `${formatStockNumber(value)} pcs`;
 
+        const formatDateTime = (date) => {
+            const pad = (n) => String(n).padStart(2, '0');
+            return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+        };
+
+        const getJakartaNow = () => {
+            const jkt = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
+            return formatDateTime(jkt);
+        };
+
+        const setInputValue = (id, value) => {
+            const el = document.getElementById(id);
+            if (el) el.value = value ?? '';
+        };
+
+        const setModalText = (id, value) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = value ?? '-';
+        };
+
         const findTableRow = (trigger) => {
             const id = String(trigger?.getAttribute('data-id') || '');
             const rows = dt.rows().data().toArray();
             return rows.find((row) => String(row.id) === id) || null;
+        };
+
+        const calculateEditStockPayload = () => {
+            const mode = document.getElementById('edit_stock_mode')?.value || 'pcs';
+            const currentStock = parseInt(document.getElementById('edit_stock_current')?.value || '0', 10);
+            const itemId = document.getElementById('edit_stock_item_id')?.value || '';
+            const warehouseId = document.getElementById('edit_stock_warehouse_id')?.value || '';
+            const note = document.getElementById('edit_stock_note')?.value || '';
+            const current = Number.isFinite(currentStock) ? currentStock : 0;
+
+            if (mode === 'koli') {
+                const koliQty = parseInt(document.getElementById('edit_stock_koli_qty')?.value || '0', 10);
+                const currentKoli = parseInt(document.getElementById('edit_stock_current_koli')?.value || '0', 10);
+                const currentRemainder = parseInt(document.getElementById('edit_stock_current_remainder')?.value || '0', 10);
+                const targetKoli = parseInt(document.getElementById('edit_stock_target_koli')?.value || '', 10);
+
+                if (!Number.isFinite(koliQty) || koliQty <= 0) {
+                    return { error: 'Isi/koli item belum diset. Penyesuaian Gudang Besar wajib satuan koli.' };
+                }
+                if (!Number.isFinite(targetKoli) || targetKoli < 0) {
+                    return { error: 'Stok akhir koli wajib diisi dengan angka valid.' };
+                }
+
+                const deltaKoli = targetKoli - currentKoli;
+                if (deltaKoli === 0) {
+                    return { error: 'Stok akhir harus berbeda dari stok saat ini.' };
+                }
+
+                const adjustmentKoli = Math.abs(deltaKoli);
+                const qty = adjustmentKoli * koliQty;
+                return {
+                    itemId,
+                    warehouseId,
+                    direction: deltaKoli > 0 ? 'in' : 'out',
+                    qty,
+                    koli: adjustmentKoli,
+                    targetStock: (targetKoli * koliQty) + (Number.isFinite(currentRemainder) ? currentRemainder : 0),
+                    note,
+                };
+            }
+
+            const targetStock = parseInt(document.getElementById('edit_stock_target_pcs')?.value || '', 10);
+            if (!Number.isFinite(targetStock) || targetStock < 0) {
+                return { error: 'Stok akhir wajib diisi dengan angka valid.' };
+            }
+
+            const delta = targetStock - current;
+            if (delta === 0) {
+                return { error: 'Stok akhir harus berbeda dari stok saat ini.' };
+            }
+
+            return {
+                itemId,
+                warehouseId,
+                direction: delta > 0 ? 'in' : 'out',
+                qty: Math.abs(delta),
+                koli: '',
+                targetStock,
+                note,
+            };
+        };
+
+        const syncEditStockPreview = () => {
+            const payload = calculateEditStockPayload();
+            const preview = document.getElementById('edit_stock_adjustment_preview');
+            const title = document.getElementById('edit_stock_adjustment_title');
+            if (!preview || !title) return;
+
+            if (payload.error) {
+                title.textContent = 'Penyesuaian stok';
+                preview.textContent = payload.error;
+                return;
+            }
+
+            const sign = payload.direction === 'in' ? '+' : '-';
+            title.textContent = payload.direction === 'in' ? 'Akan dibuat penyesuaian tambah' : 'Akan dibuat penyesuaian kurang';
+            const koliText = payload.koli ? ` (${payload.koli} koli)` : '';
+            preview.textContent = `Selisih ${sign}${formatStockNumber(payload.qty)} pcs${koliText}. Stok akhir setelah approve: ${formatStockNumber(payload.targetStock)} pcs.`;
+        };
+
+        const openEditStockModal = (trigger) => {
+            const row = findTableRow(trigger);
+            if (!row || row.item_type === 'bundle') return;
+
+            const mode = trigger.getAttribute('data-mode') || 'pcs';
+            const warehouseId = trigger.getAttribute('data-warehouse-id') || '';
+            const warehouseLabel = trigger.getAttribute('data-warehouse-label') || '';
+            const stockKey = trigger.getAttribute('data-stock-key') || 'stock_display';
+            const currentStock = Number.isFinite(Number(row[stockKey])) ? Number(row[stockKey]) : 0;
+            const koliQty = Number.isFinite(Number(row.koli_qty)) ? Number(row.koli_qty) : 0;
+            const currentKoli = Number.isFinite(Number(row.stock_main_koli)) ? Number(row.stock_main_koli) : 0;
+            const currentRemainder = Number.isFinite(Number(row.stock_main_koli_remainder)) ? Number(row.stock_main_koli_remainder) : 0;
+
+            setModalText('edit_stock_subtitle', `${row.sku || '-'} - ${row.name || '-'}`);
+            setModalText('edit_stock_item_label', `${row.sku || '-'} - ${row.name || '-'}`);
+            setModalText('edit_stock_warehouse_label', warehouseLabel || '-');
+            setInputValue('edit_stock_item_id', row.id);
+            setInputValue('edit_stock_warehouse_id', warehouseId);
+            setInputValue('edit_stock_mode', mode);
+            setInputValue('edit_stock_current', currentStock);
+            setInputValue('edit_stock_koli_qty', koliQty);
+            setInputValue('edit_stock_current_koli', currentKoli);
+            setInputValue('edit_stock_current_remainder', currentRemainder);
+            setInputValue('edit_stock_note', `Edit stok ${row.sku || ''} dari halaman Item Stocks.`);
+
+            const pcsWrap = document.getElementById('edit_stock_target_pcs_wrap');
+            const koliWrap = document.getElementById('edit_stock_target_koli_wrap');
+            if (mode === 'koli') {
+                if (pcsWrap) pcsWrap.style.display = 'none';
+                if (koliWrap) koliWrap.style.display = '';
+                setInputValue('edit_stock_current_label', `${formatStockNumber(currentStock)} pcs (${formatStockNumber(currentKoli)} koli${currentRemainder > 0 ? ` + ${formatStockNumber(currentRemainder)} pcs` : ''})`);
+                setInputValue('edit_stock_target_pcs', '');
+                setInputValue('edit_stock_target_koli', currentKoli);
+                setModalText('edit_stock_koli_hint', koliQty > 0 ? `Isi/koli: ${formatStockNumber(koliQty)} pcs. Penyesuaian Gudang Besar hanya menerima kolian bulat.` : 'Isi/koli item belum diset.');
+            } else {
+                if (pcsWrap) pcsWrap.style.display = '';
+                if (koliWrap) koliWrap.style.display = 'none';
+                setInputValue('edit_stock_current_label', `${formatStockNumber(currentStock)} pcs`);
+                setInputValue('edit_stock_target_pcs', currentStock);
+                setInputValue('edit_stock_target_koli', '');
+                setModalText('edit_stock_koli_hint', '');
+            }
+
+            syncEditStockPreview();
+            editStockModal?.show();
+            setTimeout(() => {
+                document.getElementById(mode === 'koli' ? 'edit_stock_target_koli' : 'edit_stock_target_pcs')?.focus();
+            }, 150);
         };
 
         const showItemDetail = (row) => {
@@ -498,9 +764,9 @@
                 { data: 'sku' },
                 { data: 'name' },
                 { data: 'item_type', render: (data) => renderItemTypeBadge(data) },
-                { data: 'stock_main', className: 'text-end', render: (data, type, row) => renderWarehouseStock(data, type, row, 'virtual_main', 'is_main_below_safety', { showKoli: true }) },
+                { data: 'stock_main', className: 'text-end', render: (data, type, row) => renderWarehouseStock(data, type, row, 'virtual_main', 'is_main_below_safety', { showKoli: true, warehouseId: defaultWarehouseId, warehouseLabel: @json($defaultWarehouseLabel ?? 'Gudang Besar'), stockKey: 'stock_main', mode: 'koli' }) },
                 { data: 'safety_main', className: 'text-end', render: (data, type, row) => row.item_type === 'bundle' ? '-' : (data ?? 0) },
-                { data: 'stock_display', className: 'text-end', render: (data, type, row) => renderWarehouseStock(data, type, row, 'virtual_display', 'is_display_below_safety') },
+                { data: 'stock_display', className: 'text-end', render: (data, type, row) => renderWarehouseStock(data, type, row, 'virtual_display', 'is_display_below_safety', { warehouseId: displayWarehouseId, warehouseLabel: @json($displayWarehouseLabel ?? 'Gudang Display'), stockKey: 'stock_display', mode: 'pcs' }) },
                 { data: 'safety_display', className: 'text-end', render: (data, type, row) => row.item_type === 'bundle' ? '-' : (data ?? 0) },
                 { data: 'stock_damaged', className: 'text-end', render: (data, type, row) => row.item_type === 'bundle' ? '-' : (data ?? 0) },
                 { data: 'stock_good_total', className: 'text-end', render: (data, type, row) => row.item_type === 'bundle' ? `<span class="fw-bold text-primary">${row.virtual_total ?? 0}</span><div class="text-muted fs-8">virtual total</div>` : (data ?? 0) },
@@ -547,6 +813,11 @@
             showItemDetail(findTableRow(this));
         });
 
+        tableEl.on('click', '.btn-edit-stock', function(e) {
+            e.preventDefault();
+            openEditStockModal(this);
+        });
+
         tableEl.on('click', '.btn-safety', function(e) {
             e.preventDefault();
             const id = this.getAttribute('data-id');
@@ -566,6 +837,57 @@
         });
 
         // ── MODAL MUTASI ─────────────────────────────────────────────
+        document.getElementById('edit_stock_target_pcs')?.addEventListener('input', syncEditStockPreview);
+        document.getElementById('edit_stock_target_koli')?.addEventListener('input', syncEditStockPreview);
+
+        editStockForm?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const payload = calculateEditStockPayload();
+            if (payload.error) {
+                if (typeof Swal !== 'undefined') Swal.fire('Error', payload.error, 'error');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('warehouse_id', payload.warehouseId);
+            formData.append('transacted_at', getJakartaNow());
+            formData.append('note', payload.note || 'Edit stok dari halaman Item Stocks.');
+            formData.append('items[0][item_id]', payload.itemId);
+            formData.append('items[0][direction]', payload.direction);
+            formData.append('items[0][qty]', payload.qty);
+            if (payload.koli) {
+                formData.append('items[0][koli]', payload.koli);
+            }
+            formData.append('items[0][note]', `Set stok akhir ${formatStockNumber(payload.targetStock)} pcs`);
+
+            try {
+                const res = await fetch(stockAdjustmentStoreUrl, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Accept': 'application/json',
+                    },
+                    body: formData,
+                });
+                const text = await res.text();
+                let json;
+                try { json = JSON.parse(text); } catch (err) {
+                    if (typeof Swal !== 'undefined') Swal.fire('Error', 'Respons server tidak valid', 'error');
+                    return;
+                }
+                if (!res.ok) {
+                    const firstError = json?.errors ? Object.values(json.errors).flat()[0] : null;
+                    if (typeof Swal !== 'undefined') Swal.fire('Error', firstError || json.message || 'Gagal menyimpan penyesuaian stok', 'error');
+                    return;
+                }
+                if (typeof Swal !== 'undefined') Swal.fire('Berhasil', json.message || 'Penyesuaian stok berhasil dibuat dan menunggu approval.', 'success');
+                editStockModal?.hide();
+                reloadTable();
+            } catch (err) {
+                if (typeof Swal !== 'undefined') Swal.fire('Error', 'Gagal menyimpan penyesuaian stok', 'error');
+            }
+        });
+
         const mutationsModalEl = document.getElementById('modal_item_mutations');
         const mutationsModal = mutationsModalEl ? new bootstrap.Modal(mutationsModalEl) : null;
         const detailModalEl = document.getElementById('modal_mutation_detail');

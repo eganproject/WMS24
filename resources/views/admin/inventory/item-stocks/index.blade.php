@@ -3,11 +3,6 @@
 @section('title', 'Item Stocks')
 @section('page_title', 'Item Stocks')
 
-@php
-    use App\Support\Permission as Perm;
-    $canCreateStockAdjustment = Perm::can(auth()->user(), 'admin.inventory.stock-adjustments.index', 'create');
-@endphp
-
 @section('content')
 <div class="card">
     <div class="card-header border-0 pt-6">
@@ -336,8 +331,6 @@
     const updateSafetyUrl = '{{ $updateSafetyUrl ?? '' }}';
     const mutationsDataUrl = '{{ route('admin.inventory.stock-mutations.data') }}';
     const mutationDetailUrlTpl = '{{ route('admin.inventory.stock-mutations.show', ':id') }}';
-    const stockAdjustmentCreateUrl = '{{ route('admin.inventory.stock-adjustments.index') }}';
-    const canCreateStockAdjustment = {{ $canCreateStockAdjustment ? 'true' : 'false' }};
     const defaultWarehouseId = {{ !empty($defaultWarehouseId) ? (int) $defaultWarehouseId : 'null' }};
     const displayWarehouseId = {{ !empty($displayWarehouseId) ? (int) $displayWarehouseId : 'null' }};
     const damagedWarehouseId = {{ !empty($damagedWarehouseId) ? (int) $damagedWarehouseId : 'null' }};
@@ -417,19 +410,6 @@
         const renderItemTypeBadge = (type) => type === 'bundle'
             ? '<span class="badge badge-light-primary">Bundle</span>'
             : '<span class="badge badge-light-success">Single</span>';
-
-        const buildStockEditUrl = (row, warehouseId, stockKey) => {
-            const params = new URLSearchParams({
-                mode: 'set-stock',
-                item_id: row.id,
-                warehouse_id: warehouseId,
-                current_stock: row[stockKey] ?? 0,
-                sku: row.sku || '',
-                item_name: row.name || '',
-            });
-
-            return `${stockAdjustmentCreateUrl}?${params.toString()}`;
-        };
 
         const detailText = (id, value) => {
             const el = document.getElementById(id);
@@ -531,19 +511,7 @@
                     const detailItem = `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-item-detail" data-id="${data}">Detail Item</a></div>`;
                     const mutItem = `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-mutations" data-id="${data}" data-sku="${safeSku}" data-name="${safeName}">Mutasi</a></div>`;
                     const safetyItem = row.item_type === 'bundle' ? '' : `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-safety" data-id="${data}" data-sku="${safeSku}" data-name="${safeName}" data-safety-main="${row.safety_main_raw ?? ''}" data-safety-display="${row.safety_display_raw ?? ''}" data-safety-base="${row.safety_base ?? 0}">Set Safety</a></div>`;
-                    const adjustmentItems = [];
-                    if (canCreateStockAdjustment && row.item_type !== 'bundle') {
-                        if (defaultWarehouseId) {
-                            adjustmentItems.push(`<div class="menu-item px-3"><a href="${buildStockEditUrl(row, defaultWarehouseId, 'stock_main')}" class="menu-link px-3">Edit Stok {{ $defaultWarehouseLabel ?? 'Gudang Besar' }}</a></div>`);
-                        }
-                        if (displayWarehouseId) {
-                            adjustmentItems.push(`<div class="menu-item px-3"><a href="${buildStockEditUrl(row, displayWarehouseId, 'stock_display')}" class="menu-link px-3">Edit Stok {{ $displayWarehouseLabel ?? 'Gudang Display' }}</a></div>`);
-                        }
-                        if (damagedWarehouseId) {
-                            adjustmentItems.push(`<div class="menu-item px-3"><a href="${buildStockEditUrl(row, damagedWarehouseId, 'stock_damaged')}" class="menu-link px-3">Edit Stok {{ $damagedWarehouseLabel ?? 'Gudang Rusak' }}</a></div>`);
-                        }
-                    }
-                    const actions = `${detailItem}${mutItem}${safetyItem}${adjustmentItems.join('')}`;
+                    const actions = `${detailItem}${mutItem}${safetyItem}`;
                     return `
                         <div class="text-end">
                             <a href="#" class="btn btn-sm btn-light btn-active-light-primary" data-kt-menu-trigger="click" data-kt-menu-placement="bottom-end">

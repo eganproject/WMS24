@@ -193,7 +193,6 @@
     const approveUrlTpl = '{{ route('admin.inventory.stock-adjustments.approve', ':id') }}';
     const csrfToken = '{{ csrf_token() }}';
     const importUrl = '{{ $importUrl ?? '' }}';
-    const canCreate = {{ $canCreate ? 'true' : 'false' }};
     const canUpdate = {{ $canUpdate ? 'true' : 'false' }};
     const canDelete = {{ $canDelete ? 'true' : 'false' }};
     const defaultWarehouseId = {{ !empty($defaultWarehouseId) ? (int) $defaultWarehouseId : 'null' }};
@@ -282,11 +281,6 @@
             return !hasDuplicate;
         };
 
-        const parseInteger = (value) => {
-            const parsed = parseInt(value, 10);
-            return Number.isFinite(parsed) ? parsed : 0;
-        };
-
         const requiresKoliAdjustment = () => {
             const wid = Number(warehouseSelect?.value || 0);
             return defaultWarehouseId && wid === Number(defaultWarehouseId);
@@ -325,91 +319,8 @@
             }
         };
 
-        const syncSetStockRow = (row) => {
-            if (!row) return;
-            const targetEl = row.querySelector('[data-role="target-stock"]');
-            if (!targetEl) return;
-            targetEl.classList.remove('is-invalid');
-
-            const currentStock = parseInteger(row.getAttribute('data-current-stock'));
-            const hintEl = row.querySelector('[data-role="set-stock-hint"]');
-            const qtyEl = row.querySelector('input[data-name="qty"]');
-            const koliEl = row.querySelector('input[data-name="koli"]');
-            if (targetEl.value === '') {
-                if (qtyEl) qtyEl.value = '';
-                if (koliEl) koliEl.value = '';
-                if (hintEl) hintEl.textContent = 'Isi stok akhir yang diinginkan.';
-                return;
-            }
-
-            const targetStock = parseInteger(targetEl.value);
-            const delta = targetStock - currentStock;
-            const dirEl = row.querySelector('[data-name="direction"]');
-            const qtyPerKoli = selectedKoliQty(row);
-
-            if (dirEl) dirEl.value = delta < 0 ? 'out' : 'in';
-            if (qtyEl) qtyEl.value = delta === 0 ? '' : String(Math.abs(delta));
-
-            let hint = delta === 0
-                ? 'Isi stok akhir yang berbeda dari stok saat ini.'
-                : `Selisih ${delta > 0 ? '+' : '-'}${Math.abs(delta)} akan disimpan sebagai penyesuaian stok.`;
-
-            if (requiresKoliAdjustment()) {
-                if (qtyPerKoli > 0 && delta !== 0 && Math.abs(delta) % qtyPerKoli === 0) {
-                    if (koliEl) koliEl.value = String(Math.abs(delta) / qtyPerKoli);
-                    hint += ` Kolian: ${Math.abs(delta) / qtyPerKoli}.`;
-                } else if (delta !== 0) {
-                    if (koliEl) koliEl.value = '';
-                    hint += ' Untuk Gudang Besar, selisih harus sesuai kelipatan isi/koli.';
-                }
-            }
-
-            if (hintEl) hintEl.textContent = hint;
-            syncRowKoliMode(row);
-        };
-
-        const validateSetStockRows = () => {
-            const rows = Array.from(itemsContainer?.querySelectorAll('.adjustment-item-row') || []);
-            let valid = true;
-            rows.forEach((row) => {
-                const targetEl = row.querySelector('[data-role="target-stock"]');
-                if (!targetEl) return;
-
-                const hintEl = row.querySelector('[data-role="set-stock-hint"]');
-                const currentStock = parseInteger(row.getAttribute('data-current-stock'));
-                const targetStock = targetEl.value === '' ? null : parseInteger(targetEl.value);
-                if (targetStock === null) {
-                    valid = false;
-                    if (hintEl) hintEl.textContent = 'Stok akhir wajib diisi.';
-                    targetEl.classList.add('is-invalid');
-                    return;
-                }
-
-                if (targetStock === currentStock) {
-                    valid = false;
-                    if (hintEl) hintEl.textContent = 'Stok akhir harus berbeda dari stok saat ini.';
-                    targetEl.classList.add('is-invalid');
-                    return;
-                }
-
-                if (targetStock < 0) {
-                    valid = false;
-                    if (hintEl) hintEl.textContent = 'Stok akhir tidak boleh negatif.';
-                    targetEl.classList.add('is-invalid');
-                    return;
-                }
-
-                targetEl.classList.remove('is-invalid');
-            });
-
-            return valid;
-        };
-
         const syncAllKoliMode = () => {
-            itemsContainer?.querySelectorAll('.adjustment-item-row').forEach((row) => {
-                syncRowKoliMode(row);
-                syncSetStockRow(row);
-            });
+            itemsContainer?.querySelectorAll('.adjustment-item-row').forEach(syncRowKoliMode);
         };
 
         const initSelect2 = (selectEl) => {
@@ -482,20 +393,6 @@
         const createItemRow = (data = {}) => {
             const row = document.createElement('div');
             row.className = 'row g-3 align-items-end mb-4 adjustment-item-row';
-            if (data.current_stock !== undefined && data.current_stock !== null) {
-                row.setAttribute('data-current-stock', data.current_stock);
-            }
-            const setStockFields = data.current_stock !== undefined && data.current_stock !== null ? `
-                <div class="col-md-2">
-                    <label class="fs-6 fw-bold form-label mb-2">Stok Saat Ini</label>
-                    <input type="number" class="form-control form-control-solid" value="${data.current_stock}" readonly />
-                </div>
-                <div class="col-md-2">
-                    <label class="required fs-6 fw-bold form-label mb-2">Stok Akhir</label>
-                    <input type="number" min="0" class="form-control form-control-solid" data-role="target-stock" value="${data.target_stock ?? ''}" required />
-                    <div class="form-text text-muted" data-role="set-stock-hint"></div>
-                </div>
-            ` : '';
             row.innerHTML = `
                 <div class="col-md-3">
                     <label class="required fs-6 fw-bold form-label mb-2">Item</label>
@@ -513,7 +410,6 @@
                     </select>
                     <div class="invalid-feedback" data-error-for="direction"></div>
                 </div>
-                ${setStockFields}
                 <div class="col-md-2" data-role="koli-wrap" style="display:none;">
                     <label class="required fs-6 fw-bold form-label mb-2">Kolian</label>
                     <input type="number" min="1" step="1" class="form-control form-control-solid" data-name="koli" />
@@ -551,7 +447,6 @@
             initSelect2(selectEl);
             renumberRows();
             syncRowKoliMode(row);
-            syncSetStockRow(row);
             validateUniqueItems();
         };
 
@@ -586,9 +481,6 @@
             if (e.target.matches('input[data-name="koli"]')) {
                 syncRowKoliMode(e.target.closest('.adjustment-item-row'));
             }
-            if (e.target.matches('[data-role="target-stock"]')) {
-                syncSetStockRow(e.target.closest('.adjustment-item-row'));
-            }
         });
 
         warehouseSelect?.addEventListener('change', syncAllKoliMode);
@@ -608,52 +500,6 @@
 
         addItemBtn?.addEventListener('click', () => createItemRow());
         openBtn?.addEventListener('click', resetForm);
-
-        const openSetStockPrefill = () => {
-            const params = new URLSearchParams(window.location.search);
-            if (params.get('mode') !== 'set-stock') return;
-
-            if (!canCreate) {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire('Tidak diizinkan', 'Anda tidak memiliki akses untuk membuat penyesuaian stok.', 'error');
-                }
-                return;
-            }
-
-            const itemId = params.get('item_id');
-            if (!itemId) return;
-
-            resetForm();
-            form.dataset.editId = '';
-            if (modalTitle) modalTitle.textContent = 'Edit Stok Item';
-            if (warehouseSelect && params.get('warehouse_id')) {
-                warehouseSelect.value = params.get('warehouse_id');
-            }
-
-            const sku = params.get('sku') || '';
-            const itemName = params.get('item_name') || '';
-            const currentStock = parseInteger(params.get('current_stock') || '0');
-            const noteEl = document.getElementById('adjustment_note');
-            if (noteEl) {
-                noteEl.value = `Edit stok dari halaman Item Stocks${sku ? ` untuk ${sku}` : ''}.`;
-            }
-
-            itemsContainer.innerHTML = '';
-            createItemRow({
-                item_id: itemId,
-                current_stock: currentStock,
-                target_stock: '',
-                note: [sku, itemName].filter(Boolean).join(' - '),
-            });
-            clearErrors();
-            validateUniqueItems();
-            syncAllKoliMode();
-            modal?.show();
-
-            setTimeout(() => {
-                itemsContainer.querySelector('[data-role="target-stock"]')?.focus();
-            }, 150);
-        };
 
         if (!tableEl.length || !$.fn.DataTable) {
             console.error('DataTables unavailable');
@@ -738,7 +584,6 @@
         });
 
         updateWarehouseBadge();
-        openSetStockPrefill();
 
         importBtn?.addEventListener('click', () => {
             if (importInput) importInput.value = '';
@@ -920,10 +765,6 @@
             clearErrors();
             if (!validateUniqueItems()) {
                 if (typeof Swal !== 'undefined') Swal.fire('Error', 'Item tidak boleh duplikat', 'error');
-                return;
-            }
-            if (!validateSetStockRows()) {
-                if (typeof Swal !== 'undefined') Swal.fire('Error', 'Periksa stok akhir yang ingin disimpan.', 'error');
                 return;
             }
             const formData = new FormData(form);

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Exports\AbsentEmployeesExport;
 use App\Exports\EmployeesTemplateExport;
 use App\Imports\EmployeesImport;
+use App\Models\ActivityLog;
 use App\Models\Area;
 use App\Models\Attendance;
 use App\Models\AttendanceDevice;
@@ -25,6 +26,7 @@ use App\Models\WorkShift;
 use App\Support\AttendanceLateNotifier;
 use App\Support\AttendanceProcessor;
 use Illuminate\Http\Request;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -809,12 +811,14 @@ class AttendanceController extends Controller
         );
 
         app(AttendanceProcessor::class)->rebuildDailyAttendance($schedule->employee, $schedule->schedule_date);
+        $this->writeAttendanceAudit($request, 'Menyimpan jadwal karyawan', $schedule, null, $this->auditSnapshot($schedule->fresh()));
 
         return response()->json(['message' => 'Jadwal karyawan berhasil disimpan', 'schedule' => $schedule]);
     }
 
     public function updateSchedule(Request $request, EmployeeSchedule $schedule)
     {
+        $before = $this->auditSnapshot($schedule);
         $oldEmployee = $schedule->employee;
         $oldDate = $schedule->schedule_date;
         $validated = $this->validateSchedule($request);
@@ -826,16 +830,19 @@ class AttendanceController extends Controller
             app(AttendanceProcessor::class)->rebuildDailyAttendance($oldEmployee, $oldDate);
         }
         app(AttendanceProcessor::class)->rebuildDailyAttendance($schedule->employee, $schedule->schedule_date);
+        $this->writeAttendanceAudit($request, 'Mengubah jadwal karyawan', $schedule, $before, $this->auditSnapshot($schedule));
 
         return response()->json(['message' => 'Jadwal karyawan berhasil diperbarui', 'schedule' => $schedule]);
     }
 
-    public function destroySchedule(EmployeeSchedule $schedule)
+    public function destroySchedule(Request $request, EmployeeSchedule $schedule)
     {
+        $before = $this->auditSnapshot($schedule);
         $employee = $schedule->employee;
         $date = $schedule->schedule_date;
         $schedule->delete();
         app(AttendanceProcessor::class)->rebuildDailyAttendance($employee, $date);
+        $this->writeAttendanceAudit($request, 'Menghapus jadwal karyawan', $schedule, $before, null);
 
         return response()->json(['message' => 'Jadwal karyawan berhasil dihapus']);
     }
@@ -1048,38 +1055,36 @@ class AttendanceController extends Controller
     {
         $validated = $this->validateLeave($request);
 
-        $leave = EmployeeLeave::create($validated + [
-            'approved_by' => $validated['status'] === 'approved' ? auth()->id() : null,
-            'approved_at' => $validated['status'] === 'approved' ? now() : null,
-        ]);
+        $leave = EmployeeLeave::create($validated + $this->leaveApprovalAttributes($validated['status']));
         $this->rebuildAttendanceRange($leave->employee, $leave->start_date, $leave->end_date);
+        $this->writeAttendanceAudit($request, 'Menyimpan cuti/izin karyawan', $leave, null, $this->auditSnapshot($leave->fresh()));
 
         return response()->json(['message' => 'Cuti/izin berhasil dibuat', 'leave' => $leave]);
     }
 
     public function updateLeave(Request $request, EmployeeLeave $leave)
     {
+        $before = $this->auditSnapshot($leave);
         $oldEmployee = $leave->employee;
         $oldStart = $leave->start_date;
         $oldEnd = $leave->end_date;
         $validated = $this->validateLeave($request);
 
-        $leave->update($validated + [
-            'approved_by' => $validated['status'] === 'approved' ? auth()->id() : null,
-            'approved_at' => $validated['status'] === 'approved' ? now() : null,
-        ]);
+        $leave->update($validated + $this->leaveApprovalAttributes($validated['status'], $leave));
         $leave->refresh();
 
         if ($oldEmployee) {
             $this->rebuildAttendanceRange($oldEmployee, $oldStart, $oldEnd);
         }
         $this->rebuildAttendanceRange($leave->employee, $leave->start_date, $leave->end_date);
+        $this->writeAttendanceAudit($request, 'Mengubah cuti/izin karyawan', $leave, $before, $this->auditSnapshot($leave));
 
         return response()->json(['message' => 'Cuti/izin berhasil diperbarui', 'leave' => $leave]);
     }
 
-    public function destroyLeave(EmployeeLeave $leave)
+    public function destroyLeave(Request $request, EmployeeLeave $leave)
     {
+        $before = $this->auditSnapshot($leave);
         $employee = $leave->employee;
         $start = $leave->start_date;
         $end = $leave->end_date;
@@ -1088,6 +1093,7 @@ class AttendanceController extends Controller
         if ($employee) {
             $this->rebuildAttendanceRange($employee, $start, $end);
         }
+        $this->writeAttendanceAudit($request, 'Menghapus cuti/izin karyawan', $leave, $before, null);
 
         return response()->json(['message' => 'Cuti/izin berhasil dihapus']);
     }
@@ -1138,6 +1144,10 @@ class AttendanceController extends Controller
         if ($isLateCheckIn) {
             $lateNotifier->notifyTelegramIfLate($attendance, $rawLog);
         }
+        $this->writeAttendanceAudit($request, 'Menambahkan raw log fingerprint manual', $rawLog, null, [
+            'raw_log' => $this->auditSnapshot($rawLog->fresh()),
+            'attendance' => $attendance ? $this->auditSnapshot($attendance) : null,
+        ]);
 
         return response()->json([
             'message' => 'Raw log fingerprint berhasil disimpan',
@@ -1159,6 +1169,7 @@ class AttendanceController extends Controller
 
     public function updateRawLog(Request $request, AttendanceRawLog $rawLog)
     {
+        $before = $this->auditSnapshot($rawLog);
         $validated = $request->validate([
             'attendance_device_id' => ['required', 'integer', 'exists:attendance_devices,id'],
             'device_user_id' => ['required', 'string', 'max:100'],
@@ -1199,12 +1210,14 @@ class AttendanceController extends Controller
         if ($rawLog->employee) {
             $processor->rebuildAttendanceForScan($rawLog->employee, $rawLog->scan_at);
         }
+        $this->writeAttendanceAudit($request, 'Mengubah raw log fingerprint manual', $rawLog, $before, $this->auditSnapshot($rawLog));
 
         return response()->json(['message' => 'Raw log fingerprint berhasil diperbarui', 'raw_log' => $rawLog]);
     }
 
-    public function destroyRawLog(AttendanceRawLog $rawLog)
+    public function destroyRawLog(Request $request, AttendanceRawLog $rawLog)
     {
+        $before = $this->auditSnapshot($rawLog);
         $employee = $rawLog->employee;
         $scanAt = $rawLog->scan_at?->copy();
         $rawLog->delete();
@@ -1212,6 +1225,7 @@ class AttendanceController extends Controller
         if ($employee && $scanAt) {
             app(AttendanceProcessor::class)->rebuildAttendanceForScan($employee, $scanAt);
         }
+        $this->writeAttendanceAudit($request, 'Menghapus raw log fingerprint manual', $rawLog, $before, null);
 
         return response()->json(['message' => 'Raw log fingerprint berhasil dihapus']);
     }
@@ -1296,6 +1310,7 @@ class AttendanceController extends Controller
 
     public function updateAttendance(Request $request, Attendance $attendance)
     {
+        $before = $this->auditSnapshot($attendance);
         $validated = $request->validate([
             'employee_id' => ['required', 'integer', 'exists:employees,id'],
             'attendance_date' => ['required', 'date'],
@@ -1314,10 +1329,28 @@ class AttendanceController extends Controller
                 Attendance::OVERTIME_REJECTED,
             ])],
             'overtime_note' => ['nullable', 'string'],
-            'status' => ['required', 'string', 'max:30'],
+            'status' => ['required', Rule::in([
+                Attendance::STATUS_PRESENT,
+                Attendance::STATUS_LATE,
+                Attendance::STATUS_ABSENT,
+                Attendance::STATUS_LEAVE,
+                Attendance::STATUS_HOLIDAY,
+                Attendance::STATUS_DAY_OFF,
+                Attendance::STATUS_INCOMPLETE,
+            ])],
             'source' => ['nullable', 'string', 'max:30'],
             'note' => ['nullable', 'string'],
         ]);
+
+        if (
+            !empty($validated['check_in_at'])
+            && !empty($validated['check_out_at'])
+            && Carbon::parse($validated['check_out_at'])->lessThan(Carbon::parse($validated['check_in_at']))
+        ) {
+            throw ValidationException::withMessages([
+                'check_out_at' => ['Jam pulang tidak boleh lebih awal dari jam masuk.'],
+            ]);
+        }
 
         if ($validated['overtime_status'] === Attendance::OVERTIME_APPROVED && $validated['approved_overtime_minutes'] === null) {
             throw ValidationException::withMessages([
@@ -1338,13 +1371,17 @@ class AttendanceController extends Controller
             'approved_at' => in_array($validated['overtime_status'], [Attendance::OVERTIME_APPROVED, Attendance::OVERTIME_REJECTED], true) ? now() : null,
             'source' => $validated['source'] ?? 'manual',
         ]));
+        $attendance->refresh();
+        $this->writeAttendanceAudit($request, 'Mengubah rekap absensi manual', $attendance, $before, $this->auditSnapshot($attendance));
 
         return response()->json(['message' => 'Rekap absensi berhasil diperbarui', 'attendance' => $attendance]);
     }
 
-    public function destroyAttendance(Attendance $attendance)
+    public function destroyAttendance(Request $request, Attendance $attendance)
     {
+        $before = $this->auditSnapshot($attendance);
         $attendance->delete();
+        $this->writeAttendanceAudit($request, 'Menghapus rekap absensi manual', $attendance, $before, null);
 
         return response()->json(['message' => 'Rekap absensi berhasil dihapus']);
     }
@@ -1724,14 +1761,62 @@ class AttendanceController extends Controller
 
     private function validateLeave(Request $request): array
     {
-        return $request->validate([
+        $validated = $request->validate([
             'employee_id' => ['required', 'integer', 'exists:employees,id'],
             'leave_type' => ['required', 'string', 'max:30'],
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
             'reason' => ['nullable', 'string'],
-            'status' => ['required', 'string', 'max:30'],
+            'status' => ['required', Rule::in([
+                EmployeeLeave::STATUS_PENDING,
+                EmployeeLeave::STATUS_APPROVED,
+                EmployeeLeave::STATUS_REJECTED,
+            ])],
         ]);
+
+        $leaveId = $request->route('leave') instanceof EmployeeLeave
+            ? $request->route('leave')->id
+            : null;
+
+        if ($validated['status'] !== EmployeeLeave::STATUS_REJECTED) {
+            $overlapExists = EmployeeLeave::query()
+                ->where('employee_id', $validated['employee_id'])
+                ->whereIn('status', [EmployeeLeave::STATUS_PENDING, EmployeeLeave::STATUS_APPROVED])
+                ->when($leaveId, fn ($query) => $query->whereKeyNot($leaveId))
+                ->whereDate('start_date', '<=', $validated['end_date'])
+                ->whereDate('end_date', '>=', $validated['start_date'])
+                ->exists();
+
+            if ($overlapExists) {
+                throw ValidationException::withMessages([
+                    'start_date' => ['Karyawan sudah memiliki cuti/izin pending atau approved pada rentang tanggal tersebut.'],
+                ]);
+            }
+        }
+
+        return $validated;
+    }
+
+    private function leaveApprovalAttributes(string $status, ?EmployeeLeave $leave = null): array
+    {
+        if ($status !== EmployeeLeave::STATUS_APPROVED) {
+            return [
+                'approved_by' => null,
+                'approved_at' => null,
+            ];
+        }
+
+        if ($leave?->status === EmployeeLeave::STATUS_APPROVED && $leave->approved_by && $leave->approved_at) {
+            return [
+                'approved_by' => $leave->approved_by,
+                'approved_at' => $leave->approved_at,
+            ];
+        }
+
+        return [
+            'approved_by' => auth()->id(),
+            'approved_at' => now(),
+        ];
     }
 
     private function rebuildAttendanceRange(?Employee $employee, Carbon|string|null $start, Carbon|string|null $end): void
@@ -1884,5 +1969,48 @@ class AttendanceController extends Controller
     private function timeValue(?string $value): ?string
     {
         return $value ? substr($value, 0, 5) : null;
+    }
+
+    private function writeAttendanceAudit(Request $request, string $action, ?Model $subject, ?array $before, ?array $after): void
+    {
+        try {
+            ActivityLog::create([
+                'user_id' => auth()->id(),
+                'action' => $action,
+                'route_name' => $request->route()?->getName(),
+                'method' => strtoupper($request->method()),
+                'url' => $request->fullUrl(),
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'payload' => [
+                    'ringkasan' => [
+                        'hasil' => 'Berhasil',
+                        'aktivitas' => $action,
+                        'modul' => 'Attendance',
+                        'aksi' => $action,
+                        'target' => $subject ? class_basename($subject).' #'.$subject->getKey() : '-',
+                    ],
+                    'audit' => [
+                        'model' => $subject ? get_class($subject) : null,
+                        'model_id' => $subject?->getKey(),
+                        'before' => $before,
+                        'after' => $after,
+                    ],
+                ],
+            ]);
+        } catch (\Throwable) {
+            // Audit tambahan tidak boleh menggagalkan proses utama.
+        }
+    }
+
+    private function auditSnapshot(?Model $model): ?array
+    {
+        if (!$model) {
+            return null;
+        }
+
+        return collect($model->getAttributes())
+            ->map(fn ($value) => $value instanceof \DateTimeInterface ? $value->format('Y-m-d H:i:s') : $value)
+            ->all();
     }
 }

@@ -3,6 +3,7 @@
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use App\Console\Commands\PurgeAttendanceWebhookLogs;
 use App\Console\Commands\RecalculatePoLineFulfillment;
 use App\Console\Commands\TelegramSetWebhook;
 
@@ -13,6 +14,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withCommands([
+        PurgeAttendanceWebhookLogs::class,
         RecalculatePoLineFulfillment::class,
         TelegramSetWebhook::class,
     ])

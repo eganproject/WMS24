@@ -360,7 +360,7 @@
     const routeMap = @json($routeMap ?? []);
     const typeLabelMap = @json($typeOptions ?? []);
     const csrfToken = '{{ csrf_token() }}';
-    const itemOptionsHtml = `@foreach($items as $item)<option value="{{ $item->id }}" data-koli-qty="{{ (int) ($item->koli_qty ?? 0) }}" data-item-type="{{ $item->item_type ?? 'single' }}">{{ $item->sku }} - {{ $item->name }}@if(($item->item_type ?? 'single') === 'bundle') [Bundle]@endif</option>@endforeach`;
+    const itemOptionsHtml = `@foreach($items as $item)<option value="{{ $item->id }}" data-sku="{{ $item->sku }}" data-name="{{ $item->name }}" data-koli-qty="{{ (int) ($item->koli_qty ?? 0) }}" data-item-type="{{ $item->item_type ?? 'single' }}">{{ $item->sku }} - {{ $item->name }}@if(($item->item_type ?? 'single') === 'bundle') [Bundle]@endif</option>@endforeach`;
     const defaultTypeFilter = '{{ $typeDefault ?? '' }}';
     const permMap = @json($permMap ?? []);
     const canCreateDefault = {{ $canCreateDefault ? 'true' : 'false' }};

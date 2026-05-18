@@ -261,7 +261,7 @@
     const csrfToken  = '{{ csrf_token() }}';
     const canUpdate  = {{ $canUpdate ? 'true' : 'false' }};
     const canDelete  = {{ $canDelete ? 'true' : 'false' }};
-    const itemOptionsHtml   = `@foreach($items as $item)<option value="{{ $item->id }}">{{ $item->sku }} - {{ $item->name }}</option>@endforeach`;
+    const itemOptionsHtml   = `@foreach($items as $item)<option value="{{ $item->id }}" data-sku="{{ $item->sku }}" data-name="{{ $item->name }}">{{ $item->sku }} - {{ $item->name }}</option>@endforeach`;
     const reasonOptionsHtml = `@foreach(($reasonOptions ?? []) as $code => $label)<option value="{{ $code }}">{{ $label }}</option>@endforeach`;
     const defaultSourceWarehouseId = {{ isset($defaultSourceWarehouseId) ? (int) $defaultSourceWarehouseId : 'null' }};
 

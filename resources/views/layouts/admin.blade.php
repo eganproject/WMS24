@@ -283,6 +283,49 @@
     <script src="{{ asset('metronic/plugins/custom/datatables/datatables.bundle.js') }}"></script>
     <script>
         (function () {
+            if (typeof window.jQuery === 'undefined' || !window.jQuery.fn?.select2 || window.__appSelect2MatcherPatched) {
+                return;
+            }
+
+            const normalizeSearchText = (value) => String(value ?? '').toLowerCase();
+
+            const matchesOption = (term, data) => {
+                const option = data?.element;
+                const searchableText = [
+                    data?.text,
+                    option?.getAttribute?.('data-sku'),
+                    option?.getAttribute?.('data-name'),
+                    option?.getAttribute?.('data-code'),
+                    option?.getAttribute?.('data-search'),
+                ].filter(Boolean).join(' ');
+
+                return normalizeSearchText(searchableText).includes(term);
+            };
+
+            window.jQuery.fn.select2.defaults.set('matcher', function (params, data) {
+                const term = normalizeSearchText(params?.term).trim();
+                if (term === '') {
+                    return data;
+                }
+
+                if (matchesOption(term, data)) {
+                    return data;
+                }
+
+                if (Array.isArray(data?.children)) {
+                    const children = data.children.filter((child) => matchesOption(term, child));
+                    if (children.length > 0) {
+                        return { ...data, children };
+                    }
+                }
+
+                return null;
+            });
+
+            window.__appSelect2MatcherPatched = true;
+        })();
+
+        (function () {
             const searchInputSelectors = [
                 'input[data-kt-filter="search"]',
                 'input#report_search',

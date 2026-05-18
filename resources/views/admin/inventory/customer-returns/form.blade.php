@@ -423,7 +423,7 @@
 @push('scripts')
 <script>
     const customerReturnLookupUrl = @json($lookupUrl);
-    const customerReturnItemOptionsHtml = `@foreach($items as $item)<option value="{{ $item->id }}">{{ $item->sku }} - {{ $item->name }}</option>@endforeach`;
+    const customerReturnItemOptionsHtml = `@foreach($items as $item)<option value="{{ $item->id }}" data-sku="{{ $item->sku }}" data-name="{{ $item->name }}">{{ $item->sku }} - {{ $item->name }}</option>@endforeach`;
     const customerReturnReadOnly = {{ $readOnlyMode ? 'true' : 'false' }};
 
     document.addEventListener('DOMContentLoaded', () => {

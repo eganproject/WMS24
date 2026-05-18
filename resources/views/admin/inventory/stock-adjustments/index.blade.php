@@ -197,7 +197,7 @@
     const canDelete = {{ $canDelete ? 'true' : 'false' }};
     const defaultWarehouseId = {{ !empty($defaultWarehouseId) ? (int) $defaultWarehouseId : 'null' }};
     const displayWarehouseId = {{ !empty($displayWarehouseId) ? (int) $displayWarehouseId : 'null' }};
-    const itemOptionsHtml = `@foreach($items as $item)<option value="{{ $item->id }}" data-koli-qty="{{ (int) ($item->koli_qty ?? 0) }}">{{ $item->sku }} - {{ $item->name }}</option>@endforeach`;
+    const itemOptionsHtml = `@foreach($items as $item)<option value="{{ $item->id }}" data-sku="{{ $item->sku }}" data-name="{{ $item->name }}" data-koli-qty="{{ (int) ($item->koli_qty ?? 0) }}">{{ $item->sku }} - {{ $item->name }}</option>@endforeach`;
 
     document.addEventListener('DOMContentLoaded', () => {
         const tableEl = $('#stock_adjustments_table');

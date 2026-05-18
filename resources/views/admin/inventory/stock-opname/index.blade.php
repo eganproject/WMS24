@@ -209,7 +209,7 @@
     const canDelete = {{ $canDelete ? 'true' : 'false' }};
     const defaultWarehouseId = {{ !empty($defaultWarehouseId) ? (int) $defaultWarehouseId : 'null' }};
     const displayWarehouseId = {{ !empty($displayWarehouseId) ? (int) $displayWarehouseId : 'null' }};
-    const itemOptionsHtml = `@foreach($items as $item)<option value="{{ $item->id }}" data-stock="{{ $item->stock }}" data-koli-qty="{{ (int) ($item->koli_qty ?? 0) }}">{{ $item->sku }} - {{ $item->name }}</option>@endforeach`;
+    const itemOptionsHtml = `@foreach($items as $item)<option value="{{ $item->id }}" data-sku="{{ $item->sku }}" data-name="{{ $item->name }}" data-stock="{{ $item->stock }}" data-koli-qty="{{ (int) ($item->koli_qty ?? 0) }}">{{ $item->sku }} - {{ $item->name }}</option>@endforeach`;
     let currentItemOptionsHtml = itemOptionsHtml;
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -305,7 +305,7 @@
             return items.map((item) => {
                 const stock = Number.isFinite(Number(item.stock)) ? Number(item.stock) : 0;
                 const koliQty = Number.isFinite(Number(item.koli_qty)) ? Number(item.koli_qty) : 0;
-                return `<option value="${item.id}" data-stock="${stock}" data-koli-qty="${koliQty}">${item.sku} - ${item.name}</option>`;
+                return `<option value="${item.id}" data-sku="${item.sku || ''}" data-name="${item.name || ''}" data-stock="${stock}" data-koli-qty="${koliQty}">${item.sku} - ${item.name}</option>`;
             }).join('');
         };
 

@@ -386,7 +386,7 @@
     const qrCodeTpl = '{{ route('admin.masterdata.items.qr-code', ':id') }}';
     const canUpdate = {{ $canUpdate ? 'true' : 'false' }};
     const canDelete = {{ $canDelete ? 'true' : 'false' }};
-    const componentItemOptionsHtml = `@foreach($componentItems as $componentItem)<option value="{{ $componentItem->id }}">{{ $componentItem->sku }} - {{ $componentItem->name }}</option>@endforeach`;
+    const componentItemOptionsHtml = `@foreach($componentItems as $componentItem)<option value="{{ $componentItem->id }}" data-sku="{{ $componentItem->sku }}" data-name="{{ $componentItem->name }}">{{ $componentItem->sku }} - {{ $componentItem->name }}</option>@endforeach`;
 
     const ensureOption = (selectEl, id, name) => {
         if (!selectEl) return;

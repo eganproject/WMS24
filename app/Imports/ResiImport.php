@@ -10,7 +10,7 @@ use Maatwebsite\Excel\Concerns\WithHeadingRow;
 
 class ResiImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
 {
-    /** @var array<string,array{id_pesanan:string,no_resi:?string,kurir:?string,tanggal_pesanan:string,catatan_pembeli:?string,items:array<string,array{sku:string,qty:int}>}> */
+    /** @var array<string,array{id_pesanan:string,no_resi:?string,kurir:?string,tanggal_pesanan:string,catatan_pembeli:?string,status:?string,status_raw:?string,items:array<string,array{sku:string,qty:int}>}> */
     public array $groups = [];
     /** @var array<int,string> */
     private array $requiredHeaders = [
@@ -50,6 +50,8 @@ class ResiImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             $noResi = trim((string) ($rowData['awb_no_tracking'] ?? ''));
             $kurir = trim((string) ($rowData['kurir'] ?? ''));
             $catatanPembeli = trim((string) ($rowData['catatan_pembeli'] ?? ''));
+            $statusRaw = trim((string) ($rowData['status'] ?? ''));
+            $status = $this->normalizeStatus($statusRaw);
             $sku = trim((string) ($rowData['sku'] ?? ''));
             $qty = $this->parseQty($rowData['jumlah'] ?? null);
             $tanggalPesanan = trim((string) ($rowData['tanggal_pembuatan'] ?? ''));
@@ -72,6 +74,8 @@ class ResiImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
                     'kurir' => $kurir !== '' ? $kurir : null,
                     'tanggal_pesanan' => $tanggalPesanan,
                     'catatan_pembeli' => $catatanPembeli !== '' ? $catatanPembeli : null,
+                    'status' => $status,
+                    'status_raw' => $statusRaw !== '' ? $statusRaw : null,
                     'items' => [],
                 ];
             } elseif ($this->groups[$groupKey]['no_resi'] === null && $noResi !== '') {
@@ -82,6 +86,10 @@ class ResiImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             }
             if ($this->groups[$groupKey]['catatan_pembeli'] === null && $catatanPembeli !== '') {
                 $this->groups[$groupKey]['catatan_pembeli'] = $catatanPembeli;
+            }
+            if ($this->groups[$groupKey]['status'] !== 'canceled' && $status !== null) {
+                $this->groups[$groupKey]['status'] = $status;
+                $this->groups[$groupKey]['status_raw'] = $statusRaw !== '' ? $statusRaw : $this->groups[$groupKey]['status_raw'];
             }
 
             if (!isset($this->groups[$groupKey]['items'][$sku])) {
@@ -157,6 +165,30 @@ class ResiImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
         if (in_array($key, ['catatan_pembeli', 'buyer_note', 'buyer_notes', 'buyer_remark', 'customer_note', 'customer_notes', 'note_pembeli'], true)) {
             return 'catatan_pembeli';
         }
+        if (in_array($key, ['status', 'status_pesanan', 'order_status', 'status_order', 'status_pembatalan'], true)) {
+            return 'status';
+        }
         return $key;
+    }
+
+    private function normalizeStatus(string $status): ?string
+    {
+        $status = trim(mb_strtolower($status));
+        if ($status === '') {
+            return null;
+        }
+
+        $normalized = preg_replace('/[^\p{L}\p{N}]+/u', ' ', $status);
+        $normalized = trim((string) $normalized);
+
+        if (in_array($normalized, ['dibatalkan', 'batal', 'cancel', 'canceled', 'cancelled'], true)) {
+            return 'canceled';
+        }
+
+        if (str_contains($normalized, 'dibatal') || str_contains($normalized, 'cancel')) {
+            return 'canceled';
+        }
+
+        return 'active';
     }
 }

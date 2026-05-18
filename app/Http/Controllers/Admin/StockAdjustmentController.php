@@ -135,6 +135,7 @@ class StockAdjustmentController extends Controller
 
         $code = $this->generateCode('ADJ');
         $transactedAt = $validated['transacted_at'] ?? now();
+        $autoApprove = $request->boolean('auto_approve');
 
         DB::beginTransaction();
         try {
@@ -158,6 +159,30 @@ class StockAdjustmentController extends Controller
                 ]);
             }
 
+            if ($autoApprove) {
+                $approvedAt = now();
+                foreach ($validated['items'] as $row) {
+                    StockService::mutate([
+                        'item_id' => $row['item_id'],
+                        'direction' => $row['direction'],
+                        'qty' => (int) $row['qty'],
+                        'warehouse_id' => $warehouseId,
+                        'source_type' => 'adjustment',
+                        'source_subtype' => 'auto_approve',
+                        'source_id' => $adjustment->id,
+                        'source_code' => $adjustment->code,
+                        'note' => $row['note'] ?? null,
+                        'occurred_at' => $approvedAt,
+                        'created_by' => auth()->id(),
+                    ]);
+                }
+
+                $adjustment->status = 'approved';
+                $adjustment->approved_at = $approvedAt;
+                $adjustment->approved_by = auth()->id();
+                $adjustment->save();
+            }
+
             DB::commit();
         } catch (ValidationException $e) {
             DB::rollBack();
@@ -171,7 +196,12 @@ class StockAdjustmentController extends Controller
         }
 
         return response()->json([
-            'message' => 'Penyesuaian stok berhasil disimpan dan menunggu approval.',
+            'message' => $autoApprove
+                ? 'Penyesuaian stok berhasil disimpan dan disetujui otomatis.'
+                : 'Penyesuaian stok berhasil disimpan dan menunggu approval.',
+            'id' => $adjustment->id,
+            'code' => $adjustment->code,
+            'status' => $adjustment->status ?? 'pending',
         ]);
     }
 

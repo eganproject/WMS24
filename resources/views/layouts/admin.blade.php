@@ -291,9 +291,13 @@
 
             const matchesOption = (term, data) => {
                 const option = data?.element;
+                const sku = option?.getAttribute?.('data-sku');
+                if (sku) {
+                    return normalizeSearchText(sku).trim() === term;
+                }
+
                 const searchableText = [
                     data?.text,
-                    option?.getAttribute?.('data-sku'),
                     option?.getAttribute?.('data-name'),
                     option?.getAttribute?.('data-code'),
                     option?.getAttribute?.('data-search'),

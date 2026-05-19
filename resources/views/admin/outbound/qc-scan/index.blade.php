@@ -797,6 +797,7 @@
     let audioContext = null;
     let pasteSubmitTimer = null;
     let scannerFocusPaused = false;
+    let scannerSelectActive = false;
     let scannerFocusSuppressedUntil = 0;
 
     const setStatusBox = (node, message, type = 'default') => {
@@ -1024,12 +1025,20 @@
 
     const isScannerFocusPaused = () => {
         return scannerFocusPaused
+            || scannerSelectActive
             || Date.now() < scannerFocusSuppressedUntil
             || !!document.querySelector('.swal2-container.swal2-shown');
     };
 
     const pauseScannerFocus = (duration = 800) => {
         scannerFocusSuppressedUntil = Date.now() + duration;
+    };
+
+    const resumeScannerFocus = (callback = null, delay = 80) => {
+        window.setTimeout(() => {
+            scannerSelectActive = false;
+            (callback || preferredScanFocus)();
+        }, delay);
     };
 
     const isNavigationTarget = (target) => {
@@ -1710,6 +1719,11 @@
     });
 
     document.addEventListener('pointerdown', (event) => {
+        if (event.target.closest('#resi_type')) {
+            scannerSelectActive = true;
+            pauseScannerFocus(1600);
+            return;
+        }
         if (isNavigationTarget(event.target)) {
             pauseScannerFocus(1200);
         }
@@ -1738,11 +1752,24 @@
         if (qcState.id && qcState.status !== 'passed' && !isTextEntryTarget(document.activeElement)) focusSku();
     });
 
+    el.resiType.addEventListener('focus', () => {
+        scannerSelectActive = true;
+        pauseScannerFocus(1600);
+    });
+
+    el.resiType.addEventListener('blur', () => {
+        resumeScannerFocus(() => {
+            if (!qcState.id || qcState.status === 'passed') {
+                focusResi();
+            }
+        }, 80);
+    });
+
     el.resiType.addEventListener('change', () => {
         el.resiCode.placeholder = el.resiType.value === 'id_pesanan'
             ? 'Scan ID Pesanan lalu Enter'
             : 'Scan No Resi lalu Enter';
-        focusResi();
+        resumeScannerFocus(focusResi, 120);
     });
 
     el.btnScanResi.addEventListener('click', submitResi);

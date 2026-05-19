@@ -9,6 +9,7 @@ use App\Models\Item;
 use App\Models\Supplier;
 use App\Models\Warehouse;
 use App\Models\StockMutation;
+use App\Exports\OutboundReturnTemplateExport;
 use App\Imports\OutboundReturnsImport;
 use App\Support\BundleService;
 use App\Support\OutboundManualQcStatus;
@@ -143,6 +144,13 @@ class OutboundController extends Controller
     public function returnsApprove(int $id)
     {
         return $this->approve('return', $id);
+    }
+
+    public function returnsTemplate()
+    {
+        $filename = 'outbound-retur-template-'.now()->format('YmdHis').'.xlsx';
+
+        return Excel::download(new OutboundReturnTemplateExport(), $filename);
     }
 
     public function manualsImport(Request $request)
@@ -400,6 +408,11 @@ class OutboundController extends Controller
                 'manual' => 'Import Manual Outbound',
                 default => null,
             },
+            'templateUrl' => $type === 'return'
+                ? route('admin.outbound.returns.template')
+                : null,
+            'templateLabel' => 'Download Template Retur Outbound',
+            'templateNote' => 'Header: sku, qty atau koli, supplier. Opsional: warehouse/gudang, ref_no, surat_jalan_no, surat_jalan_at, note, item_note, transacted_at. Jika warehouse adalah Gudang Besar, koli wajib diisi.',
             'statusLabels' => $type === 'manual' ? OutboundManualQcStatus::labels() : [],
             'lockedStatuses' => $type === 'manual' ? OutboundManualQcStatus::lockedForEdit() : ['approved'],
             'deleteWarningText' => $type === 'manual'

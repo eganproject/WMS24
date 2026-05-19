@@ -1036,7 +1036,7 @@ class AttendanceController extends Controller
     public function leavesData(Request $request)
     {
         $query = EmployeeLeave::query()
-            ->with('employee:id,employee_code,name')
+            ->with(['employee:id,employee_code,name', 'approver:id,name'])
             ->latest('start_date');
 
         return $this->datatable($query, $request, fn (EmployeeLeave $leave) => [
@@ -1048,49 +1048,62 @@ class AttendanceController extends Controller
             'end_date' => $leave->end_date?->format('Y-m-d'),
             'reason' => $leave->reason,
             'status' => $leave->status,
+            'approved_by' => $leave->approver?->name,
+            'approved_at' => $leave->approved_at?->format('Y-m-d H:i:s'),
         ]);
     }
 
     public function storeLeave(Request $request)
     {
-        $validated = $this->validateLeave($request);
+        $validated = $this->validateLeave($request, false);
+        $validated['status'] = EmployeeLeave::STATUS_PENDING;
 
-        $leave = EmployeeLeave::create($validated + $this->leaveApprovalAttributes($validated['status']));
-        $this->rebuildAttendanceRange($leave->employee, $leave->start_date, $leave->end_date);
+        $leave = EmployeeLeave::create($validated + $this->leaveApprovalAttributes(EmployeeLeave::STATUS_PENDING));
         $this->writeAttendanceAudit($request, 'Menyimpan cuti/izin karyawan', $leave, null, $this->auditSnapshot($leave->fresh()));
 
-        return response()->json(['message' => 'Cuti/izin berhasil dibuat', 'leave' => $leave]);
+        return response()->json(['message' => 'Pengajuan cuti/izin berhasil dibuat dan menunggu approval.', 'leave' => $leave]);
     }
 
     public function updateLeave(Request $request, EmployeeLeave $leave)
     {
         $before = $this->auditSnapshot($leave);
-        $oldEmployee = $leave->employee;
-        $oldStart = $leave->start_date;
-        $oldEnd = $leave->end_date;
-        $validated = $this->validateLeave($request);
+        if ($leave->status !== EmployeeLeave::STATUS_PENDING) {
+            throw ValidationException::withMessages([
+                'status' => ['Cuti/izin yang sudah diproses approval tidak bisa diedit. Reject atau hapus lalu buat pengajuan baru jika perlu revisi.'],
+            ]);
+        }
 
-        $leave->update($validated + $this->leaveApprovalAttributes($validated['status'], $leave));
+        $validated = $this->validateLeave($request, false);
+        $validated['status'] = EmployeeLeave::STATUS_PENDING;
+
+        $leave->update($validated + $this->leaveApprovalAttributes(EmployeeLeave::STATUS_PENDING, $leave));
         $leave->refresh();
 
-        if ($oldEmployee) {
-            $this->rebuildAttendanceRange($oldEmployee, $oldStart, $oldEnd);
-        }
-        $this->rebuildAttendanceRange($leave->employee, $leave->start_date, $leave->end_date);
         $this->writeAttendanceAudit($request, 'Mengubah cuti/izin karyawan', $leave, $before, $this->auditSnapshot($leave));
 
-        return response()->json(['message' => 'Cuti/izin berhasil diperbarui', 'leave' => $leave]);
+        return response()->json(['message' => 'Pengajuan cuti/izin berhasil diperbarui.', 'leave' => $leave]);
+    }
+
+    public function approveLeave(Request $request, EmployeeLeave $leave)
+    {
+        return $this->setLeaveApprovalStatus($request, $leave, EmployeeLeave::STATUS_APPROVED);
+    }
+
+    public function rejectLeave(Request $request, EmployeeLeave $leave)
+    {
+        return $this->setLeaveApprovalStatus($request, $leave, EmployeeLeave::STATUS_REJECTED);
     }
 
     public function destroyLeave(Request $request, EmployeeLeave $leave)
     {
         $before = $this->auditSnapshot($leave);
+        $wasApproved = $leave->status === EmployeeLeave::STATUS_APPROVED;
         $employee = $leave->employee;
         $start = $leave->start_date;
         $end = $leave->end_date;
         $leave->delete();
 
-        if ($employee) {
+        if ($wasApproved && $employee) {
             $this->rebuildAttendanceRange($employee, $start, $end);
         }
         $this->writeAttendanceAudit($request, 'Menghapus cuti/izin karyawan', $leave, $before, null);
@@ -1321,13 +1334,6 @@ class AttendanceController extends Controller
             'early_leave_minutes' => ['required', 'integer', 'min:0'],
             'work_minutes' => ['required', 'integer', 'min:0'],
             'calculated_overtime_minutes' => ['required', 'integer', 'min:0'],
-            'approved_overtime_minutes' => ['nullable', 'integer', 'min:0'],
-            'overtime_status' => ['required', Rule::in([
-                Attendance::OVERTIME_NONE,
-                Attendance::OVERTIME_PENDING,
-                Attendance::OVERTIME_APPROVED,
-                Attendance::OVERTIME_REJECTED,
-            ])],
             'overtime_note' => ['nullable', 'string'],
             'status' => ['required', Rule::in([
                 Attendance::STATUS_PRESENT,
@@ -1352,29 +1358,78 @@ class AttendanceController extends Controller
             ]);
         }
 
-        if ($validated['overtime_status'] === Attendance::OVERTIME_APPROVED && $validated['approved_overtime_minutes'] === null) {
-            throw ValidationException::withMessages([
-                'approved_overtime_minutes' => ['Menit lembur disetujui wajib diisi saat status lembur Approved.'],
-            ]);
+        $calculatedChanged = (int) $validated['calculated_overtime_minutes'] !== (int) $attendance->calculated_overtime_minutes;
+        $overtimeStatus = $attendance->overtime_status;
+        if ((int) $validated['calculated_overtime_minutes'] <= 0) {
+            $overtimeStatus = Attendance::OVERTIME_NONE;
+        } elseif ($calculatedChanged) {
+            $overtimeStatus = Attendance::OVERTIME_PENDING;
+        } elseif (!in_array($overtimeStatus, [Attendance::OVERTIME_APPROVED, Attendance::OVERTIME_REJECTED], true)) {
+            $overtimeStatus = Attendance::OVERTIME_PENDING;
         }
 
-        $approvedMinutes = match ($validated['overtime_status']) {
-            Attendance::OVERTIME_APPROVED => (int) $validated['approved_overtime_minutes'],
-            Attendance::OVERTIME_REJECTED => 0,
-            default => null,
-        };
-
         $attendance->update(array_merge($validated, [
-            'overtime_minutes' => $validated['overtime_status'] === Attendance::OVERTIME_APPROVED ? $approvedMinutes : 0,
-            'approved_overtime_minutes' => $approvedMinutes,
-            'approved_by' => in_array($validated['overtime_status'], [Attendance::OVERTIME_APPROVED, Attendance::OVERTIME_REJECTED], true) ? auth()->id() : null,
-            'approved_at' => in_array($validated['overtime_status'], [Attendance::OVERTIME_APPROVED, Attendance::OVERTIME_REJECTED], true) ? now() : null,
+            'overtime_status' => $overtimeStatus,
+            'overtime_minutes' => $overtimeStatus === Attendance::OVERTIME_APPROVED ? (int) $attendance->approved_overtime_minutes : 0,
+            'approved_overtime_minutes' => $overtimeStatus === Attendance::OVERTIME_APPROVED ? (int) $attendance->approved_overtime_minutes : null,
+            'approved_by' => in_array($overtimeStatus, [Attendance::OVERTIME_APPROVED, Attendance::OVERTIME_REJECTED], true) ? $attendance->approved_by : null,
+            'approved_at' => in_array($overtimeStatus, [Attendance::OVERTIME_APPROVED, Attendance::OVERTIME_REJECTED], true) ? $attendance->approved_at : null,
             'source' => $validated['source'] ?? 'manual',
         ]));
         $attendance->refresh();
         $this->writeAttendanceAudit($request, 'Mengubah rekap absensi manual', $attendance, $before, $this->auditSnapshot($attendance));
 
         return response()->json(['message' => 'Rekap absensi berhasil diperbarui', 'attendance' => $attendance]);
+    }
+
+    public function approveOvertime(Request $request, Attendance $attendance)
+    {
+        $validated = $request->validate([
+            'approved_overtime_minutes' => ['required', 'integer', 'min:1'],
+            'overtime_note' => ['nullable', 'string'],
+        ]);
+
+        if ((int) $attendance->calculated_overtime_minutes <= 0) {
+            throw ValidationException::withMessages([
+                'approved_overtime_minutes' => ['Absensi ini tidak memiliki lembur terhitung.'],
+            ]);
+        }
+
+        $before = $this->auditSnapshot($attendance);
+        $approvedMinutes = (int) $validated['approved_overtime_minutes'];
+        $attendance->update([
+            'overtime_minutes' => $approvedMinutes,
+            'approved_overtime_minutes' => $approvedMinutes,
+            'overtime_status' => Attendance::OVERTIME_APPROVED,
+            'overtime_note' => $validated['overtime_note'] ?? $attendance->overtime_note,
+            'approved_by' => auth()->id(),
+            'approved_at' => now(),
+        ]);
+        $attendance->refresh();
+        $this->writeAttendanceAudit($request, 'Approve lembur absensi', $attendance, $before, $this->auditSnapshot($attendance));
+
+        return response()->json(['message' => 'Lembur berhasil di-approve.', 'attendance' => $attendance]);
+    }
+
+    public function rejectOvertime(Request $request, Attendance $attendance)
+    {
+        $validated = $request->validate([
+            'overtime_note' => ['nullable', 'string'],
+        ]);
+
+        $before = $this->auditSnapshot($attendance);
+        $attendance->update([
+            'overtime_minutes' => 0,
+            'approved_overtime_minutes' => 0,
+            'overtime_status' => Attendance::OVERTIME_REJECTED,
+            'overtime_note' => $validated['overtime_note'] ?? $attendance->overtime_note,
+            'approved_by' => auth()->id(),
+            'approved_at' => now(),
+        ]);
+        $attendance->refresh();
+        $this->writeAttendanceAudit($request, 'Reject lembur absensi', $attendance, $before, $this->auditSnapshot($attendance));
+
+        return response()->json(['message' => 'Lembur berhasil di-reject.', 'attendance' => $attendance]);
     }
 
     public function destroyAttendance(Request $request, Attendance $attendance)
@@ -1759,26 +1814,32 @@ class AttendanceController extends Controller
         ]);
     }
 
-    private function validateLeave(Request $request): array
+    private function validateLeave(Request $request, bool $allowStatus = true): array
     {
-        $validated = $request->validate([
+        $rules = [
             'employee_id' => ['required', 'integer', 'exists:employees,id'],
             'leave_type' => ['required', 'string', 'max:30'],
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
             'reason' => ['nullable', 'string'],
-            'status' => ['required', Rule::in([
+        ];
+
+        if ($allowStatus) {
+            $rules['status'] = ['required', Rule::in([
                 EmployeeLeave::STATUS_PENDING,
                 EmployeeLeave::STATUS_APPROVED,
                 EmployeeLeave::STATUS_REJECTED,
-            ])],
-        ]);
+            ])];
+        }
+
+        $validated = $request->validate($rules);
+        $status = $validated['status'] ?? EmployeeLeave::STATUS_PENDING;
 
         $leaveId = $request->route('leave') instanceof EmployeeLeave
             ? $request->route('leave')->id
             : null;
 
-        if ($validated['status'] !== EmployeeLeave::STATUS_REJECTED) {
+        if ($status !== EmployeeLeave::STATUS_REJECTED) {
             $overlapExists = EmployeeLeave::query()
                 ->where('employee_id', $validated['employee_id'])
                 ->whereIn('status', [EmployeeLeave::STATUS_PENDING, EmployeeLeave::STATUS_APPROVED])
@@ -1795,6 +1856,69 @@ class AttendanceController extends Controller
         }
 
         return $validated;
+    }
+
+    private function setLeaveApprovalStatus(Request $request, EmployeeLeave $leave, string $status)
+    {
+        if (!in_array($status, [EmployeeLeave::STATUS_APPROVED, EmployeeLeave::STATUS_REJECTED], true)) {
+            throw ValidationException::withMessages([
+                'status' => ['Status approval cuti/izin tidak valid.'],
+            ]);
+        }
+
+        if ($leave->status === $status) {
+            return response()->json([
+                'message' => $status === EmployeeLeave::STATUS_APPROVED
+                    ? 'Cuti/izin sudah approved.'
+                    : 'Cuti/izin sudah rejected.',
+            ]);
+        }
+
+        if ($status === EmployeeLeave::STATUS_APPROVED) {
+            $overlapExists = EmployeeLeave::query()
+                ->where('employee_id', $leave->employee_id)
+                ->where('status', EmployeeLeave::STATUS_APPROVED)
+                ->whereKeyNot($leave->id)
+                ->whereDate('start_date', '<=', $leave->end_date)
+                ->whereDate('end_date', '>=', $leave->start_date)
+                ->exists();
+
+            if ($overlapExists) {
+                throw ValidationException::withMessages([
+                    'status' => ['Karyawan sudah memiliki cuti/izin approved pada rentang tanggal tersebut.'],
+                ]);
+            }
+        }
+
+        $before = $this->auditSnapshot($leave);
+        $wasApproved = $leave->status === EmployeeLeave::STATUS_APPROVED;
+        $employee = $leave->employee;
+        $start = $leave->start_date;
+        $end = $leave->end_date;
+
+        $leave->update([
+            'status' => $status,
+            ...$this->leaveApprovalAttributes($status, $leave),
+        ]);
+        $leave->refresh();
+
+        if ($wasApproved || $status === EmployeeLeave::STATUS_APPROVED) {
+            $this->rebuildAttendanceRange($employee, $start, $end);
+        }
+        $this->writeAttendanceAudit(
+            $request,
+            $status === EmployeeLeave::STATUS_APPROVED ? 'Approve cuti/izin karyawan' : 'Reject cuti/izin karyawan',
+            $leave,
+            $before,
+            $this->auditSnapshot($leave)
+        );
+
+        return response()->json([
+            'message' => $status === EmployeeLeave::STATUS_APPROVED
+                ? 'Cuti/izin berhasil di-approve dan rekap absensi diperbarui.'
+                : 'Cuti/izin berhasil di-reject dan rekap absensi diperbarui.',
+            'leave' => $leave,
+        ]);
     }
 
     private function leaveApprovalAttributes(string $status, ?EmployeeLeave $leave = null): array

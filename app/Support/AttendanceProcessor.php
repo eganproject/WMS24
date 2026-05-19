@@ -222,6 +222,22 @@ class AttendanceProcessor
 
     public function resolveSchedule(Employee $employee, Carbon $date): array
     {
+        $leave = EmployeeLeave::query()
+            ->where('employee_id', $employee->id)
+            ->where('status', EmployeeLeave::STATUS_APPROVED)
+            ->whereDate('start_date', '<=', $date)
+            ->whereDate('end_date', '>=', $date)
+            ->first();
+
+        if ($leave) {
+            return [
+                'type' => EmployeeSchedule::TYPE_LEAVE,
+                'status' => Attendance::STATUS_LEAVE,
+                'shift' => null,
+                'note' => 'Cuti/Izin: '.$leave->leave_type,
+            ];
+        }
+
         $manualSchedule = EmployeeSchedule::query()
             ->with('shift')
             ->where('employee_id', $employee->id)
@@ -234,22 +250,6 @@ class AttendanceProcessor
                 'status' => $this->statusForScheduleType($manualSchedule->schedule_type),
                 'shift' => $manualSchedule->shift,
                 'note' => $manualSchedule->note,
-            ];
-        }
-
-        $leave = EmployeeLeave::query()
-            ->where('employee_id', $employee->id)
-            ->where('status', 'approved')
-            ->whereDate('start_date', '<=', $date)
-            ->whereDate('end_date', '>=', $date)
-            ->first();
-
-        if ($leave) {
-            return [
-                'type' => EmployeeSchedule::TYPE_LEAVE,
-                'status' => Attendance::STATUS_LEAVE,
-                'shift' => null,
-                'note' => 'Cuti/Izin: '.$leave->leave_type,
             ];
         }
 

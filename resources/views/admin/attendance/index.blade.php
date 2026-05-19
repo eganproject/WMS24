@@ -903,7 +903,6 @@
                         @csrf
                         <div class="col-12 col-md-6 col-lg-4"><label class="form-label fw-bold">Karyawan</label><select name="employee_id" class="form-select form-select-solid" required>@foreach($employees as $employee)<option value="{{ $employee->id }}">{{ $employee->employee_code }} - {{ $employee->name }}</option>@endforeach</select></div>
                         <div class="col-6 col-md-6 col-lg-2"><label class="form-label fw-bold">Tipe</label><select name="leave_type" class="form-select form-select-solid"><option value="annual">Cuti tahunan</option><option value="sick">Sakit</option><option value="permission">Izin</option><option value="unpaid">Unpaid</option></select></div>
-                        <div class="col-6 col-md-6 col-lg-2"><label class="form-label fw-bold">Status</label><select name="status" class="form-select form-select-solid"><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option></select></div>
                         <div class="col-6 col-md-6 col-lg-2"><label class="form-label fw-bold">Tanggal Mulai</label><input type="text" name="start_date" class="form-control form-control-solid js-date" placeholder="YYYY-MM-DD" required></div>
                         <div class="col-6 col-md-6 col-lg-2"><label class="form-label fw-bold">Tanggal Selesai</label><input type="text" name="end_date" class="form-control form-control-solid js-date" placeholder="YYYY-MM-DD" required></div>
                         <div class="col-12"><label class="form-label fw-bold">Alasan</label><input name="reason" class="form-control form-control-solid" placeholder="Alasan cuti / izin"></div>
@@ -912,7 +911,7 @@
                         </div>
                     </form>
                 </div>
-                <x-attendance-table id="leaves_table" :headers="['Karyawan','Tipe','Mulai','Selesai','Status','Alasan','Aksi']" />
+                <x-attendance-table id="leaves_table" :headers="['Karyawan','Tipe','Mulai','Selesai','Status','Diproses Oleh','Alasan','Aksi']" />
             </div>
 
             {{-- ===== RAW LOGS ===== --}}
@@ -947,7 +946,7 @@
                         <span class="icon"><i class="fas fa-clipboard-check"></i></span>
                         <div>
                             <h3>Update Rekap Absensi</h3>
-                            <p>Pilih baris di tabel lalu klik <em>Edit</em> untuk mengubah data rekap & approval lembur.</p>
+                            <p>Pilih baris di tabel lalu klik <em>Edit</em> untuk koreksi data rekap. Approval lembur diproses dari tombol action pada tabel.</p>
                         </div>
                     </div>
                     <form class="ajax-form" data-table="attendances_table" action="#">
@@ -969,12 +968,10 @@
                             </div>
                         </div>
                         <div class="attendance-form-section">
-                            <div class="attendance-form-section-title">Approval Lembur</div>
+                            <div class="attendance-form-section-title">Data Lembur Terhitung</div>
                             <div class="row g-3">
                                 <div class="col-6 col-md-4 col-lg-3"><label class="form-label fw-bold">Lembur Terhitung</label><input type="number" name="calculated_overtime_minutes" min="0" value="0" class="form-control form-control-solid"></div>
-                                <div class="col-6 col-md-4 col-lg-3"><label class="form-label fw-bold">Lembur Disetujui</label><input type="number" name="approved_overtime_minutes" min="0" class="form-control form-control-solid" placeholder="Menit final"></div>
-                                <div class="col-12 col-md-4 col-lg-3"><label class="form-label fw-bold">Status Lembur</label><select name="overtime_status" class="form-select form-select-solid"><option value="none">Tidak Ada</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option></select></div>
-                                <div class="col-12"><label class="form-label fw-bold">Catatan Lembur</label><input name="overtime_note" class="form-control form-control-solid" placeholder="Alasan approve / reject / koreksi"></div>
+                                <div class="col-12 col-md-8 col-lg-9"><label class="form-label fw-bold">Catatan Lembur / Koreksi</label><input name="overtime_note" class="form-control form-control-solid" placeholder="Catatan koreksi atau konteks lembur"></div>
                             </div>
                             <div class="d-flex justify-content-end mt-3">
                                 <button class="btn btn-primary"><i class="fas fa-save me-1"></i>Update Rekap</button>
@@ -1176,9 +1173,19 @@ const crudUrls = {
     schedules_table: { update: '{{ route('admin.attendance.schedules.update', ':id') }}', destroy: '{{ route('admin.attendance.schedules.destroy', ':id') }}' },
     holidays_table: { update: '{{ route('admin.attendance.holidays.update', ':id') }}', destroy: '{{ route('admin.attendance.holidays.destroy', ':id') }}' },
     templates_table: { update: '{{ route('admin.attendance.templates.update', ':id') }}', destroy: '{{ route('admin.attendance.templates.destroy', ':id') }}' },
-    leaves_table: { update: '{{ route('admin.attendance.leaves.update', ':id') }}', destroy: '{{ route('admin.attendance.leaves.destroy', ':id') }}' },
+    leaves_table: {
+        update: '{{ route('admin.attendance.leaves.update', ':id') }}',
+        destroy: '{{ route('admin.attendance.leaves.destroy', ':id') }}',
+        approve: '{{ route('admin.attendance.leaves.approve', ':id') }}',
+        reject: '{{ route('admin.attendance.leaves.reject', ':id') }}',
+    },
     raw_logs_table: { update: '{{ route('admin.attendance.raw-logs.update', ':id') }}', destroy: '{{ route('admin.attendance.raw-logs.destroy', ':id') }}' },
-    attendances_table: { update: '{{ route('admin.attendance.attendances.update', ':id') }}', destroy: '{{ route('admin.attendance.attendances.destroy', ':id') }}' },
+    attendances_table: {
+        update: '{{ route('admin.attendance.attendances.update', ':id') }}',
+        destroy: '{{ route('admin.attendance.attendances.destroy', ':id') }}',
+        approveOvertime: '{{ route('admin.attendance.attendances.overtime.approve', ':id') }}',
+        rejectOvertime: '{{ route('admin.attendance.attendances.overtime.reject', ':id') }}',
+    },
 };
 function renderAttendanceStatusBadge(value) {
     const labels = {
@@ -1218,6 +1225,20 @@ function renderOvertimeStatusBadge(value) {
 
     return `<span class="badge ${classes[value] || 'badge-light'}">${labels[value] || value || '-'}</span>`;
 }
+function renderLeaveStatusBadge(value) {
+    const labels = {
+        pending: 'Menunggu Approval',
+        approved: 'Approved',
+        rejected: 'Rejected',
+    };
+    const classes = {
+        pending: 'badge-light-warning',
+        approved: 'badge-light-success',
+        rejected: 'badge-light-danger',
+    };
+
+    return `<span class="badge ${classes[value] || 'badge-light'}">${labels[value] || value || '-'}</span>`;
+}
 const tableConfigs = {
     employees_table: { url: '{{ route('admin.attendance.employees.data') }}', columns: ['employee_code','name','area','user','phone','position','employment_status','__actions'] },
     positions_table: { url: '{{ route('admin.attendance.positions.data') }}', columns: [
@@ -1235,7 +1256,7 @@ const tableConfigs = {
     schedules_table: { url: '{{ route('admin.attendance.schedules.data') }}', columns: ['employee','schedule_date','schedule_type','shift','note','__actions'] },
     holidays_table: { url: '{{ route('admin.attendance.holidays.data') }}', columns: ['holiday_date','name','type','is_paid','__actions'] },
     templates_table: { url: '{{ route('admin.attendance.templates.data') }}', columns: ['name','is_active','days','__actions'] },
-    leaves_table: { url: '{{ route('admin.attendance.leaves.data') }}', columns: ['employee','leave_type','start_date','end_date','status','reason','__actions'] },
+    leaves_table: { url: '{{ route('admin.attendance.leaves.data') }}', columns: ['employee','leave_type','start_date','end_date',{ data: 'status', render: renderLeaveStatusBadge },{ data: 'approved_by', render: (value, row) => value ? `${value}<div class="text-muted fs-8">${row.approved_at || ''}</div>` : '-' },'reason','__actions'] },
     raw_logs_table: { url: '{{ route('admin.attendance.raw-logs.data') }}', columns: ['device','employee','device_user_id','scan_at','verify_type','state','__actions'] },
     attendances_table: { url: '{{ route('admin.attendance.attendances.data') }}', columns: ['employee','attendance_date','shift','check_in_at','check_out_at','late_minutes','early_leave_minutes','work_minutes','calculated_overtime_minutes','approved_overtime_minutes',{ data: 'overtime_status', render: renderOvertimeStatusBadge },{ data: 'status', render: renderAttendanceStatusBadge },'source','note','__actions'] },
 };
@@ -1272,9 +1293,52 @@ const escapeAttr = (value) => String(value ?? '')
     .replaceAll('>', '&gt;');
 
 const crudUrl = (tableId, action, id) => crudUrls[tableId]?.[action]?.replace(':id', id);
+const renderLeaveActions = (row, payload) => {
+    const canEdit = row.status === 'pending';
+    const approveButton = row.status !== 'approved'
+        ? `<button type="button" class="btn btn-sm btn-light-success btn-leave-approve" data-id="${row.id}"><i class="fas fa-check me-1"></i>Approve</button>`
+        : '';
+    const rejectButton = row.status !== 'rejected'
+        ? `<button type="button" class="btn btn-sm btn-light-warning btn-leave-reject" data-id="${row.id}"><i class="fas fa-times me-1"></i>${row.status === 'approved' ? 'Batalkan' : 'Reject'}</button>`
+        : '';
+    const editButton = canEdit
+        ? `<button type="button" class="btn btn-sm btn-light-primary btn-crud-edit" data-table="leaves_table" data-row="${payload}"><i class="fas fa-pen me-1"></i>Edit</button>`
+        : '';
+
+    return `
+        <div class="attendance-row-actions">
+            ${approveButton}
+            ${rejectButton}
+            ${editButton}
+            <button type="button" class="btn btn-sm btn-light-danger btn-crud-delete" data-table="leaves_table" data-id="${row.id}"><i class="fas fa-trash me-1"></i>Hapus</button>
+        </div>
+    `;
+};
+const renderAttendanceActions = (row, payload) => {
+    const calculated = Number(row.calculated_overtime_minutes || 0);
+    const overtimeStatus = row.overtime_status || 'none';
+    const showApprove = calculated > 0 && overtimeStatus !== 'approved';
+    const showReject = calculated > 0 && overtimeStatus !== 'rejected' && overtimeStatus !== 'none';
+
+    return `
+        <div class="attendance-row-actions">
+            ${showApprove ? `<button type="button" class="btn btn-sm btn-light-success btn-overtime-approve" data-id="${row.id}" data-minutes="${calculated}" data-note="${escapeAttr(row.overtime_note || '')}"><i class="fas fa-check me-1"></i>Approve Lembur</button>` : ''}
+            ${showReject ? `<button type="button" class="btn btn-sm btn-light-warning btn-overtime-reject" data-id="${row.id}" data-note="${escapeAttr(row.overtime_note || '')}"><i class="fas fa-times me-1"></i>Reject Lembur</button>` : ''}
+            <button type="button" class="btn btn-sm btn-light-primary btn-crud-edit" data-table="attendances_table" data-row="${payload}"><i class="fas fa-pen me-1"></i>Edit Rekap</button>
+            <button type="button" class="btn btn-sm btn-light-danger btn-crud-delete" data-table="attendances_table" data-id="${row.id}"><i class="fas fa-trash me-1"></i>Hapus</button>
+        </div>
+    `;
+};
 const renderCrudActions = (tableId, row) => {
     if (!row?.id || !crudUrls[tableId]) return '-';
     const payload = escapeAttr(encodeURIComponent(JSON.stringify(row)));
+
+    if (tableId === 'leaves_table') {
+        return renderLeaveActions(row, payload);
+    }
+    if (tableId === 'attendances_table') {
+        return renderAttendanceActions(row, payload);
+    }
 
     return `
         <div class="attendance-row-actions">
@@ -2058,11 +2122,148 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    const postAction = async (url, data = {}) => {
+        const formData = new FormData();
+        Object.entries(data).forEach(([key, value]) => {
+            if (value !== undefined && value !== null) {
+                formData.append(key, value);
+            }
+        });
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' },
+            body: formData,
+        });
+        const json = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            const firstError = json?.errors ? Object.values(json.errors)[0]?.[0] : null;
+            throw new Error(firstError || json?.message || 'Request gagal');
+        }
+        return json;
+    };
+
     document.addEventListener('click', async (event) => {
         const editButton = event.target.closest('.btn-crud-edit');
         if (editButton) {
             const row = JSON.parse(decodeURIComponent(editButton.dataset.row || '{}'));
             fillCrudForm(editButton.dataset.table, row);
+            return;
+        }
+
+        const leaveApproveButton = event.target.closest('.btn-leave-approve');
+        if (leaveApproveButton) {
+            const confirmation = typeof Swal !== 'undefined'
+                ? await Swal.fire({
+                    title: 'Approve cuti/izin?',
+                    text: 'Rekap absensi pada rentang tanggal cuti akan diperbarui menjadi Cuti/Izin.',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: 'Approve',
+                    cancelButtonText: 'Batal',
+                })
+                : { isConfirmed: confirm('Approve cuti/izin ini?') };
+            if (!confirmation.isConfirmed) return;
+
+            try {
+                const json = await postAction(crudUrl('leaves_table', 'approve', leaveApproveButton.dataset.id));
+                Swal?.fire('Berhasil', json?.message || 'Cuti/izin berhasil di-approve.', 'success');
+                tables.leaves_table?.ajax.reload(null, false);
+                tables.attendances_table?.ajax.reload(null, false);
+                scheduleCalendar?.refetchEvents();
+            } catch (error) {
+                Swal?.fire('Error', error.message || 'Gagal approve cuti/izin', 'error');
+            }
+            return;
+        }
+
+        const leaveRejectButton = event.target.closest('.btn-leave-reject');
+        if (leaveRejectButton) {
+            const confirmation = typeof Swal !== 'undefined'
+                ? await Swal.fire({
+                    title: leaveRejectButton.textContent.includes('Batalkan') ? 'Batalkan approval cuti/izin?' : 'Reject cuti/izin?',
+                    text: 'Rekap absensi pada rentang tanggal cuti akan dihitung ulang dari jadwal dan scan fingerprint.',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: leaveRejectButton.textContent.includes('Batalkan') ? 'Batalkan Approval' : 'Reject',
+                    cancelButtonText: 'Batal',
+                })
+                : { isConfirmed: confirm('Reject cuti/izin ini?') };
+            if (!confirmation.isConfirmed) return;
+
+            try {
+                const json = await postAction(crudUrl('leaves_table', 'reject', leaveRejectButton.dataset.id));
+                Swal?.fire('Berhasil', json?.message || 'Cuti/izin berhasil di-reject.', 'success');
+                tables.leaves_table?.ajax.reload(null, false);
+                tables.attendances_table?.ajax.reload(null, false);
+                scheduleCalendar?.refetchEvents();
+            } catch (error) {
+                Swal?.fire('Error', error.message || 'Gagal reject cuti/izin', 'error');
+            }
+            return;
+        }
+
+        const overtimeApproveButton = event.target.closest('.btn-overtime-approve');
+        if (overtimeApproveButton) {
+            const minutes = Number(overtimeApproveButton.dataset.minutes || 0);
+            const result = typeof Swal !== 'undefined'
+                ? await Swal.fire({
+                    title: 'Approve lembur?',
+                    html: '<div class="text-start"><label class="form-label fw-bold">Menit disetujui</label><input id="swal_overtime_minutes" type="number" min="1" class="swal2-input" value="'+minutes+'"><label class="form-label fw-bold mt-3">Catatan</label><input id="swal_overtime_note" class="swal2-input" value="'+escapeAttr(overtimeApproveButton.dataset.note || '')+'"></div>',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: 'Approve',
+                    cancelButtonText: 'Batal',
+                    preConfirm: () => {
+                        const approved = parseInt(document.getElementById('swal_overtime_minutes')?.value || '0', 10);
+                        if (!approved || approved <= 0) {
+                            Swal.showValidationMessage('Menit disetujui wajib lebih dari 0.');
+                            return false;
+                        }
+                        return {
+                            approved_overtime_minutes: approved,
+                            overtime_note: document.getElementById('swal_overtime_note')?.value || '',
+                        };
+                    },
+                })
+                : { isConfirmed: true, value: { approved_overtime_minutes: minutes, overtime_note: '' } };
+            if (!result.isConfirmed) return;
+
+            try {
+                const json = await postAction(crudUrl('attendances_table', 'approveOvertime', overtimeApproveButton.dataset.id), result.value);
+                Swal?.fire('Berhasil', json?.message || 'Lembur berhasil di-approve.', 'success');
+                tables.attendances_table?.ajax.reload(null, false);
+            } catch (error) {
+                Swal?.fire('Error', error.message || 'Gagal approve lembur', 'error');
+            }
+            return;
+        }
+
+        const overtimeRejectButton = event.target.closest('.btn-overtime-reject');
+        if (overtimeRejectButton) {
+            const result = typeof Swal !== 'undefined'
+                ? await Swal.fire({
+                    title: 'Reject lembur?',
+                    input: 'text',
+                    inputValue: overtimeRejectButton.dataset.note || '',
+                    inputPlaceholder: 'Catatan reject lembur',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Reject',
+                    cancelButtonText: 'Batal',
+                })
+                : { isConfirmed: confirm('Reject lembur ini?'), value: '' };
+            if (!result.isConfirmed) return;
+
+            try {
+                const json = await postAction(crudUrl('attendances_table', 'rejectOvertime', overtimeRejectButton.dataset.id), {
+                    overtime_note: result.value || '',
+                });
+                Swal?.fire('Berhasil', json?.message || 'Lembur berhasil di-reject.', 'success');
+                tables.attendances_table?.ajax.reload(null, false);
+            } catch (error) {
+                Swal?.fire('Error', error.message || 'Gagal reject lembur', 'error');
+            }
             return;
         }
 

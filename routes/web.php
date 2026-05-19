@@ -480,6 +480,8 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::post('/templates/assign', [AttendanceController::class, 'assignTemplate'])->name('templates.assign');
         Route::get('/leaves/data', [AttendanceController::class, 'leavesData'])->name('leaves.data');
         Route::post('/leaves', [AttendanceController::class, 'storeLeave'])->name('leaves.store');
+        Route::post('/leaves/{leave}/approve', [AttendanceController::class, 'approveLeave'])->name('leaves.approve');
+        Route::post('/leaves/{leave}/reject', [AttendanceController::class, 'rejectLeave'])->name('leaves.reject');
         Route::put('/leaves/{leave}', [AttendanceController::class, 'updateLeave'])->name('leaves.update');
         Route::delete('/leaves/{leave}', [AttendanceController::class, 'destroyLeave'])->name('leaves.destroy');
         Route::get('/raw-logs/data', [AttendanceController::class, 'rawLogsData'])->name('raw-logs.data');
@@ -487,6 +489,8 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::put('/raw-logs/{rawLog}', [AttendanceController::class, 'updateRawLog'])->name('raw-logs.update');
         Route::delete('/raw-logs/{rawLog}', [AttendanceController::class, 'destroyRawLog'])->name('raw-logs.destroy');
         Route::get('/attendances/data', [AttendanceController::class, 'attendancesData'])->name('attendances.data');
+        Route::post('/attendances/{attendance}/overtime/approve', [AttendanceController::class, 'approveOvertime'])->name('attendances.overtime.approve');
+        Route::post('/attendances/{attendance}/overtime/reject', [AttendanceController::class, 'rejectOvertime'])->name('attendances.overtime.reject');
         Route::put('/attendances/{attendance}', [AttendanceController::class, 'updateAttendance'])->name('attendances.update');
         Route::delete('/attendances/{attendance}', [AttendanceController::class, 'destroyAttendance'])->name('attendances.destroy');
         Route::get('/machine-logs', [AttendanceController::class, 'machineLogsIndex'])->name('machine-logs.index');

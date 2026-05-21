@@ -117,12 +117,15 @@ class DashboardController extends Controller
         $validated = $request->validate([
             'kurir_id' => ['required', 'integer', 'exists:kurirs,id'],
             'date' => ['nullable', 'date'],
+            'type' => ['nullable', 'in:total,scanned,remaining,canceled'],
         ]);
 
         $date = Carbon::parse($validated['date'] ?? now())->toDateString();
+        $type = $validated['type'] ?? 'remaining';
         $kurir = Kurir::query()->findOrFail((int) $validated['kurir_id'], ['id', 'name']);
 
         $resis = Resi::query()
+            ->with(['details:id,resi_id,sku,qty'])
             ->where('kurir_id', $kurir->id)
             ->whereDate('tanggal_upload', $date)
             ->orderByDesc('updated_at')
@@ -130,30 +133,68 @@ class DashboardController extends Controller
             ->get(['id', 'id_pesanan', 'no_resi', 'tanggal_upload', 'status']);
 
         $scanOuts = ShipmentScanOut::query()
-            ->with('scanner:id,name')
+            ->with(['scanner:id,name', 'resi.details:id,resi_id,sku,qty'])
             ->whereDate('scan_date', $date)
-            ->whereIn('resi_id', $resis->pluck('id'))
+            ->where('kurir_id', $kurir->id)
             ->orderByDesc('scanned_at')
             ->get(['id', 'resi_id', 'scan_type', 'scan_code', 'scanned_at', 'scanned_by'])
             ->unique('resi_id')
-            ->keyBy('resi_id');
+            ->values();
+
+        $scanOutsByResi = $scanOuts->keyBy('resi_id');
 
         $activeResis = $resis->filter(function ($resi) {
             return ($resi->status ?? 'active') !== 'canceled';
         })->values();
 
-        $pendingResis = $activeResis->filter(function ($resi) use ($scanOuts) {
-            return !$scanOuts->has($resi->id);
+        $pendingResis = $activeResis->filter(function ($resi) use ($scanOutsByResi) {
+            return !$scanOutsByResi->has($resi->id);
         })->values();
 
-        $data = $pendingResis->map(function ($resi) {
+        $scannedResis = $scanOuts
+            ->map(fn ($scanOut) => $scanOut->resi)
+            ->filter()
+            ->values();
+
+        $canceledResis = $resis->filter(function ($resi) {
+            return ($resi->status ?? 'active') === 'canceled';
+        })->values();
+
+        $selectedResis = match ($type) {
+            'total' => $activeResis,
+            'scanned' => $scannedResis,
+            'canceled' => $canceledResis,
+            default => $pendingResis,
+        };
+
+        $data = $selectedResis->map(function ($resi) use ($scanOutsByResi) {
+            $scanOut = $scanOutsByResi->get($resi->id);
+            $isCanceled = ($resi->status ?? 'active') === 'canceled';
+            $skuSummary = $resi->details
+                ->map(function ($detail) {
+                    $sku = trim((string) ($detail->sku ?? ''));
+                    if ($sku === '') {
+                        return null;
+                    }
+
+                    return $sku.' ('.(int) $detail->qty.')';
+                })
+                ->filter()
+                ->implode(', ');
+
             return [
                 'id_pesanan' => $resi->id_pesanan ?? '-',
                 'no_resi' => $resi->no_resi ?? '-',
-                'status' => 'Siap Scan Out',
+                'sku' => $skuSummary ?: '-',
+                'status' => $isCanceled
+                    ? 'Canceled'
+                    : ($scanOut ? 'Scan Out' : 'Siap Scan Out'),
                 'tanggal_upload' => $resi->tanggal_upload
                     ? Carbon::parse($resi->tanggal_upload)->format('Y-m-d')
                     : '-',
+                'scanned_at' => $scanOut?->scanned_at
+                    ? Carbon::parse($scanOut->scanned_at)->format('Y-m-d H:i')
+                    : null,
             ];
         })->values();
 
@@ -161,10 +202,11 @@ class DashboardController extends Controller
             'meta' => [
                 'kurir_name' => $kurir->name,
                 'date' => $date,
+                'type' => $type,
                 'total_resi' => $activeResis->count(),
-                'scanned_total' => $activeResis->count() - $pendingResis->count(),
+                'scanned_total' => $scannedResis->count(),
                 'remaining_total' => $pendingResis->count(),
-                'canceled_total' => $resis->count() - $activeResis->count(),
+                'canceled_total' => $canceledResis->count(),
             ],
             'data' => $data,
         ]);

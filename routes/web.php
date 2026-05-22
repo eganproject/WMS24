@@ -223,6 +223,7 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/stock-adjustments/data', [StockAdjustmentController::class, 'data'])->name('stock-adjustments.data');
         Route::post('/stock-adjustments', [StockAdjustmentController::class, 'store'])->name('stock-adjustments.store');
         Route::post('/stock-adjustments/import', [StockAdjustmentController::class, 'import'])->name('stock-adjustments.import');
+        Route::get('/stock-adjustments/template', [StockAdjustmentController::class, 'template'])->name('stock-adjustments.template');
         Route::get('/stock-adjustments/{id}/detail', [StockAdjustmentController::class, 'detail'])->name('stock-adjustments.detail');
         Route::get('/stock-adjustments/{id}', [StockAdjustmentController::class, 'show'])->name('stock-adjustments.show');
         Route::put('/stock-adjustments/{id}', [StockAdjustmentController::class, 'update'])->name('stock-adjustments.update');
@@ -304,6 +305,7 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::post('/receipts', [InboundController::class, 'receiptsStore'])->name('receipts.store');
         Route::post('/receipts/import', [InboundController::class, 'receiptsImport'])->name('receipts.import');
         Route::post('/receipts/items-import', [InboundController::class, 'receiptsItemsImport'])->name('receipts.items-import');
+        Route::get('/receipts/template', [InboundController::class, 'receiptsTemplate'])->name('receipts.template');
         Route::get('/receipts/{id}', [InboundController::class, 'receiptsShow'])->name('receipts.show');
         Route::get('/receipts/{id}/qr-preview', [InboundController::class, 'receiptsQrPreview'])->name('receipts.qr-preview');
         Route::get('/receipts/{id}/qr-pdf', [InboundController::class, 'receiptsQrPdf'])->name('receipts.qr-pdf');

@@ -165,6 +165,13 @@
                             Header minimal: <strong>sku</strong>, <strong>qty</strong>, <strong>direction/arah</strong> (in/out atau tambah/kurangi).<br>
                             Opsional: <strong>note</strong>, <strong>item_note</strong>, <strong>transacted_at</strong>, <strong>warehouse</strong>/<strong>gudang</strong>.
                         </div>
+                        @if(!empty($templateUrl ?? null))
+                            <div class="mt-3">
+                                <a href="{{ $templateUrl }}" class="btn btn-light-primary btn-sm">
+                                    Download Template Penyesuaian Stok
+                                </a>
+                            </div>
+                        @endif
                     </div>
                     <div class="fv-row mb-6">
                         <label class="required fs-6 fw-bold form-label mb-2">File Excel</label>

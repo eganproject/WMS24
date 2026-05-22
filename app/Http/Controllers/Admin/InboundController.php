@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Exports\InboundManualTemplateExport;
+use App\Exports\InboundReceiptTemplateExport;
 use App\Http\Controllers\Controller;
 use App\Imports\InboundFormItemsImport;
 use App\Imports\InboundReceiptsImport;
@@ -181,6 +182,13 @@ class InboundController extends Controller
         return Excel::download(new InboundManualTemplateExport(), $filename);
     }
 
+    public function receiptsTemplate()
+    {
+        $filename = 'penerimaan-barang-template-'.now()->format('YmdHis').'.xlsx';
+
+        return Excel::download(new InboundReceiptTemplateExport(), $filename);
+    }
+
     public function manualsImport(Request $request)
     {
         return $this->importGroups(
@@ -333,11 +341,21 @@ class InboundController extends Controller
                 'manual' => 'Import Manual Inbound',
                 default => null,
             },
-            'templateUrl' => $type === 'manual'
-                ? route('admin.inbound.manuals.template')
-                : null,
-            'templateLabel' => 'Download Template Inbound Manual',
-            'templateNote' => 'Header: sku, qty atau koli. Opsional: ref_no, surat_jalan_no, surat_jalan_at, note, item_note, transacted_at.',
+            'templateUrl' => match ($type) {
+                'receipt' => route('admin.inbound.receipts.template'),
+                'manual' => route('admin.inbound.manuals.template'),
+                default => null,
+            },
+            'templateLabel' => match ($type) {
+                'receipt' => 'Download Template Penerimaan Barang',
+                'manual' => 'Download Template Inbound Manual',
+                default => 'Download Template',
+            },
+            'templateNote' => match ($type) {
+                'receipt' => 'Header: sku, qty atau koli, supplier. Opsional: ref_no, surat_jalan_no, surat_jalan_at, note, item_note, transacted_at.',
+                'manual' => 'Header: sku, qty atau koli. Opsional: ref_no, surat_jalan_no, surat_jalan_at, note, item_note, transacted_at.',
+                default => null,
+            },
         ]);
     }
 

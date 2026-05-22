@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Exports\StockAdjustmentTemplateExport;
 use App\Models\Item;
 use App\Models\StockAdjustment;
 use App\Models\StockAdjustmentItem;
@@ -37,6 +38,7 @@ class StockAdjustmentController extends Controller
             'dataUrl' => route('admin.inventory.stock-adjustments.data'),
             'storeUrl' => route('admin.inventory.stock-adjustments.store'),
             'importUrl' => route('admin.inventory.stock-adjustments.import'),
+            'templateUrl' => route('admin.inventory.stock-adjustments.template'),
             'warehouseLabel' => $warehouseLabel,
             'warehouses' => $warehouses,
             'defaultWarehouseId' => $warehouseId,
@@ -277,6 +279,13 @@ class StockAdjustmentController extends Controller
                 'error' => $e->getMessage(),
             ], 500);
         }
+    }
+
+    public function template()
+    {
+        $filename = 'penyesuaian-stok-template-'.now()->format('YmdHis').'.xlsx';
+
+        return Excel::download(new StockAdjustmentTemplateExport(), $filename);
     }
 
     public function show(int $id)

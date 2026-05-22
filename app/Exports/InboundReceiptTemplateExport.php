@@ -1,0 +1,31 @@
+<?php
+
+namespace App\Exports;
+
+use Illuminate\Support\Collection;
+use Maatwebsite\Excel\Concerns\FromCollection;
+use Maatwebsite\Excel\Concerns\WithHeadings;
+
+class InboundReceiptTemplateExport implements FromCollection, WithHeadings
+{
+    public function collection(): Collection
+    {
+        return new Collection([]);
+    }
+
+    public function headings(): array
+    {
+        return [
+            'sku',
+            'qty',
+            'koli',
+            'supplier',
+            'ref_no',
+            'surat_jalan_no',
+            'surat_jalan_at',
+            'note',
+            'item_note',
+            'transacted_at',
+        ];
+    }
+}

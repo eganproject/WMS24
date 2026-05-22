@@ -711,15 +711,20 @@ class QcScanController extends Controller
     private function serializeQc(QcResiScan $qc): array
     {
         $items = $qc->items ?? collect();
+        $itemNames = Item::query()
+            ->whereIn('sku', $items->pluck('sku')->filter()->unique()->values())
+            ->get(['sku', 'name'])
+            ->keyBy(fn (Item $item) => strtolower((string) $item->sku));
         $totalExpected = 0;
         $totalScanned = 0;
-        $rows = $items->map(function ($row) use (&$totalExpected, &$totalScanned) {
+        $rows = $items->map(function ($row) use ($itemNames, &$totalExpected, &$totalScanned) {
             $expected = (int) $row->expected_qty;
             $scanned = (int) $row->scanned_qty;
             $totalExpected += $expected;
             $totalScanned += $scanned;
             return [
                 'sku' => $row->sku,
+                'item_name' => $itemNames->get(strtolower((string) $row->sku))?->name,
                 'expected_qty' => $expected,
                 'scanned_qty' => $scanned,
             ];

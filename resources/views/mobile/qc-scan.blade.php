@@ -89,11 +89,19 @@
         gap: 10px;
         font-size: 13px;
     }
+    .result-item > div:first-child {
+        min-width: 0;
+    }
+    .result-item strong,
+    .result-meta {
+        overflow-wrap: anywhere;
+    }
     .result-meta {
         font-size: 12px;
         color: var(--muted);
     }
     .count-pill {
+        flex: 0 0 auto;
         padding: 6px 10px;
         border-radius: 999px;
         background: rgba(15, 118, 110, 0.12);
@@ -399,6 +407,14 @@
         }
     };
 
+    const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;',
+    }[char]));
+
     const buildErrorMessage = (res, json) => {
         if (json?.message) {
             return json.message;
@@ -548,8 +564,8 @@
             const done = expected > 0 && scanned >= expected;
             return `<div class="result-item">
                 <div>
-                    <strong>${row.sku || '-'}</strong>
-                    <div class="result-meta">Target ${expected} qty</div>
+                    <strong>${escapeHtml(row.sku || '-')}</strong>
+                    <div class="result-meta">${escapeHtml(row.item_name || 'Nama produk belum tersedia')} • Target ${expected} qty</div>
                 </div>
                 <div class="count-pill ${done ? 'done' : ''}">${scanned}/${expected}</div>
             </div>`;

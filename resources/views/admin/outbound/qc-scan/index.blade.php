@@ -476,11 +476,15 @@
     .qc-item-sku {
         font-weight: 800;
         font-size: 15px;
+        overflow-wrap: anywhere;
     }
-    .qc-item-target {
+    .qc-item-name {
         color: #64748b;
         font-size: 12px;
+        line-height: 1.35;
         margin-top: 4px;
+        max-width: 360px;
+        overflow-wrap: anywhere;
     }
     .qc-progress-pill {
         display: inline-flex;
@@ -919,6 +923,7 @@
                 const scanned = Number(item.scanned_qty || 0);
                 return {
                     sku: item.sku || '',
+                    item_name: item.item_name || '',
                     remaining: Math.max(0, expected - scanned),
                     expected,
                     scanned,
@@ -943,7 +948,7 @@
         scannerFocusPaused = true;
         let result;
         const options = rows.map((row) => (
-            `<option value="${escapeHtml(row.sku)}">${escapeHtml(row.sku)} - sisa ${row.remaining} dari ${row.expected}</option>`
+            `<option value="${escapeHtml(row.sku)}">${escapeHtml(row.sku)}${row.item_name ? ` - ${escapeHtml(row.item_name)}` : ''} - sisa ${row.remaining} dari ${row.expected}</option>`
         )).join('');
         const buyerNote = qcState.resi?.catatan_pembeli
             ? `<div class="alert alert-warning text-start py-2 mb-3"><strong>Catatan pembeli:</strong><br>${escapeHtml(qcState.resi.catatan_pembeli)}</div>`
@@ -1301,8 +1306,8 @@
                 return `
                     <tr>
                         <td>
-                            <div class="qc-item-sku">${item.sku || '-'}</div>
-                            <div class="qc-item-target">Target pemeriksaan SKU</div>
+                            <div class="qc-item-sku">${escapeHtml(item.sku || '-')}</div>
+                            <div class="qc-item-name">${escapeHtml(item.item_name || 'Nama produk belum tersedia')}</div>
                         </td>
                         <td>${expected}</td>
                         <td>${scanned}</td>

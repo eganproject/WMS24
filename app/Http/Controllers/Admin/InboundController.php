@@ -24,6 +24,7 @@ use App\Support\WarehouseService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Maatwebsite\Excel\Facades\Excel;
@@ -163,6 +164,18 @@ class InboundController extends Controller
                 'Cache-Control' => 'no-store, no-cache, must-revalidate',
             ]
         );
+    }
+
+    public function suratJalanImage(int $id)
+    {
+        $transaction = InboundTransaction::findOrFail($id);
+        $path = $this->storageRelativePath($transaction->surat_jalan_image_path);
+
+        abort_if(!$path || !Storage::disk('public')->exists($path), 404);
+
+        return Storage::disk('public')->response($path, null, [
+            'Cache-Control' => 'private, max-age=86400',
+        ]);
     }
 
     public function returnsApprove(int $id)
@@ -382,6 +395,7 @@ class InboundController extends Controller
                 'inbound_transactions.supplier_id',
                 'inbound_transactions.surat_jalan_no',
                 'inbound_transactions.surat_jalan_at',
+                'inbound_transactions.surat_jalan_image_path',
                 'inbound_transactions.note',
                 'inbound_transactions.warehouse_id',
                 'inbound_transactions.status',
@@ -468,6 +482,7 @@ class InboundController extends Controller
                 'note' => $row->note ?? '',
                 'surat_jalan_no' => $row->surat_jalan_no ?? '',
                 'surat_jalan_at' => $row->surat_jalan_at?->format('Y-m-d') ?? '',
+                'surat_jalan_image_url' => $this->suratJalanImageUrl($row),
                 'type' => $row->type,
                 'status' => $row->status ?? InboundScanStatus::PENDING_SCAN,
             ];
@@ -495,6 +510,8 @@ class InboundController extends Controller
             'supplier' => $transaction->supplier?->name,
             'surat_jalan_no' => $transaction->surat_jalan_no,
             'surat_jalan_at' => $transaction->surat_jalan_at?->format('Y-m-d'),
+            'surat_jalan_image_url' => $this->suratJalanImageUrl($transaction),
+            'has_surat_jalan_image' => !empty($transaction->surat_jalan_image_path),
             'note' => $transaction->note,
             'status' => $transaction->status ?? InboundScanStatus::PENDING_SCAN,
             'warehouse_id' => $transaction->warehouse_id,
@@ -571,9 +588,14 @@ class InboundController extends Controller
     {
         $validated = $this->validatePayload($request, $type);
         $prefix = $this->prefixForType($type);
+        $storedSuratJalanImage = null;
 
         DB::beginTransaction();
         try {
+            if ($request->hasFile('surat_jalan_image')) {
+                $storedSuratJalanImage = $request->file('surat_jalan_image')->store('inbound-surat-jalan', 'public');
+            }
+
             $transaction = InboundTransaction::create([
                 'code' => $this->generateCode($prefix),
                 'type' => $type,
@@ -581,6 +603,7 @@ class InboundController extends Controller
                 'supplier_id' => $validated['supplier_id'] ?? null,
                 'surat_jalan_no' => $this->resolveDeliveryNoteNo($validated['surat_jalan_no'] ?? null, 'SJ-'.$prefix),
                 'surat_jalan_at' => $validated['surat_jalan_at'] ?? null,
+                'surat_jalan_image_path' => $storedSuratJalanImage ? 'storage/'.$storedSuratJalanImage : null,
                 'note' => $validated['note'] ?? null,
                 'warehouse_id' => WarehouseService::defaultWarehouseId(),
                 'transacted_at' => $validated['transacted_at'] ?? now(),
@@ -601,9 +624,15 @@ class InboundController extends Controller
             DB::commit();
         } catch (ValidationException $e) {
             DB::rollBack();
+            if ($storedSuratJalanImage) {
+                Storage::disk('public')->delete($storedSuratJalanImage);
+            }
             throw $e;
         } catch (\Throwable $e) {
             DB::rollBack();
+            if ($storedSuratJalanImage) {
+                Storage::disk('public')->delete($storedSuratJalanImage);
+            }
 
             return response()->json([
                 'message' => 'Gagal menyimpan inbound',
@@ -619,6 +648,8 @@ class InboundController extends Controller
     private function update(Request $request, string $type, int $id)
     {
         $validated = $this->validatePayload($request, $type);
+        $newSuratJalanImage = null;
+        $oldSuratJalanImage = null;
 
         DB::beginTransaction();
         try {
@@ -636,14 +667,25 @@ class InboundController extends Controller
 
             InboundItem::where('inbound_transaction_id', $transaction->id)->delete();
 
-            $transaction->update([
+            $update = [
                 'ref_no' => $validated['ref_no'] ?? null,
                 'supplier_id' => $validated['supplier_id'] ?? null,
                 'surat_jalan_no' => $this->resolveDeliveryNoteNo($validated['surat_jalan_no'] ?? null, 'SJ-'.$this->prefixForType($type)),
                 'surat_jalan_at' => $validated['surat_jalan_at'] ?? null,
                 'note' => $validated['note'] ?? null,
                 'transacted_at' => $validated['transacted_at'] ?? $transaction->transacted_at,
-            ]);
+            ];
+
+            if ($request->hasFile('surat_jalan_image')) {
+                $newSuratJalanImage = $request->file('surat_jalan_image')->store('inbound-surat-jalan', 'public');
+                $update['surat_jalan_image_path'] = 'storage/'.$newSuratJalanImage;
+                $oldSuratJalanImage = $this->storageRelativePath($transaction->surat_jalan_image_path);
+            } elseif ($request->boolean('remove_surat_jalan_image')) {
+                $update['surat_jalan_image_path'] = null;
+                $oldSuratJalanImage = $this->storageRelativePath($transaction->surat_jalan_image_path);
+            }
+
+            $transaction->update($update);
 
             foreach ($validated['items'] as $row) {
                 InboundItem::create([
@@ -656,11 +698,21 @@ class InboundController extends Controller
             }
 
             DB::commit();
+
+            if ($oldSuratJalanImage) {
+                Storage::disk('public')->delete($oldSuratJalanImage);
+            }
         } catch (ValidationException $e) {
             DB::rollBack();
+            if ($newSuratJalanImage) {
+                Storage::disk('public')->delete($newSuratJalanImage);
+            }
             throw $e;
         } catch (\Throwable $e) {
             DB::rollBack();
+            if ($newSuratJalanImage) {
+                Storage::disk('public')->delete($newSuratJalanImage);
+            }
 
             return response()->json([
                 'message' => 'Gagal memperbarui inbound',
@@ -689,9 +741,14 @@ class InboundController extends Controller
                 ], 422);
             }
 
+            $suratJalanImage = $this->storageRelativePath($transaction->surat_jalan_image_path);
             $transaction->delete();
 
             DB::commit();
+
+            if ($suratJalanImage) {
+                Storage::disk('public')->delete($suratJalanImage);
+            }
         } catch (ValidationException $e) {
             DB::rollBack();
             $message = collect($e->errors())->flatten()->first() ?? $e->getMessage();
@@ -737,6 +794,8 @@ class InboundController extends Controller
                 : ['nullable'],
             'surat_jalan_no' => ['nullable', 'string', 'max:100'],
             'surat_jalan_at' => ['nullable', 'date'],
+            'surat_jalan_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'remove_surat_jalan_image' => ['nullable', 'boolean'],
             'note' => ['nullable', 'string'],
             'transacted_at' => ['required', 'date'],
         ]);
@@ -816,6 +875,24 @@ class InboundController extends Controller
             : null;
 
         return $validated;
+    }
+
+    private function suratJalanImageUrl(InboundTransaction $transaction): ?string
+    {
+        if (!$transaction->surat_jalan_image_path) {
+            return null;
+        }
+
+        return route('admin.inbound.surat-jalan-image', $transaction->id);
+    }
+
+    private function storageRelativePath(?string $path): ?string
+    {
+        if (!$path || !str_starts_with($path, 'storage/')) {
+            return null;
+        }
+
+        return Str::after($path, 'storage/');
     }
 
     private function importGroups(

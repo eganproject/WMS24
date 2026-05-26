@@ -16,6 +16,7 @@ class InboundTransaction extends Model
         'supplier_id',
         'surat_jalan_no',
         'surat_jalan_at',
+        'surat_jalan_image_path',
         'transacted_at',
         'note',
         'warehouse_id',

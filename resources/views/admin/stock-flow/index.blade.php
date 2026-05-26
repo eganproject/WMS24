@@ -222,6 +222,19 @@
                             <input type="text" class="form-control form-control-solid" name="surat_jalan_at" id="flow_surat_jalan_at" placeholder="YYYY-MM-DD" />
                             <div class="invalid-feedback" id="error_surat_jalan_at"></div>
                         </div>
+                        <div class="fv-row mb-7">
+                            <label class="fs-6 fw-bold form-label mb-2">Gambar Surat Jalan</label>
+                            <input type="file" class="form-control form-control-solid" name="surat_jalan_image" id="flow_surat_jalan_image" accept="image/jpeg,image/png,image/webp" />
+                            <div class="form-text">Format JPG, PNG, atau WEBP. Maksimal 5 MB.</div>
+                            <div class="invalid-feedback d-block" id="error_surat_jalan_image"></div>
+                            <div class="mt-3" id="flow_surat_jalan_image_preview" style="display:none;">
+                                <a href="#" target="_blank" rel="noopener" class="btn btn-light-primary btn-sm" id="flow_surat_jalan_image_link">Lihat gambar saat ini</a>
+                                <label class="form-check form-check-sm form-check-custom form-check-solid mt-3">
+                                    <input class="form-check-input" type="checkbox" name="remove_surat_jalan_image" id="flow_remove_surat_jalan_image" value="1" />
+                                    <span class="form-check-label">Hapus gambar saat ini</span>
+                                </label>
+                            </div>
+                        </div>
                     @endif
                     <div class="fv-row mb-7">
                         <label class="fs-6 fw-bold form-label mb-2">Catatan</label>
@@ -418,6 +431,10 @@
         const recipientAddressEl = document.getElementById('flow_recipient_address');
         const suratJalanNoEl = document.getElementById('flow_surat_jalan_no');
         const suratJalanAtEl = document.getElementById('flow_surat_jalan_at');
+        const suratJalanImageEl = document.getElementById('flow_surat_jalan_image');
+        const suratJalanImagePreview = document.getElementById('flow_surat_jalan_image_preview');
+        const suratJalanImageLink = document.getElementById('flow_surat_jalan_image_link');
+        const removeSuratJalanImageEl = document.getElementById('flow_remove_surat_jalan_image');
         let fpFrom = null;
         let fpTo = null;
         let fpTransacted = null;
@@ -506,7 +523,7 @@
         };
 
         const clearErrors = () => {
-            ['error_transacted_at','error_ref_no','error_recipient_name','error_recipient_phone','error_recipient_address','error_supplier_id','error_surat_jalan_no','error_surat_jalan_at','error_note','error_warehouse_id'].forEach(id => {
+            ['error_transacted_at','error_ref_no','error_recipient_name','error_recipient_phone','error_recipient_address','error_supplier_id','error_surat_jalan_no','error_surat_jalan_at','error_surat_jalan_image','error_note','error_warehouse_id'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.textContent = '';
             });
@@ -1001,6 +1018,10 @@
             } else if (suratJalanAtEl) {
                 suratJalanAtEl.value = '';
             }
+            if (suratJalanImageEl) suratJalanImageEl.value = '';
+            if (removeSuratJalanImageEl) removeSuratJalanImageEl.checked = false;
+            if (suratJalanImagePreview) suratJalanImagePreview.style.display = 'none';
+            if (suratJalanImageLink) suratJalanImageLink.href = '#';
             itemsContainer.innerHTML = '';
             createItemRow();
             clearErrors();
@@ -1093,8 +1114,14 @@
                     { data: 'surat_jalan_no', orderable: false, searchable: false, render: (data, type, row) => {
                         const no = data || '';
                         const at = row?.surat_jalan_at || '';
-                        if (!no && !at) return '<span class="text-muted">-</span>';
-                        return (no || '-') + (at ? `<div class="text-muted fs-8">${at}</div>` : '');
+                        const imageUrl = row?.surat_jalan_image_url || '';
+                        if (!no && !at && !imageUrl) return '<span class="text-muted">-</span>';
+                        const parts = [
+                            no || '-',
+                            at ? `<div class="text-muted fs-8">${at}</div>` : '',
+                            imageUrl ? `<div class="mt-1"><a href="${escapeHtml(imageUrl)}" target="_blank" rel="noopener" class="badge badge-light-primary">Lihat Gambar</a></div>` : '',
+                        ].filter(Boolean);
+                        return parts.join('');
                     }},
                 @endif
                 @if(!empty($showSupplierColumn ?? false))
@@ -1490,6 +1517,15 @@
                     }
                 }
                 if (suratJalanNoEl) suratJalanNoEl.value = json.surat_jalan_no || '';
+                if (suratJalanImageEl) suratJalanImageEl.value = '';
+                if (removeSuratJalanImageEl) removeSuratJalanImageEl.checked = false;
+                if (json.surat_jalan_image_url && suratJalanImagePreview && suratJalanImageLink) {
+                    suratJalanImageLink.href = json.surat_jalan_image_url;
+                    suratJalanImagePreview.style.display = '';
+                } else {
+                    if (suratJalanImageLink) suratJalanImageLink.href = '#';
+                    if (suratJalanImagePreview) suratJalanImagePreview.style.display = 'none';
+                }
                 document.getElementById('flow_note').value = json.note || '';
                 applyWarehouseVisibility(rowType);
                 if (warehouseSelect) {

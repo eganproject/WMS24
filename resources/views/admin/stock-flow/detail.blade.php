@@ -18,6 +18,9 @@
         } elseif ($currentWarehouseId == $defaultWarehouseId) {
             $warehouseBadge = 'badge-light-primary';
         }
+        $suratJalanImageUrl = !empty($transaction->surat_jalan_image_path)
+            ? route('admin.inbound.surat-jalan-image', $transaction->id)
+            : null;
     @endphp
 
     <style>
@@ -343,8 +346,7 @@
                         </div>
                     </div>
 
-                    @if(!empty($transaction->surat_jalan_image_path))
-                        @php($suratJalanImageUrl = route('admin.inbound.surat-jalan-image', $transaction->id))
+                    @if($suratJalanImageUrl)
                         <div class="stock-document-section-title">Gambar Surat Jalan</div>
                         <a href="{{ $suratJalanImageUrl }}" target="_blank" rel="noopener" class="stock-document-image">
                             <img src="{{ $suratJalanImageUrl }}" alt="Gambar Surat Jalan {{ $transaction->surat_jalan_no ?: $transaction->code }}">
@@ -498,10 +500,10 @@
                         <div>{{ $transaction->surat_jalan_at?->format('Y-m-d') ?: '-' }}</div>
                     </div>
                 @endif
-                @if(!empty($transaction->surat_jalan_image_path))
+                @if($suratJalanImageUrl)
                     <div class="col-md-4">
                         <div class="fw-bold text-gray-600">Gambar Surat Jalan</div>
-                        <a href="{{ route('admin.inbound.surat-jalan-image', $transaction->id) }}" target="_blank" rel="noopener">Lihat gambar</a>
+                        <a href="{{ $suratJalanImageUrl }}" target="_blank" rel="noopener">Lihat gambar</a>
                     </div>
                 @endif
                 @if(!empty($showRecipientFields ?? false))

@@ -323,6 +323,10 @@ class InboundController extends Controller
             'statusLabels' => $statusLabels,
             'lockedStatuses' => [InboundScanStatus::SCANNING, InboundScanStatus::COMPLETED, 'approved'],
             'showDeliveryNoteFields' => true,
+            'deliveryNoteImageLabel' => match ($type) {
+                'return' => 'Gambar Bukti Retur',
+                default => 'Gambar Surat Jalan',
+            },
             'deliveryNotePrefixMap' => [
                 'receipt' => 'SJ-RCV',
                 'return' => 'SJ-RET',

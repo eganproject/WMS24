@@ -98,6 +98,16 @@
     </div>
 
     <div class="menu-list">
+        @if(!empty($showAttendancePerformance))
+            <a class="menu-card" href="{{ $routes['attendancePerformance'] }}">
+                <div class="menu-icon inbound-scan">AB</div>
+                <div>
+                    <div class="menu-title">Performa Absensi</div>
+                    <div class="menu-desc">Lihat ringkasan kehadiran, keterlambatan, lembur, dan riwayat harian.</div>
+                </div>
+            </a>
+        @endif
+
         <a class="menu-card" href="{{ $routes['opname'] }}">
             <div class="menu-icon opname">SO</div>
             <div>

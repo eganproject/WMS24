@@ -49,6 +49,7 @@ use App\Http\Controllers\Mobile\InboundScanController;
 use App\Http\Controllers\Mobile\ScanOutController;
 use App\Http\Controllers\Mobile\QcScanController;
 use App\Http\Controllers\Mobile\PickingListMobileController;
+use App\Http\Controllers\EmployeeAttendancePerformanceController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 
@@ -87,6 +88,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+    Route::get('/my/attendance-performance', [EmployeeAttendancePerformanceController::class, 'index'])->name('employee.attendance-performance');
 });
 
 Route::middleware('auth')->prefix('mobile')->as('mobile.')->group(function () {

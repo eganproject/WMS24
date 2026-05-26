@@ -794,7 +794,7 @@ class InboundController extends Controller
                 : ['nullable'],
             'surat_jalan_no' => ['nullable', 'string', 'max:100'],
             'surat_jalan_at' => ['nullable', 'date'],
-            'surat_jalan_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'surat_jalan_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
             'remove_surat_jalan_image' => ['nullable', 'boolean'],
             'note' => ['nullable', 'string'],
             'transacted_at' => ['required', 'date'],

@@ -225,7 +225,7 @@
                         <div class="fv-row mb-7">
                             <label class="fs-6 fw-bold form-label mb-2">Gambar Surat Jalan</label>
                             <input type="file" class="form-control form-control-solid" name="surat_jalan_image" id="flow_surat_jalan_image" accept="image/jpeg,image/png,image/webp" />
-                            <div class="form-text">Format JPG, PNG, atau WEBP. Maksimal 5 MB.</div>
+                            <div class="form-text">Format JPG, PNG, atau WEBP. Maksimal 2 MB.</div>
                             <div class="invalid-feedback d-block" id="error_surat_jalan_image"></div>
                             <div class="mt-3" id="flow_surat_jalan_image_preview" style="display:none;">
                                 <a href="#" target="_blank" rel="noopener" class="btn btn-light-primary btn-sm" id="flow_surat_jalan_image_link">Lihat gambar saat ini</a>

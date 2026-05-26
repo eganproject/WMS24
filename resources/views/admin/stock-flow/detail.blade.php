@@ -18,9 +18,6 @@
         } elseif ($currentWarehouseId == $defaultWarehouseId) {
             $warehouseBadge = 'badge-light-primary';
         }
-        $suratJalanImageUrl = !empty($transaction->surat_jalan_image_path)
-            ? route('admin.inbound.surat-jalan-image', $transaction->id)
-            : null;
     @endphp
 
     <style>
@@ -162,21 +159,6 @@
             border-radius: 4px;
             min-height: 76px;
             padding: 12px 14px;
-        }
-
-        .stock-document-image {
-            border: 1px solid #d9dee8;
-            border-radius: 4px;
-            display: inline-block;
-            max-width: 360px;
-            padding: 8px;
-        }
-
-        .stock-document-image img {
-            border-radius: 3px;
-            display: block;
-            height: auto;
-            max-width: 100%;
         }
 
         .stock-document-signatures {
@@ -346,13 +328,6 @@
                         </div>
                     </div>
 
-                    @if($suratJalanImageUrl)
-                        <div class="stock-document-section-title">Gambar Surat Jalan</div>
-                        <a href="{{ $suratJalanImageUrl }}" target="_blank" rel="noopener" class="stock-document-image">
-                            <img src="{{ $suratJalanImageUrl }}" alt="Gambar Surat Jalan {{ $transaction->surat_jalan_no ?: $transaction->code }}">
-                        </a>
-                    @endif
-
                     <div class="stock-document-section-title">Daftar Barang</div>
                     <div class="table-responsive">
                         <table class="table stock-document-table align-middle fs-6">
@@ -498,12 +473,6 @@
                     <div class="col-md-4">
                         <div class="fw-bold text-gray-600">Tgl. Surat Jalan</div>
                         <div>{{ $transaction->surat_jalan_at?->format('Y-m-d') ?: '-' }}</div>
-                    </div>
-                @endif
-                @if($suratJalanImageUrl)
-                    <div class="col-md-4">
-                        <div class="fw-bold text-gray-600">Gambar Surat Jalan</div>
-                        <a href="{{ $suratJalanImageUrl }}" target="_blank" rel="noopener">Lihat gambar</a>
                     </div>
                 @endif
                 @if(!empty($showRecipientFields ?? false))

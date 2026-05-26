@@ -29,6 +29,8 @@ use Illuminate\Http\Request;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Maatwebsite\Excel\Facades\Excel;
@@ -1047,6 +1049,8 @@ class AttendanceController extends Controller
             'start_date' => $leave->start_date?->format('Y-m-d'),
             'end_date' => $leave->end_date?->format('Y-m-d'),
             'reason' => $leave->reason,
+            'proof_image_url' => $this->leaveProofImageUrl($leave),
+            'has_proof_image' => !empty($leave->proof_image_path),
             'status' => $leave->status,
             'approved_by' => $leave->approver?->name,
             'approved_at' => $leave->approved_at?->format('Y-m-d H:i:s'),
@@ -1057,9 +1061,23 @@ class AttendanceController extends Controller
     {
         $validated = $this->validateLeave($request, false);
         $validated['status'] = EmployeeLeave::STATUS_PENDING;
+        $storedProofImage = null;
 
-        $leave = EmployeeLeave::create($validated + $this->leaveApprovalAttributes(EmployeeLeave::STATUS_PENDING));
-        $this->writeAttendanceAudit($request, 'Menyimpan cuti/izin karyawan', $leave, null, $this->auditSnapshot($leave->fresh()));
+        try {
+            if ($request->hasFile('proof_image')) {
+                $storedProofImage = $request->file('proof_image')->store('employee-leave-proofs', 'public');
+                $validated['proof_image_path'] = 'storage/'.$storedProofImage;
+            }
+
+            $leave = EmployeeLeave::create($validated + $this->leaveApprovalAttributes(EmployeeLeave::STATUS_PENDING));
+            $this->writeAttendanceAudit($request, 'Menyimpan cuti/izin karyawan', $leave, null, $this->auditSnapshot($leave->fresh()));
+        } catch (\Throwable $e) {
+            if ($storedProofImage) {
+                Storage::disk('public')->delete($storedProofImage);
+            }
+
+            throw $e;
+        }
 
         return response()->json(['message' => 'Pengajuan cuti/izin berhasil dibuat dan menunggu approval.', 'leave' => $leave]);
     }
@@ -1075,9 +1093,32 @@ class AttendanceController extends Controller
 
         $validated = $this->validateLeave($request, false);
         $validated['status'] = EmployeeLeave::STATUS_PENDING;
+        $newProofImage = null;
+        $oldProofImage = null;
 
-        $leave->update($validated + $this->leaveApprovalAttributes(EmployeeLeave::STATUS_PENDING, $leave));
-        $leave->refresh();
+        try {
+            if ($request->hasFile('proof_image')) {
+                $newProofImage = $request->file('proof_image')->store('employee-leave-proofs', 'public');
+                $validated['proof_image_path'] = 'storage/'.$newProofImage;
+                $oldProofImage = $this->storageRelativePath($leave->proof_image_path);
+            } elseif ($request->boolean('remove_proof_image')) {
+                $validated['proof_image_path'] = null;
+                $oldProofImage = $this->storageRelativePath($leave->proof_image_path);
+            }
+
+            $leave->update($validated + $this->leaveApprovalAttributes(EmployeeLeave::STATUS_PENDING, $leave));
+            $leave->refresh();
+
+            if ($oldProofImage) {
+                Storage::disk('public')->delete($oldProofImage);
+            }
+        } catch (\Throwable $e) {
+            if ($newProofImage) {
+                Storage::disk('public')->delete($newProofImage);
+            }
+
+            throw $e;
+        }
 
         $this->writeAttendanceAudit($request, 'Mengubah cuti/izin karyawan', $leave, $before, $this->auditSnapshot($leave));
 
@@ -1101,14 +1142,29 @@ class AttendanceController extends Controller
         $employee = $leave->employee;
         $start = $leave->start_date;
         $end = $leave->end_date;
+        $proofImage = $this->storageRelativePath($leave->proof_image_path);
         $leave->delete();
 
         if ($wasApproved && $employee) {
             $this->rebuildAttendanceRange($employee, $start, $end);
         }
+        if ($proofImage) {
+            Storage::disk('public')->delete($proofImage);
+        }
         $this->writeAttendanceAudit($request, 'Menghapus cuti/izin karyawan', $leave, $before, null);
 
         return response()->json(['message' => 'Cuti/izin berhasil dihapus']);
+    }
+
+    public function leaveProofImage(EmployeeLeave $leave)
+    {
+        $path = $this->storageRelativePath($leave->proof_image_path);
+
+        abort_if(!$path || !Storage::disk('public')->exists($path), 404);
+
+        return Storage::disk('public')->response($path, null, [
+            'Cache-Control' => 'private, max-age=86400',
+        ]);
     }
 
     public function rawLogsData(Request $request)
@@ -1822,6 +1878,8 @@ class AttendanceController extends Controller
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
             'reason' => ['nullable', 'string'],
+            'proof_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+            'remove_proof_image' => ['nullable', 'boolean'],
         ];
 
         if ($allowStatus) {
@@ -1855,7 +1913,27 @@ class AttendanceController extends Controller
             }
         }
 
+        unset($validated['proof_image'], $validated['remove_proof_image']);
+
         return $validated;
+    }
+
+    private function leaveProofImageUrl(EmployeeLeave $leave): ?string
+    {
+        if (!$leave->proof_image_path) {
+            return null;
+        }
+
+        return route('admin.attendance.leaves.proof-image', $leave);
+    }
+
+    private function storageRelativePath(?string $path): ?string
+    {
+        if (!$path || !str_starts_with($path, 'storage/')) {
+            return null;
+        }
+
+        return Str::after($path, 'storage/');
     }
 
     private function setLeaveApprovalStatus(Request $request, EmployeeLeave $leave, string $status)

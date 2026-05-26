@@ -483,6 +483,7 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::post('/templates/assign', [AttendanceController::class, 'assignTemplate'])->name('templates.assign');
         Route::get('/leaves/data', [AttendanceController::class, 'leavesData'])->name('leaves.data');
         Route::post('/leaves', [AttendanceController::class, 'storeLeave'])->name('leaves.store');
+        Route::get('/leaves/{leave}/proof-image', [AttendanceController::class, 'leaveProofImage'])->name('leaves.proof-image');
         Route::post('/leaves/{leave}/approve', [AttendanceController::class, 'approveLeave'])->name('leaves.approve');
         Route::post('/leaves/{leave}/reject', [AttendanceController::class, 'rejectLeave'])->name('leaves.reject');
         Route::put('/leaves/{leave}', [AttendanceController::class, 'updateLeave'])->name('leaves.update');

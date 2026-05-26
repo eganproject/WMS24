@@ -19,6 +19,7 @@ class EmployeeLeave extends Model
         'start_date',
         'end_date',
         'reason',
+        'proof_image_path',
         'status',
         'approved_by',
         'approved_at',

@@ -906,12 +906,26 @@
                         <div class="col-6 col-md-6 col-lg-2"><label class="form-label fw-bold">Tanggal Mulai</label><input type="text" name="start_date" class="form-control form-control-solid js-date" placeholder="YYYY-MM-DD" required></div>
                         <div class="col-6 col-md-6 col-lg-2"><label class="form-label fw-bold">Tanggal Selesai</label><input type="text" name="end_date" class="form-control form-control-solid js-date" placeholder="YYYY-MM-DD" required></div>
                         <div class="col-12"><label class="form-label fw-bold">Alasan</label><input name="reason" class="form-control form-control-solid" placeholder="Alasan cuti / izin"></div>
+                        <div class="col-12">
+                            <label class="form-label fw-bold">Gambar Bukti</label>
+                            <input type="file" name="proof_image" class="form-control form-control-solid" accept="image/jpeg,image/png,image/webp">
+                            <div class="form-text">Format JPG, PNG, atau WEBP. Maksimal 2 MB.</div>
+                            <div class="mt-2 leave-proof-preview" style="display:none;">
+                                <a href="#" target="_blank" rel="noopener" class="btn btn-sm btn-light-primary leave-proof-link">
+                                    <i class="fas fa-image me-1"></i>Lihat gambar saat ini
+                                </a>
+                                <label class="form-check form-check-sm form-check-custom form-check-solid mt-3">
+                                    <input class="form-check-input" type="checkbox" name="remove_proof_image" value="1">
+                                    <span class="form-check-label">Hapus gambar saat ini</span>
+                                </label>
+                            </div>
+                        </div>
                         <div class="col-12 d-flex justify-content-end pt-2">
                             <button class="btn btn-primary"><i class="fas fa-plus me-1"></i>Tambah Pengajuan</button>
                         </div>
                     </form>
                 </div>
-                <x-attendance-table id="leaves_table" :headers="['Karyawan','Tipe','Mulai','Selesai','Status','Diproses Oleh','Alasan','Aksi']" />
+                <x-attendance-table id="leaves_table" :headers="['Karyawan','Tipe','Mulai','Selesai','Status','Diproses Oleh','Alasan','Bukti','Aksi']" />
             </div>
 
             {{-- ===== RAW LOGS ===== --}}
@@ -1256,7 +1270,7 @@ const tableConfigs = {
     schedules_table: { url: '{{ route('admin.attendance.schedules.data') }}', columns: ['employee','schedule_date','schedule_type','shift','note','__actions'] },
     holidays_table: { url: '{{ route('admin.attendance.holidays.data') }}', columns: ['holiday_date','name','type','is_paid','__actions'] },
     templates_table: { url: '{{ route('admin.attendance.templates.data') }}', columns: ['name','is_active','days','__actions'] },
-    leaves_table: { url: '{{ route('admin.attendance.leaves.data') }}', columns: ['employee','leave_type','start_date','end_date',{ data: 'status', render: renderLeaveStatusBadge },{ data: 'approved_by', render: (value, row) => value ? `${value}<div class="text-muted fs-8">${row.approved_at || ''}</div>` : '-' },'reason','__actions'] },
+    leaves_table: { url: '{{ route('admin.attendance.leaves.data') }}', columns: ['employee','leave_type','start_date','end_date',{ data: 'status', render: renderLeaveStatusBadge },{ data: 'approved_by', render: (value, row) => value ? `${value}<div class="text-muted fs-8">${row.approved_at || ''}</div>` : '-' },'reason',{ data: 'proof_image_url', render: (value) => value ? `<a href="${escapeAttr(value)}" target="_blank" rel="noopener" class="badge badge-light-primary">Lihat Gambar</a>` : '-' },'__actions'] },
     raw_logs_table: { url: '{{ route('admin.attendance.raw-logs.data') }}', columns: ['device','employee','device_user_id','scan_at','verify_type','state','__actions'] },
     attendances_table: { url: '{{ route('admin.attendance.attendances.data') }}', columns: ['employee','attendance_date','shift','check_in_at','check_out_at','late_minutes','early_leave_minutes','work_minutes','calculated_overtime_minutes','approved_overtime_minutes',{ data: 'overtime_status', render: renderOvertimeStatusBadge },{ data: 'status', render: renderAttendanceStatusBadge },'source','note','__actions'] },
 };
@@ -1931,6 +1945,26 @@ document.addEventListener('DOMContentLoaded', () => {
             $(field).trigger('change.select2');
         }
     };
+    const resetLeaveProofPreview = (form) => {
+        if (form?.getAttribute('data-table') !== 'leaves_table') return;
+        const preview = form.querySelector('.leave-proof-preview');
+        const link = form.querySelector('.leave-proof-link');
+        const remove = form.querySelector('[name="remove_proof_image"]');
+        const file = form.querySelector('[name="proof_image"]');
+        if (preview) preview.style.display = 'none';
+        if (link) link.href = '#';
+        if (remove) remove.checked = false;
+        if (file) file.value = '';
+    };
+    const setLeaveProofPreview = (form, row) => {
+        resetLeaveProofPreview(form);
+        const url = row?.proof_image_url || '';
+        if (!url) return;
+        const preview = form.querySelector('.leave-proof-preview');
+        const link = form.querySelector('.leave-proof-link');
+        if (link) link.href = url;
+        if (preview) preview.style.display = '';
+    };
     const clearEditState = (form) => {
         delete form.dataset.editUrl;
         delete form.dataset.editingId;
@@ -1938,6 +1972,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (submit && submit.dataset.createText) {
             submit.innerHTML = submit.dataset.createText;
         }
+        resetLeaveProofPreview(form);
     };
     const setEditState = (form, tableId, row) => {
         form.dataset.editUrl = crudUrl(tableId, 'update', row.id);
@@ -1976,6 +2011,9 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             Object.entries(row).forEach(([key, value]) => setFieldValue(form, key, value));
         }
+        if (tableId === 'leaves_table') {
+            setLeaveProofPreview(form, row);
+        }
         setEditState(form, tableId, row);
         setTimeout(() => form.querySelector('input, select, textarea')?.focus(), 250);
     };
@@ -1990,6 +2028,7 @@ document.addEventListener('DOMContentLoaded', () => {
             setAssignmentResult(json);
         }
         form.reset();
+        resetLeaveProofPreview(form);
         clearEditState(form);
         $(form).find('select').trigger('change.select2');
         updateTemplateShiftState(form);

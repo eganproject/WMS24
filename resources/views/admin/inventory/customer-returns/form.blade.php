@@ -172,7 +172,7 @@
             <div class="alert alert-danger mb-6">{{ $errors->first('customer_return') }}</div>
         @endif
 
-        <form method="POST" action="{{ $readOnlyMode ? '#' : $formAction }}" class="form" id="customer_return_form">
+        <form method="POST" action="{{ $readOnlyMode ? '#' : $formAction }}" class="form" id="customer_return_form" enctype="multipart/form-data">
             @csrf
             @if($isEditMode)
                 @method('PUT')
@@ -402,6 +402,31 @@
                     <label class="fs-6 fw-bold form-label mb-2">Catatan</label>
                     <textarea class="form-control form-control-solid @error('note') is-invalid @enderror" name="note" id="customer_return_note" rows="3" placeholder="Catatan inspeksi, kondisi paket, atau mismatch resi" @disabled($readOnlyMode)>{{ $noteValue }}</textarea>
                     @error('note')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
+                </div>
+
+                <div class="fv-row mt-6">
+                    <label class="fs-6 fw-bold form-label mb-2">Gambar Barang</label>
+                    <input
+                        type="file"
+                        class="form-control form-control-solid @error('item_image') is-invalid @enderror"
+                        name="item_image"
+                        id="customer_return_item_image"
+                        accept="image/jpeg,image/png,image/webp"
+                        @disabled($readOnlyMode)
+                    />
+                    <div class="form-text">Opsional. Upload foto barang retur, kondisi paket, atau bukti fisik. Format JPG, PNG, atau WEBP. Maksimal 2 MB.</div>
+                    @error('item_image')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
+                    @if($itemImageUrl)
+                        <div class="mt-3">
+                            <a href="{{ $itemImageUrl }}" target="_blank" rel="noopener" class="btn btn-light-primary btn-sm">Lihat gambar barang saat ini</a>
+                            @unless($readOnlyMode)
+                                <label class="form-check form-check-sm form-check-custom form-check-solid mt-3">
+                                    <input class="form-check-input" type="checkbox" name="remove_item_image" value="1" />
+                                    <span class="form-check-label">Hapus gambar barang saat ini</span>
+                                </label>
+                            @endunless
+                        </div>
+                    @endif
                 </div>
             </div>
 

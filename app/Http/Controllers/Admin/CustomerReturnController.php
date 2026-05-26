@@ -17,6 +17,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -119,6 +120,7 @@ class CustomerReturnController extends Controller
                 'total_good' => (int) $items->sum('good_qty'),
                 'total_damaged' => (int) $items->sum('damaged_qty'),
                 'note' => $row->note ?? '',
+                'item_image_url' => $this->itemImageUrl($row),
                 'damaged_good_code' => $row->damagedGood?->code,
                 'can_finalize' => !$row->isCompleted(),
             ];
@@ -172,9 +174,14 @@ class CustomerReturnController extends Controller
     public function store(Request $request)
     {
         $validated = $this->validatePayload($request);
+        $storedItemImage = null;
 
         DB::beginTransaction();
         try {
+            if ($request->hasFile('item_image')) {
+                $storedItemImage = $request->file('item_image')->store('customer-return-item-images', 'public');
+            }
+
             $customerReturn = CustomerReturn::create([
                 'code' => $this->generateCode('CRT'),
                 'resi_id' => $validated['resi_id'],
@@ -184,6 +191,7 @@ class CustomerReturnController extends Controller
                 'inspected_at' => $validated['received_at'],
                 'status' => CustomerReturn::STATUS_INSPECTED,
                 'note' => $validated['note'],
+                'item_image_path' => $storedItemImage ? 'storage/'.$storedItemImage : null,
                 'created_by' => auth()->id(),
                 'inspected_by' => auth()->id(),
             ]);
@@ -193,9 +201,15 @@ class CustomerReturnController extends Controller
             DB::commit();
         } catch (ValidationException $e) {
             DB::rollBack();
+            if ($storedItemImage) {
+                Storage::disk('public')->delete($storedItemImage);
+            }
             throw $e;
         } catch (\Throwable $e) {
             DB::rollBack();
+            if ($storedItemImage) {
+                Storage::disk('public')->delete($storedItemImage);
+            }
 
             if (!$request->expectsJson()) {
                 return back()->withErrors([
@@ -229,11 +243,24 @@ class CustomerReturnController extends Controller
 
         return view('admin.inventory.customer-returns.show', [
             'customerReturn' => $customerReturn,
+            'itemImageUrl' => $this->itemImageUrl($customerReturn),
             'pageTitle' => 'Detail Retur Customer',
             'pageHeading' => 'Detail Retur Customer',
             'backUrl' => route('admin.inventory.customer-returns.index'),
             'displayWarehouseLabel' => $this->displayWarehouseLabel(),
             'damagedWarehouseLabel' => $this->damagedWarehouseLabel(),
+        ]);
+    }
+
+    public function itemImage(int $id)
+    {
+        $customerReturn = CustomerReturn::findOrFail($id);
+        $path = $this->storageRelativePath($customerReturn->item_image_path);
+
+        abort_if(!$path || !Storage::disk('public')->exists($path), 404);
+
+        return Storage::disk('public')->response($path, null, [
+            'Cache-Control' => 'private, max-age=86400',
         ]);
     }
 
@@ -264,6 +291,8 @@ class CustomerReturnController extends Controller
     public function update(Request $request, int $id)
     {
         $validated = $this->validatePayload($request);
+        $newItemImage = null;
+        $oldItemImage = null;
 
         DB::beginTransaction();
         try {
@@ -277,6 +306,15 @@ class CustomerReturnController extends Controller
                 ]);
             }
 
+            if ($request->hasFile('item_image')) {
+                $newItemImage = $request->file('item_image')->store('customer-return-item-images', 'public');
+                $validated['item_image_path'] = 'storage/'.$newItemImage;
+                $oldItemImage = $this->storageRelativePath($customerReturn->item_image_path);
+            } elseif ($request->boolean('remove_item_image')) {
+                $validated['item_image_path'] = null;
+                $oldItemImage = $this->storageRelativePath($customerReturn->item_image_path);
+            }
+
             $customerReturn->update([
                 'resi_id' => $validated['resi_id'],
                 'resi_no' => $validated['resi_no'],
@@ -284,6 +322,9 @@ class CustomerReturnController extends Controller
                 'received_at' => $validated['received_at'],
                 'inspected_at' => $validated['received_at'],
                 'note' => $validated['note'],
+                'item_image_path' => array_key_exists('item_image_path', $validated)
+                    ? $validated['item_image_path']
+                    : $customerReturn->item_image_path,
                 'inspected_by' => auth()->id(),
                 'status' => CustomerReturn::STATUS_INSPECTED,
             ]);
@@ -292,11 +333,21 @@ class CustomerReturnController extends Controller
             $this->persistItems($customerReturn, $validated['items']);
 
             DB::commit();
+
+            if ($oldItemImage) {
+                Storage::disk('public')->delete($oldItemImage);
+            }
         } catch (ValidationException $e) {
             DB::rollBack();
+            if ($newItemImage) {
+                Storage::disk('public')->delete($newItemImage);
+            }
             throw $e;
         } catch (\Throwable $e) {
             DB::rollBack();
+            if ($newItemImage) {
+                Storage::disk('public')->delete($newItemImage);
+            }
 
             if (!$request->expectsJson()) {
                 return back()->withErrors([
@@ -337,8 +388,13 @@ class CustomerReturnController extends Controller
                 ]);
             }
 
+            $itemImage = $this->storageRelativePath($customerReturn->item_image_path);
             $customerReturn->delete();
             DB::commit();
+
+            if ($itemImage) {
+                Storage::disk('public')->delete($itemImage);
+            }
         } catch (ValidationException $e) {
             DB::rollBack();
             throw $e;
@@ -567,6 +623,8 @@ class CustomerReturnController extends Controller
             'order_ref' => ['nullable', 'string', 'max:100'],
             'received_at' => ['required', 'date'],
             'note' => ['nullable', 'string'],
+            'item_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+            'remove_item_image' => ['nullable', 'boolean'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.item_id' => ['required', 'integer', 'exists:items,id'],
             'items.*.expected_qty' => ['nullable', 'integer', 'min:0'],
@@ -639,6 +697,7 @@ class CustomerReturnController extends Controller
         $validated['received_at'] = Carbon::parse($validated['received_at']);
         $validated['note'] = $validated['note'] ?? null;
         $validated['items'] = $rows;
+        unset($validated['item_image'], $validated['remove_item_image']);
 
         return $validated;
     }
@@ -741,6 +800,7 @@ class CustomerReturnController extends Controller
             'inspected_at' => $customerReturn->inspected_at?->format('Y-m-d H:i'),
             'finalized_at' => $customerReturn->finalized_at?->format('Y-m-d H:i'),
             'note' => $customerReturn->note,
+            'item_image_url' => $this->itemImageUrl($customerReturn),
             'damaged_good_code' => $customerReturn->damagedGood?->code,
             'items' => $customerReturn->items->map(function (CustomerReturnItem $row) {
                 return [
@@ -783,7 +843,26 @@ class CustomerReturnController extends Controller
             'items' => $items,
             'displayWarehouseLabel' => $this->displayWarehouseLabel(),
             'damagedWarehouseLabel' => $this->damagedWarehouseLabel(),
+            'itemImageUrl' => $customerReturn ? $this->itemImageUrl($customerReturn) : null,
         ];
+    }
+
+    private function itemImageUrl(CustomerReturn $customerReturn): ?string
+    {
+        if (!$customerReturn->item_image_path) {
+            return null;
+        }
+
+        return route('admin.inventory.customer-returns.item-image', $customerReturn->id);
+    }
+
+    private function storageRelativePath(?string $path): ?string
+    {
+        if (!$path || !str_starts_with($path, 'storage/')) {
+            return null;
+        }
+
+        return Str::after($path, 'storage/');
     }
 
     private function displayWarehouseLabel(): string

@@ -107,7 +107,7 @@
                         <th>Submit By</th>
                         <th>Gudang</th>
                         @if(!empty($showDeliveryNoteFields ?? false))
-                            <th>Surat Jalan</th>
+                            <th>{{ $deliveryNoteColumnLabel ?? 'Surat Jalan' }}</th>
                         @endif
                         @if(!empty($showSupplierColumn ?? false))
                             <th>Supplier</th>
@@ -213,12 +213,12 @@
                     @endif
                     @if(!empty($showDeliveryNoteFields ?? false))
                         <div class="fv-row mb-7">
-                            <label class="fs-6 fw-bold form-label mb-2">No Surat Jalan</label>
+                            <label class="fs-6 fw-bold form-label mb-2">{{ $deliveryNoteNoLabel ?? 'No Surat Jalan' }}</label>
                             <input type="text" class="form-control form-control-solid" name="surat_jalan_no" id="flow_surat_jalan_no" />
                             <div class="invalid-feedback" id="error_surat_jalan_no"></div>
                         </div>
                         <div class="fv-row mb-7">
-                            <label class="fs-6 fw-bold form-label mb-2">Tanggal Surat Jalan</label>
+                            <label class="fs-6 fw-bold form-label mb-2">{{ $deliveryNoteDateLabel ?? 'Tanggal Surat Jalan' }}</label>
                             <input type="text" class="form-control form-control-solid" name="surat_jalan_at" id="flow_surat_jalan_at" placeholder="YYYY-MM-DD" />
                             <div class="invalid-feedback" id="error_surat_jalan_at"></div>
                         </div>
@@ -228,7 +228,7 @@
                             <div class="form-text">Opsional. Format JPG, PNG, atau WEBP. Maksimal 2 MB.</div>
                             <div class="invalid-feedback d-block" id="error_surat_jalan_image"></div>
                             <div class="mt-3" id="flow_surat_jalan_image_preview" style="display:none;">
-                                <a href="#" target="_blank" rel="noopener" class="btn btn-light-primary btn-sm" id="flow_surat_jalan_image_link">Lihat gambar saat ini</a>
+                                <a href="#" target="_blank" rel="noopener" class="btn btn-light-primary btn-sm" id="flow_surat_jalan_image_link">{{ $deliveryNoteImageLinkLabel ?? 'Lihat gambar saat ini' }}</a>
                                 <label class="form-check form-check-sm form-check-custom form-check-solid mt-3">
                                     <input class="form-check-input" type="checkbox" name="remove_surat_jalan_image" id="flow_remove_surat_jalan_image" value="1" />
                                     <span class="form-check-label">Hapus gambar saat ini</span>
@@ -390,6 +390,7 @@
     const deleteWarningText = @json($deleteWarningText ?? 'Data akan dihapus dan stok akan dikembalikan');
     const showScanProgressColumn = {{ !empty($showScanProgressColumn ?? false) ? 'true' : 'false' }};
     const deliveryNotePrefixMap = @json($deliveryNotePrefixMap ?? []);
+    const deliveryNoteImageLinkLabel = @json($deliveryNoteImageLinkLabel ?? 'Lihat Gambar');
     const showRecipientFields = {{ !empty($showRecipientFields ?? false) ? 'true' : 'false' }};
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -1119,7 +1120,7 @@
                         const parts = [
                             no || '-',
                             at ? `<div class="text-muted fs-8">${at}</div>` : '',
-                            imageUrl ? `<div class="mt-1"><a href="${escapeHtml(imageUrl)}" target="_blank" rel="noopener" class="badge badge-light-primary">Lihat Gambar</a></div>` : '',
+                            imageUrl ? `<div class="mt-1"><a href="${escapeHtml(imageUrl)}" target="_blank" rel="noopener" class="badge badge-light-primary">${escapeHtml(deliveryNoteImageLinkLabel)}</a></div>` : '',
                         ].filter(Boolean);
                         return parts.join('');
                     }},

@@ -462,6 +462,7 @@
     };
 
     const showError = (message, details = []) => {
+        window.AppScanSound?.error?.();
         if (typeof Swal !== 'undefined') {
             let html = `<div style="text-align:left; font-size:13px;">${message}</div>`;
             if (Array.isArray(details) && details.length) {

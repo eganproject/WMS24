@@ -281,6 +281,11 @@ document.addEventListener('DOMContentLoaded', () => {
         scanStatus.textContent = message || '';
         scanStatus.classList.remove('is-error', 'is-success');
         if (type) scanStatus.classList.add(type === 'error' ? 'is-error' : 'is-success');
+        if (type === 'success') {
+            window.AppScanSound?.success?.();
+        } else if (type === 'error') {
+            window.AppScanSound?.error?.();
+        }
     };
 
     const requestJson = async (url, options = {}) => {

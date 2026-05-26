@@ -324,6 +324,11 @@
     const setStatus = (target, text, type = 'muted') => {
         if (!target) return;
         target.textContent = text;
+        if (type === 'success') {
+            window.AppScanSound?.success?.();
+        } else if (type === 'error') {
+            window.AppScanSound?.error?.();
+        }
         if (type === 'error') {
             target.style.color = '#b91c1c';
         } else if (type === 'success') {
@@ -428,6 +433,7 @@
     };
 
     const showError = (message, details = []) => {
+        window.AppScanSound?.error?.();
         if (typeof Swal !== 'undefined') {
             Swal.fire({
                 icon: 'error',

@@ -323,9 +323,25 @@ class InboundController extends Controller
             'statusLabels' => $statusLabels,
             'lockedStatuses' => [InboundScanStatus::SCANNING, InboundScanStatus::COMPLETED, 'approved'],
             'showDeliveryNoteFields' => true,
+            'deliveryNoteColumnLabel' => match ($type) {
+                'return' => 'Referensi Retur',
+                default => 'Surat Jalan',
+            },
+            'deliveryNoteNoLabel' => match ($type) {
+                'return' => 'No Referensi Retur',
+                default => 'No Surat Jalan',
+            },
+            'deliveryNoteDateLabel' => match ($type) {
+                'return' => 'Tanggal Retur',
+                default => 'Tanggal Surat Jalan',
+            },
             'deliveryNoteImageLabel' => match ($type) {
-                'return' => 'Gambar Bukti Retur',
+                'return' => 'Gambar Barang',
                 default => 'Gambar Surat Jalan',
+            },
+            'deliveryNoteImageLinkLabel' => match ($type) {
+                'return' => 'Lihat Gambar Barang',
+                default => 'Lihat Gambar',
             },
             'deliveryNotePrefixMap' => [
                 'receipt' => 'SJ-RCV',
@@ -597,7 +613,7 @@ class InboundController extends Controller
         DB::beginTransaction();
         try {
             if ($request->hasFile('surat_jalan_image')) {
-                $storedSuratJalanImage = $request->file('surat_jalan_image')->store('inbound-surat-jalan', 'public');
+                $storedSuratJalanImage = $request->file('surat_jalan_image')->store($this->imageDirectoryForType($type), 'public');
             }
 
             $transaction = InboundTransaction::create([
@@ -681,7 +697,7 @@ class InboundController extends Controller
             ];
 
             if ($request->hasFile('surat_jalan_image')) {
-                $newSuratJalanImage = $request->file('surat_jalan_image')->store('inbound-surat-jalan', 'public');
+                $newSuratJalanImage = $request->file('surat_jalan_image')->store($this->imageDirectoryForType($type), 'public');
                 $update['surat_jalan_image_path'] = 'storage/'.$newSuratJalanImage;
                 $oldSuratJalanImage = $this->storageRelativePath($transaction->surat_jalan_image_path);
             } elseif ($request->boolean('remove_surat_jalan_image')) {
@@ -888,6 +904,13 @@ class InboundController extends Controller
         }
 
         return route('admin.inbound.surat-jalan-image', $transaction->id);
+    }
+
+    private function imageDirectoryForType(string $type): string
+    {
+        return $type === 'return'
+            ? 'inbound-return-item-images'
+            : 'inbound-surat-jalan';
     }
 
     private function storageRelativePath(?string $path): ?string

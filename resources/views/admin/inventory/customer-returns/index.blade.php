@@ -401,6 +401,9 @@
             const damagedGood = row.damaged_good_code
                 ? `<div class="customer-return-doc-submeta"><span class="badge badge-light-danger">Barang Rusak ${escapeHtml(row.damaged_good_code)}</span></div>`
                 : '';
+            const itemImage = row.item_image_url
+                ? `<div class="customer-return-doc-submeta"><a href="${escapeHtml(row.item_image_url)}" target="_blank" rel="noopener" class="badge badge-light-primary">Gambar Barang</a></div>`
+                : '';
 
             return `
                 <div class="customer-return-doc-cell">
@@ -417,6 +420,7 @@
                         <span class="customer-return-meta-label">Order Ref</span>
                         <span class="text-gray-700">${escapeHtml(orderRef)}</span>
                     </div>
+                    ${itemImage}
                     ${damagedGood}
                 </div>
             `;

@@ -278,6 +278,7 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/customer-returns/lookup', [CustomerReturnController::class, 'lookup'])->name('customer-returns.lookup');
         Route::post('/customer-returns', [CustomerReturnController::class, 'store'])->name('customer-returns.store');
         Route::post('/customer-returns/finalize', [CustomerReturnController::class, 'finalize'])->name('customer-returns.finalize');
+        Route::get('/customer-returns/{id}/item-image', [CustomerReturnController::class, 'itemImage'])->name('customer-returns.item-image');
         Route::get('/customer-returns/{id}/edit', [CustomerReturnController::class, 'edit'])->name('customer-returns.edit');
         Route::get('/customer-returns/{id}', [CustomerReturnController::class, 'show'])->name('customer-returns.show');
         Route::put('/customer-returns/{id}', [CustomerReturnController::class, 'update'])->name('customer-returns.update');

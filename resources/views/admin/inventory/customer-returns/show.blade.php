@@ -442,6 +442,16 @@
                             <div class="customer-return-document-meta-label">PIC Finalisasi</div>
                             <div class="customer-return-document-meta-value">{{ $customerReturn->finalizer?->name ?: '-' }}</div>
                         </div>
+                        <div class="customer-return-document-meta-item">
+                            <div class="customer-return-document-meta-label">Gambar Barang</div>
+                            <div class="customer-return-document-meta-value">
+                                @if($itemImageUrl)
+                                    <a href="{{ $itemImageUrl }}" target="_blank" rel="noopener">Lihat gambar barang</a>
+                                @else
+                                    -
+                                @endif
+                            </div>
+                        </div>
                     </div>
                 </div>
 

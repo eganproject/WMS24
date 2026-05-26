@@ -23,6 +23,7 @@ class CustomerReturn extends Model
         'finalized_at',
         'status',
         'note',
+        'item_image_path',
         'created_by',
         'inspected_by',
         'finalized_by',

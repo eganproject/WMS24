@@ -748,6 +748,70 @@
                 };
             }
 
+            if (!window.AppScanSound) {
+                let scanAudioContext = null;
+                let lastPlayedAt = 0;
+
+                const getScanAudioContext = async () => {
+                    const Context = window.AudioContext || window.webkitAudioContext;
+                    if (!Context) return null;
+                    if (!scanAudioContext) {
+                        scanAudioContext = new Context();
+                    }
+                    if (scanAudioContext.state === 'suspended') {
+                        await scanAudioContext.resume().catch(() => {});
+                    }
+                    return scanAudioContext;
+                };
+
+                const playTone = async (steps) => {
+                    const now = Date.now();
+                    if (now - lastPlayedAt < 90) return;
+                    lastPlayedAt = now;
+
+                    const context = await getScanAudioContext();
+                    if (!context) return;
+
+                    const gain = context.createGain();
+                    gain.connect(context.destination);
+                    gain.gain.setValueAtTime(0.0001, context.currentTime);
+                    gain.gain.linearRampToValueAtTime(0.08, context.currentTime + 0.01);
+
+                    let totalDuration = 0;
+                    steps.forEach((step) => {
+                        const start = context.currentTime + (step.offset || 0);
+                        const duration = step.duration || 0.1;
+                        const oscillator = context.createOscillator();
+                        oscillator.type = step.type || 'sine';
+                        oscillator.frequency.setValueAtTime(step.frequency, start);
+                        oscillator.connect(gain);
+                        oscillator.start(start);
+                        oscillator.stop(start + duration);
+                        totalDuration = Math.max(totalDuration, (step.offset || 0) + duration);
+                    });
+
+                    gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + totalDuration + 0.05);
+                    window.setTimeout(() => gain.disconnect(), (totalDuration + 0.12) * 1000);
+                };
+
+                window.AppScanSound = {
+                    unlock: () => getScanAudioContext(),
+                    success: () => playTone([
+                        { frequency: 880, duration: 0.07 },
+                        { frequency: 1180, offset: 0.07, duration: 0.08 },
+                    ]),
+                    complete: () => playTone([
+                        { frequency: 880, duration: 0.07 },
+                        { frequency: 1174, offset: 0.07, duration: 0.07 },
+                        { frequency: 1568, offset: 0.14, duration: 0.1 },
+                    ]),
+                    error: () => playTone([
+                        { frequency: 320, duration: 0.1, type: 'square' },
+                        { frequency: 220, offset: 0.1, duration: 0.12, type: 'square' },
+                    ]),
+                };
+            }
+
             document.addEventListener('DOMContentLoaded', () => {
                 enforceModalBackdrops();
                 patchSelect2ForModals();

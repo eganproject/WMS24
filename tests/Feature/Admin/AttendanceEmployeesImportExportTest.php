@@ -6,12 +6,14 @@ use App\Exports\EmployeesExport;
 use App\Models\Area;
 use App\Models\Employee;
 use App\Models\EmployeePosition;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Tests\TestCase;
+use Illuminate\Support\Facades\Hash;
 
 class AttendanceEmployeesImportExportTest extends TestCase
 {
@@ -50,7 +52,9 @@ class AttendanceEmployeesImportExportTest extends TestCase
     {
         $position = EmployeePosition::create(['name' => 'Picker', 'is_active' => true]);
         $area = Area::create(['code' => 'GDG', 'name' => 'Gudang', 'is_active' => true]);
+        $role = Role::create(['name' => 'Picker', 'slug' => 'picker']);
         $login = User::factory()->create(['email' => 'sari@example.com']);
+        $login->roles()->sync([$role->id]);
         $employee = Employee::create([
             'employee_code' => 'K9002',
             'name' => 'Sari Export',
@@ -73,8 +77,11 @@ class AttendanceEmployeesImportExportTest extends TestCase
             'position_id',
             'area',
             'area_id',
+            'create_user',
             'user_email',
             'user_id',
+            'user_password',
+            'user_roles',
             'join_date',
         ], $export->headings());
 
@@ -87,10 +94,44 @@ class AttendanceEmployeesImportExportTest extends TestCase
             $position->id,
             'GDG',
             $area->id,
+            '',
             'sari@example.com',
             $login->id,
+            '',
+            'picker',
             '2026-05-30',
         ], $export->map($employee->fresh(['area', 'positionRelation', 'user'])));
+    }
+
+    public function test_employee_import_can_create_user_with_roles_when_requested(): void
+    {
+        $role = Role::create(['name' => 'Picker', 'slug' => 'picker']);
+        $area = Area::create(['code' => 'GDG', 'name' => 'Gudang', 'is_active' => true]);
+        $file = $this->makeExcelUpload([
+            ['employee_code', 'name', 'employment_status', 'area', 'create_user', 'user_email', 'user_password', 'user_roles'],
+            ['K9003', 'Dina Login', 'Aktif', $area->code, 'yes', 'dina@example.com', 'Password!2', 'picker'],
+        ]);
+
+        $this->actingAs(User::factory()->create())
+            ->withoutMiddleware()
+            ->post(route('admin.attendance.employees.import'), [
+                'file' => $file,
+                'mode' => 'create_only',
+            ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('created', 1)
+            ->assertJsonPath('updated', 0)
+            ->assertJsonPath('users_created', 1);
+
+        $user = User::where('email', 'dina@example.com')->first();
+        $employee = Employee::where('employee_code', 'K9003')->first();
+
+        $this->assertNotNull($user);
+        $this->assertNotNull($employee);
+        $this->assertSame($user->id, $employee->user_id);
+        $this->assertSame($area->id, $user->area_id);
+        $this->assertTrue(Hash::check('Password!2', $user->password));
+        $this->assertSame([$role->id], $user->roles()->pluck('roles.id')->all());
     }
 
     /**

@@ -20,8 +20,11 @@ class EmployeesTemplateExport implements FromCollection, WithHeadings
                 '',
                 'GDG',
                 '',
+                'yes',
                 'budi@example.com',
                 '',
+                'Password!2',
+                'picker',
                 now()->toDateString(),
             ],
         ]);
@@ -38,8 +41,11 @@ class EmployeesTemplateExport implements FromCollection, WithHeadings
             'position_id',
             'area',
             'area_id',
+            'create_user',
             'user_email',
             'user_id',
+            'user_password',
+            'user_roles',
             'join_date',
         ];
     }

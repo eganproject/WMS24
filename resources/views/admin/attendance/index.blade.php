@@ -1076,9 +1076,11 @@
                         Wajib: <code>name</code>.
                         Opsional: <code>phone</code>, <code>employment_status</code>, <code>position</code>,
                         <code>position_id</code>, <code>area</code>, <code>area_id</code>, <code>user_email</code>,
-                        <code>user_id</code>, <code>join_date</code>, <code>employee_code</code>.
+                        <code>user_id</code>, <code>create_user</code>, <code>user_password</code>, <code>user_roles</code>,
+                        <code>join_date</code>, <code>employee_code</code>.
                     </div>
                     <div class="fs-8 text-muted mt-2">Kosongkan <code>employee_code</code> agar sistem membuat kode pendek otomatis. Status kerja bisa diisi <code>active</code>/<code>aktif</code> atau <code>inactive</code>/<code>nonaktif</code>.</div>
+                    <div class="fs-8 text-muted mt-2">Jika ingin sekaligus membuat user login, isi <code>create_user</code> dengan <code>yes</code>, lalu wajib isi <code>user_email</code>, <code>user_password</code>, dan <code>user_roles</code>. Role bisa berupa slug/nama/id dan bisa dipisah koma.</div>
                 </div>
                 <div class="mb-4">
                     <label class="form-label fw-bold">Mode Import</label>
@@ -1917,7 +1919,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            const detail = `Created: ${json.created ?? 0}, Updated: ${json.updated ?? 0}`;
+            const detail = `Created: ${json.created ?? 0}, Updated: ${json.updated ?? 0}, User dibuat: ${json.users_created ?? 0}`;
             Swal?.fire('Berhasil', `${json.message || 'Import karyawan berhasil'} (${detail})`, 'success');
             if (employeeImportFile) employeeImportFile.value = '';
             importEmployeesModal?.hide();

@@ -35,6 +35,7 @@ class EmployeesImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             $detected = implode(', ', array_filter($headers));
             throw ValidationException::withMessages([
                 'file' => 'Header wajib: name. Header opsional: employee_code, phone, employment_status, position, position_id, area, area_id, user_email, user_id, join_date. '
+                    .'Untuk buat user baru opsional: create_user, user_password, user_roles. '
                     .($detected !== '' ? 'Header terdeteksi: '.$detected : ''),
             ]);
         }
@@ -55,6 +56,9 @@ class EmployeesImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             $positionRaw = trim((string) ($rowData['position_id'] ?? $rowData['position_code'] ?? $rowData['position_name'] ?? $position));
             $areaRaw = trim((string) ($rowData['area_id'] ?? $rowData['area_code'] ?? $rowData['area'] ?? ''));
             $userRaw = trim((string) ($rowData['user_id'] ?? $rowData['user_email'] ?? $rowData['email'] ?? ''));
+            $createUser = $this->normalizeBoolean($rowData['create_user'] ?? $rowData['buat_user'] ?? false);
+            $userPassword = (string) ($rowData['user_password'] ?? $rowData['password'] ?? '');
+            $userRoles = trim((string) ($rowData['user_roles'] ?? $rowData['roles'] ?? $rowData['role'] ?? ''));
             $joinDate = $rowData['join_date'] ?? null;
 
             if ($name === '') {
@@ -85,6 +89,31 @@ class EmployeesImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
                 $seenUserRefs[$userKey] = true;
             }
 
+            if ($createUser && $userRaw === '') {
+                $errors[] = "Baris {$rowIndex}: user_email wajib diisi jika create_user bernilai yes";
+                continue;
+            }
+
+            if ($createUser && !filter_var($userRaw, FILTER_VALIDATE_EMAIL)) {
+                $errors[] = "Baris {$rowIndex}: create_user hanya mendukung user_email yang valid";
+                continue;
+            }
+
+            if ($createUser && trim($userPassword) !== '' && mb_strlen($userPassword) < 6) {
+                $errors[] = "Baris {$rowIndex}: user_password minimal 6 karakter";
+                continue;
+            }
+
+            if ($createUser && trim($userPassword) === '') {
+                $errors[] = "Baris {$rowIndex}: user_password wajib diisi untuk membuat user baru";
+                continue;
+            }
+
+            if ($createUser && $userRoles === '') {
+                $errors[] = "Baris {$rowIndex}: user_roles wajib diisi untuk membuat user baru";
+                continue;
+            }
+
             $this->rows[] = [
                 'row' => $rowIndex,
                 'employee_code' => $employeeCode,
@@ -95,6 +124,9 @@ class EmployeesImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
                 'position_raw' => $positionRaw,
                 'area_raw' => $areaRaw,
                 'user_raw' => $userRaw,
+                'create_user' => $createUser,
+                'user_password' => $userPassword,
+                'user_roles_raw' => $userRoles,
                 'join_date' => $joinDate,
             ];
         }
@@ -151,6 +183,9 @@ class EmployeesImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             'id_area', 'lane_id' => 'area_id',
             'kode_area', 'area_code', 'lane_code', 'kode_lane' => 'area_code',
             'user', 'email_user', 'user_login' => 'user_email',
+            'buat_user', 'create_login', 'buat_login' => 'create_user',
+            'password_user', 'password_login' => 'user_password',
+            'role_user', 'roles_user', 'role_login', 'roles_login' => 'user_roles',
             'tanggal_masuk', 'tgl_masuk', 'join_date', 'tanggal_join' => 'join_date',
             default => $key,
         };
@@ -167,5 +202,14 @@ class EmployeesImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             'inactive', 'nonaktif', 'non_aktif', 'tidak_aktif', '0', 'tidak', 'no' => 'inactive',
             default => $status,
         };
+    }
+
+    private function normalizeBoolean(mixed $value): bool
+    {
+        $normalized = mb_strtolower(trim((string) $value));
+        $normalized = preg_replace('/[^\p{L}\p{N}]+/u', '_', $normalized);
+        $normalized = trim((string) $normalized, '_');
+
+        return in_array($normalized, ['1', 'yes', 'ya', 'y', 'true', 'buat', 'create'], true);
     }
 }

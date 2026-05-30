@@ -18,7 +18,7 @@ class EmployeesExport implements FromCollection, WithHeadings, WithMapping, Shou
     public function collection(): Collection
     {
         $query = Employee::query()
-            ->with(['area:id,code,name', 'positionRelation:id,name', 'user:id,email'])
+            ->with(['area:id,code,name', 'positionRelation:id,name', 'user:id,email', 'user.roles:id,slug'])
             ->orderBy('name');
 
         $search = trim($this->search);
@@ -44,8 +44,11 @@ class EmployeesExport implements FromCollection, WithHeadings, WithMapping, Shou
             'position_id',
             'area',
             'area_id',
+            'create_user',
             'user_email',
             'user_id',
+            'user_password',
+            'user_roles',
             'join_date',
         ];
     }
@@ -61,8 +64,11 @@ class EmployeesExport implements FromCollection, WithHeadings, WithMapping, Shou
             $employee->position_id,
             $employee->area?->code,
             $employee->area_id,
+            '',
             $employee->user?->email,
             $employee->user_id,
+            '',
+            $employee->user?->roles?->pluck('slug')->implode(','),
             $employee->join_date?->format('Y-m-d'),
         ];
     }

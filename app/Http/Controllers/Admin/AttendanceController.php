@@ -20,6 +20,7 @@ use App\Models\EmployeePosition;
 use App\Models\EmployeeSchedule;
 use App\Models\EmployeeScheduleAssignment;
 use App\Models\Holiday;
+use App\Models\Role;
 use App\Models\User;
 use App\Models\WeeklyScheduleTemplate;
 use App\Models\WeeklyScheduleTemplateDay;
@@ -30,6 +31,7 @@ use Illuminate\Http\Request;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -305,6 +307,11 @@ class AttendanceController extends Controller
         $userById = $users->keyBy(fn ($user) => (string) $user->id);
         $userByEmail = $users->keyBy(fn ($user) => strtolower((string) $user->email));
 
+        $roles = Role::query()->get(['id', 'name', 'slug']);
+        $roleById = $roles->keyBy(fn ($role) => (string) $role->id);
+        $roleBySlug = $roles->keyBy(fn ($role) => strtolower((string) $role->slug));
+        $roleByName = $roles->keyBy(fn ($role) => strtolower((string) $role->name));
+
         $errors = [];
         $prepared = [];
         $reservedCodes = [];
@@ -354,33 +361,70 @@ class AttendanceController extends Controller
             }
 
             $userId = null;
+            $userPayload = null;
             $userRaw = trim((string) ($row['user_raw'] ?? ''));
+            $createUser = (bool) ($row['create_user'] ?? false);
             if ($userRaw !== '') {
                 $user = is_numeric($userRaw)
                     ? $userById->get((string) $userRaw)
                     : $userByEmail->get(strtolower($userRaw));
 
-                if (!$user) {
+                if (!$user && !$createUser) {
                     $errors[] = "Baris {$rowNo}: User login tidak ditemukan ({$userRaw})";
                     continue;
                 }
 
-                $usedBy = Employee::query()
-                    ->where('user_id', $user->id)
-                    ->when($existingEmployee, fn ($query) => $query->where('id', '!=', $existingEmployee->id))
-                    ->first();
+                if ($user) {
+                    if ($createUser) {
+                        $errors[] = "Baris {$rowNo}: Email user sudah terdaftar ({$userRaw}). Gunakan create_user kosong/no jika ingin menghubungkan user yang sudah ada.";
+                        continue;
+                    }
 
-                if ($usedBy) {
-                    $errors[] = "Baris {$rowNo}: User login sudah dipakai karyawan lain ({$userRaw})";
-                    continue;
+                    $usedBy = Employee::query()
+                        ->where('user_id', $user->id)
+                        ->when($existingEmployee, fn ($query) => $query->where('id', '!=', $existingEmployee->id))
+                        ->first();
+
+                    if ($usedBy) {
+                        $errors[] = "Baris {$rowNo}: User login sudah dipakai karyawan lain ({$userRaw})";
+                        continue;
+                    }
+                    $userId = $user->id;
+                } else {
+                    $roleIds = [];
+                    $tokens = preg_split('/[;,|]+/', (string) ($row['user_roles_raw'] ?? '')) ?: [];
+                    foreach ($tokens as $token) {
+                        $token = trim((string) $token);
+                        if ($token === '') {
+                            continue;
+                        }
+
+                        $role = is_numeric($token)
+                            ? $roleById->get((string) $token)
+                            : ($roleBySlug->get(strtolower($token)) ?? $roleByName->get(strtolower($token)));
+
+                        if (!$role) {
+                            $errors[] = "Baris {$rowNo}: Role user tidak ditemukan ({$token})";
+                            continue 2;
+                        }
+                        $roleIds[] = $role->id;
+                    }
+
+                    $userPayload = [
+                        'name' => $row['name'],
+                        'email' => strtolower($userRaw),
+                        'password' => (string) ($row['user_password'] ?? ''),
+                        'roles' => array_values(array_unique($roleIds)),
+                        'area_id' => $areaId,
+                    ];
                 }
-                $userId = $user->id;
             }
 
             $joinDate = $this->parseEmployeeImportDate($row['join_date'] ?? null, $rowNo);
 
             $prepared[] = [
                 'existing' => $existingEmployee,
+                'user_payload' => $userPayload,
                 'payload' => [
                     'employee_code' => $employeeCode,
                     'name' => $row['name'],
@@ -403,10 +447,25 @@ class AttendanceController extends Controller
 
         $created = 0;
         $updated = 0;
+        $usersCreated = 0;
 
         DB::beginTransaction();
         try {
             foreach ($prepared as $row) {
+                if ($row['user_payload']) {
+                    $newUser = User::create([
+                        'name' => $row['user_payload']['name'],
+                        'email' => $row['user_payload']['email'],
+                        'password' => Hash::make($row['user_payload']['password']),
+                        'avatar' => User::defaultAvatar(),
+                        'email_verified_at' => now(),
+                        'area_id' => $row['user_payload']['area_id'],
+                    ]);
+                    $newUser->roles()->sync($row['user_payload']['roles']);
+                    $row['payload']['user_id'] = $newUser->id;
+                    $usersCreated++;
+                }
+
                 if ($row['existing']) {
                     $row['existing']->update($row['payload']);
                     $updated++;
@@ -431,6 +490,7 @@ class AttendanceController extends Controller
             'message' => 'Import karyawan berhasil',
             'created' => $created,
             'updated' => $updated,
+            'users_created' => $usersCreated,
         ]);
     }
 

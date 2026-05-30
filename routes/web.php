@@ -449,6 +449,7 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/absences/export', [AttendanceController::class, 'exportAbsences'])->name('absences.export');
         Route::get('/employee-schedule', [AttendanceController::class, 'employeeSchedule'])->name('employee-schedule.index');
         Route::get('/employees/data', [AttendanceController::class, 'employeesData'])->name('employees.data');
+        Route::get('/employees/export', [AttendanceController::class, 'exportEmployees'])->name('employees.export');
         Route::get('/employees/import-template', [AttendanceController::class, 'downloadEmployeesImportTemplate'])->name('employees.import-template');
         Route::post('/employees', [AttendanceController::class, 'storeEmployee'])->name('employees.store');
         Route::post('/employees/import', [AttendanceController::class, 'importEmployees'])->name('employees.import');

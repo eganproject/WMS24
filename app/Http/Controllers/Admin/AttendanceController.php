@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Exports\AbsentEmployeesExport;
+use App\Exports\EmployeesExport;
 use App\Exports\EmployeesTemplateExport;
 use App\Imports\EmployeesImport;
 use App\Models\ActivityLog;
@@ -438,6 +439,14 @@ class AttendanceController extends Controller
         return Excel::download(
             new EmployeesTemplateExport(),
             'template_import_karyawan.xlsx'
+        );
+    }
+
+    public function exportEmployees(Request $request)
+    {
+        return Excel::download(
+            new EmployeesExport((string) $request->input('q', '')),
+            'export_karyawan_'.now()->format('Ymd_His').'.xlsx'
         );
     }
 
@@ -1741,7 +1750,7 @@ class AttendanceController extends Controller
             'phone' => ['nullable', 'string', 'max:50'],
             'position' => ['nullable', 'string', 'max:100'],
             'join_date' => ['nullable', 'date'],
-            'employment_status' => ['required', 'string', 'max:30'],
+            'employment_status' => ['required', Rule::in([Employee::STATUS_ACTIVE, Employee::STATUS_INACTIVE])],
         ]);
 
         $validated['employee_code'] = trim((string) ($validated['employee_code'] ?? ''));

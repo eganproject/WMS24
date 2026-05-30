@@ -50,7 +50,7 @@ class EmployeesImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             $employeeCode = trim((string) ($rowData['employee_code'] ?? ''));
             $name = trim((string) ($rowData['name'] ?? ''));
             $phone = trim((string) ($rowData['phone'] ?? ''));
-            $employmentStatus = strtolower(trim((string) ($rowData['employment_status'] ?? 'active')));
+            $employmentStatus = $this->normalizeStatus($rowData['employment_status'] ?? 'active');
             $position = trim((string) ($rowData['position'] ?? ''));
             $positionRaw = trim((string) ($rowData['position_id'] ?? $rowData['position_code'] ?? $rowData['position_name'] ?? $position));
             $areaRaw = trim((string) ($rowData['area_id'] ?? $rowData['area_code'] ?? $rowData['area'] ?? ''));
@@ -72,7 +72,7 @@ class EmployeesImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             }
 
             if (!in_array($employmentStatus, ['active', 'inactive'], true)) {
-                $errors[] = "Baris {$rowIndex}: employment_status harus active atau inactive";
+                $errors[] = "Baris {$rowIndex}: employment_status harus active/aktif atau inactive/nonaktif";
                 continue;
             }
 
@@ -153,6 +153,19 @@ class EmployeesImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             'user', 'email_user', 'user_login' => 'user_email',
             'tanggal_masuk', 'tgl_masuk', 'join_date', 'tanggal_join' => 'join_date',
             default => $key,
+        };
+    }
+
+    private function normalizeStatus(mixed $value): string
+    {
+        $status = mb_strtolower(trim((string) $value));
+        $status = preg_replace('/[^\p{L}\p{N}]+/u', '_', $status);
+        $status = trim((string) $status, '_');
+
+        return match ($status) {
+            '', 'active', 'aktif', '1', 'ya', 'yes' => 'active',
+            'inactive', 'nonaktif', 'non_aktif', 'tidak_aktif', '0', 'tidak', 'no' => 'inactive',
+            default => $status,
         };
     }
 }

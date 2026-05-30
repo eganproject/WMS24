@@ -451,6 +451,9 @@
                 <input type="text" class="form-control form-control-solid" placeholder="Cari data pada tab aktif..." id="attendance_search" />
             </div>
             <div class="att-toolbar-actions">
+                <button type="button" class="btn btn-light-primary d-none" id="attendance_export_employees">
+                    <i class="fas fa-file-excel me-1"></i>Export Karyawan
+                </button>
                 <button type="button" class="btn btn-light-primary d-none" id="attendance_import_employees">
                     <i class="fas fa-file-import me-1"></i>Import Karyawan
                 </button>
@@ -1075,7 +1078,7 @@
                         <code>position_id</code>, <code>area</code>, <code>area_id</code>, <code>user_email</code>,
                         <code>user_id</code>, <code>join_date</code>, <code>employee_code</code>.
                     </div>
-                    <div class="fs-8 text-muted mt-2">Kosongkan <code>employee_code</code> agar sistem membuat kode pendek otomatis. Status kerja isi <code>active</code> atau <code>inactive</code>.</div>
+                    <div class="fs-8 text-muted mt-2">Kosongkan <code>employee_code</code> agar sistem membuat kode pendek otomatis. Status kerja bisa diisi <code>active</code>/<code>aktif</code> atau <code>inactive</code>/<code>nonaktif</code>.</div>
                 </div>
                 <div class="mb-4">
                     <label class="form-label fw-bold">Mode Import</label>
@@ -1172,6 +1175,7 @@ const calendarEventsUrl = '{{ route('admin.attendance.schedules.calendar-events'
 const assignTemplateUrl = '{{ route('admin.attendance.templates.assign') }}';
 const employeeImportUrl = '{{ route('admin.attendance.employees.import') }}';
 const employeeImportTemplateUrl = '{{ route('admin.attendance.employees.import-template') }}';
+const employeeExportUrl = '{{ route('admin.attendance.employees.export') }}';
 const nextEmployeeCode = @json($nextEmployeeCode ?? 'K0001');
 const weeklyTemplateOptions = @json($templateOptions ?? []);
 const positionStoreUrl = '{{ route('admin.attendance.positions.store') }}';
@@ -1253,8 +1257,20 @@ function renderLeaveStatusBadge(value) {
 
     return `<span class="badge ${classes[value] || 'badge-light'}">${labels[value] || value || '-'}</span>`;
 }
+function renderEmployeeStatusBadge(value) {
+    const labels = {
+        active: 'Aktif',
+        inactive: 'Nonaktif',
+    };
+    const classes = {
+        active: 'badge-light-success',
+        inactive: 'badge-light-secondary',
+    };
+
+    return `<span class="badge ${classes[value] || 'badge-light'}">${labels[value] || value || '-'}</span>`;
+}
 const tableConfigs = {
-    employees_table: { url: '{{ route('admin.attendance.employees.data') }}', columns: ['employee_code','name','area','user','phone','position','employment_status','__actions'] },
+    employees_table: { url: '{{ route('admin.attendance.employees.data') }}', columns: ['employee_code','name','area','user','phone','position',{ data: 'employment_status', render: renderEmployeeStatusBadge },'__actions'] },
     positions_table: { url: '{{ route('admin.attendance.positions.data') }}', columns: [
         'name',
         'description',
@@ -1378,6 +1394,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const formModalTitle = document.getElementById('attendance_form_modal_title');
     const formModalSubtitle = document.getElementById('attendance_form_modal_subtitle');
     const openFormButton = document.getElementById('attendance_open_form');
+    const exportEmployeesButton = document.getElementById('attendance_export_employees');
     const importEmployeesButton = document.getElementById('attendance_import_employees');
     const importEmployeesModalEl = document.getElementById('attendance_import_employees_modal');
     const importEmployeesModal = importEmployeesModalEl && typeof bootstrap !== 'undefined'
@@ -1473,6 +1490,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         openFormButton.classList.toggle('d-none', !hasCreateForm);
+        exportEmployeesButton?.classList.toggle('d-none', section !== 'employees');
         importEmployeesButton?.classList.toggle('d-none', section !== 'employees');
         openFormButton.dataset.activeSection = section;
         openFormButton.querySelector('span').textContent = section === 'raw_logs'
@@ -1863,6 +1881,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (employeeImportError) employeeImportError.textContent = '';
         if (employeeImportMode) employeeImportMode.value = 'create_only';
         importEmployeesModal?.show();
+    });
+    exportEmployeesButton?.addEventListener('click', () => {
+        const q = searchInput?.value?.trim() || '';
+        window.location.href = q ? `${employeeExportUrl}?q=${encodeURIComponent(q)}` : employeeExportUrl;
     });
     employeeImportSubmit?.addEventListener('click', async () => {
         if (!employeeImportUrl) return;

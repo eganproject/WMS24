@@ -108,13 +108,15 @@
             </a>
         @endif
 
-        <a class="menu-card" href="{{ $routes['opname'] }}">
-            <div class="menu-icon opname">SO</div>
-            <div>
-                <div class="menu-title">Stock Opname</div>
-                <div class="menu-desc">Input hasil stock opname dengan cepat.</div>
-            </div>
-        </a>
+        @if(!empty($showOpname))
+            <a class="menu-card" href="{{ $routes['opname'] }}">
+                <div class="menu-icon opname">SO</div>
+                <div>
+                    <div class="menu-title">Stock Opname</div>
+                    <div class="menu-desc">Input hasil stock opname dengan cepat.</div>
+                </div>
+            </a>
+        @endif
 
         @if(!empty($showInboundScan))
             <a class="menu-card" href="{{ $routes['inboundScan'] }}">

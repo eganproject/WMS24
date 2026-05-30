@@ -31,12 +31,15 @@ class AuthenticatedSessionController extends Controller
         $user = $request->user();
         if ($user) {
             $roles = $user->roles()->pluck('slug');
-            $hasPicker = $roles->contains('picker');
-            $hasAdminScan = $roles->contains('admin-scan');
-            $hasQc = $roles->contains('qc');
-            $hasInboundScan = $roles->contains('inbound-scan');
-            $hasOtherRoles = $roles->diff(['picker', 'admin-scan', 'qc', 'inbound-scan'])->isNotEmpty();
-            if (!$hasOtherRoles && ($hasPicker || $hasAdminScan || $hasQc || $hasInboundScan)) {
+            $operationalRoles = ['picker', 'admin-scan', 'qc', 'inbound-scan', 'attendance-performance'];
+            $hasOperationalRole = $roles->intersect($operationalRoles)->isNotEmpty();
+            $hasOtherRoles = $roles->diff($operationalRoles)->isNotEmpty();
+
+            if (!$hasOtherRoles && $roles->count() === 1 && $roles->contains('attendance-performance')) {
+                return redirect()->route('employee.attendance-performance');
+            }
+
+            if (!$hasOtherRoles && $hasOperationalRole) {
                 return redirect()->route('mobile.dashboard');
             }
         }

@@ -14,7 +14,14 @@ class MobileDashboardController extends Controller
         $hasAdminScan = $roles->contains('admin-scan');
         $hasQc = $roles->contains('qc');
         $hasInboundScan = $roles->contains('inbound-scan');
-        $hasOtherRoles = $roles->diff(['picker', 'admin-scan', 'qc', 'inbound-scan'])->isNotEmpty();
+        $hasAttendancePerformance = $roles->contains('attendance-performance');
+        $hasOtherRoles = $roles->diff(['picker', 'admin-scan', 'qc', 'inbound-scan', 'attendance-performance'])->isNotEmpty();
+        $isAttendancePerformanceOnly = $hasAttendancePerformance
+            && !$hasPicker
+            && !$hasAdminScan
+            && !$hasQc
+            && !$hasInboundScan
+            && !$hasOtherRoles;
 
         return view('mobile.dashboard', [
             'routes' => [
@@ -26,6 +33,7 @@ class MobileDashboardController extends Controller
                 'pickingList' => route('mobile.picking-list.index'),
                 'logout' => route('logout'),
             ],
+            'showOpname' => !$isAttendancePerformanceOnly,
             'showInboundScan' => $hasInboundScan || $hasOtherRoles,
             'showQc' => $hasQc || $hasOtherRoles,
             'showScanOut' => $hasAdminScan || $hasOtherRoles,

@@ -22,11 +22,12 @@ class RestrictMobileAccess
         $hasAdminScan = $roles->contains('admin-scan');
         $hasQc = $roles->contains('qc');
         $hasInboundScan = $roles->contains('inbound-scan');
-        if (!$hasPicker && !$hasAdminScan && !$hasQc && !$hasInboundScan) {
+        $hasAttendancePerformance = $roles->contains('attendance-performance');
+        if (!$hasPicker && !$hasAdminScan && !$hasQc && !$hasInboundScan && !$hasAttendancePerformance) {
             return $next($request);
         }
 
-        $hasOtherRoles = $roles->diff(['picker', 'admin-scan', 'qc', 'inbound-scan'])->isNotEmpty();
+        $hasOtherRoles = $roles->diff(['picker', 'admin-scan', 'qc', 'inbound-scan', 'attendance-performance'])->isNotEmpty();
         if ($hasOtherRoles) {
             return $next($request);
         }
@@ -46,12 +47,18 @@ class RestrictMobileAccess
             && !$isScanOutRoute
             && !$isDashboardRoute;
         $isOpnameRoute = str_starts_with($routeName, 'opname.') || str_starts_with($path, 'opname');
+        $isAttendancePerformanceRoute = $routeName === 'employee.attendance-performance'
+            || $path === 'my/attendance-performance';
         $isLogoutRoute = $routeName === 'logout';
         $isDesktopQcRoute = str_starts_with($routeName, 'admin.outbound.qc-scan.')
             || str_starts_with($path, 'admin/outbound/qc-scan');
         $isPermittedAdminMenuRoute = $this->isPermittedAdminMenuRoute($user, $routeName);
 
-        if ($isDashboardRoute || $isLogoutRoute || $isOpnameRoute) {
+        if ($isDashboardRoute || $isLogoutRoute || $isAttendancePerformanceRoute) {
+            return $next($request);
+        }
+
+        if ($isOpnameRoute && !$hasAttendancePerformance) {
             return $next($request);
         }
 

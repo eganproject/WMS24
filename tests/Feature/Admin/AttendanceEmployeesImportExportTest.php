@@ -10,10 +10,10 @@ use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Hash;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Tests\TestCase;
-use Illuminate\Support\Facades\Hash;
 
 class AttendanceEmployeesImportExportTest extends TestCase
 {
@@ -132,6 +132,34 @@ class AttendanceEmployeesImportExportTest extends TestCase
         $this->assertSame($area->id, $user->area_id);
         $this->assertTrue(Hash::check('Password!2', $user->password));
         $this->assertSame([$role->id], $user->roles()->pluck('roles.id')->all());
+    }
+
+    public function test_attendance_performance_role_only_sees_attendance_performance_access(): void
+    {
+        $role = Role::where('slug', 'attendance-performance')->firstOrFail();
+        $user = User::factory()->create();
+        $user->roles()->sync([$role->id]);
+        Employee::create([
+            'user_id' => $user->id,
+            'employee_code' => 'K9004',
+            'name' => 'Rina Performa',
+            'employment_status' => Employee::STATUS_ACTIVE,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('employee.attendance-performance'))
+            ->assertOk()
+            ->assertSee('Performa Absensi');
+
+        $this->actingAs($user)
+            ->get(route('mobile.dashboard'))
+            ->assertOk()
+            ->assertSee('Performa Absensi')
+            ->assertDontSee('Stock Opname');
+
+        $this->actingAs($user)
+            ->get(route('mobile.picking-list.index'))
+            ->assertRedirect(route('mobile.dashboard'));
     }
 
     /**

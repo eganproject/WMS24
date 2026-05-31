@@ -8,6 +8,7 @@ use App\Models\Item;
 use App\Models\ItemStock;
 use App\Models\Warehouse;
 use App\Support\BundleService;
+use App\Support\ItemTextSearch;
 use App\Support\WarehouseService;
 use Illuminate\Http\Request;
 use Maatwebsite\Excel\Facades\Excel;
@@ -55,13 +56,7 @@ class ItemStockController extends Controller
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
-            $exact = $this->isExactSearch($request);
-            $query->where(function ($q) use ($search, $exact) {
-                $this->applyTextSearch($q, 'sku', $search, $exact);
-                $this->applyTextSearch($q, 'name', $search, $exact, 'or');
-                $this->applyTextSearch($q, 'address', $search, $exact, 'or');
-                $this->applyTextSearch($q, 'description', $search, $exact, 'or');
-            });
+            ItemTextSearch::apply($query, $search, $this->isExactSearch($request));
         }
 
         $recordsTotal = Item::count();
@@ -145,7 +140,7 @@ class ItemStockController extends Controller
         $search = trim((string) $request->input('q', ''));
         $filename = 'item-stocks-'.now()->format('YmdHis').'.xlsx';
 
-        return Excel::download(new ItemStocksExport($search), $filename);
+        return Excel::download(new ItemStocksExport($search, $this->isExactSearch($request)), $filename);
     }
 
     public function updateSafety(Request $request)

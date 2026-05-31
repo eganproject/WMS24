@@ -113,6 +113,47 @@ class ItemStockDataTest extends TestCase
         $this->assertFalse($bundleRow['is_display_below_safety']);
     }
 
+    public function test_item_stock_data_search_accepts_multiple_items(): void
+    {
+        Item::create([
+            'sku' => 'SKU-MULTI-001',
+            'name' => 'Item Multi Satu',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+            'safety_stock' => 0,
+        ]);
+        Item::create([
+            'sku' => 'SKU-MULTI-002',
+            'name' => 'Item Multi Dua',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+            'safety_stock' => 0,
+        ]);
+        Item::create([
+            'sku' => 'SKU-MULTI-003',
+            'name' => 'Item Multi Tiga',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+            'safety_stock' => 0,
+        ]);
+
+        $response = $this->withoutMiddleware()->getJson(route('admin.inventory.item-stocks.data', [
+            'draw' => 1,
+            'start' => 0,
+            'length' => 10,
+            'q' => "SKU-MULTI-001\nSKU-MULTI-003",
+        ]));
+
+        $response->assertOk()
+            ->assertJsonPath('recordsFiltered', 2);
+
+        $skus = Collection::make($response->json('data'))->pluck('sku')->all();
+
+        $this->assertContains('SKU-MULTI-001', $skus);
+        $this->assertContains('SKU-MULTI-003', $skus);
+        $this->assertNotContains('SKU-MULTI-002', $skus);
+    }
+
     public function test_item_stock_edit_adjustment_can_be_auto_approved(): void
     {
         $displayWarehouse = Warehouse::firstOrCreate([

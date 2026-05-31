@@ -5,6 +5,7 @@ namespace App\Exports;
 use App\Models\Item;
 use App\Models\Warehouse;
 use App\Support\BundleService;
+use App\Support\ItemTextSearch;
 use App\Support\WarehouseService;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
@@ -14,7 +15,7 @@ use Maatwebsite\Excel\Concerns\WithMapping;
 
 class ItemStocksExport implements FromCollection, WithHeadings, WithMapping, ShouldAutoSize
 {
-    public function __construct(private string $search = '')
+    public function __construct(private string $search = '', private bool $exact = false)
     {
     }
 
@@ -28,12 +29,7 @@ class ItemStocksExport implements FromCollection, WithHeadings, WithMapping, Sho
         }])->orderBy('name');
         $search = trim($this->search);
         if ($search !== '') {
-            $query->where(function ($q) use ($search) {
-                $q->where('sku', 'like', "%{$search}%")
-                    ->orWhere('name', 'like', "%{$search}%")
-                    ->orWhere('address', 'like', "%{$search}%")
-                    ->orWhere('description', 'like', "%{$search}%");
-            });
+            ItemTextSearch::apply($query, $search, $this->exact);
         }
         return $query->get();
     }

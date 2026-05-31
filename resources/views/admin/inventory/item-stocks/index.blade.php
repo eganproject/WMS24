@@ -12,18 +12,29 @@
 <div class="card">
     <div class="card-header border-0 pt-6">
         <div class="card-title">
-            <div class="d-flex align-items-center position-relative my-1">
-                <span class="svg-icon svg-icon-1 position-absolute ms-6">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
-                        <rect opacity="0.5" x="17.0365" y="15.1223" width="8.15546" height="2" rx="1" transform="rotate(45 17.0365 15.1223)" fill="black" />
-                        <path d="M11 19C6.55556 19 3 15.4444 3 11C3 6.55556 6.55556 3 11 3C15.4444 3 19 6.55556 19 11C19 15.4444 15.4444 19 11 19ZM11 5C7.53333 5 5 7.53333 5 11C5 14.4667 7.53333 17 11 17C14.4667 17 17 14.4667 17 11C17 7.53333 14.4667 5 11 5Z" fill="black" />
-                    </svg>
-                </span>
-                <input type="text" class="form-control form-control-solid w-250px ps-14" placeholder="Search items" data-kt-filter="search" />
+            <div class="d-flex flex-column my-1">
+                <div class="d-flex align-items-start position-relative">
+                    <span class="svg-icon svg-icon-1 position-absolute ms-6 mt-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+                            <rect opacity="0.5" x="17.0365" y="15.1223" width="8.15546" height="2" rx="1" transform="rotate(45 17.0365 15.1223)" fill="black" />
+                            <path d="M11 19C6.55556 19 3 15.4444 3 11C3 6.55556 6.55556 3 11 3C15.4444 3 19 6.55556 19 11C19 15.4444 15.4444 19 11 19ZM11 5C7.53333 5 5 7.53333 5 11C5 14.4667 7.53333 17 11 17C14.4667 17 17 14.4667 17 11C17 7.53333 14.4667 5 11 5Z" fill="black" />
+                        </svg>
+                    </span>
+                    <textarea class="form-control form-control-solid w-300px ps-14" rows="2" placeholder="Search items" data-kt-filter="search"></textarea>
+                </div>
+                <div class="form-text text-muted">Bisa isi beberapa SKU/nama, pisahkan dengan koma atau baris baru.</div>
             </div>
         </div>
         <div class="card-toolbar">
-            <button type="button" class="btn btn-light-primary" id="btn_export_item_stocks">Export Excel</button>
+            <div class="d-flex justify-content-end align-items-center gap-2">
+                <select class="form-select form-select-solid w-100px" id="filter_item_stocks_limit" aria-label="Jumlah data">
+                    <option value="10" selected>10</option>
+                    <option value="20">20</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                </select>
+                <button type="button" class="btn btn-light-primary" id="btn_export_item_stocks">Export Excel</button>
+            </div>
         </div>
     </div>
     <div class="card-body py-6">
@@ -433,6 +444,7 @@
     document.addEventListener('DOMContentLoaded', () => {
         const tableEl = $('#item_stocks_table');
         const searchInput = document.querySelector('[data-kt-filter="search"]');
+        const limitSelect = document.getElementById('filter_item_stocks_limit');
         const exportBtn = document.getElementById('btn_export_item_stocks');
         const safetyModalEl = document.getElementById('modal_safety_stock');
         const safetyModal = safetyModalEl ? new bootstrap.Modal(safetyModalEl) : null;
@@ -752,6 +764,7 @@
             serverSide: true,
             dom: 'rtip',
             order: [[0, 'desc']],
+            pageLength: Number(limitSelect?.value || 10),
             ajax: {
                 url: dataUrl,
                 dataSrc: 'data',
@@ -801,7 +814,11 @@
         dt.on('draw', refreshMenus);
 
         const reloadTable = () => dt.ajax.reload();
-        searchInput?.addEventListener('keyup', reloadTable);
+        searchInput?.addEventListener('input', reloadTable);
+        limitSelect?.addEventListener('change', () => {
+            const val = Number(limitSelect.value || 10);
+            dt.page.len(val).draw();
+        });
         exportBtn?.addEventListener('click', () => {
             const q = searchInput?.value?.trim() || '';
             const url = q ? `${exportUrl}?q=${encodeURIComponent(q)}` : exportUrl;

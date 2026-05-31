@@ -147,6 +147,17 @@
             <div class="modal-body scroll-y mx-5 mx-xl-15 my-7">
                 <form class="form" id="stock_flow_form">
                     @csrf
+                    <div class="alert alert-primary p-5 mb-7">
+                        <div class="fw-bold mb-2">Input Cepat Item</div>
+                        <div class="text-muted fs-7 mb-3" id="flow_quick_item_hint">
+                            Tulis satu item per baris. Format: SKU koli/qty catatan.
+                        </div>
+                        <textarea class="form-control form-control-solid mb-3" id="flow_quick_items" rows="4" placeholder="SKU-001 2&#10;SKU-002 5 Catatan item"></textarea>
+                        <div class="d-flex align-items-center gap-3 flex-wrap">
+                            <button type="button" class="btn btn-light-primary" id="btn_add_quick_items">Tambahkan dari Teks</button>
+                            <div class="text-danger fs-7" id="flow_quick_items_error"></div>
+                        </div>
+                    </div>
                     <div id="flow_items_container"></div>
                     <div class="mb-7 d-flex flex-wrap gap-3">
                         <button type="button" class="btn btn-light" id="btn_add_flow_item">Tambah Item</button>
@@ -374,6 +385,15 @@
     const typeLabelMap = @json($typeOptions ?? []);
     const csrfToken = '{{ csrf_token() }}';
     const itemOptionsHtml = `@foreach($items as $item)<option value="{{ $item->id }}" data-sku="{{ $item->sku }}" data-name="{{ $item->name }}" data-koli-qty="{{ (int) ($item->koli_qty ?? 0) }}" data-item-type="{{ $item->item_type ?? 'single' }}">{{ $item->sku }} - {{ $item->name }}@if(($item->item_type ?? 'single') === 'bundle') [Bundle]@endif</option>@endforeach`;
+    const itemCatalog = {!! ($items ?? collect())->map(function ($item) {
+        return [
+            'id' => $item->id,
+            'sku' => $item->sku,
+            'name' => $item->name,
+            'koli_qty' => (int) ($item->koli_qty ?? 0),
+            'item_type' => $item->item_type ?? 'single',
+        ];
+    })->values()->toJson() !!};
     const defaultTypeFilter = '{{ $typeDefault ?? '' }}';
     const permMap = @json($permMap ?? []);
     const canCreateDefault = {{ $canCreateDefault ? 'true' : 'false' }};
@@ -401,6 +421,10 @@
         const modal = modalEl ? new bootstrap.Modal(modalEl) : null;
         const modalContentEl = modalEl?.querySelector('.modal-content') || modalEl;
         const itemsContainer = document.getElementById('flow_items_container');
+        const quickItemsInput = document.getElementById('flow_quick_items');
+        const quickItemsBtn = document.getElementById('btn_add_quick_items');
+        const quickItemsError = document.getElementById('flow_quick_items_error');
+        const quickItemsHint = document.getElementById('flow_quick_item_hint');
         const addItemBtn = document.getElementById('btn_add_flow_item');
         const openCreateBtn = document.getElementById('btn_open_create_flow');
         const modalTitle = document.getElementById('flow_modal_title');
@@ -592,6 +616,10 @@
             return Number.isFinite(val) && val > 0 ? val : null;
         };
 
+        const normalizeSku = (value) => String(value || '').trim().toLowerCase();
+        const itemBySku = new Map((Array.isArray(itemCatalog) ? itemCatalog : [])
+            .map((item) => [normalizeSku(item.sku), item]));
+
         const isKoliActive = () => {
             if (!enableKoli) return false;
             const flowType = form?.dataset?.flowType || defaultTypeFilter || '';
@@ -604,6 +632,13 @@
 
             const selectedWarehouseId = Number(warehouseSelect?.value || 0);
             return !!defaultWarehouseId && selectedWarehouseId === Number(defaultWarehouseId);
+        };
+
+        const updateQuickItemHint = () => {
+            if (!quickItemsHint) return;
+            quickItemsHint.textContent = isKoliActive()
+                ? 'Tulis satu item per baris. Format: SKU koli catatan. Qty dihitung otomatis dari isi/koli.'
+                : 'Tulis satu item per baris. Format: SKU qty catatan.';
         };
 
         const setKoliInfo = (row, message, tone = 'muted') => {
@@ -865,6 +900,7 @@
             } else {
                 warehouseSelect.value = '';
             }
+            updateQuickItemHint();
         };
 
         const applySupplierVisibility = (flowType) => {
@@ -920,6 +956,7 @@
         }
 
         warehouseSelect?.addEventListener('change', updateAllKoliVisibility);
+        warehouseSelect?.addEventListener('change', updateQuickItemHint);
 
         const renumberRows = () => {
             const rows = itemsContainer.querySelectorAll('.flow-item-row');
@@ -991,6 +1028,87 @@
             validateUniqueItems();
         };
 
+        const parseQuickItemLine = (line) => {
+            const normalized = String(line || '').trim();
+            if (!normalized) return null;
+
+            let parts = normalized.includes(',') || normalized.includes(';') || normalized.includes('\t')
+                ? normalized.split(/[,\t;]+/).map((part) => part.trim()).filter(Boolean)
+                : normalized.split(/\s+/);
+
+            const sku = parts.shift() || '';
+            const amountText = parts.shift() || '';
+            const amount = Number(amountText);
+            const note = parts.join(' ').trim();
+
+            if (!sku || !Number.isInteger(amount) || amount < 1) {
+                throw new Error(`Format tidak valid: ${line}`);
+            }
+
+            const item = itemBySku.get(normalizeSku(sku));
+            if (!item) {
+                throw new Error(`SKU tidak ditemukan: ${sku}`);
+            }
+
+            if ((item.item_type || 'single') === 'bundle') {
+                throw new Error(`SKU bundle tidak bisa dipakai: ${sku}`);
+            }
+
+            if (isKoliActive()) {
+                const koliQty = Number(item.koli_qty || 0);
+                if (!Number.isFinite(koliQty) || koliQty < 1) {
+                    throw new Error(`Isi/koli belum diset untuk SKU: ${sku}`);
+                }
+
+                return {
+                    item_id: item.id,
+                    qty: amount * koliQty,
+                    koli: amount,
+                    note,
+                };
+            }
+
+            return {
+                item_id: item.id,
+                qty: amount,
+                koli: '',
+                note,
+            };
+        };
+
+        const addQuickItems = () => {
+            if (!quickItemsInput) return;
+            if (quickItemsError) quickItemsError.textContent = '';
+
+            const lines = quickItemsInput.value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+            if (!lines.length) {
+                if (quickItemsError) quickItemsError.textContent = 'Isi daftar SKU terlebih dahulu.';
+                return;
+            }
+
+            let parsed = [];
+            try {
+                parsed = lines.map(parseQuickItemLine).filter(Boolean);
+            } catch (err) {
+                if (quickItemsError) quickItemsError.textContent = err.message || 'Input cepat tidak valid.';
+                return;
+            }
+
+            const duplicateSku = parsed
+                .map((row) => String(row.item_id))
+                .find((itemId, index, ids) => ids.indexOf(itemId) !== index);
+            if (duplicateSku) {
+                if (quickItemsError) quickItemsError.textContent = 'SKU pada input cepat tidak boleh duplikat.';
+                return;
+            }
+
+            itemsContainer.innerHTML = '';
+            parsed.forEach((item) => createItemRow(item));
+            quickItemsInput.value = '';
+            clearErrors();
+            validateUniqueItems();
+        };
+
         const resetForm = () => {
             form?.reset();
             form.dataset.editId = '';
@@ -1023,6 +1141,9 @@
             if (removeSuratJalanImageEl) removeSuratJalanImageEl.checked = false;
             if (suratJalanImagePreview) suratJalanImagePreview.style.display = 'none';
             if (suratJalanImageLink) suratJalanImageLink.href = '#';
+            if (quickItemsInput) quickItemsInput.value = '';
+            if (quickItemsError) quickItemsError.textContent = '';
+            updateQuickItemHint();
             itemsContainer.innerHTML = '';
             createItemRow();
             clearErrors();
@@ -1047,6 +1168,13 @@
         };
 
         addItemBtn?.addEventListener('click', () => createItemRow());
+        quickItemsBtn?.addEventListener('click', addQuickItems);
+        quickItemsInput?.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault();
+                addQuickItems();
+            }
+        });
         if (!canCreateDefault && openCreateBtn) {
             openCreateBtn.remove();
         } else {

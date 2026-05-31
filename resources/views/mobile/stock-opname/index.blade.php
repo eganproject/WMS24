@@ -146,7 +146,7 @@
 
     <div class="card disabled" id="search_card">
         <div style="font-weight: 700; margin-bottom: 8px;">Tambah Item Opname</div>
-        <input type="text" class="input" id="item_search" placeholder="Cari SKU atau nama barang" autocomplete="off" />
+        <input type="text" class="input" id="item_search" placeholder="Masukkan SKU persis" autocomplete="off" />
         <div class="results" id="search_results"></div>
     </div>
 

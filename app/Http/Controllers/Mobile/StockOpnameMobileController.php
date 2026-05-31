@@ -65,10 +65,7 @@ class StockOpnameMobileController extends Controller
 
         $query = Item::query()
             ->where('item_type', Item::TYPE_SINGLE)
-            ->where(function ($query) use ($q) {
-                $query->where('sku', 'like', "%{$q}%")
-                    ->orWhere('name', 'like', "%{$q}%");
-            })
+            ->whereRaw('LOWER(sku) = ?', [mb_strtolower($q)])
             ->orderBy('name')
             ->limit(12);
 

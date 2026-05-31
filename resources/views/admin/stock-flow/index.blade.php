@@ -148,14 +148,19 @@
                 <form class="form" id="stock_flow_form">
                     @csrf
                     <div class="alert alert-primary p-5 mb-7">
-                        <div class="fw-bold mb-2">Input Cepat Item</div>
-                        <div class="text-muted fs-7 mb-3" id="flow_quick_item_hint">
-                            Tulis satu item per baris. Format: SKU koli/qty catatan.
+                        <div class="d-flex align-items-center justify-content-between gap-3 flex-wrap mb-2">
+                            <div class="fw-bold">Input Cepat Item</div>
+                            <button type="button" class="btn btn-sm btn-light" id="btn_toggle_quick_items">Sembunyikan Form</button>
                         </div>
-                        <textarea class="form-control form-control-solid mb-3" id="flow_quick_items" rows="4" placeholder="SKU-001 2&#10;SKU-002 5 Catatan item"></textarea>
-                        <div class="d-flex align-items-center gap-3 flex-wrap">
-                            <button type="button" class="btn btn-light-primary" id="btn_add_quick_items">Tambahkan dari Teks</button>
-                            <div class="text-danger fs-7" id="flow_quick_items_error"></div>
+                        <div id="flow_quick_items_body">
+                            <div class="text-muted fs-7 mb-3" id="flow_quick_item_hint">
+                                Tulis satu item per baris. Format: SKU koli/qty catatan.
+                            </div>
+                            <textarea class="form-control form-control-solid mb-3" id="flow_quick_items" rows="4" placeholder="SKU-001 2&#10;SKU-002 5 Catatan item"></textarea>
+                            <div class="d-flex align-items-center gap-3 flex-wrap">
+                                <button type="button" class="btn btn-light-primary" id="btn_add_quick_items">Tambahkan dari Teks</button>
+                                <div class="text-danger fs-7" id="flow_quick_items_error"></div>
+                            </div>
                         </div>
                     </div>
                     <div id="flow_items_container"></div>
@@ -421,6 +426,8 @@
         const modal = modalEl ? new bootstrap.Modal(modalEl) : null;
         const modalContentEl = modalEl?.querySelector('.modal-content') || modalEl;
         const itemsContainer = document.getElementById('flow_items_container');
+        const quickItemsBody = document.getElementById('flow_quick_items_body');
+        const quickItemsToggle = document.getElementById('btn_toggle_quick_items');
         const quickItemsInput = document.getElementById('flow_quick_items');
         const quickItemsBtn = document.getElementById('btn_add_quick_items');
         const quickItemsError = document.getElementById('flow_quick_items_error');
@@ -639,6 +646,11 @@
             quickItemsHint.textContent = isKoliActive()
                 ? 'Tulis satu item per baris. Format: SKU koli catatan. Qty dihitung otomatis dari isi/koli.'
                 : 'Tulis satu item per baris. Format: SKU qty catatan.';
+        };
+
+        const setQuickItemsVisible = (visible) => {
+            if (quickItemsBody) quickItemsBody.style.display = visible ? '' : 'none';
+            if (quickItemsToggle) quickItemsToggle.textContent = visible ? 'Sembunyikan Form' : 'Tampilkan Form';
         };
 
         const setKoliInfo = (row, message, tone = 'muted') => {
@@ -1143,6 +1155,7 @@
             if (suratJalanImageLink) suratJalanImageLink.href = '#';
             if (quickItemsInput) quickItemsInput.value = '';
             if (quickItemsError) quickItemsError.textContent = '';
+            setQuickItemsVisible(true);
             updateQuickItemHint();
             itemsContainer.innerHTML = '';
             createItemRow();
@@ -1168,11 +1181,29 @@
         };
 
         addItemBtn?.addEventListener('click', () => createItemRow());
+        quickItemsToggle?.addEventListener('click', () => {
+            const isVisible = !quickItemsBody || quickItemsBody.style.display !== 'none';
+            setQuickItemsVisible(!isVisible);
+        });
         quickItemsBtn?.addEventListener('click', addQuickItems);
         quickItemsInput?.addEventListener('keydown', (e) => {
             if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
                 e.preventDefault();
                 addQuickItems();
+                return;
+            }
+
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                e.stopPropagation();
+
+                const start = quickItemsInput.selectionStart ?? quickItemsInput.value.length;
+                const end = quickItemsInput.selectionEnd ?? start;
+                const before = quickItemsInput.value.slice(0, start);
+                const after = quickItemsInput.value.slice(end);
+                quickItemsInput.value = `${before}\n${after}`;
+                quickItemsInput.selectionStart = start + 1;
+                quickItemsInput.selectionEnd = start + 1;
             }
         });
         if (!canCreateDefault && openCreateBtn) {

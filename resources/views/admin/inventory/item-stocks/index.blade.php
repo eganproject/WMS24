@@ -8,37 +8,93 @@
     $canCreateStockAdjustment = Perm::can(auth()->user(), 'admin.inventory.stock-adjustments.index', 'create');
 @endphp
 
+@push('styles')
+<style>
+    .item-stock-toolbar {
+        gap: 1rem;
+    }
+
+    .item-stock-search {
+        width: min(100%, 680px);
+    }
+
+    .item-stock-search .form-label,
+    .item-stock-actions .form-label {
+        margin-bottom: 0.35rem;
+    }
+
+    .item-stock-search-box {
+        position: relative;
+    }
+
+    .item-stock-search-box .svg-icon {
+        top: 0.95rem;
+        left: 1.25rem;
+        opacity: 0.6;
+        pointer-events: none;
+    }
+
+    .item-stock-search-box textarea {
+        min-height: 74px;
+        resize: vertical;
+    }
+
+    .item-stock-actions {
+        gap: 0.75rem;
+    }
+
+    @media (max-width: 991.98px) {
+        .item-stock-search,
+        .item-stock-actions,
+        .item-stock-actions .btn {
+            width: 100%;
+        }
+
+        .item-stock-actions {
+            align-items: stretch !important;
+        }
+    }
+</style>
+@endpush
+
 @section('content')
 <div class="card">
-    <div class="card-header border-0 pt-6">
-        <div class="card-title">
-            <div class="d-flex flex-column my-1">
-                <div class="d-flex align-items-start position-relative">
-                    <span class="svg-icon svg-icon-1 position-absolute ms-6 mt-3">
+    <div class="card-header border-0 pt-6 item-stock-toolbar align-items-start flex-column flex-lg-row">
+        <div class="card-title flex-column align-items-stretch my-0 item-stock-search">
+            <label class="form-label fw-bold text-gray-700">Pencarian item</label>
+            <div class="d-flex flex-column gap-2">
+                <div class="item-stock-search-box">
+                    <span class="svg-icon svg-icon-1 position-absolute">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
                             <rect opacity="0.5" x="17.0365" y="15.1223" width="8.15546" height="2" rx="1" transform="rotate(45 17.0365 15.1223)" fill="black" />
                             <path d="M11 19C6.55556 19 3 15.4444 3 11C3 6.55556 6.55556 3 11 3C15.4444 3 19 6.55556 19 11C19 15.4444 15.4444 19 11 19ZM11 5C7.53333 5 5 7.53333 5 11C5 14.4667 7.53333 17 11 17C14.4667 17 17 14.4667 17 11C17 7.53333 14.4667 5 11 5Z" fill="black" />
                         </svg>
                     </span>
-                    <textarea class="form-control form-control-solid w-300px ps-14" rows="2" placeholder="Search items" data-kt-filter="search"></textarea>
+                    <textarea class="form-control form-control-solid ps-14" rows="2" placeholder="SKU atau nama item" data-kt-filter="search"></textarea>
                 </div>
-                <div class="d-flex align-items-center gap-2 mt-2 flex-wrap">
-                    <select class="form-select form-select-solid w-150px" id="filter_item_stocks_search_mode" data-search-mode-control="1" aria-label="Mode pencarian">
-                        <option value="contains" selected>Mirip</option>
-                        <option value="exact">Persis</option>
-                    </select>
-                    <div class="form-text text-muted mt-0">Bisa isi beberapa SKU/nama, pisahkan dengan koma atau baris baru.</div>
+                <div class="d-flex align-items-end gap-3 flex-wrap">
+                    <div class="w-150px">
+                        <label class="form-label fs-7 text-muted">Mode</label>
+                        <select class="form-select form-select-solid" id="filter_item_stocks_search_mode" data-search-mode-control="1" aria-label="Mode pencarian">
+                            <option value="contains" selected>Mirip</option>
+                            <option value="exact">Persis</option>
+                        </select>
+                    </div>
+                    <div class="form-text text-muted pb-3">Pisahkan beberapa SKU/nama dengan koma atau baris baru.</div>
                 </div>
             </div>
         </div>
-        <div class="card-toolbar">
-            <div class="d-flex justify-content-end align-items-center gap-2">
-                <select class="form-select form-select-solid w-100px" id="filter_item_stocks_limit" aria-label="Jumlah data">
-                    <option value="10" selected>10</option>
-                    <option value="20">20</option>
-                    <option value="50">50</option>
-                    <option value="100">100</option>
-                </select>
+        <div class="card-toolbar align-self-stretch align-self-lg-start">
+            <div class="d-flex justify-content-end align-items-end flex-wrap item-stock-actions">
+                <div class="w-125px">
+                    <label class="form-label fs-7 text-muted">Tampil</label>
+                    <select class="form-select form-select-solid" id="filter_item_stocks_limit" aria-label="Jumlah data">
+                        <option value="10" selected>10 data</option>
+                        <option value="20">20 data</option>
+                        <option value="50">50 data</option>
+                        <option value="100">100 data</option>
+                    </select>
+                </div>
                 <button type="button" class="btn btn-light-primary" id="btn_export_item_stocks">Export Excel</button>
             </div>
         </div>

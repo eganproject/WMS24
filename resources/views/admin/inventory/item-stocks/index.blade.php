@@ -22,7 +22,13 @@
                     </span>
                     <textarea class="form-control form-control-solid w-300px ps-14" rows="2" placeholder="Search items" data-kt-filter="search"></textarea>
                 </div>
-                <div class="form-text text-muted">Bisa isi beberapa SKU/nama, pisahkan dengan koma atau baris baru.</div>
+                <div class="d-flex align-items-center gap-2 mt-2 flex-wrap">
+                    <select class="form-select form-select-solid w-150px" id="filter_item_stocks_search_mode" data-search-mode-control="1" aria-label="Mode pencarian">
+                        <option value="contains" selected>Mirip</option>
+                        <option value="exact">Persis</option>
+                    </select>
+                    <div class="form-text text-muted mt-0">Bisa isi beberapa SKU/nama, pisahkan dengan koma atau baris baru.</div>
+                </div>
             </div>
         </div>
         <div class="card-toolbar">
@@ -444,6 +450,7 @@
     document.addEventListener('DOMContentLoaded', () => {
         const tableEl = $('#item_stocks_table');
         const searchInput = document.querySelector('[data-kt-filter="search"]');
+        const searchModeSelect = document.getElementById('filter_item_stocks_search_mode');
         const limitSelect = document.getElementById('filter_item_stocks_limit');
         const exportBtn = document.getElementById('btn_export_item_stocks');
         const safetyModalEl = document.getElementById('modal_safety_stock');
@@ -770,6 +777,7 @@
                 dataSrc: 'data',
                 data: function(params) {
                     params.q = searchInput?.value || '';
+                    params.search_mode = searchModeSelect?.value || 'contains';
                 }
             },
             columns: [
@@ -815,14 +823,19 @@
 
         const reloadTable = () => dt.ajax.reload();
         searchInput?.addEventListener('input', reloadTable);
+        searchModeSelect?.addEventListener('change', reloadTable);
         limitSelect?.addEventListener('change', () => {
             const val = Number(limitSelect.value || 10);
             dt.page.len(val).draw();
         });
         exportBtn?.addEventListener('click', () => {
             const q = searchInput?.value?.trim() || '';
-            const url = q ? `${exportUrl}?q=${encodeURIComponent(q)}` : exportUrl;
-            window.location.href = url;
+            const mode = searchModeSelect?.value || 'contains';
+            const params = new URLSearchParams();
+            if (q) params.set('q', q);
+            params.set('search_mode', mode);
+            const query = params.toString();
+            window.location.href = query ? `${exportUrl}?${query}` : exportUrl;
         });
 
         tableEl.on('click', '.btn-item-detail', function(e) {

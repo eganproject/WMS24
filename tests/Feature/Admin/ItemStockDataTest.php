@@ -152,6 +152,21 @@ class ItemStockDataTest extends TestCase
         $this->assertContains('SKU-MULTI-001', $skus);
         $this->assertContains('SKU-MULTI-003', $skus);
         $this->assertNotContains('SKU-MULTI-002', $skus);
+
+        $exactResponse = $this->withoutMiddleware()->getJson(route('admin.inventory.item-stocks.data', [
+            'draw' => 1,
+            'start' => 0,
+            'length' => 10,
+            'q' => "SKU-MULTI-001\nSKU-MULTI",
+            'search_mode' => 'exact',
+        ]));
+
+        $exactResponse->assertOk()
+            ->assertJsonPath('recordsFiltered', 1);
+
+        $exactSkus = Collection::make($exactResponse->json('data'))->pluck('sku')->all();
+
+        $this->assertSame(['SKU-MULTI-001'], $exactSkus);
     }
 
     public function test_item_stock_edit_adjustment_can_be_auto_approved(): void

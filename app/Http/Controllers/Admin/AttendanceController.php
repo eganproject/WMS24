@@ -7,8 +7,10 @@ use App\Exports\AbsentEmployeesExport;
 use App\Exports\EmployeesExport;
 use App\Exports\EmployeesTemplateExport;
 use App\Exports\WeeklyScheduleTemplatesExport;
+use App\Exports\WorkShiftsExport;
 use App\Imports\EmployeesImport;
 use App\Imports\WeeklyScheduleTemplatesImport;
+use App\Imports\WorkShiftsImport;
 use App\Models\ActivityLog;
 use App\Models\Area;
 use App\Models\Attendance;
@@ -512,6 +514,14 @@ class AttendanceController extends Controller
         );
     }
 
+    public function exportShifts()
+    {
+        return Excel::download(
+            new WorkShiftsExport(),
+            'shift_kerja.xlsx'
+        );
+    }
+
     public function exportEmployees(Request $request)
     {
         return Excel::download(
@@ -653,6 +663,62 @@ class AttendanceController extends Controller
         $shift = WorkShift::create($this->validateShift($request));
 
         return response()->json(['message' => 'Shift berhasil dibuat', 'shift' => $shift]);
+    }
+
+    public function importShifts(Request $request)
+    {
+        $validated = $request->validate([
+            'file' => ['required', 'file', 'mimes:xlsx,xls'],
+        ]);
+
+        $import = new WorkShiftsImport();
+        Excel::import($import, $validated['file']);
+
+        $rows = $import->rows;
+        if (empty($rows)) {
+            throw ValidationException::withMessages([
+                'file' => 'Tidak ada data valid untuk diimport',
+            ]);
+        }
+
+        $created = 0;
+        $updated = 0;
+
+        DB::transaction(function () use ($rows, &$created, &$updated) {
+            foreach ($rows as $row) {
+                $shift = WorkShift::query()
+                    ->where('name', $row['name'])
+                    ->first();
+
+                $payload = [
+                    'name' => $row['name'],
+                    'start_time' => $row['start_time'],
+                    'end_time' => $row['end_time'],
+                    'break_start_time' => $row['break_start_time'],
+                    'break_end_time' => $row['break_end_time'],
+                    'late_tolerance_minutes' => $row['late_tolerance_minutes'],
+                    'checkout_tolerance_minutes' => $row['checkout_tolerance_minutes'],
+                    'overtime_start_after_minutes' => $row['overtime_start_after_minutes'],
+                    'minimum_overtime_minutes' => $row['minimum_overtime_minutes'],
+                    'crosses_midnight' => $row['crosses_midnight'],
+                    'is_active' => $row['is_active'],
+                ];
+
+                if ($shift) {
+                    $shift->update($payload);
+                    $updated++;
+                } else {
+                    WorkShift::create($payload);
+                    $created++;
+                }
+            }
+        });
+
+        return response()->json([
+            'message' => 'Import shift berhasil',
+            'created' => $created,
+            'updated' => $updated,
+        ]);
     }
 
     public function updateShift(Request $request, WorkShift $shift)

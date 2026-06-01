@@ -468,7 +468,9 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::put('/fingerprints/{fingerprint}', [AttendanceController::class, 'updateFingerprint'])->name('fingerprints.update');
         Route::delete('/fingerprints/{fingerprint}', [AttendanceController::class, 'destroyFingerprint'])->name('fingerprints.destroy');
         Route::get('/shifts/data', [AttendanceController::class, 'shiftsData'])->name('shifts.data');
+        Route::get('/shifts/export', [AttendanceController::class, 'exportShifts'])->name('shifts.export');
         Route::post('/shifts', [AttendanceController::class, 'storeShift'])->name('shifts.store');
+        Route::post('/shifts/import', [AttendanceController::class, 'importShifts'])->name('shifts.import');
         Route::put('/shifts/{shift}', [AttendanceController::class, 'updateShift'])->name('shifts.update');
         Route::delete('/shifts/{shift}', [AttendanceController::class, 'destroyShift'])->name('shifts.destroy');
         Route::get('/schedules/data', [AttendanceController::class, 'schedulesData'])->name('schedules.data');

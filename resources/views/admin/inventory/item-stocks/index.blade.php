@@ -374,61 +374,6 @@
         </div>
     </div>
 </div>
-{{-- Modal: Mutasi Barang --}}
-<div class="modal fade" id="modal_item_mutations" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-xl">
-        <div class="modal-content">
-            <div class="modal-header">
-                <div>
-                    <h2 class="fw-bolder">Mutasi Barang</h2>
-                    <div class="text-muted fs-7" id="mutations_item_label">-</div>
-                </div>
-                <div class="btn btn-icon btn-sm btn-active-icon-primary" data-bs-dismiss="modal">
-                    <span class="svg-icon svg-icon-1">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
-                            <rect opacity="0.5" x="6" y="17.3137" width="16" height="2" rx="1" transform="rotate(-45 6 17.3137)" fill="black"/>
-                            <rect x="7.41422" y="6" width="16" height="2" rx="1" transform="rotate(45 7.41422 6)" fill="black"/>
-                        </svg>
-                    </span>
-                </div>
-            </div>
-            <div class="modal-body py-6">
-                <div class="d-flex align-items-center gap-2 mb-6 flex-wrap">
-                    <select class="form-select form-select-solid w-200px" id="mut_filter_warehouse">
-                        <option value="all">Semua Gudang</option>
-                        @foreach($warehouses ?? [] as $wh)
-                            <option value="{{ $wh->id }}">{{ $wh->name }}</option>
-                        @endforeach
-                    </select>
-                    <input type="text" class="form-control form-control-solid w-150px" id="mut_date_from" placeholder="Dari" />
-                    <input type="text" class="form-control form-control-solid w-150px" id="mut_date_to" placeholder="Sampai" />
-                    <button type="button" class="btn btn-light" id="mut_filter_apply">Filter</button>
-                    <button type="button" class="btn btn-light" id="mut_filter_reset">Reset</button>
-                </div>
-                <div class="table-responsive">
-                    <table class="table align-middle table-row-dashed fs-6 gy-5" id="modal_mutations_table">
-                        <thead>
-                            <tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0">
-                                <th>Tanggal</th>
-                                <th>Gudang</th>
-                                <th>Arah</th>
-                                <th>Qty</th>
-                                <th>Stok Sebelum</th>
-                                <th>Stok Sesudah</th>
-                                <th>Sumber</th>
-                                <th>Kode</th>
-                                <th>Catatan</th>
-                                <th class="text-end">Aksi</th>
-                            </tr>
-                        </thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
 @endsection
 
 @push('scripts')
@@ -438,8 +383,7 @@
     const updateSafetyUrl = '{{ $updateSafetyUrl ?? '' }}';
     const stockAdjustmentStoreUrl = '{{ route('admin.inventory.stock-adjustments.store') }}';
     const canCreateStockAdjustment = {{ $canCreateStockAdjustment ? 'true' : 'false' }};
-    const mutationsDataUrl = '{{ route('admin.inventory.stock-mutations.data') }}';
-    const mutationDetailUrlTpl = '{{ route('admin.inventory.stock-mutations.show', ':id') }}';
+    const mutationIndexUrl = '{{ route('admin.inventory.stock-mutations.index') }}';
     const defaultWarehouseId = {{ !empty($defaultWarehouseId) ? (int) $defaultWarehouseId : 'null' }};
     const displayWarehouseId = {{ !empty($displayWarehouseId) ? (int) $displayWarehouseId : 'null' }};
     const damagedWarehouseId = {{ !empty($damagedWarehouseId) ? (int) $damagedWarehouseId : 'null' }};
@@ -794,7 +738,7 @@
                     const safeSku = escapeHtml(row.sku || '');
                     const safeName = escapeHtml(row.name || '');
                     const detailItem = `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-item-detail" data-id="${data}">Detail Item</a></div>`;
-                    const mutItem = `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-mutations" data-id="${data}" data-sku="${safeSku}" data-name="${safeName}">Mutasi</a></div>`;
+                    const mutItem = `<div class="menu-item px-3"><a href="${mutationIndexUrl}?item_id=${encodeURIComponent(data)}&warehouse_id=all" class="menu-link px-3">Mutasi</a></div>`;
                     const safetyItem = row.item_type === 'bundle' ? '' : `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-safety" data-id="${data}" data-sku="${safeSku}" data-name="${safeName}" data-safety-main="${row.safety_main_raw ?? ''}" data-safety-display="${row.safety_display_raw ?? ''}" data-safety-base="${row.safety_base ?? 0}">Set Safety</a></div>`;
                     const actions = `${detailItem}${mutItem}${safetyItem}`;
                     return `
@@ -941,66 +885,18 @@
             }
         });
 
-        const mutationsModalEl = document.getElementById('modal_item_mutations');
-        const mutationsModal = mutationsModalEl ? new bootstrap.Modal(mutationsModalEl) : null;
-        const mutDateFrom = document.getElementById('mut_date_from');
-        const mutDateTo = document.getElementById('mut_date_to');
-        const mutWarehouse = document.getElementById('mut_filter_warehouse');
+        const mutationsModalEl = null;
+        const mutationsModal = null;
+        const mutWarehouse = null;
+        const mutDateFrom = null;
+        const mutDateTo = null;
+        const mutFpFrom = null;
+        const mutFpTo = null;
         let mutDt = null;
-        let mutFpFrom = null;
-        let mutFpTo = null;
         let currentItemId = null;
+        const initMutDt = () => {};
 
-        if (typeof flatpickr !== 'undefined') {
-            if (mutDateFrom) mutFpFrom = flatpickr(mutDateFrom, { dateFormat: 'Y-m-d', allowInput: true });
-            if (mutDateTo)   mutFpTo   = flatpickr(mutDateTo,   { dateFormat: 'Y-m-d', allowInput: true });
-        }
-
-        const warehouseBadgeClass = (wId) => {
-            const id = Number(wId || 0);
-            if (displayWarehouseId && id === Number(displayWarehouseId)) return 'badge-light-success';
-            if (defaultWarehouseId && id === Number(defaultWarehouseId)) return 'badge-light-primary';
-            if (damagedWarehouseId && id === Number(damagedWarehouseId)) return 'badge-light-danger';
-            return 'badge-light-secondary';
-        };
-        const renderWhBadge = (label, wId) => `<span class="badge ${warehouseBadgeClass(wId)}">${label || '-'}</span>`;
-
-        const initMutDt = () => {
-            if (mutDt) { mutDt.destroy(); mutDt = null; }
-            mutDt = $('#modal_mutations_table').DataTable({
-                processing: true,
-                serverSide: true,
-                dom: 'rtip',
-                order: [[0, 'desc']],
-                ajax: {
-                    url: mutationsDataUrl,
-                    dataSrc: 'data',
-                    data: (params) => {
-                        params.item_id = currentItemId;
-                        params.warehouse_id = mutWarehouse?.value || 'all';
-                        if (mutDateFrom?.value) params.date_from = mutDateFrom.value;
-                        if (mutDateTo?.value)   params.date_to   = mutDateTo.value;
-                    }
-                },
-                columns: [
-                    { data: 'occurred_at' },
-                    { data: 'warehouse', render: (d, t, row) => renderWhBadge(d, row?.warehouse_id) },
-                    { data: 'direction', render: (d) => d === 'IN'
-                        ? '<span class="badge badge-light-success">IN</span>'
-                        : '<span class="badge badge-light-danger">OUT</span>' },
-                    { data: 'qty' },
-                    { data: 'stock_before', render: (d) => d ?? '-' },
-                    { data: 'stock_after', render: (d) => d ?? '-' },
-                    { data: 'source' },
-                    { data: 'source_code' },
-                    { data: 'note' },
-                    { data: 'id', orderable: false, searchable: false, className: 'text-end',
-                        render: (d) => `<a href="${mutationDetailUrlTpl.replace(':id', d)}" class="btn btn-sm btn-light-primary">Lihat Dokumen</a>` },
-                ]
-            });
-        };
-
-        tableEl.on('click', '.btn-mutations', function (e) {
+        tableEl.on('click', '.btn-mutations-disabled', function (e) {
             e.preventDefault();
             const id   = this.getAttribute('data-id');
             const sku  = this.getAttribute('data-sku') || '';

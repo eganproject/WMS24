@@ -31,6 +31,8 @@ class StockMutationController extends Controller
             'damagedWarehouseId' => WarehouseService::damagedWarehouseId(),
             'warehouseLabel' => $warehouseLabel,
             'today' => now()->toDateString(),
+            'initialItemId' => request()->input('item_id'),
+            'initialWarehouseId' => request()->input('warehouse_id'),
         ]);
     }
 

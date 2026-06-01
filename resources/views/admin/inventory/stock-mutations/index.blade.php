@@ -206,6 +206,8 @@
     const displayWarehouseId = {{ !empty($displayWarehouseId) ? (int) $displayWarehouseId : 'null' }};
     const damagedWarehouseId = {{ !empty($damagedWarehouseId) ? (int) $damagedWarehouseId : 'null' }};
     const today = '{{ $today ?? now()->toDateString() }}';
+    const initialItemId = '{{ $initialItemId ?? '' }}';
+    const initialWarehouseId = '{{ $initialWarehouseId ?? '' }}';
 
     document.addEventListener('DOMContentLoaded', () => {
         const tableEl = $('#stock_mutations_table');
@@ -234,6 +236,12 @@
 
         if (warehouseFilter && typeof $ !== 'undefined' && $.fn.select2) {
             $(warehouseFilter).select2({ placeholder: 'Semua Gudang', allowClear: true, width: '200px' });
+        }
+        if (warehouseFilter && initialWarehouseId) {
+            warehouseFilter.value = initialWarehouseId;
+            if (typeof $ !== 'undefined' && $(warehouseFilter).data('select2')) {
+                $(warehouseFilter).val(initialWarehouseId).trigger('change.select2');
+            }
         }
 
         const warehouseBadgeClass = (warehouseId) => {
@@ -273,6 +281,7 @@
                 dataSrc: 'data',
                 data: function(params) {
                     params.q = searchInput?.value || '';
+                    if (initialItemId) params.item_id = initialItemId;
                     if (warehouseFilter?.value) params.warehouse_id = warehouseFilter.value;
                     if (dateFromEl?.value) params.date_from = dateFromEl.value;
                     if (dateToEl?.value) params.date_to = dateToEl.value;

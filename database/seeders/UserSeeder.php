@@ -10,26 +10,41 @@ class UserSeeder extends Seeder
 {
     public function run(): void
     {
-        // Create or update admin user
-        $adminId = DB::table('users')->updateOrInsert(
-            ['email' => 'admin@gmail.com'],
-            [
-                'name' => 'Administrator',
-                'password' => Hash::make('Password!2'),
-                'email_verified_at' => now(),
-                'updated_at' => now(),
-                'created_at' => now(),
-            ]
-        );
-
-        $admin = DB::table('users')->where('email', 'admin@gmail.com')->first();
         $adminRole = DB::table('roles')->where('slug', 'admin')->first();
 
-        if ($admin && $adminRole) {
-            DB::table('role_user')->updateOrInsert(
-                ['role_id' => $adminRole->id, 'user_id' => $admin->id],
-                []
+        $administratorUsers = [
+            [
+                'name' => 'Super Administrator',
+                'email' => 'superadmin@gmail.com',
+                'password' => 'Password24!2',
+            ],
+            [
+                'name' => 'Doni',
+                'email' => 'doni24@gmail.com',
+                'password' => 'DoniPassword!2',
+            ],
+        ];
+
+        foreach ($administratorUsers as $administratorUser) {
+            DB::table('users')->updateOrInsert(
+                ['email' => $administratorUser['email']],
+                [
+                    'name' => $administratorUser['name'],
+                    'password' => Hash::make($administratorUser['password']),
+                    'email_verified_at' => now(),
+                    'updated_at' => now(),
+                    'created_at' => now(),
+                ]
             );
+
+            $user = DB::table('users')->where('email', $administratorUser['email'])->first();
+
+            if ($user && $adminRole) {
+                DB::table('role_user')->updateOrInsert(
+                    ['role_id' => $adminRole->id, 'user_id' => $user->id],
+                    []
+                );
+            }
         }
 
         $users = [

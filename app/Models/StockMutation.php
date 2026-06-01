@@ -16,6 +16,8 @@ class StockMutation extends Model
         'warehouse_id',
         'direction',
         'qty',
+        'stock_before',
+        'stock_after',
         'source_type',
         'source_subtype',
         'source_id',

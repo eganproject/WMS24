@@ -41,8 +41,8 @@
                         @endforeach
                     </select>
                 @endif
-                <input type="text" class="form-control form-control-solid w-150px" id="filter_date_from" placeholder="Dari" />
-                <input type="text" class="form-control form-control-solid w-150px" id="filter_date_to" placeholder="Sampai" />
+                <input type="text" class="form-control form-control-solid w-150px" id="filter_date_from" placeholder="Dari" value="{{ $today ?? now()->toDateString() }}" />
+                <input type="text" class="form-control form-control-solid w-150px" id="filter_date_to" placeholder="Sampai" value="{{ $today ?? now()->toDateString() }}" />
                 <button type="button" class="btn btn-light" id="filter_apply">Filter</button>
                 <button type="button" class="btn btn-light" id="filter_reset">Reset</button>
             </div>
@@ -60,6 +60,8 @@
                         <th>Submit By</th>
                         <th>Arah</th>
                         <th>Qty</th>
+                        <th>Stok Sebelum</th>
+                        <th>Stok Sesudah</th>
                         <th>Sumber</th>
                         <th>Kode</th>
                         <th>Catatan</th>
@@ -121,6 +123,20 @@
                     <div class="col-md-2">
                         <div class="fw-bold text-gray-600">Sumber</div>
                         <div id="mutation_source">-</div>
+                    </div>
+                </div>
+                <div class="row mb-6">
+                    <div class="col-md-3">
+                        <div class="fw-bold text-gray-600">Stok Sebelum</div>
+                        <div id="mutation_stock_before">-</div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="fw-bold text-gray-600">Stok Sesudah</div>
+                        <div id="mutation_stock_after">-</div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="fw-bold text-gray-600">Perubahan</div>
+                        <div id="mutation_stock_delta">-</div>
                     </div>
                 </div>
                 <div class="row mb-6">
@@ -189,6 +205,7 @@
     const defaultWarehouseId = {{ !empty($defaultWarehouseId) ? (int) $defaultWarehouseId : 'null' }};
     const displayWarehouseId = {{ !empty($displayWarehouseId) ? (int) $displayWarehouseId : 'null' }};
     const damagedWarehouseId = {{ !empty($damagedWarehouseId) ? (int) $damagedWarehouseId : 'null' }};
+    const today = '{{ $today ?? now()->toDateString() }}';
 
     document.addEventListener('DOMContentLoaded', () => {
         const tableEl = $('#stock_mutations_table');
@@ -208,10 +225,10 @@
 
         if (typeof flatpickr !== 'undefined') {
             if (dateFromEl) {
-                fpFrom = flatpickr(dateFromEl, { dateFormat: 'Y-m-d', allowInput: true });
+                fpFrom = flatpickr(dateFromEl, { dateFormat: 'Y-m-d', allowInput: true, defaultDate: dateFromEl.value || today });
             }
             if (dateToEl) {
-                fpTo = flatpickr(dateToEl, { dateFormat: 'Y-m-d', allowInput: true });
+                fpTo = flatpickr(dateToEl, { dateFormat: 'Y-m-d', allowInput: true, defaultDate: dateToEl.value || today });
             }
         }
 
@@ -269,11 +286,14 @@
                 { data: 'user' },
                 { data: 'direction' },
                 { data: 'qty' },
+                { data: 'stock_before', render: (data) => data ?? '-' },
+                { data: 'stock_after', render: (data) => data ?? '-' },
                 { data: 'source' },
                 { data: 'source_code' },
                 { data: 'note' },
                 { data: 'id', orderable:false, searchable:false, className:'text-end', render: (data) => {
                     const detailItem = `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-detail" data-id="${data}">Detail</a></div>`;
+                    const documentItem = `<div class="menu-item px-3"><a href="${detailUrlTpl.replace(':id', data)}" class="menu-link px-3">Lihat Dokumen</a></div>`;
                     return `
                         <div class="text-end">
                             <a href="#" class="btn btn-sm btn-light btn-active-light-primary" data-kt-menu-trigger="click" data-kt-menu-placement="bottom-end">
@@ -286,6 +306,7 @@
                             </a>
                             <div class="menu menu-sub menu-sub-dropdown menu-column menu-rounded menu-gray-600 menu-state-bg-light-primary fw-bold fs-7 w-175px py-3" data-kt-menu="true">
                                 ${detailItem}
+                                ${documentItem}
                             </div>
                         </div>
                     `;
@@ -311,8 +332,8 @@
                 }
             }
             updateWarehouseBadge();
-            if (fpFrom) fpFrom.clear(); else if (dateFromEl) dateFromEl.value = '';
-            if (fpTo) fpTo.clear(); else if (dateToEl) dateToEl.value = '';
+            if (fpFrom) fpFrom.setDate(today, false); else if (dateFromEl) dateFromEl.value = today;
+            if (fpTo) fpTo.setDate(today, false); else if (dateToEl) dateToEl.value = today;
             reloadTable();
         });
         updateWarehouseBadge();
@@ -346,6 +367,10 @@
                 setHtml('mutation_warehouse', renderWarehouseBadge(m.warehouse, m.warehouse_id));
                 setText('mutation_direction', m.direction);
                 setText('mutation_qty', m.qty);
+                setText('mutation_stock_before', m.stock_before ?? '-');
+                setText('mutation_stock_after', m.stock_after ?? '-');
+                const signedQty = m.direction === 'OUT' ? `-${m.qty ?? 0}` : `+${m.qty ?? 0}`;
+                setText('mutation_stock_delta', signedQty);
                 setText('mutation_source', m.source);
                 setText('mutation_source_code', m.source_code);
                 setText('mutation_note', m.note);

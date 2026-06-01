@@ -413,6 +413,8 @@
                                 <th>Gudang</th>
                                 <th>Arah</th>
                                 <th>Qty</th>
+                                <th>Stok Sebelum</th>
+                                <th>Stok Sesudah</th>
                                 <th>Sumber</th>
                                 <th>Kode</th>
                                 <th>Catatan</th>
@@ -427,66 +429,6 @@
     </div>
 </div>
 
-{{-- Modal: Detail Mutasi --}}
-<div class="modal fade" id="modal_mutation_detail" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered mw-900px">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 class="fw-bolder">Detail Mutasi Stok</h2>
-                <div class="btn btn-icon btn-sm btn-active-icon-primary" data-bs-dismiss="modal">
-                    <span class="svg-icon svg-icon-1">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
-                            <rect opacity="0.5" x="6" y="17.3137" width="16" height="2" rx="1" transform="rotate(-45 6 17.3137)" fill="black"/>
-                            <rect x="7.41422" y="6" width="16" height="2" rx="1" transform="rotate(45 7.41422 6)" fill="black"/>
-                        </svg>
-                    </span>
-                </div>
-            </div>
-            <div class="modal-body scroll-y mx-5 mx-xl-15 my-7">
-                <div class="row mb-6">
-                    <div class="col-md-3"><div class="fw-bold text-gray-600">ID</div><div id="md_id">-</div></div>
-                    <div class="col-md-3"><div class="fw-bold text-gray-600">Tanggal</div><div id="md_date">-</div></div>
-                    <div class="col-md-3"><div class="fw-bold text-gray-600">User</div><div id="md_user">-</div></div>
-                    <div class="col-md-3"><div class="fw-bold text-gray-600">Gudang</div><div id="md_warehouse">-</div></div>
-                </div>
-                <div class="row mb-6">
-                    <div class="col-md-6"><div class="fw-bold text-gray-600">Item</div><div id="md_item">-</div></div>
-                    <div class="col-md-2"><div class="fw-bold text-gray-600">Arah</div><div id="md_direction">-</div></div>
-                    <div class="col-md-2"><div class="fw-bold text-gray-600">Qty</div><div id="md_qty">-</div></div>
-                    <div class="col-md-2"><div class="fw-bold text-gray-600">Sumber</div><div id="md_source">-</div></div>
-                </div>
-                <div class="row mb-6">
-                    <div class="col-md-4"><div class="fw-bold text-gray-600">Kode Sumber</div><div id="md_source_code">-</div></div>
-                    <div class="col-md-8"><div class="fw-bold text-gray-600">Catatan</div><div id="md_note">-</div></div>
-                </div>
-                <hr class="my-6" />
-                <div class="fw-bolder fs-5 mb-4">Sumber Data</div>
-                <div id="md_source_empty" class="text-muted">Data sumber tidak ditemukan.</div>
-                <div id="md_source_section" style="display:none;">
-                    <div class="row mb-6">
-                        <div class="col-md-4"><div class="fw-bold text-gray-600">Jenis</div><div id="md_src_label">-</div></div>
-                        <div class="col-md-4"><div class="fw-bold text-gray-600">Kode</div><div id="md_src_code">-</div></div>
-                        <div class="col-md-4"><div class="fw-bold text-gray-600">Ref</div><div id="md_src_ref">-</div></div>
-                    </div>
-                    <div class="row mb-6">
-                        <div class="col-md-4"><div class="fw-bold text-gray-600">Tanggal</div><div id="md_src_date">-</div></div>
-                        <div class="col-md-8"><div class="fw-bold text-gray-600">Catatan</div><div id="md_src_note">-</div></div>
-                    </div>
-                    <div class="table-responsive">
-                        <table class="table align-middle table-row-dashed fs-6 gy-5">
-                            <thead>
-                                <tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0">
-                                    <th>Item</th><th>Qty</th><th>Catatan</th>
-                                </tr>
-                            </thead>
-                            <tbody id="md_src_items"></tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
 @endsection
 
 @push('scripts')
@@ -1001,8 +943,6 @@
 
         const mutationsModalEl = document.getElementById('modal_item_mutations');
         const mutationsModal = mutationsModalEl ? new bootstrap.Modal(mutationsModalEl) : null;
-        const detailModalEl = document.getElementById('modal_mutation_detail');
-        const detailModal = detailModalEl ? new bootstrap.Modal(detailModalEl) : null;
         const mutDateFrom = document.getElementById('mut_date_from');
         const mutDateTo = document.getElementById('mut_date_to');
         const mutWarehouse = document.getElementById('mut_filter_warehouse');
@@ -1049,11 +989,13 @@
                         ? '<span class="badge badge-light-success">IN</span>'
                         : '<span class="badge badge-light-danger">OUT</span>' },
                     { data: 'qty' },
+                    { data: 'stock_before', render: (d) => d ?? '-' },
+                    { data: 'stock_after', render: (d) => d ?? '-' },
                     { data: 'source' },
                     { data: 'source_code' },
                     { data: 'note' },
                     { data: 'id', orderable: false, searchable: false, className: 'text-end',
-                        render: (d) => `<button type="button" class="btn btn-sm btn-light btn-mut-detail" data-id="${d}">Detail</button>` },
+                        render: (d) => `<a href="${mutationDetailUrlTpl.replace(':id', d)}" class="btn btn-sm btn-light-primary">Lihat Dokumen</a>` },
                 ]
             });
         };
@@ -1086,57 +1028,6 @@
             mutDt?.ajax.reload();
         });
 
-        // Detail mutasi
-        const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val ?? '-'; };
-        const setHtml = (id, val) => { const el = document.getElementById(id); if (el) el.innerHTML = val ?? '-'; };
-
-        $(document).on('click', '.btn-mut-detail', async function (e) {
-            e.preventDefault();
-            const id = this.getAttribute('data-id');
-            if (!id) return;
-            try {
-                const res  = await fetch(mutationDetailUrlTpl.replace(':id', id), { headers: { 'Accept': 'application/json' } });
-                const json = await res.json();
-                if (!res.ok) { if (typeof Swal !== 'undefined') Swal.fire('Error', json.message || 'Gagal memuat data', 'error'); return; }
-                const m = json.mutation || {};
-                setText('md_id', m.id);
-                setText('md_date', m.occurred_at);
-                setText('md_item', m.item);
-                setHtml('md_warehouse', renderWhBadge(m.warehouse, m.warehouse_id));
-                setText('md_direction', m.direction);
-                setText('md_qty', m.qty);
-                setText('md_source', m.source);
-                setText('md_source_code', m.source_code);
-                setText('md_note', m.note);
-                setText('md_user', m.user);
-                const src = json.source || null;
-                const srcEmpty = document.getElementById('md_source_empty');
-                const srcSection = document.getElementById('md_source_section');
-                const srcItems = document.getElementById('md_src_items');
-                if (src && srcSection && srcEmpty) {
-                    srcSection.style.display = '';
-                    srcEmpty.style.display = 'none';
-                    setText('md_src_label', src.label);
-                    setText('md_src_code', src.code);
-                    setText('md_src_ref', src.ref);
-                    setText('md_src_date', src.date);
-                    setText('md_src_note', src.note);
-                    if (srcItems) {
-                        srcItems.innerHTML = (src.items || []).map(r => {
-                            const meta = r.meta ? `<div class="text-muted fs-8">${r.meta}</div>` : '';
-                            return `<tr><td>${r.label || '-'}${meta}</td><td>${r.qty ?? '-'}</td><td>${r.note ?? '-'}</td></tr>`;
-                        }).join('') || '<tr><td colspan="3" class="text-muted">Tidak ada item.</td></tr>';
-                    }
-                } else if (srcEmpty && srcSection) {
-                    srcSection.style.display = 'none';
-                    srcEmpty.style.display = '';
-                }
-                detailModal?.show();
-            } catch (err) {
-                console.error(err);
-                if (typeof Swal !== 'undefined') Swal.fire('Error', 'Gagal memuat data', 'error');
-            }
-        });
         // ─────────────────────────────────────────────────────────────
 
         safetyForm?.addEventListener('submit', async (e) => {

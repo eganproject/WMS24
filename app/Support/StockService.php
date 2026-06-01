@@ -56,9 +56,12 @@ class StockService
             ]);
         }
 
-        $stock->stock = $direction === 'out'
-            ? ($stock->stock - $qty)
-            : ($stock->stock + $qty);
+        $stockBefore = (int) $stock->stock;
+        $stockAfter = $direction === 'out'
+            ? ($stockBefore - $qty)
+            : ($stockBefore + $qty);
+
+        $stock->stock = $stockAfter;
         $stock->save();
 
         $sourceType = $payload['source_type'] ?? null;
@@ -76,6 +79,8 @@ class StockService
             'warehouse_id' => $warehouseId,
             'direction' => $direction,
             'qty' => $qty,
+            'stock_before' => $stockBefore,
+            'stock_after' => $stockAfter,
             'source_type' => $sourceType,
             'source_subtype' => $payload['source_subtype'] ?? null,
             'source_id' => $sourceId,

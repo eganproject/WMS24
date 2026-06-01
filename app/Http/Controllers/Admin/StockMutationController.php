@@ -30,6 +30,7 @@ class StockMutationController extends Controller
             'displayWarehouseId' => WarehouseService::displayWarehouseId(),
             'damagedWarehouseId' => WarehouseService::damagedWarehouseId(),
             'warehouseLabel' => $warehouseLabel,
+            'today' => now()->toDateString(),
         ]);
     }
 
@@ -102,6 +103,8 @@ class StockMutationController extends Controller
                 'user' => $m->creator?->name ?? '-',
                 'direction' => $direction,
                 'qty' => (int) $m->qty,
+                'stock_before' => $m->stock_before !== null ? (int) $m->stock_before : null,
+                'stock_after' => $m->stock_after !== null ? (int) $m->stock_after : null,
                 'source' => trim($source),
                 'source_code' => $m->source_code ?? '',
                 'note' => $m->note ?? '',
@@ -144,7 +147,7 @@ class StockMutationController extends Controller
         $direction = $mutation->direction === 'in' ? 'IN' : 'OUT';
         $source = strtoupper($mutation->source_type ?? '').($mutation->source_subtype ? ' / '.$mutation->source_subtype : '');
 
-        return response()->json([
+        $payload = [
             'mutation' => [
                 'id' => $mutation->id,
                 'occurred_at' => $mutation->occurred_at?->format('Y-m-d H:i'),
@@ -153,12 +156,28 @@ class StockMutationController extends Controller
                 'warehouse_id' => $mutation->warehouse_id,
                 'direction' => $direction,
                 'qty' => (int) $mutation->qty,
+                'stock_before' => $mutation->stock_before !== null ? (int) $mutation->stock_before : null,
+                'stock_after' => $mutation->stock_after !== null ? (int) $mutation->stock_after : null,
                 'source' => trim($source),
                 'source_code' => $mutation->source_code ?? '',
                 'note' => $mutation->note ?? '',
                 'user' => $mutation->creator?->name ?? '-',
             ],
             'source' => $sourceSummary ? array_merge($sourceSummary, ['items' => $sourceItems]) : null,
+        ];
+
+        if (request()->expectsJson()) {
+            return response()->json($payload);
+        }
+
+        return view('admin.inventory.stock-mutations.detail', [
+            'mutation' => $mutation,
+            'mutationLabel' => $itemLabel,
+            'directionLabel' => $direction,
+            'sourceLabel' => trim($source),
+            'sourceSummary' => $sourceSummary,
+            'sourceItems' => $sourceItems,
+            'backUrl' => url()->previous() ?: route('admin.inventory.stock-mutations.index'),
         ]);
     }
 

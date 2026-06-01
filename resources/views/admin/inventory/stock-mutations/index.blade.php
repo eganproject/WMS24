@@ -4,6 +4,20 @@
 @section('page_title', 'Stock Mutations')
 
 @section('content')
+@if(!empty($initialItem))
+    <div class="alert bg-light-primary border border-primary border-dashed d-flex align-items-start justify-content-between flex-wrap gap-4 p-6 mb-6">
+        <div>
+            <div class="fw-bolder fs-4 text-gray-900">Riwayat Mutasi Item</div>
+            <div class="fs-6 text-gray-800 mt-1">
+                <span class="fw-bold">{{ $initialItem->sku }}</span>
+                <span class="text-muted">- {{ $initialItem->name }}</span>
+            </div>
+            <div class="text-muted fs-7 mt-2">Menampilkan mutasi khusus item ini di semua gudang. Gunakan filter untuk melacak arah, sumber dokumen, rentang tanggal, kode, atau catatan.</div>
+        </div>
+        <a href="{{ route('admin.inventory.item-stocks.index') }}" class="btn btn-light-primary">Kembali ke Item Stock</a>
+    </div>
+@endif
+
 <div class="card">
     <div class="card-header border-0 pt-6">
         <div class="card-title">
@@ -41,8 +55,19 @@
                         @endforeach
                     </select>
                 @endif
-                <input type="text" class="form-control form-control-solid w-150px" id="filter_date_from" placeholder="Dari" value="{{ $today ?? now()->toDateString() }}" />
-                <input type="text" class="form-control form-control-solid w-150px" id="filter_date_to" placeholder="Sampai" value="{{ $today ?? now()->toDateString() }}" />
+                <select class="form-select form-select-solid w-125px" id="filter_direction">
+                    <option value="">Semua Arah</option>
+                    <option value="in">IN</option>
+                    <option value="out">OUT</option>
+                </select>
+                <select class="form-select form-select-solid w-175px" id="filter_source_type">
+                    <option value="">Semua Sumber</option>
+                    @foreach($sourceTypes ?? [] as $sourceType)
+                        <option value="{{ $sourceType }}">{{ strtoupper(str_replace('_', ' ', $sourceType)) }}</option>
+                    @endforeach
+                </select>
+                <input type="text" class="form-control form-control-solid w-150px" id="filter_date_from" placeholder="Dari" value="{{ $defaultDateFrom ?? ($today ?? now()->toDateString()) }}" />
+                <input type="text" class="form-control form-control-solid w-150px" id="filter_date_to" placeholder="Sampai" value="{{ $defaultDateTo ?? ($today ?? now()->toDateString()) }}" />
                 <button type="button" class="btn btn-light" id="filter_apply">Filter</button>
                 <button type="button" class="btn btn-light" id="filter_reset">Reset</button>
             </div>
@@ -208,11 +233,15 @@
     const today = '{{ $today ?? now()->toDateString() }}';
     const initialItemId = '{{ $initialItemId ?? '' }}';
     const initialWarehouseId = '{{ $initialWarehouseId ?? '' }}';
+    const defaultDateFrom = '{{ $defaultDateFrom ?? ($today ?? now()->toDateString()) }}';
+    const defaultDateTo = '{{ $defaultDateTo ?? ($today ?? now()->toDateString()) }}';
 
     document.addEventListener('DOMContentLoaded', () => {
         const tableEl = $('#stock_mutations_table');
         const searchInput = document.querySelector('[data-kt-filter="search"]');
         const warehouseFilter = document.getElementById('filter_warehouse');
+        const directionFilter = document.getElementById('filter_direction');
+        const sourceTypeFilter = document.getElementById('filter_source_type');
         const dateFromEl = document.getElementById('filter_date_from');
         const dateToEl = document.getElementById('filter_date_to');
         const filterApplyBtn = document.getElementById('filter_apply');
@@ -227,15 +256,18 @@
 
         if (typeof flatpickr !== 'undefined') {
             if (dateFromEl) {
-                fpFrom = flatpickr(dateFromEl, { dateFormat: 'Y-m-d', allowInput: true, defaultDate: dateFromEl.value || today });
+                fpFrom = flatpickr(dateFromEl, { dateFormat: 'Y-m-d', allowInput: true, defaultDate: dateFromEl.value || defaultDateFrom || null });
             }
             if (dateToEl) {
-                fpTo = flatpickr(dateToEl, { dateFormat: 'Y-m-d', allowInput: true, defaultDate: dateToEl.value || today });
+                fpTo = flatpickr(dateToEl, { dateFormat: 'Y-m-d', allowInput: true, defaultDate: dateToEl.value || defaultDateTo || null });
             }
         }
 
         if (warehouseFilter && typeof $ !== 'undefined' && $.fn.select2) {
             $(warehouseFilter).select2({ placeholder: 'Semua Gudang', allowClear: true, width: '200px' });
+        }
+        if (sourceTypeFilter && typeof $ !== 'undefined' && $.fn.select2) {
+            $(sourceTypeFilter).select2({ placeholder: 'Semua Sumber', allowClear: true, width: '175px' });
         }
         if (warehouseFilter && initialWarehouseId) {
             warehouseFilter.value = initialWarehouseId;
@@ -283,6 +315,8 @@
                     params.q = searchInput?.value || '';
                     if (initialItemId) params.item_id = initialItemId;
                     if (warehouseFilter?.value) params.warehouse_id = warehouseFilter.value;
+                    if (directionFilter?.value) params.direction = directionFilter.value;
+                    if (sourceTypeFilter?.value) params.source_type = sourceTypeFilter.value;
                     if (dateFromEl?.value) params.date_from = dateFromEl.value;
                     if (dateToEl?.value) params.date_to = dateToEl.value;
                 }
@@ -331,6 +365,8 @@
         searchInput?.addEventListener('keyup', reloadTable);
         warehouseFilter?.addEventListener('change', reloadTable);
         warehouseFilter?.addEventListener('change', updateWarehouseBadge);
+        directionFilter?.addEventListener('change', reloadTable);
+        sourceTypeFilter?.addEventListener('change', reloadTable);
         filterApplyBtn?.addEventListener('click', reloadTable);
         filterResetBtn?.addEventListener('click', () => {
             if (warehouseFilter) {
@@ -341,8 +377,23 @@
                 }
             }
             updateWarehouseBadge();
-            if (fpFrom) fpFrom.setDate(today, false); else if (dateFromEl) dateFromEl.value = today;
-            if (fpTo) fpTo.setDate(today, false); else if (dateToEl) dateToEl.value = today;
+            if (directionFilter) directionFilter.value = '';
+            if (sourceTypeFilter) {
+                sourceTypeFilter.value = '';
+                if (typeof $ !== 'undefined' && $(sourceTypeFilter).data('select2')) {
+                    $(sourceTypeFilter).val('').trigger('change.select2');
+                }
+            }
+            if (fpFrom) {
+                defaultDateFrom ? fpFrom.setDate(defaultDateFrom, false) : fpFrom.clear();
+            } else if (dateFromEl) {
+                dateFromEl.value = defaultDateFrom;
+            }
+            if (fpTo) {
+                defaultDateTo ? fpTo.setDate(defaultDateTo, false) : fpTo.clear();
+            } else if (dateToEl) {
+                dateToEl.value = defaultDateTo;
+            }
             reloadTable();
         });
         updateWarehouseBadge();

@@ -7,6 +7,7 @@ use App\Models\DamagedGood;
 use App\Models\DamagedAllocation;
 use App\Models\CustomerReturn;
 use App\Models\InboundTransaction;
+use App\Models\Item;
 use App\Models\OutboundTransaction;
 use App\Models\StockMutation;
 use App\Models\StockOpname;
@@ -23,6 +24,16 @@ class StockMutationController extends Controller
         $warehouseId = WarehouseService::defaultWarehouseId();
         $warehouseLabel = Warehouse::where('id', $warehouseId)->value('name') ?? 'Gudang Besar';
         $warehouses = Warehouse::orderBy('name')->get(['id', 'name', 'code']);
+        $initialItemId = request()->integer('item_id') ?: null;
+        $initialItem = $initialItemId
+            ? Item::query()->find($initialItemId, ['id', 'sku', 'name'])
+            : null;
+        $sourceTypes = StockMutation::query()
+            ->whereNotNull('source_type')
+            ->select('source_type')
+            ->distinct()
+            ->orderBy('source_type')
+            ->pluck('source_type');
 
         return view('admin.inventory.stock-mutations.index', [
             'warehouses' => $warehouses,
@@ -31,8 +42,12 @@ class StockMutationController extends Controller
             'damagedWarehouseId' => WarehouseService::damagedWarehouseId(),
             'warehouseLabel' => $warehouseLabel,
             'today' => now()->toDateString(),
-            'initialItemId' => request()->input('item_id'),
+            'defaultDateFrom' => $initialItem ? '' : now()->toDateString(),
+            'defaultDateTo' => $initialItem ? '' : now()->toDateString(),
+            'initialItemId' => $initialItemId,
+            'initialItem' => $initialItem,
             'initialWarehouseId' => request()->input('warehouse_id'),
+            'sourceTypes' => $sourceTypes,
         ]);
     }
 
@@ -65,6 +80,16 @@ class StockMutationController extends Controller
         }
 
         $this->applyDateFilter($query, $request);
+
+        $directionFilter = $request->input('direction');
+        if (in_array($directionFilter, ['in', 'out'], true)) {
+            $query->where('direction', $directionFilter);
+        }
+
+        $sourceTypeFilter = trim((string) $request->input('source_type', ''));
+        if ($sourceTypeFilter !== '') {
+            $query->where('source_type', $sourceTypeFilter);
+        }
 
         $itemFilter = $request->input('item_id');
         if ($itemFilter !== null && $itemFilter !== '') {

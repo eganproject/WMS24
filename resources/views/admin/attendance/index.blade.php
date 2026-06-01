@@ -457,6 +457,12 @@
                 <button type="button" class="btn btn-light-primary d-none" id="attendance_import_employees">
                     <i class="fas fa-file-import me-1"></i>Import Karyawan
                 </button>
+                <button type="button" class="btn btn-light-primary d-none" id="attendance_export_templates">
+                    <i class="fas fa-file-excel me-1"></i>Export Template
+                </button>
+                <button type="button" class="btn btn-light-primary d-none" id="attendance_import_templates">
+                    <i class="fas fa-file-import me-1"></i>Import Template
+                </button>
                 <button type="button" class="btn btn-primary" id="attendance_open_form" data-active-section="{{ $activeSection }}">
                     <i class="fas fa-plus me-1"></i><span>Tambah {{ $activeSectionLabel }}</span>
                 </button>
@@ -1108,6 +1114,50 @@
     </div>
 </div>
 
+{{-- ===== Modal Import Template Jadwal ===== --}}
+<div class="modal fade" id="attendance_import_templates_modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h2 class="fw-bolder mb-1"><i class="fas fa-file-import text-primary me-2"></i>Import Template Jadwal</h2>
+                    <div class="text-muted fs-7">Upload Excel untuk membuat atau memperbarui pola template mingguan.</div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info border-0 mb-5" style="background:#eff8ff;">
+                    <div class="fw-bold mb-2">Format kolom Excel</div>
+                    <div class="fs-7 text-muted">
+                        Gunakan format yang sama dengan export:
+                        <code>template_name</code>, <code>is_active</code>, <code>day_of_week</code>,
+                        <code>day_name</code>, <code>schedule_type</code>, <code>shift</code>, <code>work_shift_id</code>.
+                    </div>
+                    <div class="fs-8 text-muted mt-2">
+                        Satu baris mewakili satu hari. <code>day_of_week</code>: 1=Senin sampai 7=Minggu.
+                        <code>schedule_type</code> bisa <code>work</code>/<code>masuk</code> atau <code>day_off</code>/<code>libur</code>.
+                    </div>
+                    <div class="fs-8 text-muted mt-2">Untuk hari <code>work</code>, isi salah satu: <code>work_shift_id</code> atau nama shift pada kolom <code>shift</code>.</div>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-bold">File Excel</label>
+                    <input type="file" id="template_import_file" class="form-control form-control-solid" accept=".xlsx,.xls">
+                    <div class="invalid-feedback d-block" id="template_import_error"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <a href="{{ route('admin.attendance.templates.export') }}" class="btn btn-light-primary me-auto" id="template_import_export">
+                    <i class="fas fa-download me-1"></i>Download Format
+                </a>
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Batal</button>
+                <button type="button" class="btn btn-primary" id="template_import_submit">
+                    <i class="fas fa-file-import me-1"></i>Import
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {{-- ===== Modal Create/Edit ===== --}}
 <div class="modal fade" id="attendance_form_modal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
@@ -1178,6 +1228,8 @@ const assignTemplateUrl = '{{ route('admin.attendance.templates.assign') }}';
 const employeeImportUrl = '{{ route('admin.attendance.employees.import') }}';
 const employeeImportTemplateUrl = '{{ route('admin.attendance.employees.import-template') }}';
 const employeeExportUrl = '{{ route('admin.attendance.employees.export') }}';
+const templateImportUrl = '{{ route('admin.attendance.templates.import') }}';
+const templateExportUrl = '{{ route('admin.attendance.templates.export') }}';
 const nextEmployeeCode = @json($nextEmployeeCode ?? 'K0001');
 const weeklyTemplateOptions = @json($templateOptions ?? []);
 const positionStoreUrl = '{{ route('admin.attendance.positions.store') }}';
@@ -1398,14 +1450,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const openFormButton = document.getElementById('attendance_open_form');
     const exportEmployeesButton = document.getElementById('attendance_export_employees');
     const importEmployeesButton = document.getElementById('attendance_import_employees');
+    const exportTemplatesButton = document.getElementById('attendance_export_templates');
+    const importTemplatesButton = document.getElementById('attendance_import_templates');
     const importEmployeesModalEl = document.getElementById('attendance_import_employees_modal');
     const importEmployeesModal = importEmployeesModalEl && typeof bootstrap !== 'undefined'
         ? bootstrap.Modal.getOrCreateInstance(importEmployeesModalEl)
+        : null;
+    const importTemplatesModalEl = document.getElementById('attendance_import_templates_modal');
+    const importTemplatesModal = importTemplatesModalEl && typeof bootstrap !== 'undefined'
+        ? bootstrap.Modal.getOrCreateInstance(importTemplatesModalEl)
         : null;
     const employeeImportFile = document.getElementById('employee_import_file');
     const employeeImportMode = document.getElementById('employee_import_mode');
     const employeeImportError = document.getElementById('employee_import_error');
     const employeeImportSubmit = document.getElementById('employee_import_submit');
+    const templateImportFile = document.getElementById('template_import_file');
+    const templateImportError = document.getElementById('template_import_error');
+    const templateImportSubmit = document.getElementById('template_import_submit');
     const recapFilterDateFrom = document.getElementById('recap_filter_date_from');
     const recapFilterDateTo = document.getElementById('recap_filter_date_to');
     const recapFilterEmployee = document.getElementById('recap_filter_employee');
@@ -1494,6 +1555,8 @@ document.addEventListener('DOMContentLoaded', () => {
         openFormButton.classList.toggle('d-none', !hasCreateForm);
         exportEmployeesButton?.classList.toggle('d-none', section !== 'employees');
         importEmployeesButton?.classList.toggle('d-none', section !== 'employees');
+        exportTemplatesButton?.classList.toggle('d-none', section !== 'templates');
+        importTemplatesButton?.classList.toggle('d-none', section !== 'templates');
         openFormButton.dataset.activeSection = section;
         openFormButton.querySelector('span').textContent = section === 'raw_logs'
             ? 'Input Manual Raw Log'
@@ -1888,6 +1951,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const q = searchInput?.value?.trim() || '';
         window.location.href = q ? `${employeeExportUrl}?q=${encodeURIComponent(q)}` : employeeExportUrl;
     });
+    importTemplatesButton?.addEventListener('click', () => {
+        if (templateImportFile) templateImportFile.value = '';
+        if (templateImportError) templateImportError.textContent = '';
+        importTemplatesModal?.show();
+    });
+    exportTemplatesButton?.addEventListener('click', () => {
+        window.location.href = templateExportUrl;
+    });
     employeeImportSubmit?.addEventListener('click', async () => {
         if (!employeeImportUrl) return;
         if (employeeImportError) employeeImportError.textContent = '';
@@ -1930,6 +2001,49 @@ document.addEventListener('DOMContentLoaded', () => {
         } finally {
             employeeImportSubmit.disabled = false;
             employeeImportSubmit.innerHTML = '<i class="fas fa-file-import me-1"></i>Import';
+        }
+    });
+    templateImportSubmit?.addEventListener('click', async () => {
+        if (!templateImportUrl) return;
+        if (templateImportError) templateImportError.textContent = '';
+
+        const file = templateImportFile?.files?.[0];
+        if (!file) {
+            if (templateImportError) templateImportError.textContent = 'Pilih file Excel terlebih dahulu.';
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        templateImportSubmit.disabled = true;
+        templateImportSubmit.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Mengimport...';
+
+        try {
+            const response = await fetch(templateImportUrl, {
+                method: 'POST',
+                headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' },
+                body: formData,
+            });
+            const json = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                const message = json?.errors?.file?.[0] || json?.message || 'Gagal import template jadwal';
+                if (templateImportError) templateImportError.textContent = message;
+                Swal?.fire('Error', message, 'error');
+                return;
+            }
+
+            const detail = `Created: ${json.created ?? 0}, Updated: ${json.updated ?? 0}`;
+            Swal?.fire('Berhasil', `${json.message || 'Import template jadwal berhasil'} (${detail})`, 'success');
+            if (templateImportFile) templateImportFile.value = '';
+            importTemplatesModal?.hide();
+            initAttendanceTable('templates_table')?.ajax.reload(null, false);
+        } catch (error) {
+            if (templateImportError) templateImportError.textContent = 'Gagal import template jadwal';
+            Swal?.fire('Error', 'Gagal import template jadwal', 'error');
+        } finally {
+            templateImportSubmit.disabled = false;
+            templateImportSubmit.innerHTML = '<i class="fas fa-file-import me-1"></i>Import';
         }
     });
     document.getElementById('modal_positions')?.addEventListener('shown.bs.modal', () => {

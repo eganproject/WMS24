@@ -481,7 +481,9 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::put('/holidays/{holiday}', [AttendanceController::class, 'updateHoliday'])->name('holidays.update');
         Route::delete('/holidays/{holiday}', [AttendanceController::class, 'destroyHoliday'])->name('holidays.destroy');
         Route::get('/templates/data', [AttendanceController::class, 'templatesData'])->name('templates.data');
+        Route::get('/templates/export', [AttendanceController::class, 'exportTemplates'])->name('templates.export');
         Route::post('/templates', [AttendanceController::class, 'storeTemplate'])->name('templates.store');
+        Route::post('/templates/import', [AttendanceController::class, 'importTemplates'])->name('templates.import');
         Route::put('/templates/{template}', [AttendanceController::class, 'updateTemplate'])->name('templates.update');
         Route::delete('/templates/{template}', [AttendanceController::class, 'destroyTemplate'])->name('templates.destroy');
         Route::post('/templates/assign', [AttendanceController::class, 'assignTemplate'])->name('templates.assign');

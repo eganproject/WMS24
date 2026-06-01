@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Exports\AbsentEmployeesExport;
 use App\Exports\EmployeesExport;
 use App\Exports\EmployeesTemplateExport;
+use App\Exports\WeeklyScheduleTemplatesExport;
 use App\Imports\EmployeesImport;
+use App\Imports\WeeklyScheduleTemplatesImport;
 use App\Models\ActivityLog;
 use App\Models\Area;
 use App\Models\Attendance;
@@ -499,6 +501,14 @@ class AttendanceController extends Controller
         return Excel::download(
             new EmployeesTemplateExport(),
             'template_import_karyawan.xlsx'
+        );
+    }
+
+    public function exportTemplates()
+    {
+        return Excel::download(
+            new WeeklyScheduleTemplatesExport(),
+            'template_jadwal.xlsx'
         );
     }
 
@@ -1005,6 +1015,93 @@ class AttendanceController extends Controller
         });
 
         return response()->json(['message' => 'Template jadwal berhasil dibuat', 'template' => $template]);
+    }
+
+    public function importTemplates(Request $request)
+    {
+        $validated = $request->validate([
+            'file' => ['required', 'file', 'mimes:xlsx,xls'],
+        ]);
+
+        $import = new WeeklyScheduleTemplatesImport();
+        Excel::import($import, $validated['file']);
+
+        $templates = $import->templates;
+        if (empty($templates)) {
+            throw ValidationException::withMessages([
+                'file' => 'Tidak ada data valid untuk diimport',
+            ]);
+        }
+
+        $shifts = WorkShift::query()->get(['id', 'name']);
+        $shiftById = $shifts->keyBy(fn ($shift) => (string) $shift->id);
+        $shiftByName = $shifts->keyBy(fn ($shift) => mb_strtolower((string) $shift->name));
+
+        $created = 0;
+        $updated = 0;
+        $errors = [];
+
+        DB::transaction(function () use ($templates, $shiftById, $shiftByName, &$created, &$updated, &$errors) {
+            foreach ($templates as $templateData) {
+                $days = [];
+                foreach ($templateData['days'] as $day) {
+                    $shiftId = null;
+                    if (($day['schedule_type'] ?? '') === EmployeeSchedule::TYPE_WORK) {
+                        $shiftRaw = trim((string) ($day['shift_raw'] ?? ''));
+                        $shift = is_numeric($shiftRaw)
+                            ? $shiftById->get((string) $shiftRaw)
+                            : $shiftByName->get(mb_strtolower($shiftRaw));
+
+                        if (!$shift) {
+                            $errors[] = "Baris {$day['row']}: Shift tidak ditemukan ({$shiftRaw})";
+                            continue;
+                        }
+                        $shiftId = $shift->id;
+                    }
+
+                    $days[] = [
+                        'day_of_week' => $day['day_of_week'],
+                        'schedule_type' => $day['schedule_type'],
+                        'work_shift_id' => $shiftId,
+                    ];
+                }
+
+                if (!empty($errors)) {
+                    continue;
+                }
+
+                $template = WeeklyScheduleTemplate::query()
+                    ->where('name', $templateData['name'])
+                    ->first();
+
+                if ($template) {
+                    $template->update([
+                        'is_active' => (bool) $templateData['is_active'],
+                    ]);
+                    $updated++;
+                } else {
+                    $template = WeeklyScheduleTemplate::create([
+                        'name' => $templateData['name'],
+                        'is_active' => (bool) $templateData['is_active'],
+                    ]);
+                    $created++;
+                }
+
+                $this->syncTemplateDays($template, $days);
+            }
+
+            if (!empty($errors)) {
+                throw ValidationException::withMessages([
+                    'file' => implode(' | ', array_slice($errors, 0, 5)),
+                ]);
+            }
+        });
+
+        return response()->json([
+            'message' => 'Import template jadwal berhasil',
+            'created' => $created,
+            'updated' => $updated,
+        ]);
     }
 
     public function updateTemplate(Request $request, WeeklyScheduleTemplate $template)

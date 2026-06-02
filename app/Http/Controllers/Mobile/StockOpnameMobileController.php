@@ -8,6 +8,7 @@ use App\Models\ItemStock;
 use App\Models\StockOpname;
 use App\Models\StockOpnameItem;
 use App\Support\BundleService;
+use App\Support\ItemBarcodeScanMissLogger;
 use App\Support\ItemBarcodeResolver;
 use App\Support\WarehouseService;
 use Illuminate\Http\Request;
@@ -66,6 +67,12 @@ class StockOpnameMobileController extends Controller
 
         $item = app(ItemBarcodeResolver::class)->resolveItem($q);
         if (!$item || !$item->isSingle()) {
+            app(ItemBarcodeScanMissLogger::class)->log(
+                ItemBarcodeScanMissLogger::CONTEXT_STOCK_OPNAME,
+                $q,
+                null,
+                trim((string) $request->input('batch_code', '')) ?: null
+            );
             return response()->json(['items' => []]);
         }
 

@@ -87,6 +87,16 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
                 ]);
             }
 
+            $skuAliasConflict = ItemBarcode::query()
+                ->where('normalized_hash', ItemBarcodeResolver::hash(ItemBarcodeResolver::normalize($sku)))
+                ->when($existingItem, fn ($q) => $q->where('item_id', '!=', $existingItem->id))
+                ->exists();
+            if ($skuAliasConflict) {
+                throw ValidationException::withMessages([
+                    'file' => "Baris {$excelRow} (SKU {$sku}): SKU bentrok dengan barcode eksternal item lain.",
+                ]);
+            }
+
             $address = '';
             $hasAddressHeader = $this->hasAnyKey($row, ['address']);
             $hasLocationHeaders = $this->hasAnyKey($row, [

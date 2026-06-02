@@ -11,6 +11,7 @@ use App\Models\Resi;
 use App\Models\ResiDetail;
 use App\Models\ShipmentScanOut;
 use App\Support\BundleService;
+use App\Support\ItemBarcodeScanMissLogger;
 use App\Support\ItemBarcodeResolver;
 use App\Support\PickingListBalanceService;
 use App\Support\QcScanExceptionRegistry;
@@ -219,6 +220,12 @@ class QcScanController extends Controller
 
             if (!$target) {
                 DB::rollBack();
+                app(ItemBarcodeScanMissLogger::class)->log(
+                    ItemBarcodeScanMissLogger::CONTEXT_QC_SCAN,
+                    $code,
+                    $qc->id,
+                    $qc->scan_code ?: ($qc->resi?->no_resi ?? null)
+                );
                 return response()->json([
                     'message' => 'SKU tidak sesuai resi.',
                 ], 422);

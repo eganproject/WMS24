@@ -79,4 +79,23 @@ class StockOpnameMobileSearchTest extends TestCase
             ->assertJsonPath('items.0.sku', 'SO-ALIAS-001')
             ->assertJsonPath('items.0.koli_qty', 12);
     }
+
+    public function test_mobile_stock_opname_unknown_barcode_is_logged(): void
+    {
+        $response = $this->withoutMiddleware()->getJson(route('opname.items.search', [
+            'q' => 'UNKNOWN-BC-001',
+            'batch_code' => 'OPN-001',
+        ]));
+
+        $response->assertOk()
+            ->assertJsonCount(0, 'items');
+
+        $this->assertDatabaseHas('item_barcode_scan_misses', [
+            'context' => 'stock_opname',
+            'scan_code' => 'UNKNOWN-BC-001',
+            'normalized_hash' => hash('sha256', 'unknown-bc-001'),
+            'source_code' => 'OPN-001',
+            'scan_count' => 1,
+        ]);
+    }
 }

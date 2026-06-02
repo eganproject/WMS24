@@ -8,10 +8,13 @@ use App\Models\InboundItem;
 use App\Models\InboundTransaction;
 use App\Models\Item;
 use App\Models\ItemBarcode;
+use App\Models\ItemBarcodeScanMiss;
 use App\Models\ItemStock;
 use App\Models\Area;
+use App\Exports\ItemBarcodeTemplateExport;
 use App\Exports\ItemBundleTemplateExport;
 use App\Exports\ItemsTemplateExport;
+use App\Imports\ItemBarcodesImport;
 use App\Imports\ItemBundleImport;
 use App\Imports\ItemsImport;
 use App\Models\ItemBundleComponent;
@@ -164,6 +167,7 @@ class ItemController extends Controller
             'external_barcodes.*.source_name' => ['nullable', 'string', 'max:100'],
             'external_barcodes.*.note' => ['nullable', 'string'],
         ]);
+        $this->assertSkuDoesNotCollideWithBarcodeAlias($validated['sku']);
 
         $catId = $request->input('category_id');
         $validated['category_id'] = ($catId === null || (int)$catId === 0) ? 0 : $catId;
@@ -253,6 +257,7 @@ class ItemController extends Controller
             'external_barcodes.*.source_name' => ['nullable', 'string', 'max:100'],
             'external_barcodes.*.note' => ['nullable', 'string'],
         ]);
+        $this->assertSkuDoesNotCollideWithBarcodeAlias($validated['sku'], $item);
 
         $catId = $request->input('category_id');
         $validated['category_id'] = ($catId === null || (int)$catId === 0) ? 0 : $catId;
@@ -431,6 +436,182 @@ class ItemController extends Controller
         ]);
     }
 
+    public function barcodeTemplate()
+    {
+        $filename = 'item-barcode-template-'.now()->format('YmdHis').'.xlsx';
+        return Excel::download(new ItemBarcodeTemplateExport(), $filename);
+    }
+
+    public function barcodeImport(Request $request)
+    {
+        $request->validate([
+            'file' => ['required', 'file', 'mimes:xlsx,xls', 'max:5120'],
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $import = new ItemBarcodesImport();
+            Excel::import($import, $request->file('file'));
+            DB::commit();
+        } catch (ValidationException $e) {
+            DB::rollBack();
+            throw $e;
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return response()->json(['message' => 'Gagal import barcode alias: '.$e->getMessage()], 500);
+        }
+
+        return response()->json([
+            'message' => 'Import barcode alias selesai',
+            'created' => $import->created,
+            'updated' => $import->updated,
+        ]);
+    }
+
+    public function barcodeMissesData(Request $request)
+    {
+        $query = ItemBarcodeScanMiss::query()
+            ->with(['creator:id,name', 'resolvedItem:id,sku,name'])
+            ->orderByRaw('resolved_at is not null')
+            ->orderByDesc('last_scanned_at');
+
+        $status = trim((string) $request->input('status', 'open'));
+        if ($status === 'resolved') {
+            $query->whereNotNull('resolved_at');
+        } elseif ($status !== 'all') {
+            $query->whereNull('resolved_at');
+        }
+
+        $search = trim((string) $request->input('q', ''));
+        if ($search !== '') {
+            $exact = $this->isExactSearch($request);
+            $query->where(function ($q) use ($search, $exact) {
+                $this->applyTextSearch($q, 'scan_code', $search, $exact);
+                $this->applyTextSearch($q, 'context', $search, $exact, 'or');
+                $this->applyTextSearch($q, 'source_code', $search, $exact, 'or');
+            });
+        }
+
+        $recordsTotal = ItemBarcodeScanMiss::count();
+        $recordsFiltered = (clone $query)->count();
+
+        $start = (int) $request->input('start', 0);
+        $length = (int) $request->input('length', 10);
+        if ($length > 0) {
+            $query->skip($start)->take($length);
+        }
+
+        $data = $query->get()->map(function (ItemBarcodeScanMiss $row) {
+            return [
+                'id' => $row->id,
+                'context' => $this->barcodeMissContextLabel((string) $row->context),
+                'raw_context' => $row->context,
+                'scan_code' => $row->scan_code,
+                'source_code' => $row->source_code ?? '-',
+                'scan_count' => (int) $row->scan_count,
+                'last_scanned_at' => $row->last_scanned_at?->format('Y-m-d H:i') ?? '-',
+                'created_by' => $row->creator?->name ?? '-',
+                'resolved_item' => $row->resolvedItem
+                    ? trim($row->resolvedItem->sku.' - '.$row->resolvedItem->name)
+                    : '-',
+                'resolved_at' => $row->resolved_at?->format('Y-m-d H:i') ?? '-',
+                'is_resolved' => $row->resolved_at !== null,
+            ];
+        });
+
+        return response()->json([
+            'draw' => (int) $request->input('draw'),
+            'recordsTotal' => $recordsTotal,
+            'recordsFiltered' => $recordsFiltered,
+            'data' => $data,
+        ]);
+    }
+
+    public function resolveBarcodeMiss(Request $request, string $miss)
+    {
+        $miss = ItemBarcodeScanMiss::query()->findOrFail((int) $miss);
+
+        $validated = $request->validate([
+            'item_id' => ['required', 'integer', 'exists:items,id'],
+            'source_name' => ['nullable', 'string', 'max:100'],
+            'note' => ['nullable', 'string'],
+        ]);
+
+        if ($miss->resolved_at !== null) {
+            return response()->json(['message' => 'Barcode tidak dikenal ini sudah diselesaikan.'], 422);
+        }
+
+        $item = Item::query()->findOrFail((int) $validated['item_id']);
+        if (!$item->isSingle()) {
+            return response()->json(['message' => 'Barcode alias hanya bisa dihubungkan ke item stok fisik.'], 422);
+        }
+
+        DB::beginTransaction();
+        try {
+            $barcodeValue = trim((string) $miss->scan_code);
+            $normalized = ItemBarcodeResolver::normalize($barcodeValue);
+            if ($normalized === '') {
+                throw ValidationException::withMessages([
+                    'item_id' => 'Barcode tidak valid.',
+                ]);
+            }
+
+            if ($normalized === ItemBarcodeResolver::normalize((string) $item->sku)) {
+                throw ValidationException::withMessages([
+                    'item_id' => 'Barcode eksternal tidak boleh sama dengan SKU item.',
+                ]);
+            }
+
+            $hash = ItemBarcodeResolver::hash($normalized);
+            $skuConflict = Item::query()
+                ->whereRaw('LOWER(sku) = ?', [$normalized])
+                ->where('id', '!=', $item->id)
+                ->exists();
+            if ($skuConflict) {
+                throw ValidationException::withMessages([
+                    'item_id' => 'Barcode bentrok dengan SKU item lain.',
+                ]);
+            }
+
+            $existingBarcode = ItemBarcode::query()
+                ->where('normalized_hash', $hash)
+                ->first();
+
+            if ($existingBarcode && (int) $existingBarcode->item_id !== (int) $item->id) {
+                throw ValidationException::withMessages([
+                    'item_id' => 'Barcode sudah digunakan item lain.',
+                ]);
+            }
+
+            if (!$existingBarcode) {
+                $item->barcodes()->create([
+                    'barcode_value' => $barcodeValue,
+                    'normalized_barcode' => $normalized,
+                    'normalized_hash' => $hash,
+                    'source_name' => $this->nullableTrim($validated['source_name'] ?? null) ?? $this->barcodeMissContextLabel((string) $miss->context),
+                    'note' => $this->nullableTrim($validated['note'] ?? null) ?? 'Dari log barcode tidak dikenal',
+                    'is_active' => true,
+                ]);
+            }
+            $miss->resolved_item_id = $item->id;
+            $miss->resolved_by = auth()->id();
+            $miss->resolved_at = now();
+            $miss->save();
+
+            DB::commit();
+        } catch (ValidationException $e) {
+            DB::rollBack();
+            throw $e;
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return response()->json(['message' => 'Gagal menghubungkan barcode: '.$e->getMessage()], 500);
+        }
+
+        return response()->json([
+            'message' => 'Barcode berhasil dihubungkan ke item.',
+        ]);
+    }
+
     public function bundleImport(Request $request)
     {
         $request->validate([
@@ -597,6 +778,25 @@ class ItemController extends Controller
         unset($validated['rack_code'], $validated['column_no'], $validated['row_no']);
     }
 
+    private function assertSkuDoesNotCollideWithBarcodeAlias(string $sku, ?Item $item = null): void
+    {
+        $normalized = ItemBarcodeResolver::normalize($sku);
+        if ($normalized === '') {
+            return;
+        }
+
+        $exists = ItemBarcode::query()
+            ->where('normalized_hash', ItemBarcodeResolver::hash($normalized))
+            ->when($item, fn ($q) => $q->where('item_id', '!=', $item->id))
+            ->exists();
+
+        if ($exists) {
+            throw ValidationException::withMessages([
+                'sku' => 'SKU bentrok dengan barcode eksternal item lain.',
+            ]);
+        }
+    }
+
     /**
      * @return array<int,array{barcode_value:string,normalized_barcode:string,normalized_hash:string,source_name:?string,note:?string,is_active:bool}>
      */
@@ -677,5 +877,14 @@ class ItemController extends Controller
     {
         $trimmed = trim((string) ($value ?? ''));
         return $trimmed === '' ? null : $trimmed;
+    }
+
+    private function barcodeMissContextLabel(string $context): string
+    {
+        return match ($context) {
+            'qc_scan_sku' => 'QC Scan SKU',
+            'stock_opname' => 'Stock Opname',
+            default => $context,
+        };
     }
 }

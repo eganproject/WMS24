@@ -64,7 +64,9 @@
                 </div>
                 @if($canCreate)
                     <button type="button" class="btn btn-light-primary me-3" id="btn_import_items" data-bs-toggle="modal" data-bs-target="#modal_import_items">Import Items</button>
+                    <button type="button" class="btn btn-light-success me-3" id="btn_import_barcodes" data-bs-toggle="modal" data-bs-target="#modal_import_barcodes">Import Barcode Alias</button>
                     <button type="button" class="btn btn-light-warning me-3" id="btn_import_bundle" data-bs-toggle="modal" data-bs-target="#modal_import_bundle">Import Bundle</button>
+                    <button type="button" class="btn btn-light-info me-3" id="btn_open_barcode_misses" data-bs-toggle="modal" data-bs-target="#modal_barcode_misses">Barcode Tidak Dikenal</button>
                     <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modal_item_form" id="btn_open_create_item">
                         Add Item
                     </button>
@@ -302,6 +304,49 @@
 </div>
 <!--end::Import Modal-->
 
+<!--begin::Import Barcode Modal-->
+<div class="modal fade" id="modal_import_barcodes" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered mw-650px">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="fw-bolder">Import Barcode Alias (Excel)</h2>
+                <div class="btn btn-icon btn-sm btn-active-icon-primary" data-bs-dismiss="modal">
+                    <span class="svg-icon svg-icon-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+                            <rect opacity="0.5" x="6" y="17.3137" width="16" height="2" rx="1" transform="rotate(-45 6 17.3137)" fill="black" />
+                            <rect x="7.41422" y="6" width="16" height="2" rx="1" transform="rotate(45 7.41422 6)" fill="black" />
+                        </svg>
+                    </span>
+                </div>
+            </div>
+            <div class="modal-body scroll-y px-10 py-10">
+                <div class="mb-7">
+                    <p class="fw-semibold mb-3">Gunakan import ini untuk menambah atau memperbarui barcode/QR eksternal tanpa mengubah master item.</p>
+                    <ul class="ms-5 mb-4">
+                        <li><strong>sku</strong> (wajib, harus item single/stok fisik)</li>
+                        <li><strong>barcode</strong> (wajib, unik)</li>
+                        <li><strong>source_name</strong> (opsional)</li>
+                        <li><strong>note</strong> (opsional)</li>
+                    </ul>
+                    <a href="{{ route('admin.masterdata.items.barcode-template') }}" class="btn btn-light-primary">
+                        Download Template Barcode Alias
+                    </a>
+                </div>
+                <div class="mb-10">
+                    <label class="required fs-6 fw-bold form-label mb-2">File Excel</label>
+                    <input type="file" class="form-control form-control-solid" id="import_barcodes_file" accept=".xlsx,.xls" />
+                    <div class="invalid-feedback d-block" id="error_import_barcodes_file"></div>
+                </div>
+                <div class="text-end">
+                    <button type="button" class="btn btn-light me-3" data-bs-dismiss="modal">Batal</button>
+                    <button type="button" class="btn btn-success" id="btn_import_barcodes_submit">Import</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<!--end::Import Barcode Modal-->
+
 <!--begin::Import Bundle Modal-->
 <div class="modal fade" id="modal_import_bundle" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered mw-650px">
@@ -355,6 +400,53 @@
 </div>
 <!--end::Import Bundle Modal-->
 
+<div class="modal fade" id="modal_barcode_misses" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered mw-1000px">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h2 class="fw-bolder mb-1">Barcode Tidak Dikenal</h2>
+                    <div class="text-muted fs-7">Hubungkan kode scan gagal ke item agar menjadi barcode alias.</div>
+                </div>
+                <div class="btn btn-icon btn-sm btn-active-icon-primary" data-bs-dismiss="modal">
+                    <span class="svg-icon svg-icon-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+                            <rect opacity="0.5" x="6" y="17.3137" width="16" height="2" rx="1" transform="rotate(-45 6 17.3137)" fill="black" />
+                            <rect x="7.41422" y="6" width="16" height="2" rx="1" transform="rotate(45 7.41422 6)" fill="black" />
+                        </svg>
+                    </span>
+                </div>
+            </div>
+            <div class="modal-body px-10 py-10">
+                <div class="d-flex align-items-center justify-content-between mb-5">
+                    <input type="text" class="form-control form-control-solid w-250px" id="barcode_miss_search" placeholder="Cari kode/context" />
+                    <select class="form-select form-select-solid w-175px" id="barcode_miss_status">
+                        <option value="open" selected>Belum selesai</option>
+                        <option value="resolved">Sudah selesai</option>
+                        <option value="all">Semua</option>
+                    </select>
+                </div>
+                <div class="table-responsive">
+                    <table class="table align-middle table-row-dashed fs-6 gy-4" id="barcode_misses_table">
+                        <thead>
+                            <tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0">
+                                <th>Kode Scan</th>
+                                <th>Context</th>
+                                <th>Sumber</th>
+                                <th>Jumlah</th>
+                                <th>Terakhir</th>
+                                <th>Resolved</th>
+                                <th class="text-end">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="modal_item_qr" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered mw-550px">
         <div class="modal-content">
@@ -394,6 +486,9 @@
     const updateTpl = '{{ route('admin.masterdata.items.update', ':id') }}';
     const deleteTpl = '{{ route('admin.masterdata.items.destroy', ':id') }}';
     const importUrl = '{{ route('admin.masterdata.items.import') }}';
+    const barcodeImportUrl = '{{ route('admin.masterdata.items.barcode-import') }}';
+    const barcodeMissesDataUrl = '{{ route('admin.masterdata.items.barcode-misses.data') }}';
+    const barcodeMissResolveTpl = '{{ route('admin.masterdata.items.barcode-misses.resolve', ':id') }}';
     const bundleImportUrl = '{{ route('admin.masterdata.items.bundle-import') }}';
     const qrCodeTpl = '{{ route('admin.masterdata.items.qr-code', ':id') }}';
     const canUpdate = {{ $canUpdate ? 'true' : 'false' }};
@@ -451,6 +546,16 @@
         const importInput = document.getElementById('import_items_file');
         const importError = document.getElementById('error_import_file');
         const importSubmit = document.getElementById('btn_import_items_submit');
+        const barcodeImportModalEl = document.getElementById('modal_import_barcodes');
+        const barcodeImportModal = barcodeImportModalEl ? new bootstrap.Modal(barcodeImportModalEl) : null;
+        const barcodeImportInput = document.getElementById('import_barcodes_file');
+        const barcodeImportError = document.getElementById('error_import_barcodes_file');
+        const barcodeImportSubmit = document.getElementById('btn_import_barcodes_submit');
+        const barcodeMissesModalEl = document.getElementById('modal_barcode_misses');
+        const barcodeMissesModal = barcodeMissesModalEl ? new bootstrap.Modal(barcodeMissesModalEl) : null;
+        const barcodeMissSearch = document.getElementById('barcode_miss_search');
+        const barcodeMissStatus = document.getElementById('barcode_miss_status');
+        const barcodeMissesTableEl = $('#barcode_misses_table');
         const bundleImportModalEl = document.getElementById('modal_import_bundle');
         const bundleImportModal = bundleImportModalEl ? new bootstrap.Modal(bundleImportModalEl) : null;
         const bundleImportInput = document.getElementById('import_bundle_file');
@@ -461,6 +566,7 @@
         const qrLabelEl = document.getElementById('item_qr_label');
         const qrImageEl = document.getElementById('item_qr_image');
         const qrDownloadEl = document.getElementById('item_qr_download');
+        let barcodeMissesDt = null;
         const notifyError = (message, title = 'Error') => {
             if (window.AppSwal?.error) {
                 return window.AppSwal.error(message, title);
@@ -853,6 +959,154 @@
         importBtn?.addEventListener('click', () => {
             if (importInput) importInput.value = '';
             if (importError) importError.textContent = '';
+        });
+
+        document.getElementById('btn_import_barcodes')?.addEventListener('click', () => {
+            if (barcodeImportInput) barcodeImportInput.value = '';
+            if (barcodeImportError) barcodeImportError.textContent = '';
+        });
+
+        barcodeImportSubmit?.addEventListener('click', async () => {
+            if (barcodeImportError) barcodeImportError.textContent = '';
+            const file = barcodeImportInput?.files?.[0];
+            if (!file) {
+                if (barcodeImportError) barcodeImportError.textContent = 'Pilih file Excel terlebih dahulu.';
+                return;
+            }
+            const confirmed = await confirmAction();
+            if (!confirmed) return;
+            const formData = new FormData();
+            formData.append('file', file);
+            try {
+                const res = await fetch(barcodeImportUrl, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Accept': 'application/json',
+                    },
+                    body: formData,
+                });
+                const text = await res.text();
+                let json;
+                try { json = JSON.parse(text); } catch (e) {
+                    closeSwal();
+                    notifyError('Respons server tidak valid');
+                    return;
+                }
+                closeSwal();
+                if (!res.ok) {
+                    if (json?.errors) {
+                        const msg = Object.values(json.errors).flat().join(', ');
+                        notifyError(msg || 'Gagal import barcode alias');
+                    } else {
+                        notifyError(json.message || 'Gagal import barcode alias');
+                    }
+                    return;
+                }
+                notifySuccess(`${json.message || 'Import selesai'} (created: ${json.created}, updated: ${json.updated})`);
+                if (barcodeImportInput) barcodeImportInput.value = '';
+                barcodeImportModal?.hide();
+                reloadTable(true);
+            } catch (err) {
+                console.error(err);
+                closeSwal();
+                notifyError('Gagal import barcode alias');
+            }
+        });
+
+        const initBarcodeMissesTable = () => {
+            if (barcodeMissesDt || !barcodeMissesTableEl.length || !$.fn.DataTable) return;
+            barcodeMissesDt = barcodeMissesTableEl.DataTable({
+                processing: true,
+                serverSide: true,
+                dom: 'rtip',
+                order: [[4, 'desc']],
+                pageLength: 10,
+                ajax: {
+                    url: barcodeMissesDataUrl,
+                    dataSrc: 'data',
+                    data: function(params) {
+                        params.q = barcodeMissSearch?.value || '';
+                        params.status = barcodeMissStatus?.value || 'open';
+                    }
+                },
+                columns: [
+                    { data: 'scan_code' },
+                    { data: 'context' },
+                    { data: 'source_code' },
+                    { data: 'scan_count', className: 'text-end' },
+                    { data: 'last_scanned_at' },
+                    { data: 'resolved_item' },
+                    { data: 'id', orderable: false, searchable: false, className: 'text-end', render: (data, type, row) => {
+                        if (row.is_resolved || !canUpdate) return '';
+                        return `
+                            <div class="d-flex gap-2 justify-content-end align-items-center">
+                                <select class="form-select form-select-sm form-select-solid w-250px barcode-miss-item">
+                                    <option value="">Pilih item</option>
+                                    ${componentItemOptionsHtml}
+                                </select>
+                                <button type="button" class="btn btn-sm btn-primary btn-resolve-barcode-miss" data-id="${data}">Hubungkan</button>
+                            </div>
+                        `;
+                    }},
+                ],
+            });
+            barcodeMissesDt.on('draw', refreshMenus);
+        };
+
+        document.getElementById('btn_open_barcode_misses')?.addEventListener('click', () => {
+            initBarcodeMissesTable();
+            barcodeMissesDt?.ajax.reload();
+        });
+        barcodeMissSearch?.addEventListener('keyup', () => barcodeMissesDt?.ajax.reload());
+        barcodeMissStatus?.addEventListener('change', () => barcodeMissesDt?.ajax.reload());
+
+        barcodeMissesTableEl.on('click', '.btn-resolve-barcode-miss', async function(e) {
+            e.preventDefault();
+            const id = this.getAttribute('data-id');
+            const row = this.closest('tr');
+            const select = row?.querySelector('.barcode-miss-item');
+            const itemId = select?.value || '';
+            if (!itemId) {
+                notifyError('Pilih item tujuan terlebih dahulu.');
+                return;
+            }
+            const confirmed = await confirmAction();
+            if (!confirmed) return;
+            try {
+                const res = await fetch(barcodeMissResolveTpl.replace(':id', id), {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({ item_id: itemId }),
+                });
+                const text = await res.text();
+                let json;
+                try { json = JSON.parse(text); } catch (e) {
+                    closeSwal();
+                    notifyError('Respons server tidak valid');
+                    return;
+                }
+                closeSwal();
+                if (!res.ok) {
+                    if (json?.errors) {
+                        notifyError(Object.values(json.errors).flat().join(', '));
+                    } else {
+                        notifyError(json.message || 'Gagal menghubungkan barcode');
+                    }
+                    return;
+                }
+                notifySuccess(json.message || 'Barcode berhasil dihubungkan.');
+                barcodeMissesDt?.ajax.reload(null, false);
+                reloadTable(true);
+            } catch (err) {
+                console.error(err);
+                closeSwal();
+                notifyError('Gagal menghubungkan barcode');
+            }
         });
 
         document.getElementById('btn_import_bundle')?.addEventListener('click', () => {

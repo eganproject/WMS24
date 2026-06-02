@@ -171,6 +171,10 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         // Items
         Route::get('/items/data', [\App\Http\Controllers\Admin\ItemController::class, 'data'])->name('items.data');
         Route::get('/items/template', [\App\Http\Controllers\Admin\ItemController::class, 'template'])->name('items.template');
+        Route::get('/items/barcode-template', [\App\Http\Controllers\Admin\ItemController::class, 'barcodeTemplate'])->name('items.barcode-template');
+        Route::post('/items/barcode-import', [\App\Http\Controllers\Admin\ItemController::class, 'barcodeImport'])->name('items.barcode-import');
+        Route::get('/items/barcode-misses/data', [\App\Http\Controllers\Admin\ItemController::class, 'barcodeMissesData'])->name('items.barcode-misses.data');
+        Route::post('/items/barcode-misses/{miss}/resolve', [\App\Http\Controllers\Admin\ItemController::class, 'resolveBarcodeMiss'])->name('items.barcode-misses.resolve');
         Route::get('/items/bundle-template', [\App\Http\Controllers\Admin\ItemController::class, 'bundleTemplate'])->name('items.bundle-template');
         Route::get('/items/{item}/qr-code', [\App\Http\Controllers\Admin\ItemController::class, 'qrCode'])->name('items.qr-code');
         Route::resource('items', \App\Http\Controllers\Admin\ItemController::class)->except(['create','show','edit'])->names('items');

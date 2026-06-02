@@ -195,6 +195,17 @@
                         <input type="number" min="0" class="form-control form-control-solid" name="safety_stock" id="item_safety_stock" value="0" />
                         <div class="invalid-feedback" id="error_safety_stock"></div>
                     </div>
+                    <div class="border border-dashed rounded p-5 mb-7" id="external_barcodes_card">
+                        <div class="d-flex align-items-center justify-content-between mb-4">
+                            <div>
+                                <div class="fw-bold">Barcode / QR Eksternal</div>
+                                <div class="text-muted fs-7">Dipakai untuk QC Scan SKU dan Stock Opname. Setiap barcode wajib unik.</div>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-light-primary" id="btn_add_external_barcode">Tambah Barcode</button>
+                        </div>
+                        <div id="external_barcodes_container" class="d-flex flex-column gap-4"></div>
+                        <div class="invalid-feedback d-block" id="error_external_barcodes"></div>
+                    </div>
                     <div class="card border border-dashed border-primary bg-light-primary" id="bundle_components_card" style="display:none;">
                         <div class="card-header min-h-50px">
                             <div class="card-title">
@@ -265,7 +276,8 @@
                         <li><strong>description</strong> (opsional)</li>
                     </ul>
                     <p class="text-muted small mb-1">Jika Anda menambahkan kolom <code>item_type</code>, nilainya hanya boleh <code>single</code>. Nilai <code>bundle</code> akan ditolak.</p>
-                    <p class="text-muted small mb-1">Contoh header: <code>sku,name,item_type,parent_category,category,stock_gudang_besar,stock_gudang_display,stock,safety_stock_gudang_besar,safety_stock_gudang_display,safety_stock,koli_qty,area,rack,column,row,description</code></p>
+                    <p class="text-muted small mb-1">Tambahkan kolom <code>external_barcodes</code> atau <code>barcode</code> jika ingin mengisi alias barcode/QR eksternal. Pisahkan banyak barcode dengan koma, titik koma, atau baris baru.</p>
+                    <p class="text-muted small mb-1">Contoh header: <code>sku,name,item_type,parent_category,category,stock_gudang_besar,stock_gudang_display,stock,safety_stock_gudang_besar,safety_stock_gudang_display,safety_stock,koli_qty,external_barcodes,area,rack,column,row,description</code></p>
                     <p class="text-muted small mb-1">Gunakan format Excel (.xlsx/.xls) dengan header di baris pertama.</p>
                     <p class="text-muted small mb-1">Jika kolom category dikosongkan, item otomatis dimasukkan ke kategori "Tanpa Kategori".</p>
                     <p class="text-muted small mb-0">Catatan: gunakan <code>area</code> saja jika baru tahu area umum. Jika ingin alamat detail, lengkapi <code>area</code>, <code>rack</code>, <code>column</code>, dan <code>row</code>.</p>
@@ -426,6 +438,9 @@
         const formDescription = document.getElementById('item_description');
         const formSafetyStock = document.getElementById('item_safety_stock');
         const formKoliQty = document.getElementById('item_koli_qty');
+        const externalBarcodesCard = document.getElementById('external_barcodes_card');
+        const externalBarcodesContainer = document.getElementById('external_barcodes_container');
+        const addExternalBarcodeBtn = document.getElementById('btn_add_external_barcode');
         const bundleCard = document.getElementById('bundle_components_card');
         const bundleContainer = document.getElementById('bundle_components_container');
         const addBundleComponentBtn = document.getElementById('btn_add_bundle_component');
@@ -516,6 +531,54 @@
             }
         };
 
+        const escapeHtml = (value) => String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+
+        const createExternalBarcodeRow = (barcode = {}) => {
+            if (!externalBarcodesContainer) return null;
+            const row = document.createElement('div');
+            row.className = 'row g-3 align-items-end external-barcode-row';
+            row.innerHTML = `
+                <div class="col-md-5">
+                    <label class="fs-7 fw-bold form-label mb-2">Barcode / QR</label>
+                    <input type="text" class="form-control form-control-solid external-barcode-value" data-field="barcode_value" value="${escapeHtml(barcode.barcode_value || '')}" />
+                </div>
+                <div class="col-md-3">
+                    <label class="fs-7 fw-bold form-label mb-2">Sumber</label>
+                    <input type="text" class="form-control form-control-solid external-barcode-source" data-field="source_name" value="${escapeHtml(barcode.source_name || '')}" placeholder="Supplier/marketplace" />
+                </div>
+                <div class="col-md-3">
+                    <label class="fs-7 fw-bold form-label mb-2">Catatan</label>
+                    <input type="text" class="form-control form-control-solid external-barcode-note" data-field="note" value="${escapeHtml(barcode.note || '')}" />
+                </div>
+                <div class="col-md-1">
+                    <button type="button" class="btn btn-icon btn-light-danger btn-remove-external-barcode">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            `;
+            externalBarcodesContainer.appendChild(row);
+            syncExternalBarcodeFieldNames();
+            return row;
+        };
+
+        const syncExternalBarcodeFieldNames = () => {
+            if (!externalBarcodesContainer) return;
+            Array.from(externalBarcodesContainer.querySelectorAll('.external-barcode-row')).forEach((row, index) => {
+                row.querySelectorAll('[data-field]').forEach((field) => {
+                    field.setAttribute('name', `external_barcodes[${index}][${field.getAttribute('data-field')}]`);
+                });
+            });
+        };
+
+        const clearExternalBarcodes = () => {
+            if (externalBarcodesContainer) externalBarcodesContainer.innerHTML = '';
+        };
+
         const createBundleComponentRow = (component = {}) => {
             if (!bundleContainer) return null;
             const row = document.createElement('div');
@@ -589,6 +652,9 @@
             if (bundleCard) {
                 bundleCard.style.display = isBundle ? '' : 'none';
             }
+            if (externalBarcodesCard) {
+                externalBarcodesCard.style.display = isBundle ? 'none' : '';
+            }
 
             [formArea, formRack, formColumn, formRow, formAddress, formKoliQty, formSafetyStock].forEach((field) => {
                 if (!field) return;
@@ -605,6 +671,7 @@
                 if (formSafetyStock) formSafetyStock.value = 0;
                 ensureBundleComponentRow();
                 syncBundleComponentFieldNames();
+                clearExternalBarcodes();
             } else {
                 clearBundleComponents();
             }
@@ -681,8 +748,9 @@
                 { data: 'safety_stock', className:'text-end', render: (data, type, row)=> row.item_type === 'bundle' ? '-' : (data ?? 0) },
                 { data: 'id', orderable:false, searchable:false, className:'text-end', render: (data, type, row)=>{
                     const components = encodeURIComponent(JSON.stringify(row.bundle_components || []));
+                    const externalBarcodes = encodeURIComponent(JSON.stringify(row.external_barcodes || []));
                     const qrItem = `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-qr" data-id="${data}" data-sku="${row.sku}" data-name="${row.name}">QR Code</a></div>`;
-                    const editItem = canUpdate ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-edit" data-id="${data}" data-sku="${row.sku}" data-name="${row.name}" data-item-type="${row.item_type}" data-category="${row.category_id}" data-address="${row.address ?? ''}" data-area-id="${row.area_id ?? ''}" data-rack-code="${row.rack_code ?? ''}" data-column-no="${row.column_no ?? ''}" data-row-no="${row.row_no ?? ''}" data-description="${row.description}" data-koli-qty="${row.koli_qty ?? ''}" data-safety-stock="${row.safety_stock ?? 0}" data-bundle-components="${components}">Edit</a></div>` : '';
+                    const editItem = canUpdate ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-edit" data-id="${data}" data-sku="${row.sku}" data-name="${row.name}" data-item-type="${row.item_type}" data-category="${row.category_id}" data-address="${row.address ?? ''}" data-area-id="${row.area_id ?? ''}" data-rack-code="${row.rack_code ?? ''}" data-column-no="${row.column_no ?? ''}" data-row-no="${row.row_no ?? ''}" data-description="${row.description}" data-koli-qty="${row.koli_qty ?? ''}" data-safety-stock="${row.safety_stock ?? 0}" data-external-barcodes="${externalBarcodes}" data-bundle-components="${components}">Edit</a></div>` : '';
                     const delItem = canDelete ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 text-danger btn-delete" data-id="${data}">Hapus</a></div>` : '';
                     const actions = `${qrItem}${editItem}${delItem}`;
                     if (!actions) return '';
@@ -731,7 +799,7 @@
         });
 
         const clearErrors = () => {
-            ['error_sku','error_name','error_item_type','error_category_id','error_area_id','error_rack_code','error_column_no','error_row_no','error_address','error_description','error_koli_qty','error_safety_stock','error_bundle_components'].forEach(id => {
+            ['error_sku','error_name','error_item_type','error_category_id','error_area_id','error_rack_code','error_column_no','error_row_no','error_address','error_description','error_koli_qty','error_safety_stock','error_external_barcodes','error_bundle_components'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.textContent = '';
             });
@@ -775,6 +843,7 @@
             if (formRack) formRack.value = '';
             if (formColumn) formColumn.value = '';
             if (formRow) formRow.value = '';
+            clearExternalBarcodes();
             clearBundleComponents();
             clearErrors();
             toggleBundleMode();
@@ -893,6 +962,7 @@
         form?.addEventListener('submit', async (e) => {
             e.preventDefault();
             clearErrors();
+            syncExternalBarcodeFieldNames();
             syncBundleComponentFieldNames();
             const id = formId.value;
             const url = id ? updateTpl.replace(':id', id) : storeUrl;
@@ -953,6 +1023,7 @@
             const koliQty = this.getAttribute('data-koli-qty');
             const safetyStock = this.getAttribute('data-safety-stock');
             const bundleComponentsRaw = this.getAttribute('data-bundle-components') || '';
+            const externalBarcodesRaw = this.getAttribute('data-external-barcodes') || '';
             if (!form) return;
             formId.value = id;
             if (formSku) formSku.value = sku || '';
@@ -967,6 +1038,13 @@
             if (formKoliQty) formKoliQty.value = koliQty ?? '';
             if (formSafetyStock) formSafetyStock.value = safetyStock ?? 0;
             setCategoryValue(categoryId || '0');
+            clearExternalBarcodes();
+            try {
+                const externalBarcodes = externalBarcodesRaw ? JSON.parse(decodeURIComponent(externalBarcodesRaw)) : [];
+                externalBarcodes.forEach((barcode) => createExternalBarcodeRow(barcode));
+            } catch (err) {
+                console.error('Failed to parse external barcodes', err);
+            }
             clearBundleComponents();
             try {
                 const bundleComponents = bundleComponentsRaw ? JSON.parse(decodeURIComponent(bundleComponentsRaw)) : [];
@@ -1006,6 +1084,13 @@
         });
 
         formType?.addEventListener('change', toggleBundleMode);
+        addExternalBarcodeBtn?.addEventListener('click', () => createExternalBarcodeRow());
+        externalBarcodesContainer?.addEventListener('click', (event) => {
+            const button = event.target.closest('.btn-remove-external-barcode');
+            if (!button) return;
+            button.closest('.external-barcode-row')?.remove();
+            syncExternalBarcodeFieldNames();
+        });
         addBundleComponentBtn?.addEventListener('click', () => createBundleComponentRow());
         bundleContainer?.addEventListener('click', (event) => {
             const button = event.target.closest('.btn-remove-bundle-component');

@@ -3,6 +3,7 @@
 namespace Tests\Feature\Outbound;
 
 use App\Models\Item;
+use App\Models\ItemBarcode;
 use App\Models\ItemStock;
 use App\Models\Kurir;
 use App\Models\PickingList;
@@ -110,6 +111,59 @@ class QcOutboundFlowTest extends TestCase
             'scanned_by' => $scanOutUser->id,
             'kurir_id' => $kurir->id,
         ]);
+    }
+
+    public function test_qc_scan_sku_accepts_external_barcode_alias(): void
+    {
+        [$displayWarehouse] = $this->createWarehouseFixtures();
+        $qcUser = $this->createUserWithRole('qc');
+        $uploader = User::factory()->create();
+        $kurir = Kurir::create(['name' => 'JNE']);
+        $item = Item::create([
+            'sku' => 'SKU-ALIAS-QC-001',
+            'name' => 'Item Alias QC',
+            'category_id' => 0,
+        ]);
+
+        ItemBarcode::create([
+            'item_id' => $item->id,
+            'barcode_value' => 'EXT-QC-BARCODE-001',
+            'normalized_barcode' => 'ext-qc-barcode-001',
+            'normalized_hash' => hash('sha256', 'ext-qc-barcode-001'),
+            'is_active' => true,
+        ]);
+
+        ItemStock::create([
+            'item_id' => $item->id,
+            'warehouse_id' => $displayWarehouse->id,
+            'stock' => 1,
+        ]);
+
+        $resi = $this->createResi($uploader->id, $kurir->id, 'ORD-ALIAS-QC-001', 'RESI-ALIAS-QC-001');
+        ResiDetail::create([
+            'resi_id' => $resi->id,
+            'sku' => $item->sku,
+            'qty' => 1,
+        ]);
+
+        $this->actingAs($qcUser)
+            ->postJson(route('mobile.qc.scan'), [
+                'type' => 'no_resi',
+                'code' => $resi->no_resi,
+            ])
+            ->assertOk();
+
+        $qc = QcResiScan::where('resi_id', $resi->id)->firstOrFail();
+
+        $this->actingAs($qcUser)
+            ->postJson(route('mobile.qc.scan-sku'), [
+                'qc_id' => $qc->id,
+                'code' => 'ext-qc-barcode-001',
+                'qty' => 1,
+            ])
+            ->assertOk()
+            ->assertJsonPath('qc.items.0.sku', 'SKU-ALIAS-QC-001')
+            ->assertJsonPath('qc.summary.total_scanned', 1);
     }
 
     public function test_scan_out_before_qc_fails_and_qc_after_pass_allows_scan_out(): void

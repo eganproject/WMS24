@@ -11,6 +11,7 @@ use App\Models\Resi;
 use App\Models\ResiDetail;
 use App\Models\ShipmentScanOut;
 use App\Support\BundleService;
+use App\Support\ItemBarcodeResolver;
 use App\Support\PickingListBalanceService;
 use App\Support\QcScanExceptionRegistry;
 use App\Support\QcInventoryService;
@@ -206,12 +207,14 @@ class QcScanController extends Controller
                 ], 422);
             }
 
+            $skuCode = app(ItemBarcodeResolver::class)->resolveSku($code);
+
             $items = QcResiScanItem::where('qc_resi_scan_id', $qc->id)
                 ->lockForUpdate()
                 ->get();
 
-            $target = $items->first(function ($row) use ($code) {
-                return strtolower((string) $row->sku) === strtolower($code);
+            $target = $items->first(function ($row) use ($skuCode) {
+                return strtolower((string) $row->sku) === strtolower($skuCode);
             });
 
             if (!$target) {

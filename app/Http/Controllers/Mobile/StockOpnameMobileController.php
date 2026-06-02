@@ -8,6 +8,7 @@ use App\Models\ItemStock;
 use App\Models\StockOpname;
 use App\Models\StockOpnameItem;
 use App\Support\BundleService;
+use App\Support\ItemBarcodeResolver;
 use App\Support\WarehouseService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -63,28 +64,31 @@ class StockOpnameMobileController extends Controller
             return response()->json(['items' => []]);
         }
 
-        $query = Item::query()
-            ->where('item_type', Item::TYPE_SINGLE)
-            ->whereRaw('LOWER(sku) = ?', [mb_strtolower($q)])
-            ->orderBy('name')
-            ->limit(12);
+        $item = app(ItemBarcodeResolver::class)->resolveItem($q);
+        if (!$item || !$item->isSingle()) {
+            return response()->json(['items' => []]);
+        }
 
         $batchCode = trim((string) $request->input('batch_code', ''));
         if ($batchCode !== '') {
             $batch = StockOpname::where('code', $batchCode)->first();
             if ($batch) {
-                $existingIds = StockOpnameItem::where('stock_opname_id', $batch->id)
-                    ->pluck('item_id');
-                if ($existingIds->isNotEmpty()) {
-                    $query->whereNotIn('id', $existingIds);
+                $exists = StockOpnameItem::where('stock_opname_id', $batch->id)
+                    ->where('item_id', $item->id)
+                    ->exists();
+                if ($exists) {
+                    return response()->json(['items' => []]);
                 }
             }
         }
 
-        $items = $query->get(['id', 'sku', 'name', 'koli_qty']);
-
         return response()->json([
-            'items' => $items,
+            'items' => [[
+                'id' => $item->id,
+                'sku' => $item->sku,
+                'name' => $item->name,
+                'koli_qty' => $item->koli_qty,
+            ]],
         ]);
     }
 

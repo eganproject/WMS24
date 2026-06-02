@@ -7,6 +7,7 @@ use App\Models\Category;
 use App\Models\InboundItem;
 use App\Models\InboundTransaction;
 use App\Models\Item;
+use App\Models\ItemBarcode;
 use App\Models\ItemStock;
 use App\Models\Area;
 use App\Exports\ItemBundleTemplateExport;
@@ -15,6 +16,7 @@ use App\Imports\ItemBundleImport;
 use App\Imports\ItemsImport;
 use App\Models\ItemBundleComponent;
 use App\Support\BundleService;
+use App\Support\ItemBarcodeResolver;
 use App\Support\ItemQrCodeService;
 use App\Support\LocationService;
 use App\Support\StockService;
@@ -45,7 +47,7 @@ class ItemController extends Controller
 
     public function data(Request $request)
     {
-        $query = Item::with(['category', 'location.area', 'area', 'bundleComponents.component'])->orderBy('name');
+        $query = Item::with(['category', 'location.area', 'area', 'barcodes', 'bundleComponents.component'])->orderBy('name');
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
@@ -65,6 +67,9 @@ class ItemController extends Controller
                         $this->applyTextSearch($areaQ, 'code', $search, $exact);
                         $this->applyTextSearch($areaQ, 'name', $search, $exact, 'or');
                     });
+                })->orWhereHas('barcodes', function ($barcodeQ) use ($search, $exact) {
+                    $this->applyTextSearch($barcodeQ, 'barcode_value', $search, $exact);
+                    $this->applyTextSearch($barcodeQ, 'source_name', $search, $exact, 'or');
                 });
             });
         }
@@ -115,6 +120,11 @@ class ItemController extends Controller
                     'component_sku' => $row->component?->sku,
                     'component_name' => $row->component?->name,
                 ])->values()->all(),
+                'external_barcodes' => $i->barcodes->map(fn (ItemBarcode $row) => [
+                    'barcode_value' => $row->barcode_value,
+                    'source_name' => $row->source_name,
+                    'note' => $row->note,
+                ])->values()->all(),
             ];
         });
 
@@ -149,6 +159,10 @@ class ItemController extends Controller
             'bundle_components' => ['nullable', 'array'],
             'bundle_components.*.component_item_id' => ['nullable', 'integer', 'exists:items,id'],
             'bundle_components.*.required_qty' => ['nullable', 'integer', 'min:1'],
+            'external_barcodes' => ['nullable', 'array'],
+            'external_barcodes.*.barcode_value' => ['nullable', 'string'],
+            'external_barcodes.*.source_name' => ['nullable', 'string', 'max:100'],
+            'external_barcodes.*.note' => ['nullable', 'string'],
         ]);
 
         $catId = $request->input('category_id');
@@ -163,19 +177,24 @@ class ItemController extends Controller
         }
 
         $bundleComponents = $validated['bundle_components'] ?? [];
+        $externalBarcodes = $validated['external_barcodes'] ?? [];
         unset($validated['bundle_components']);
+        unset($validated['external_barcodes']);
 
         if (($validated['item_type'] ?? Item::TYPE_SINGLE) === Item::TYPE_BUNDLE) {
             $this->normalizeBundlePayload($validated);
             BundleService::validateComponents(null, $bundleComponents);
+            $externalBarcodes = [];
         } else {
             $this->applyLocationPayload($validated);
+            $externalBarcodes = $this->normalizeBarcodeRows($externalBarcodes, $validated['sku']);
         }
 
         DB::beginTransaction();
         try {
             $item = Item::create($validated);
             BundleService::syncComponents($item, $bundleComponents);
+            $this->syncExternalBarcodes($item, $externalBarcodes);
 
             if ($item->isSingle()) {
                 $warehouseId = WarehouseService::defaultWarehouseId();
@@ -229,6 +248,10 @@ class ItemController extends Controller
             'bundle_components' => ['nullable', 'array'],
             'bundle_components.*.component_item_id' => ['nullable', 'integer', 'exists:items,id'],
             'bundle_components.*.required_qty' => ['nullable', 'integer', 'min:1'],
+            'external_barcodes' => ['nullable', 'array'],
+            'external_barcodes.*.barcode_value' => ['nullable', 'string'],
+            'external_barcodes.*.source_name' => ['nullable', 'string', 'max:100'],
+            'external_barcodes.*.note' => ['nullable', 'string'],
         ]);
 
         $catId = $request->input('category_id');
@@ -243,7 +266,9 @@ class ItemController extends Controller
         }
 
         $bundleComponents = $validated['bundle_components'] ?? [];
+        $externalBarcodes = $validated['external_barcodes'] ?? [];
         unset($validated['bundle_components']);
+        unset($validated['external_barcodes']);
 
         $switchingToBundle = $item->isSingle() && ($validated['item_type'] ?? Item::TYPE_SINGLE) === Item::TYPE_BUNDLE;
         $switchingToSingle = $item->isBundle() && ($validated['item_type'] ?? Item::TYPE_SINGLE) === Item::TYPE_SINGLE;
@@ -257,14 +282,17 @@ class ItemController extends Controller
 
             $this->normalizeBundlePayload($validated);
             BundleService::validateComponents($item, $bundleComponents);
+            $externalBarcodes = [];
         } else {
             $this->applyLocationPayload($validated);
+            $externalBarcodes = $this->normalizeBarcodeRows($externalBarcodes, $validated['sku'], $item);
         }
 
         DB::beginTransaction();
         try {
             $item->update($validated);
             BundleService::syncComponents($item->fresh(), $bundleComponents);
+            $this->syncExternalBarcodes($item->fresh(), $externalBarcodes);
 
             if ($switchingToSingle) {
                 ItemStock::firstOrCreate(
@@ -567,5 +595,87 @@ class ItemController extends Controller
         $validated['safety_stock'] = 0;
         $validated['koli_qty'] = null;
         unset($validated['rack_code'], $validated['column_no'], $validated['row_no']);
+    }
+
+    /**
+     * @return array<int,array{barcode_value:string,normalized_barcode:string,normalized_hash:string,source_name:?string,note:?string,is_active:bool}>
+     */
+    private function normalizeBarcodeRows(array $rows, string $itemSku, ?Item $item = null): array
+    {
+        $normalizedSku = ItemBarcodeResolver::normalize($itemSku);
+        $normalizedRows = [];
+        $seen = [];
+
+        foreach ($rows as $idx => $row) {
+            $value = trim((string) ($row['barcode_value'] ?? ''));
+            if ($value === '') {
+                continue;
+            }
+
+            $normalized = ItemBarcodeResolver::normalize($value);
+            if ($normalized === $normalizedSku) {
+                throw ValidationException::withMessages([
+                    "external_barcodes.{$idx}.barcode_value" => 'Barcode eksternal tidak boleh sama dengan SKU item.',
+                ]);
+            }
+
+            $hash = ItemBarcodeResolver::hash($normalized);
+            if (isset($seen[$hash])) {
+                throw ValidationException::withMessages([
+                    "external_barcodes.{$idx}.barcode_value" => 'Barcode eksternal tidak boleh duplikat pada item yang sama.',
+                ]);
+            }
+            $seen[$hash] = true;
+
+            $skuConflict = Item::query()
+                ->whereRaw('LOWER(sku) = ?', [$normalized])
+                ->when($item, fn ($q) => $q->where('id', '!=', $item->id))
+                ->exists();
+            if ($skuConflict) {
+                throw ValidationException::withMessages([
+                    "external_barcodes.{$idx}.barcode_value" => 'Barcode eksternal bentrok dengan SKU item lain.',
+                ]);
+            }
+
+            $barcodeConflict = ItemBarcode::query()
+                ->where('normalized_hash', $hash)
+                ->when($item, fn ($q) => $q->where('item_id', '!=', $item->id))
+                ->exists();
+            if ($barcodeConflict) {
+                throw ValidationException::withMessages([
+                    "external_barcodes.{$idx}.barcode_value" => 'Barcode eksternal sudah digunakan item lain.',
+                ]);
+            }
+
+            $normalizedRows[] = [
+                'barcode_value' => $value,
+                'normalized_barcode' => $normalized,
+                'normalized_hash' => $hash,
+                'source_name' => $this->nullableTrim($row['source_name'] ?? null),
+                'note' => $this->nullableTrim($row['note'] ?? null),
+                'is_active' => true,
+            ];
+        }
+
+        return $normalizedRows;
+    }
+
+    private function syncExternalBarcodes(Item $item, array $rows): void
+    {
+        ItemBarcode::query()->where('item_id', $item->id)->delete();
+
+        if ($item->isBundle()) {
+            return;
+        }
+
+        foreach ($rows as $row) {
+            $item->barcodes()->create($row);
+        }
+    }
+
+    private function nullableTrim(mixed $value): ?string
+    {
+        $trimmed = trim((string) ($value ?? ''));
+        return $trimmed === '' ? null : $trimmed;
     }
 }

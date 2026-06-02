@@ -76,6 +76,11 @@ class Item extends Model
         return $this->hasMany(ItemBundleComponent::class, 'component_item_id');
     }
 
+    public function barcodes()
+    {
+        return $this->hasMany(ItemBarcode::class, 'item_id');
+    }
+
     public function isBundle(): bool
     {
         return (string) $this->item_type === self::TYPE_BUNDLE;

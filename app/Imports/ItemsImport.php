@@ -4,7 +4,9 @@ namespace App\Imports;
 
 use App\Models\Category;
 use App\Models\Item;
+use App\Models\ItemBarcode;
 use App\Models\ItemStock;
+use App\Support\ItemBarcodeResolver;
 use App\Support\LocationService;
 use App\Support\WarehouseService;
 use Illuminate\Support\Collection;
@@ -55,6 +57,14 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             $parentCategoryName = trim((string) ($row['parent_category'] ?? ''));
             $categoryName = trim((string) ($row['category'] ?? ''));
             $description = trim((string) ($row['description'] ?? ''));
+            $hasBarcodeHeaders = $this->hasAnyKey($row, [
+                'external_barcodes',
+                'external_barcode',
+                'barcodes',
+                'barcode',
+                'qr',
+                'external_qr',
+            ]);
 
             if ($sku === '' || $name === '') {
                 $excelRow++;
@@ -154,6 +164,9 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
                 ['sku' => $sku],
                 $payload
             );
+            if ($item->isSingle() && $hasBarcodeHeaders) {
+                $this->syncExternalBarcodes($item, $this->parseExternalBarcodes($row, $sku, $item, $excelRow));
+            }
             if ($item->isSingle()) {
                 $warehouseId = WarehouseService::defaultWarehouseId();
                 ItemStock::firstOrCreate(
@@ -477,6 +490,85 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             }
         }
         return null;
+    }
+
+    private function parseExternalBarcodes($row, string $sku, Item $item, int $excelRow): array
+    {
+        $raw = $this->getValue($row, [
+            'external_barcodes',
+            'external_barcode',
+            'barcodes',
+            'barcode',
+            'qr',
+            'external_qr',
+        ]);
+
+        $values = preg_split('/[\r\n,;]+/', (string) ($raw ?? '')) ?: [];
+        $normalizedSku = ItemBarcodeResolver::normalize($sku);
+        $result = [];
+        $seen = [];
+
+        foreach ($values as $rawValue) {
+            $value = trim((string) $rawValue);
+            if ($value === '') {
+                continue;
+            }
+
+            $normalized = ItemBarcodeResolver::normalize($value);
+            if ($normalized === $normalizedSku) {
+                throw ValidationException::withMessages([
+                    'file' => "Baris {$excelRow} (SKU {$sku}): barcode eksternal tidak boleh sama dengan SKU item.",
+                ]);
+            }
+
+            $hash = ItemBarcodeResolver::hash($normalized);
+            if (isset($seen[$hash])) {
+                throw ValidationException::withMessages([
+                    'file' => "Baris {$excelRow} (SKU {$sku}): barcode eksternal duplikat dalam baris yang sama.",
+                ]);
+            }
+            $seen[$hash] = true;
+
+            $skuConflict = Item::query()
+                ->whereRaw('LOWER(sku) = ?', [$normalized])
+                ->where('id', '!=', $item->id)
+                ->exists();
+            if ($skuConflict) {
+                throw ValidationException::withMessages([
+                    'file' => "Baris {$excelRow} (SKU {$sku}): barcode {$value} bentrok dengan SKU item lain.",
+                ]);
+            }
+
+            $barcodeConflict = ItemBarcode::query()
+                ->where('normalized_hash', $hash)
+                ->where('item_id', '!=', $item->id)
+                ->exists();
+            if ($barcodeConflict) {
+                throw ValidationException::withMessages([
+                    'file' => "Baris {$excelRow} (SKU {$sku}): barcode {$value} sudah digunakan item lain.",
+                ]);
+            }
+
+            $result[] = [
+                'barcode_value' => $value,
+                'normalized_barcode' => $normalized,
+                'normalized_hash' => $hash,
+                'source_name' => null,
+                'note' => null,
+                'is_active' => true,
+            ];
+        }
+
+        return $result;
+    }
+
+    private function syncExternalBarcodes(Item $item, array $barcodes): void
+    {
+        ItemBarcode::query()->where('item_id', $item->id)->delete();
+
+        foreach ($barcodes as $barcode) {
+            $item->barcodes()->create($barcode);
+        }
     }
 
     private function hasAnyKey($row, array $keys): bool

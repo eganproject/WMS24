@@ -298,7 +298,7 @@
                 return scanAudioContext;
             };
 
-            const playTone = async (steps) => {
+            const playTone = async (steps, peakVolume = 0.18) => {
                 const now = Date.now();
                 if (now - lastPlayedAt < 90) return;
                 lastPlayedAt = now;
@@ -309,7 +309,7 @@
                 const gain = context.createGain();
                 gain.connect(context.destination);
                 gain.gain.setValueAtTime(0.0001, context.currentTime);
-                gain.gain.linearRampToValueAtTime(0.08, context.currentTime + 0.01);
+                gain.gain.linearRampToValueAtTime(peakVolume, context.currentTime + 0.01);
 
                 let totalDuration = 0;
                 steps.forEach((step) => {
@@ -331,18 +331,18 @@
             window.AppScanSound = {
                 unlock: () => getScanAudioContext(),
                 success: () => playTone([
-                    { frequency: 880, duration: 0.07 },
-                    { frequency: 1180, offset: 0.07, duration: 0.08 },
-                ]),
+                    { frequency: 1046, duration: 0.09 },
+                    { frequency: 1568, offset: 0.09, duration: 0.11 },
+                ], 0.18),
                 complete: () => playTone([
-                    { frequency: 880, duration: 0.07 },
-                    { frequency: 1174, offset: 0.07, duration: 0.07 },
-                    { frequency: 1568, offset: 0.14, duration: 0.1 },
-                ]),
+                    { frequency: 988, duration: 0.1 },
+                    { frequency: 1319, offset: 0.1, duration: 0.1 },
+                    { frequency: 1760, offset: 0.2, duration: 0.14 },
+                ], 0.2),
                 error: () => playTone([
-                    { frequency: 320, duration: 0.1, type: 'square' },
-                    { frequency: 220, offset: 0.1, duration: 0.12, type: 'square' },
-                ]),
+                    { frequency: 260, duration: 0.14, type: 'square' },
+                    { frequency: 190, offset: 0.14, duration: 0.16, type: 'square' },
+                ], 0.17),
             };
         })();
     </script>

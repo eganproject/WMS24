@@ -273,6 +273,7 @@
     const unlockScanSound = () => window.AppScanSound?.unlock?.();
     const playScanSound = () => window.AppScanSound?.success?.();
     const playSuccessSound = () => window.AppScanSound?.success?.();
+    const playCompleteSound = () => window.AppScanSound?.complete?.();
     const playErrorSound = () => window.AppScanSound?.error?.();
 
     const el = {
@@ -748,7 +749,7 @@
             };
 
             setStatus(el.qcStatus, data?.message || 'QC selesai.', 'success');
-            playSuccessSound();
+            playCompleteSound();
             renderQc();
         } catch (error) {
             showError(error.message || 'Gagal menyelesaikan QC.', error.details || []);

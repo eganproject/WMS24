@@ -506,7 +506,6 @@ const el = {
 };
 
 let isSubmitting = false;
-let audioCtx = null;
 let scannerFocusPaused = false;
 let pasteSubmitTimer = null;
 
@@ -536,32 +535,9 @@ const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => 
     '"': '&quot;',
     "'": '&#039;',
 }[char]));
-const getAudioCtx = () => {
-    if (!audioCtx) {
-        const Ctx = window.AudioContext || window.webkitAudioContext;
-        if (!Ctx) return null;
-        audioCtx = new Ctx();
-    }
-    if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
-    return audioCtx;
-};
-const beep = (frequency, duration = 120, volume = .32) => {
-    const ctx = getAudioCtx();
-    if (!ctx) return;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.frequency.value = frequency;
-    osc.type = 'sine';
-    gain.gain.value = volume;
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start();
-    setTimeout(() => {
-        try { osc.stop(); } catch (error) {}
-        osc.disconnect();
-        gain.disconnect();
-    }, duration);
-};
+const unlockScanSound = () => window.AppScanSound?.unlock?.();
+const playScanSuccess = () => window.AppScanSound?.success?.();
+const playScanError = () => window.AppScanSound?.error?.();
 const setFeedback = (state, title, message, scanOut = null) => {
     el.feedback.className = `scan-feedback ${state || ''}`.trim();
     const icon = state === 'success' ? 'fa-check' : state === 'error' ? 'fa-exclamation-triangle' : state === 'pending' ? 'fa-spinner fa-spin' : 'fa-barcode';
@@ -661,12 +637,12 @@ const refreshRecent = async () => {
 };
 const submitScan = async () => {
     if (isSubmitting) return;
-    getAudioCtx();
+    unlockScanSound();
     const code = el.code.value.trim();
     if (!code) {
         setFeedback('error', 'Kode Kosong', 'Scan atau masukkan nomor terlebih dahulu.');
         setScannerState('Kode kosong', 'error');
-        beep(280, 160, .28);
+        playScanError();
         focusScanner();
         return;
     }
@@ -680,13 +656,13 @@ const submitScan = async () => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ type: selectedType(), code, _token: csrfToken }),
         });
-        beep(1180, 120, .4);
+        playScanSuccess();
         setFeedback('success', 'Scan Out Berhasil', data?.message || 'Resi berhasil discan keluar.', data?.scan_out);
         setScannerState('Scan berhasil, siap berikutnya');
         el.code.value = '';
         await refreshRecent();
     } catch (error) {
-        beep(220, 180, .3);
+        playScanError();
         const isSessionExpired = error.status === 419;
         const title = isSessionExpired ? 'Sesi Kedaluwarsa' : rejectionTitle(error.payload || {});
         const message = rejectionMessage(error);

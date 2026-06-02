@@ -1120,10 +1120,14 @@
         qcItemsContainer?.addEventListener('click', async (e) => {
             const btn = e.target.closest('#btn_qc_scan_koli');
             if (!btn || isScanningKoli) return;
+            window.AppScanSound?.unlock?.();
             const id = qcTransferIdEl.value;
             const input = document.getElementById('qc_koli_scan_code');
             const code = (input?.value || '').trim();
-            if (!id || !code) return;
+            if (!id || !code) {
+                window.AppScanSound?.error?.();
+                return;
+            }
             isScanningKoli = true;
             btn.setAttribute('disabled', 'disabled');
             try {
@@ -1140,18 +1144,22 @@
                 });
                 const json = await res.json();
                 if (!res.ok) {
+                    window.AppScanSound?.error?.();
                     if (typeof Swal !== 'undefined') Swal.fire('Error', json.message || 'Gagal scan QR dus', 'error');
                     return;
                 }
                 const detailRes = await fetch(showUrlTpl.replace(':id', id), { headers: { 'Accept': 'application/json' }});
                 const detailJson = await detailRes.json();
                 if (!detailRes.ok) {
+                    window.AppScanSound?.error?.();
                     if (typeof Swal !== 'undefined') Swal.fire('Error', detailJson.message || 'Gagal memuat ulang data QC', 'error');
                     return;
                 }
                 renderQcForm(applyScanFormValues(detailJson, previousValues));
+                window.AppScanSound?.success?.();
                 if (typeof Swal !== 'undefined') Swal.fire({ title: 'Berhasil', text: json.message || 'QR dus discan', icon: 'success', timer: 900, showConfirmButton: false });
             } catch (err) {
+                window.AppScanSound?.error?.();
                 if (typeof Swal !== 'undefined') Swal.fire('Error', 'Gagal scan QR dus', 'error');
             } finally {
                 isScanningKoli = false;

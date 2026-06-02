@@ -203,37 +203,10 @@
     const routes = @json($routes);
     const csrfToken = '{{ csrf_token() }}';
 
-    let audioCtx = null;
-    const getAudioCtx = () => {
-        if (!audioCtx) {
-            const Ctx = window.AudioContext || window.webkitAudioContext;
-            if (!Ctx) return null;
-            audioCtx = new Ctx();
-        }
-        if (audioCtx.state === 'suspended') {
-            audioCtx.resume().catch(() => {});
-        }
-        return audioCtx;
-    };
-    const playBeep = (frequency = 880, duration = 120, volume = 0.35) => {
-        const ctx = getAudioCtx();
-        if (!ctx) return;
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.value = frequency;
-        gain.gain.value = volume;
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start();
-        setTimeout(() => {
-            try { osc.stop(); } catch (e) {}
-            osc.disconnect();
-            gain.disconnect();
-        }, duration);
-    };
-    const playScanSound = () => playBeep(760, 120, 0.35);
-    const playSuccessSound = () => playBeep(1200, 140, 0.45);
+    const unlockScanSound = () => window.AppScanSound?.unlock?.();
+    const playScanSound = () => window.AppScanSound?.success?.();
+    const playSuccessSound = () => window.AppScanSound?.success?.();
+    const playErrorSound = () => window.AppScanSound?.error?.();
 
     const el = {
         scanType: document.getElementById('scan_type'),
@@ -363,6 +336,7 @@
     };
 
     const showError = (message, details = []) => {
+        playErrorSound();
         if (typeof Swal !== 'undefined') {
             let html = `<div style="text-align:left; font-size:13px;">${message}</div>`;
             if (Array.isArray(details) && details.length) {
@@ -408,10 +382,11 @@
     };
 
     const submitScan = async () => {
-        getAudioCtx();
+        unlockScanSound();
         const type = el.scanType.value;
         const code = el.scanCode.value.trim();
         if (!code) {
+            playErrorSound();
             setStatus('Masukkan nomor resi atau ID pesanan.', 'error');
             el.scanCode.focus();
             return;
@@ -471,7 +446,7 @@
     };
 
     const openScanner = async () => {
-        getAudioCtx();
+        unlockScanSound();
         if (!window.isSecureContext) {
             showError('Akses kamera membutuhkan HTTPS. Gunakan domain HTTPS atau localhost.');
             return;

@@ -1138,6 +1138,9 @@
     };
 
     const ensureAudio = async () => {
+        if (window.AppScanSound?.unlock) {
+            return window.AppScanSound.unlock();
+        }
         if (!window.AudioContext && !window.webkitAudioContext) return null;
         if (!audioContext) {
             const Context = window.AudioContext || window.webkitAudioContext;
@@ -1151,6 +1154,16 @@
 
     const playTone = async (type) => {
         try {
+            if (type === 'success' && window.AppScanSound?.success) {
+                return window.AppScanSound.success();
+            }
+            if (type === 'complete' && window.AppScanSound?.complete) {
+                return window.AppScanSound.complete();
+            }
+            if (window.AppScanSound?.error) {
+                return window.AppScanSound.error();
+            }
+
             const context = await ensureAudio();
             if (!context) return;
 

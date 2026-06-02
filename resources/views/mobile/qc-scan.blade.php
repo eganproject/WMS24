@@ -270,37 +270,10 @@
     const routes = @json($routes);
     const csrfToken = '{{ csrf_token() }}';
 
-    let audioCtx = null;
-    const getAudioCtx = () => {
-        if (!audioCtx) {
-            const Ctx = window.AudioContext || window.webkitAudioContext;
-            if (!Ctx) return null;
-            audioCtx = new Ctx();
-        }
-        if (audioCtx.state === 'suspended') {
-            audioCtx.resume().catch(() => {});
-        }
-        return audioCtx;
-    };
-    const playBeep = (frequency = 880, duration = 120, volume = 0.35) => {
-        const ctx = getAudioCtx();
-        if (!ctx) return;
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.value = frequency;
-        gain.gain.value = volume;
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start();
-        setTimeout(() => {
-            try { osc.stop(); } catch (e) {}
-            osc.disconnect();
-            gain.disconnect();
-        }, duration);
-    };
-    const playScanSound = () => playBeep(760, 120, 0.35);
-    const playSuccessSound = () => playBeep(1200, 140, 0.45);
+    const unlockScanSound = () => window.AppScanSound?.unlock?.();
+    const playScanSound = () => window.AppScanSound?.success?.();
+    const playSuccessSound = () => window.AppScanSound?.success?.();
+    const playErrorSound = () => window.AppScanSound?.error?.();
 
     const el = {
         resiType: document.getElementById('resi_type'),
@@ -462,7 +435,7 @@
     };
 
     const showError = (message, details = []) => {
-        window.AppScanSound?.error?.();
+        playErrorSound();
         if (typeof Swal !== 'undefined') {
             let html = `<div style="text-align:left; font-size:13px;">${message}</div>`;
             if (Array.isArray(details) && details.length) {
@@ -587,10 +560,11 @@
     };
 
     const submitResi = async () => {
-        getAudioCtx();
+        unlockScanSound();
         const type = el.resiType.value;
         const code = el.resiCode.value.trim();
         if (!code) {
+            playErrorSound();
             setStatus(el.resiStatus, 'Masukkan nomor resi atau ID pesanan.', 'error');
             el.resiCode.focus();
             return;
@@ -630,8 +604,9 @@
     };
 
     const submitSku = async () => {
-        getAudioCtx();
+        unlockScanSound();
         if (!qcState.id) {
+            playErrorSound();
             setStatus(el.skuStatus, 'Scan resi terlebih dahulu.', 'error');
             return;
         }
@@ -639,11 +614,13 @@
         const code = el.skuCode.value.trim();
         const qty = parseInt(el.skuQty.value || '1', 10);
         if (!code) {
+            playErrorSound();
             setStatus(el.skuStatus, 'Masukkan SKU.', 'error');
             el.skuCode.focus();
             return;
         }
         if (!qty || qty <= 0) {
+            playErrorSound();
             setStatus(el.skuStatus, 'Qty minimal 1.', 'error');
             el.skuQty.focus();
             return;
@@ -878,7 +855,7 @@
     };
 
     const openScanner = async (target) => {
-        getAudioCtx();
+        unlockScanSound();
         scanTarget = target;
         el.scannerTitle.textContent = target === 'sku' ? 'Scan SKU' : 'Scan Resi';
 

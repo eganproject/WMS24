@@ -198,6 +198,10 @@
         totalCounted: document.getElementById('total_counted'),
     };
 
+    const unlockScanSound = () => window.AppScanSound?.unlock?.();
+    const playScanSuccess = () => window.AppScanSound?.success?.();
+    const playScanError = () => window.AppScanSound?.error?.();
+
     const fetchJson = async (url, options = {}) => {
         const res = await fetch(url, {
             headers: {
@@ -310,14 +314,23 @@
     const searchItems = async (q, logMiss = false) => {
         if (!q || q.length < 2) {
             el.searchResults.innerHTML = '';
-            return;
+            if (logMiss) {
+                playScanError();
+            }
+            return [];
         }
         const url = `${routes.itemsSearch}?q=${encodeURIComponent(q)}&batch_code=${encodeURIComponent(state.batch?.code || '')}&log_miss=${logMiss ? '1' : '0'}`;
         const json = await fetchJson(url);
         const items = json.items || [];
         if (!items.length) {
             el.searchResults.innerHTML = '';
-            return;
+            if (logMiss) {
+                playScanError();
+            }
+            return [];
+        }
+        if (logMiss) {
+            playScanSuccess();
         }
         const requiresKoli = !!state.batch?.requires_koli;
         el.searchResults.innerHTML = items.map((item) => {
@@ -340,6 +353,7 @@
                 </div>
             `;
         }).join('');
+        return items;
     };
 
     const addItem = async (itemId, qty) => {
@@ -356,6 +370,7 @@
         setBatch(json);
         el.itemSearch.value = '';
         el.searchResults.innerHTML = '';
+        playScanSuccess();
     };
 
     const updateItem = async (rowId, qty, silent = false) => {
@@ -439,8 +454,14 @@
     el.itemSearch.addEventListener('keydown', async (e) => {
         if (e.key !== 'Enter') return;
         e.preventDefault();
+        unlockScanSound();
         const q = el.itemSearch.value.trim();
-        await searchItems(q, true);
+        try {
+            await searchItems(q, true);
+        } catch (err) {
+            playScanError();
+            Swal?.fire('Error', err.message || 'Gagal mencari item', 'error');
+        }
     });
 
     el.searchResults.addEventListener('click', async (e) => {
@@ -451,12 +472,14 @@
         const qtyInput = btn.parentElement?.querySelector('.result-qty');
         const qty = parseInt(qtyInput?.value || '0', 10);
         if (Number.isNaN(qty) || qty < 0) {
+            playScanError();
             Swal?.fire('Error', 'Qty tidak valid', 'error');
             return;
         }
         try {
             await addItem(itemId, qty);
         } catch (err) {
+            playScanError();
             Swal?.fire('Error', err.message || 'Gagal menambah item', 'error');
         }
     });
@@ -469,12 +492,14 @@
             const qtyInput = row?.querySelector('.qty-input');
             const qty = parseInt(qtyInput?.value || '0', 10);
             if (Number.isNaN(qty) || qty < 0) {
+                playScanError();
                 Swal?.fire('Error', 'Qty tidak valid', 'error');
                 return;
             }
             try {
                 await updateItem(rowId, qty);
             } catch (err) {
+                playScanError();
                 Swal?.fire('Error', err.message || 'Gagal memperbarui', 'error');
             }
         }

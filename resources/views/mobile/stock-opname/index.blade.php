@@ -307,12 +307,12 @@
         setBatch(json);
     };
 
-    const searchItems = async (q) => {
+    const searchItems = async (q, logMiss = false) => {
         if (!q || q.length < 2) {
             el.searchResults.innerHTML = '';
             return;
         }
-        const url = `${routes.itemsSearch}?q=${encodeURIComponent(q)}&batch_code=${encodeURIComponent(state.batch?.code || '')}`;
+        const url = `${routes.itemsSearch}?q=${encodeURIComponent(q)}&batch_code=${encodeURIComponent(state.batch?.code || '')}&log_miss=${logMiss ? '1' : '0'}`;
         const json = await fetchJson(url);
         const items = json.items || [];
         if (!items.length) {
@@ -436,6 +436,12 @@
     });
 
     el.itemSearch.addEventListener('input', runSearch);
+    el.itemSearch.addEventListener('keydown', async (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        const q = el.itemSearch.value.trim();
+        await searchItems(q, true);
+    });
 
     el.searchResults.addEventListener('click', async (e) => {
         if (state.batch?.status === 'completed') return;

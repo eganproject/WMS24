@@ -67,12 +67,14 @@ class StockOpnameMobileController extends Controller
 
         $item = app(ItemBarcodeResolver::class)->resolveItem($q);
         if (!$item || !$item->isSingle()) {
-            app(ItemBarcodeScanMissLogger::class)->log(
-                ItemBarcodeScanMissLogger::CONTEXT_STOCK_OPNAME,
-                $q,
-                null,
-                trim((string) $request->input('batch_code', '')) ?: null
-            );
+            if ($request->boolean('log_miss')) {
+                app(ItemBarcodeScanMissLogger::class)->log(
+                    ItemBarcodeScanMissLogger::CONTEXT_STOCK_OPNAME,
+                    $q,
+                    null,
+                    trim((string) $request->input('batch_code', '')) ?: null
+                );
+            }
             return response()->json(['items' => []]);
         }
 

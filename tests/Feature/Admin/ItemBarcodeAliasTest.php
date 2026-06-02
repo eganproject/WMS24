@@ -6,6 +6,7 @@ use App\Models\Item;
 use App\Models\ItemBarcode;
 use App\Models\ItemBarcodeScanMiss;
 use App\Imports\ItemBarcodesImport;
+use App\Imports\ItemsImport;
 use Illuminate\Support\Collection;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -174,6 +175,42 @@ class ItemBarcodeAliasTest extends TestCase
             'barcode_value' => 'import-bc-001',
             'source_name' => 'Supplier Import Update',
             'note' => 'Update',
+        ]);
+    }
+
+    public function test_items_import_with_empty_barcode_column_keeps_existing_aliases(): void
+    {
+        $item = Item::create([
+            'sku' => 'ALIAS-KEEP-001',
+            'name' => 'Item Keep Alias',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+        ]);
+
+        ItemBarcode::create([
+            'item_id' => $item->id,
+            'barcode_value' => 'KEEP-BC-001',
+            'normalized_barcode' => 'keep-bc-001',
+            'normalized_hash' => hash('sha256', 'keep-bc-001'),
+            'is_active' => true,
+        ]);
+
+        $import = new ItemsImport();
+        $import->collection(new Collection([
+            new Collection([
+                'sku' => 'ALIAS-KEEP-001',
+                'name' => 'Item Keep Alias Updated',
+                'external_barcodes' => '',
+            ]),
+        ]));
+
+        $this->assertDatabaseHas('items', [
+            'id' => $item->id,
+            'name' => 'Item Keep Alias Updated',
+        ]);
+        $this->assertDatabaseHas('item_barcodes', [
+            'item_id' => $item->id,
+            'barcode_value' => 'KEEP-BC-001',
         ]);
     }
 

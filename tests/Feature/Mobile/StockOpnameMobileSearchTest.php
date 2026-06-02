@@ -80,11 +80,28 @@ class StockOpnameMobileSearchTest extends TestCase
             ->assertJsonPath('items.0.koli_qty', 12);
     }
 
-    public function test_mobile_stock_opname_unknown_barcode_is_logged(): void
+    public function test_mobile_stock_opname_unknown_barcode_is_not_logged_during_live_search(): void
     {
         $response = $this->withoutMiddleware()->getJson(route('opname.items.search', [
             'q' => 'UNKNOWN-BC-001',
             'batch_code' => 'OPN-001',
+        ]));
+
+        $response->assertOk()
+            ->assertJsonCount(0, 'items');
+
+        $this->assertDatabaseMissing('item_barcode_scan_misses', [
+            'context' => 'stock_opname',
+            'scan_code' => 'UNKNOWN-BC-001',
+        ]);
+    }
+
+    public function test_mobile_stock_opname_unknown_barcode_is_logged_on_final_scan(): void
+    {
+        $response = $this->withoutMiddleware()->getJson(route('opname.items.search', [
+            'q' => 'UNKNOWN-BC-001',
+            'batch_code' => 'OPN-001',
+            'log_miss' => 1,
         ]));
 
         $response->assertOk()

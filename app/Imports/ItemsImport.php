@@ -175,7 +175,10 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
                 $payload
             );
             if ($item->isSingle() && $hasBarcodeHeaders) {
-                $this->syncExternalBarcodes($item, $this->parseExternalBarcodes($row, $sku, $item, $excelRow));
+                $externalBarcodes = $this->parseExternalBarcodes($row, $sku, $item, $excelRow);
+                if (!empty($externalBarcodes)) {
+                    $this->syncExternalBarcodes($item, $externalBarcodes);
+                }
             }
             if ($item->isSingle()) {
                 $warehouseId = WarehouseService::defaultWarehouseId();

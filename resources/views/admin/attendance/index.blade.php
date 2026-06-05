@@ -237,6 +237,99 @@
         color: #7e8299;
         background: #f9fafc;
     }
+    .recap-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: .75rem;
+        margin-bottom: 1rem;
+    }
+    .recap-summary-card {
+        border: 1px solid #eef0f8;
+        border-radius: .75rem;
+        background: #fff;
+        padding: .85rem 1rem;
+        min-width: 0;
+    }
+    .recap-summary-card .label {
+        color: #7e8299;
+        font-size: .7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+    }
+    .recap-summary-card .value {
+        color: #1e1e2d;
+        font-size: 1.4rem;
+        line-height: 1.2;
+        font-weight: 800;
+        margin-top: .2rem;
+    }
+    .recap-summary-card.primary { border-top: 3px solid #1b84ff; }
+    .recap-summary-card.success { border-top: 3px solid #50cd89; }
+    .recap-summary-card.warning { border-top: 3px solid #ffc700; }
+    .recap-summary-card.info { border-top: 3px solid #7239ea; }
+    .recap-summary-card.danger { border-top: 3px solid #f1416c; }
+    .recap-summary-card.overtime { border-top: 3px solid #009ef7; }
+    .recap-employee {
+        min-width: 170px;
+    }
+    .recap-employee .name {
+        color: #181c32;
+        font-weight: 700;
+    }
+    .recap-employee .code,
+    .recap-cell-meta {
+        color: #7e8299;
+        font-size: .75rem;
+        margin-top: .15rem;
+    }
+    .recap-time-pair {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(58px, 1fr));
+        gap: .4rem;
+        min-width: 135px;
+    }
+    .recap-time {
+        border: 1px solid #eef0f8;
+        border-radius: .5rem;
+        background: #f9fafc;
+        padding: .4rem .5rem;
+        text-align: center;
+    }
+    .recap-time .label {
+        color: #a1a5b7;
+        font-size: .62rem;
+        font-weight: 700;
+        text-transform: uppercase;
+    }
+    .recap-time .value {
+        color: #3f4254;
+        font-size: .8rem;
+        font-weight: 700;
+        margin-top: .1rem;
+    }
+    .recap-metric {
+        display: inline-flex;
+        align-items: center;
+        gap: .3rem;
+        border-radius: .45rem;
+        padding: .25rem .45rem;
+        background: #f5f8fa;
+        color: #5e6278;
+        font-size: .74rem;
+        white-space: nowrap;
+        margin: .1rem .15rem .1rem 0;
+    }
+    .recap-note {
+        max-width: 220px;
+        white-space: normal;
+        color: #5e6278;
+        font-size: .78rem;
+        line-height: 1.45;
+    }
+    #attendances_table tbody tr:hover {
+        background: #f8fbff;
+    }
 
     /* ===== Form helpers ===== */
     .form-label.fw-bold { color: #3f4254; font-size: .8rem; }
@@ -373,6 +466,9 @@
         .att-template-preview,
         .att-result-grid {
             grid-template-columns: 1fr;
+        }
+        .recap-summary-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
         }
         #attendance_schedule_calendar { min-height: 560px; }
         #attendance_schedule_calendar .fc-toolbar {
@@ -1014,11 +1110,11 @@
                     <div class="row g-3 align-items-end">
                         <div class="col-12 col-md-6 col-lg-2">
                             <label class="form-label fw-bold">Dari Tanggal</label>
-                            <input type="text" class="form-control form-control-solid js-date" id="recap_filter_date_from" placeholder="YYYY-MM-DD">
+                            <input type="text" class="form-control form-control-solid js-date" id="recap_filter_date_from" value="{{ today()->toDateString() }}" placeholder="YYYY-MM-DD">
                         </div>
                         <div class="col-12 col-md-6 col-lg-2">
                             <label class="form-label fw-bold">Sampai Tanggal</label>
-                            <input type="text" class="form-control form-control-solid js-date" id="recap_filter_date_to" placeholder="YYYY-MM-DD">
+                            <input type="text" class="form-control form-control-solid js-date" id="recap_filter_date_to" value="{{ today()->toDateString() }}" placeholder="YYYY-MM-DD">
                         </div>
                         <div class="col-12 col-md-6 col-lg-3">
                             <label class="form-label fw-bold">Karyawan</label>
@@ -1062,7 +1158,15 @@
                         </div>
                     </div>
                 </div>
-                <x-attendance-table id="attendances_table" :headers="['Karyawan','Tanggal','Shift','Masuk','Pulang','Telat','Pulang Cepat','Menit Kerja','Lembur Hitung','Lembur Approved','Status Lembur','Status','Source','Catatan','Aksi']" />
+                <div class="recap-summary-grid" id="attendance_recap_summary">
+                    <div class="recap-summary-card primary"><div class="label">Total Rekap</div><div class="value" data-summary="total">0</div></div>
+                    <div class="recap-summary-card success"><div class="label">Hadir</div><div class="value" data-summary="present">0</div></div>
+                    <div class="recap-summary-card warning"><div class="label">Terlambat</div><div class="value" data-summary="late">0</div></div>
+                    <div class="recap-summary-card info"><div class="label">Belum Lengkap</div><div class="value" data-summary="incomplete">0</div></div>
+                    <div class="recap-summary-card danger"><div class="label">Alpha</div><div class="value" data-summary="absent">0</div></div>
+                    <div class="recap-summary-card overtime"><div class="label">Lembur Pending</div><div class="value" data-summary="overtime_pending">0</div></div>
+                </div>
+                <x-attendance-table id="attendances_table" :headers="['Karyawan','Tanggal & Shift','Jam Absensi','Kedisiplinan','Durasi Kerja','Lembur','Status','Catatan','Aksi']" />
             </div>
         </div>
     </div>
@@ -1375,6 +1479,80 @@ function renderEmployeeStatusBadge(value) {
 
     return `<span class="badge ${classes[value] || 'badge-light'}">${labels[value] || value || '-'}</span>`;
 }
+function formatRecapDate(value) {
+    if (!value) return '-';
+    const date = new Date(`${value}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleDateString('id-ID', {
+        weekday: 'short',
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+    });
+}
+function formatRecapTime(value) {
+    if (!value) return '-';
+    const match = String(value).match(/(\d{2}):(\d{2})/);
+    return match ? `${match[1]}:${match[2]}` : '-';
+}
+function formatMinutes(value) {
+    const minutes = Number(value || 0);
+    if (minutes <= 0) return '0 menit';
+    const hours = Math.floor(minutes / 60);
+    const rest = minutes % 60;
+    if (!hours) return `${rest} menit`;
+    return rest ? `${hours}j ${rest}m` : `${hours} jam`;
+}
+function renderRecapEmployee(value) {
+    const parts = String(value || '-').split(' - ');
+    const code = parts.shift() || '-';
+    const name = parts.join(' - ') || code;
+    return `<div class="recap-employee"><div class="name">${escapeAttr(name)}</div><div class="code">${escapeAttr(code)}</div></div>`;
+}
+function renderRecapSchedule(value, row) {
+    return `<div class="fw-bold text-gray-800">${escapeAttr(formatRecapDate(row.attendance_date))}</div>
+        <div class="recap-cell-meta"><i class="fas fa-clock me-1"></i>${escapeAttr(row.shift || 'Tanpa shift')}</div>`;
+}
+function renderRecapTimes(value, row) {
+    return `<div class="recap-time-pair">
+        <div class="recap-time"><div class="label">Masuk</div><div class="value">${escapeAttr(formatRecapTime(row.check_in_at))}</div></div>
+        <div class="recap-time"><div class="label">Pulang</div><div class="value">${escapeAttr(formatRecapTime(row.check_out_at))}</div></div>
+    </div>`;
+}
+function renderRecapDiscipline(value, row) {
+    const late = Number(row.late_minutes || 0);
+    const early = Number(row.early_leave_minutes || 0);
+    if (!late && !early) return '<span class="badge badge-light-success">Tepat waktu</span>';
+    return `${late ? `<span class="recap-metric text-warning"><i class="fas fa-hourglass-start"></i>Telat ${late}m</span>` : ''}
+        ${early ? `<span class="recap-metric text-danger"><i class="fas fa-running"></i>Pulang cepat ${early}m</span>` : ''}`;
+}
+function renderRecapWorkDuration(value, row) {
+    return `<div class="fw-bold text-gray-800">${escapeAttr(formatMinutes(row.work_minutes))}</div>
+        <div class="recap-cell-meta">${Number(row.work_minutes || 0)} menit tercatat</div>`;
+}
+function renderRecapOvertime(value, row) {
+    const calculated = Number(row.calculated_overtime_minutes || 0);
+    const approved = row.approved_overtime_minutes;
+    return `<div>${renderOvertimeStatusBadge(row.overtime_status)}</div>
+        <div class="recap-cell-meta mt-1">Hitung: ${escapeAttr(formatMinutes(calculated))}</div>
+        ${approved !== null && approved !== undefined ? `<div class="recap-cell-meta">Approved: ${escapeAttr(formatMinutes(approved))}</div>` : ''}`;
+}
+function renderRecapStatus(value, row) {
+    const sourceLabels = { fingerprint: 'Mesin', manual: 'Manual', system: 'Sistem' };
+    return `<div>${renderAttendanceStatusBadge(row.status)}</div>
+        <div class="recap-cell-meta mt-1">Sumber: ${escapeAttr(sourceLabels[row.source] || row.source || '-')}</div>`;
+}
+function renderRecapNote(value, row) {
+    const notes = [row.note, row.overtime_note].filter(Boolean);
+    return notes.length
+        ? `<div class="recap-note">${notes.map(escapeAttr).join('<br>')}</div>`
+        : '<span class="text-muted">-</span>';
+}
+function updateRecapSummary(summary = {}) {
+    document.querySelectorAll('#attendance_recap_summary [data-summary]').forEach((element) => {
+        element.textContent = Number(summary[element.dataset.summary] || 0).toLocaleString('id-ID');
+    });
+}
 const tableConfigs = {
     employees_table: { url: '{{ route('admin.attendance.employees.data') }}', columns: ['employee_code','name','area','user','phone','position',{ data: 'employment_status', render: renderEmployeeStatusBadge },'__actions'] },
     positions_table: { url: '{{ route('admin.attendance.positions.data') }}', columns: [
@@ -1394,7 +1572,17 @@ const tableConfigs = {
     templates_table: { url: '{{ route('admin.attendance.templates.data') }}', columns: ['name','is_active','days','__actions'] },
     leaves_table: { url: '{{ route('admin.attendance.leaves.data') }}', columns: ['employee','leave_type','start_date','end_date',{ data: 'status', render: renderLeaveStatusBadge },{ data: 'approved_by', render: (value, row) => value ? `${value}<div class="text-muted fs-8">${row.approved_at || ''}</div>` : '-' },'reason',{ data: 'proof_image_url', render: (value) => value ? `<a href="${escapeAttr(value)}" target="_blank" rel="noopener" class="badge badge-light-primary">Lihat Gambar</a>` : '-' },'__actions'] },
     raw_logs_table: { url: '{{ route('admin.attendance.raw-logs.data') }}', columns: ['device','employee','device_user_id','scan_at','verify_type','state','__actions'] },
-    attendances_table: { url: '{{ route('admin.attendance.attendances.data') }}', columns: ['employee','attendance_date','shift','check_in_at','check_out_at','late_minutes','early_leave_minutes','work_minutes','calculated_overtime_minutes','approved_overtime_minutes',{ data: 'overtime_status', render: renderOvertimeStatusBadge },{ data: 'status', render: renderAttendanceStatusBadge },'source','note','__actions'] },
+    attendances_table: { url: '{{ route('admin.attendance.attendances.data') }}', columns: [
+        { data: 'employee', render: renderRecapEmployee },
+        { data: 'attendance_date', render: renderRecapSchedule },
+        { data: 'check_in_at', render: renderRecapTimes },
+        { data: 'late_minutes', render: renderRecapDiscipline },
+        { data: 'work_minutes', render: renderRecapWorkDuration },
+        { data: 'overtime_status', render: renderRecapOvertime },
+        { data: 'status', render: renderRecapStatus },
+        { data: 'note', render: renderRecapNote },
+        '__actions',
+    ] },
 };
 const tables = {};
 const tabTableMap = {
@@ -1815,7 +2003,12 @@ document.addEventListener('DOMContentLoaded', () => {
             },
             ajax: {
                 url: config.url,
-                dataSrc: 'data',
+                dataSrc: (json) => {
+                    if (id === 'attendances_table') {
+                        updateRecapSummary(json.summary || {});
+                    }
+                    return json.data || [];
+                },
                 data: (params) => {
                     params.q = searchInput?.value || '';
                     if (id === 'attendances_table') {
@@ -1872,7 +2065,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const reloadRecapTable = () => initAttendanceTable('attendances_table')?.ajax.reload();
     document.getElementById('recap_apply_filters')?.addEventListener('click', reloadRecapTable);
     document.getElementById('recap_reset_filters')?.addEventListener('click', () => {
-        [recapFilterDateFrom, recapFilterDateTo, recapFilterEmployee, recapFilterStatus, recapFilterOvertimeStatus].forEach((field) => {
+        [recapFilterDateFrom, recapFilterDateTo].forEach((field) => {
+            if (!field) return;
+            if (field._flatpickr) {
+                field._flatpickr.setDate(attendanceToday, false);
+            } else {
+                field.value = attendanceToday;
+            }
+        });
+        [recapFilterEmployee, recapFilterStatus, recapFilterOvertimeStatus].forEach((field) => {
             if (field) field.value = '';
         });
         if (typeof $ !== 'undefined') {

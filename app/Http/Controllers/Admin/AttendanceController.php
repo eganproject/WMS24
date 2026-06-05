@@ -1547,16 +1547,28 @@ class AttendanceController extends Controller
 
     public function attendancesData(Request $request)
     {
+        $dateFrom = $request->input('date_from') ?: today()->toDateString();
+        $dateTo = $request->input('date_to') ?: $dateFrom;
         $query = Attendance::query()
             ->with(['employee:id,employee_code,name', 'shift:id,name', 'approver:id,name'])
-            ->when($request->input('date_from'), fn ($q, $date) => $q->whereDate('attendance_date', '>=', $date))
-            ->when($request->input('date_to'), fn ($q, $date) => $q->whereDate('attendance_date', '<=', $date))
+            ->whereDate('attendance_date', '>=', $dateFrom)
+            ->whereDate('attendance_date', '<=', $dateTo)
             ->when($request->input('employee_id'), fn ($q, $employeeId) => $q->where('employee_id', $employeeId))
             ->when($request->input('status'), fn ($q, $status) => $q->where('status', $status))
             ->when($request->input('overtime_status'), fn ($q, $status) => $q->where('overtime_status', $status))
             ->latest('attendance_date');
 
-        return $this->datatable($query, $request, fn (Attendance $attendance) => [
+        $summaryQuery = clone $query;
+        $summary = [
+            'total' => (clone $summaryQuery)->count(),
+            'present' => (clone $summaryQuery)->where('status', Attendance::STATUS_PRESENT)->count(),
+            'late' => (clone $summaryQuery)->where('status', Attendance::STATUS_LATE)->count(),
+            'incomplete' => (clone $summaryQuery)->where('status', Attendance::STATUS_INCOMPLETE)->count(),
+            'absent' => (clone $summaryQuery)->where('status', Attendance::STATUS_ABSENT)->count(),
+            'overtime_pending' => (clone $summaryQuery)->where('overtime_status', Attendance::OVERTIME_PENDING)->count(),
+        ];
+
+        $response = $this->datatable($query, $request, fn (Attendance $attendance) => [
             'id' => $attendance->id,
             'employee_id' => $attendance->employee_id,
             'work_shift_id' => $attendance->work_shift_id,
@@ -1579,6 +1591,11 @@ class AttendanceController extends Controller
             'source' => $attendance->source,
             'note' => $attendance->note,
         ]);
+
+        $payload = $response->getData(true);
+        $payload['summary'] = $summary;
+
+        return response()->json($payload);
     }
 
     public function absencesData(Request $request)

@@ -307,6 +307,10 @@
     .modal .flatpickr-calendar {
         z-index: 1070 !important;
     }
+    .modal .flatpickr-wrapper {
+        display: block;
+        width: 100%;
+    }
     .schedule-view-switch {
         display: inline-flex;
         padding: .25rem;
@@ -2357,11 +2361,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (typeof flatpickr !== 'undefined') {
         const modalFlatpickrOptions = (input) => {
-            const modalContent = input.closest('.modal-content');
-
-            return modalContent ? {
-                appendTo: modalContent,
-                positionElement: input,
+            return input.closest('.modal') ? {
+                static: true,
             } : {};
         };
 

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Admin;
 
+use App\Models\Attendance;
 use App\Models\Employee;
 use App\Models\EmployeeSchedule;
 use App\Models\EmployeeScheduleAssignment;
@@ -213,6 +214,36 @@ class AttendanceScheduleChangeRulesTest extends TestCase
             ->assertJsonPath('data.0.shift_start_time', '22:00')
             ->assertJsonPath('data.0.shift_end_time', '06:00')
             ->assertJsonPath('data.0.crosses_midnight', true);
+    }
+
+    public function test_schedule_calendar_does_not_mix_attendance_status_with_employee_schedule(): void
+    {
+        Carbon::setTestNow('2026-06-05 10:00:00');
+        $this->loginAsAdmin();
+
+        $employee = $this->employee();
+        $shift = $this->shift('Pagi', '08:00', '17:00');
+
+        EmployeeSchedule::create([
+            'employee_id' => $employee->id,
+            'work_shift_id' => $shift->id,
+            'schedule_date' => '2026-06-06',
+            'schedule_type' => 'work',
+        ]);
+        Attendance::create([
+            'employee_id' => $employee->id,
+            'attendance_date' => '2026-06-06',
+            'status' => Attendance::STATUS_DAY_OFF,
+            'source' => 'generated',
+        ]);
+
+        $response = $this->getJson(route('admin.attendance.schedules.calendar-events', [
+            'start' => '2026-06-01',
+            'end' => '2026-07-01',
+            'employee_id' => $employee->id,
+        ]))->assertOk();
+
+        $this->assertSame(['1 Jadwal Masuk'], collect($response->json())->pluck('title')->all());
     }
 
     private function employee(): Employee

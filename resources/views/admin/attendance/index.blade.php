@@ -1110,7 +1110,7 @@
                         <div class="schedule-calendar-toolbar">
                             <div>
                                 <div class="fw-bold text-gray-900">Kalender Jadwal</div>
-                                <div class="text-muted fs-8">Klik event untuk melihat rincian jadwal dan kehadiran.</div>
+                                <div class="text-muted fs-8">Klik event untuk melihat rincian jadwal karyawan.</div>
                             </div>
                             <div class="d-flex flex-wrap gap-2 align-items-center">
                                 <select id="calendar_employee_filter" class="form-select form-select-solid form-select-sm" style="min-width:230px;">
@@ -1126,10 +1126,9 @@
                         </div>
                         <div class="att-legend mb-4">
                             <span><span class="dot" style="background:#009ef7"></span>Jadwal masuk</span>
-                            <span><span class="dot" style="background:#50cd89"></span>Hadir</span>
-                            <span><span class="dot" style="background:#ffc700"></span>Telat / Cuti</span>
-                            <span><span class="dot" style="background:#f1416c"></span>Libur / Absen</span>
-                            <span><span class="dot" style="background:#7239ea"></span>Tidak lengkap</span>
+                            <span><span class="dot" style="background:#7e8299"></span>Libur</span>
+                            <span><span class="dot" style="background:#f1416c"></span>Libur perusahaan</span>
+                            <span><span class="dot" style="background:#ffc700"></span>Cuti / izin</span>
                         </div>
                         <div id="attendance_schedule_calendar"></div>
                     </div>

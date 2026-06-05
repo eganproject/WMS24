@@ -22,4 +22,9 @@ class WeeklyScheduleTemplate extends Model
     {
         return $this->hasMany(WeeklyScheduleTemplateDay::class);
     }
+
+    public function assignments()
+    {
+        return $this->hasMany(EmployeeScheduleAssignment::class);
+    }
 }

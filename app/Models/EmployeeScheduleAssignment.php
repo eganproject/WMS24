@@ -30,4 +30,9 @@ class EmployeeScheduleAssignment extends Model
     {
         return $this->belongsTo(WeeklyScheduleTemplate::class, 'weekly_schedule_template_id');
     }
+
+    public function schedules()
+    {
+        return $this->hasMany(EmployeeSchedule::class);
+    }
 }

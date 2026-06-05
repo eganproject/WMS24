@@ -17,6 +17,7 @@ use App\Models\WeeklyScheduleTemplateDay;
 use App\Models\WorkShift;
 use App\Support\AttendanceProcessor;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -627,25 +628,27 @@ class AttendanceProcessorTest extends TestCase
             'day_of_week' => 2,
             'schedule_type' => 'day_off',
         ]);
+        $effectiveFrom = now()->next(Carbon::MONDAY)->startOfDay();
+        $effectiveUntil = $effectiveFrom->copy()->addDay();
 
         $this->postJson(route('admin.attendance.templates.assign'), [
             'employee_id' => $employee->id,
             'weekly_schedule_template_id' => $template->id,
-            'effective_from' => '2026-04-27',
-            'effective_until' => '2026-04-28',
+            'effective_from' => $effectiveFrom->toDateString(),
+            'effective_until' => $effectiveUntil->toDateString(),
         ])
             ->assertOk()
-            ->assertJsonPath('generated_until', '2026-04-28');
+            ->assertJsonPath('generated_until', $effectiveUntil->toDateString());
 
         $this->assertTrue(EmployeeSchedule::query()
             ->where('employee_id', $employee->id)
-            ->whereDate('schedule_date', '2026-04-27')
+            ->whereDate('schedule_date', $effectiveFrom)
             ->where('schedule_type', 'work')
             ->where('work_shift_id', $shift->id)
             ->exists());
         $this->assertTrue(EmployeeSchedule::query()
             ->where('employee_id', $employee->id)
-            ->whereDate('schedule_date', '2026-04-28')
+            ->whereDate('schedule_date', $effectiveUntil)
             ->where('schedule_type', 'day_off')
             ->whereNull('work_shift_id')
             ->exists());
@@ -654,7 +657,7 @@ class AttendanceProcessorTest extends TestCase
             ->assertOk()
             ->assertJsonFragment([
                 'employee' => 'EMP006 - Wawan',
-                'schedule_date' => '2026-04-27',
+                'schedule_date' => $effectiveFrom->toDateString(),
             ]);
     }
 

@@ -16,6 +16,7 @@ class EmployeeSchedule extends Model
 
     protected $fillable = [
         'employee_id',
+        'employee_schedule_assignment_id',
         'work_shift_id',
         'schedule_date',
         'schedule_type',
@@ -35,5 +36,10 @@ class EmployeeSchedule extends Model
     public function shift()
     {
         return $this->belongsTo(WorkShift::class, 'work_shift_id');
+    }
+
+    public function assignment()
+    {
+        return $this->belongsTo(EmployeeScheduleAssignment::class, 'employee_schedule_assignment_id');
     }
 }

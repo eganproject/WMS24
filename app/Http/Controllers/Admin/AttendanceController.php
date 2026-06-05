@@ -763,11 +763,13 @@ class AttendanceController extends Controller
             'id' => $schedule->id,
             'employee_id' => $schedule->employee_id,
             'work_shift_id' => $schedule->work_shift_id,
+            'employee_schedule_assignment_id' => $schedule->employee_schedule_assignment_id,
             'employee' => $schedule->employee ? "{$schedule->employee->employee_code} - {$schedule->employee->name}" : '-',
             'schedule_date' => $schedule->schedule_date?->format('Y-m-d'),
             'schedule_type' => $schedule->schedule_type,
             'shift' => $schedule->shift?->name ?? '-',
             'note' => $schedule->note,
+            'is_editable' => $schedule->schedule_date?->greaterThanOrEqualTo(today()) ?? false,
         ]);
     }
 
@@ -949,6 +951,10 @@ class AttendanceController extends Controller
     {
         $validated = $this->validateSchedule($request);
         $validated['created_by'] = auth()->id();
+        $validated['employee_schedule_assignment_id'] = null;
+        if ($validated['schedule_type'] !== EmployeeSchedule::TYPE_WORK) {
+            $validated['work_shift_id'] = null;
+        }
         $schedule = EmployeeSchedule::query()->updateOrCreate(
             [
                 'employee_id' => $validated['employee_id'],
@@ -965,10 +971,15 @@ class AttendanceController extends Controller
 
     public function updateSchedule(Request $request, EmployeeSchedule $schedule)
     {
+        $this->ensureScheduleIsEditable($schedule);
         $before = $this->auditSnapshot($schedule);
         $oldEmployee = $schedule->employee;
         $oldDate = $schedule->schedule_date;
         $validated = $this->validateSchedule($request);
+        $validated['employee_schedule_assignment_id'] = null;
+        if ($validated['schedule_type'] !== EmployeeSchedule::TYPE_WORK) {
+            $validated['work_shift_id'] = null;
+        }
 
         $schedule->update($validated);
         $schedule->refresh();
@@ -984,6 +995,7 @@ class AttendanceController extends Controller
 
     public function destroySchedule(Request $request, EmployeeSchedule $schedule)
     {
+        $this->ensureScheduleIsEditable($schedule);
         $before = $this->auditSnapshot($schedule);
         $employee = $schedule->employee;
         $date = $schedule->schedule_date;
@@ -1154,6 +1166,7 @@ class AttendanceController extends Controller
                 }
 
                 $this->syncTemplateDays($template, $days);
+                $this->syncGeneratedSchedulesForTemplate($template);
             }
 
             if (!empty($errors)) {
@@ -1187,9 +1200,10 @@ class AttendanceController extends Controller
                 'is_active' => $request->boolean('is_active', true),
             ]);
             $this->syncTemplateDays($template, $validated['days'] ?? []);
+            $this->syncGeneratedSchedulesForTemplate($template);
         });
 
-        return response()->json(['message' => 'Template jadwal berhasil diperbarui']);
+        return response()->json(['message' => 'Template jadwal berhasil diperbarui dan jadwal mulai hari ini sudah disinkronkan.']);
     }
 
     public function destroyTemplate(WeeklyScheduleTemplate $template)
@@ -1208,7 +1222,7 @@ class AttendanceController extends Controller
         $validated = $request->validate([
             'employee_id' => ['required', 'integer', 'exists:employees,id'],
             'weekly_schedule_template_id' => ['required', 'integer', 'exists:weekly_schedule_templates,id'],
-            'effective_from' => ['required', 'date'],
+            'effective_from' => ['required', 'date', 'after_or_equal:today'],
             'effective_until' => ['nullable', 'date', 'after_or_equal:effective_from'],
             'conflict_strategy' => ['nullable', 'string', Rule::in(['overwrite', 'skip_existing'])],
         ]);
@@ -2091,7 +2105,7 @@ class AttendanceController extends Controller
         return $request->validate([
             'employee_id' => ['required', 'integer', 'exists:employees,id'],
             'work_shift_id' => [Rule::requiredIf($request->input('schedule_type') === EmployeeSchedule::TYPE_WORK), 'nullable', 'integer', 'exists:work_shifts,id'],
-            'schedule_date' => ['required', 'date'],
+            'schedule_date' => ['required', 'date', 'after_or_equal:today'],
             'schedule_type' => ['required', Rule::in([
                 EmployeeSchedule::TYPE_WORK,
                 EmployeeSchedule::TYPE_DAY_OFF,
@@ -2100,6 +2114,15 @@ class AttendanceController extends Controller
             ])],
             'note' => ['nullable', 'string'],
         ]);
+    }
+
+    private function ensureScheduleIsEditable(EmployeeSchedule $schedule): void
+    {
+        if ($schedule->schedule_date?->lt(today())) {
+            throw ValidationException::withMessages([
+                'schedule_date' => ['Jadwal yang tanggalnya sudah terlewat tidak dapat diubah atau dihapus.'],
+            ]);
+        }
     }
 
     private function validateLeave(Request $request, bool $allowStatus = true): array
@@ -2340,6 +2363,7 @@ class AttendanceController extends Controller
                     'schedule_date' => $scheduleDate,
                 ];
                 $values = [
+                    'employee_schedule_assignment_id' => $assignment->id,
                     'work_shift_id' => $templateDay->schedule_type === EmployeeSchedule::TYPE_WORK ? $templateDay->work_shift_id : null,
                     'schedule_type' => $templateDay->schedule_type,
                     'note' => 'Dibuat dari template jadwal',
@@ -2365,6 +2389,95 @@ class AttendanceController extends Controller
             'generated' => $generatedCount,
             'skipped' => $skippedCount,
         ];
+    }
+
+    private function syncGeneratedSchedulesForTemplate(WeeklyScheduleTemplate $template): void
+    {
+        $templateDays = $template->days()
+            ->get()
+            ->keyBy('day_of_week');
+
+        $template->assignments()
+            ->whereDate('effective_until', '>=', today())
+            ->with('employee')
+            ->get()
+            ->each(function (EmployeeScheduleAssignment $assignment) use ($templateDays) {
+                $from = $assignment->effective_from->greaterThan(today())
+                    ? $assignment->effective_from->copy()
+                    : today();
+                $until = $assignment->effective_until?->copy();
+
+                if (!$until || $from->gt($until) || !$assignment->employee) {
+                    return;
+                }
+
+                $current = $from;
+                while ($current->lte($until)) {
+                    $activeAssignmentId = EmployeeScheduleAssignment::query()
+                        ->where('employee_id', $assignment->employee_id)
+                        ->whereDate('effective_from', '<=', $current)
+                        ->whereDate('effective_until', '>=', $current)
+                        ->latest('effective_from')
+                        ->value('id');
+
+                    if ((int) $activeAssignmentId !== $assignment->id) {
+                        $current->addDay();
+                        continue;
+                    }
+
+                    $templateDay = $templateDays->get((int) $current->dayOfWeekIso);
+                    $schedule = EmployeeSchedule::query()
+                        ->where('employee_id', $assignment->employee_id)
+                        ->whereDate('schedule_date', $current)
+                        ->where(function ($query) use ($assignment) {
+                            $query->where('employee_schedule_assignment_id', $assignment->id)
+                                ->orWhere(function ($legacyQuery) {
+                                    $legacyQuery->whereNull('employee_schedule_assignment_id')
+                                        ->where('note', 'Dibuat dari template jadwal');
+                                });
+                        })
+                        ->first();
+
+                    if (!$templateDay) {
+                        if ($schedule) {
+                            $schedule->delete();
+                            app(AttendanceProcessor::class)->rebuildDailyAttendance($assignment->employee, $current);
+                        }
+                        $current->addDay();
+                        continue;
+                    }
+
+                    if ($schedule) {
+                        $schedule->update([
+                            'employee_schedule_assignment_id' => $assignment->id,
+                            'work_shift_id' => $templateDay->schedule_type === EmployeeSchedule::TYPE_WORK
+                                ? $templateDay->work_shift_id
+                                : null,
+                            'schedule_type' => $templateDay->schedule_type,
+                            'note' => 'Dibuat dari template jadwal',
+                        ]);
+                        app(AttendanceProcessor::class)->rebuildDailyAttendance($assignment->employee, $current);
+                    } elseif ($templateDay && !EmployeeSchedule::query()
+                        ->where('employee_id', $assignment->employee_id)
+                        ->whereDate('schedule_date', $current)
+                        ->exists()) {
+                        EmployeeSchedule::create([
+                            'employee_id' => $assignment->employee_id,
+                            'employee_schedule_assignment_id' => $assignment->id,
+                            'work_shift_id' => $templateDay->schedule_type === EmployeeSchedule::TYPE_WORK
+                                ? $templateDay->work_shift_id
+                                : null,
+                            'schedule_date' => $current->toDateString(),
+                            'schedule_type' => $templateDay->schedule_type,
+                            'note' => 'Dibuat dari template jadwal',
+                            'created_by' => auth()->id(),
+                        ]);
+                        app(AttendanceProcessor::class)->rebuildDailyAttendance($assignment->employee, $current);
+                    }
+
+                    $current->addDay();
+                }
+            });
     }
 
     private function applySearch($query, Request $request, array $columns): void

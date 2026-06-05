@@ -674,7 +674,7 @@
                     <form class="row g-3 ajax-form" data-table="schedules_table" action="{{ route('admin.attendance.schedules.store') }}">
                         @csrf
                         <div class="col-12 col-md-6 col-lg-4"><label class="form-label fw-bold">Karyawan</label><select name="employee_id" class="form-select form-select-solid" required>@foreach($employees as $employee)<option value="{{ $employee->id }}">{{ $employee->employee_code }} - {{ $employee->name }}</option>@endforeach</select></div>
-                        <div class="col-6 col-md-6 col-lg-2"><label class="form-label fw-bold">Tanggal Jadwal</label><input type="text" name="schedule_date" class="form-control form-control-solid js-date" placeholder="YYYY-MM-DD" required></div>
+                        <div class="col-6 col-md-6 col-lg-2"><label class="form-label fw-bold">Tanggal Jadwal</label><input type="text" name="schedule_date" class="form-control form-control-solid js-date js-schedule-date" min="{{ today()->toDateString() }}" placeholder="YYYY-MM-DD" required></div>
                         <div class="col-6 col-md-6 col-lg-2"><label class="form-label fw-bold">Tipe</label><select name="schedule_type" class="form-select form-select-solid"><option value="work">Masuk</option><option value="day_off">Libur</option><option value="holiday">Libur Perusahaan</option><option value="leave">Cuti/Izin</option></select></div>
                         <div class="col-12 col-md-6 col-lg-4"><label class="form-label fw-bold">Shift</label><select name="work_shift_id" class="form-select form-select-solid"><option value="">Tanpa shift</option>@foreach($shifts as $shift)<option value="{{ $shift->id }}">{{ $shift->name }} ({{ substr($shift->start_time,0,5) }}-{{ substr($shift->end_time,0,5) }})</option>@endforeach</select></div>
                         <div class="col-12 col-md-9"><label class="form-label fw-bold">Catatan</label><input name="note" class="form-control form-control-solid" placeholder="Opsional"></div>
@@ -845,7 +845,7 @@
                             </div>
                             <div class="col-12 col-md-6">
                                 <label class="form-label fw-bold">Berlaku Dari</label>
-                                <input type="text" name="effective_from" class="form-control form-control-solid js-date" placeholder="YYYY-MM-DD" required>
+                                <input type="text" name="effective_from" class="form-control form-control-solid js-date js-schedule-date" min="{{ today()->toDateString() }}" placeholder="YYYY-MM-DD" required>
                             </div>
                             <div class="col-12 col-md-6">
                                 <label class="form-label fw-bold">Berlaku Sampai</label>
@@ -1271,6 +1271,7 @@
 <script src="{{ asset('metronic/plugins/custom/fullcalendar/fullcalendar.bundle.js') }}"></script>
 <script>
 const csrfToken = '{{ csrf_token() }}';
+const attendanceToday = @json(today()->toDateString());
 const searchInput = document.getElementById('attendance_search');
 const calendarEventsUrl = '{{ route('admin.attendance.schedules.calendar-events') }}';
 const assignTemplateUrl = '{{ route('admin.attendance.templates.assign') }}';
@@ -1473,6 +1474,9 @@ const renderCrudActions = (tableId, row) => {
     }
     if (tableId === 'attendances_table') {
         return renderAttendanceActions(row, payload);
+    }
+    if (tableId === 'schedules_table' && !row.is_editable) {
+        return '<span class="badge badge-light-secondary">Terkunci</span>';
     }
 
     return `
@@ -1763,6 +1767,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof flatpickr !== 'undefined') {
         document.querySelectorAll('.js-date').forEach((input) => {
             flatpickr(input, {
+                minDate: input.classList.contains('js-schedule-date') ? attendanceToday : null,
                 dateFormat: 'Y-m-d',
                 allowInput: true,
             });

@@ -492,7 +492,7 @@
     }
     .recap-summary-grid {
         display: grid;
-        grid-template-columns: repeat(6, minmax(0, 1fr));
+        grid-template-columns: repeat(7, minmax(0, 1fr));
         gap: .75rem;
         margin-bottom: 1rem;
     }
@@ -522,7 +522,33 @@
     .recap-summary-card.warning { border-top: 3px solid #ffc700; }
     .recap-summary-card.info { border-top: 3px solid #7239ea; }
     .recap-summary-card.danger { border-top: 3px solid #f1416c; }
+    .recap-summary-card.off { border-top: 3px solid #7e8299; }
     .recap-summary-card.overtime { border-top: 3px solid #009ef7; }
+    .recap-action-trigger {
+        position: relative;
+    }
+    .recap-overtime-alert-dot {
+        position: absolute;
+        top: -4px;
+        right: -4px;
+        width: 10px;
+        height: 10px;
+        border: 2px solid #fff;
+        border-radius: 50%;
+        background: #f1416c;
+        box-shadow: 0 0 0 0 rgba(241, 65, 108, .65);
+        animation: recapOvertimePulse 1.4s ease-out infinite;
+    }
+    @keyframes recapOvertimePulse {
+        0% { box-shadow: 0 0 0 0 rgba(241, 65, 108, .65); }
+        70% { box-shadow: 0 0 0 8px rgba(241, 65, 108, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(241, 65, 108, 0); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .recap-overtime-alert-dot {
+            animation: none;
+        }
+    }
     .recap-employee {
         min-width: 170px;
     }
@@ -586,6 +612,9 @@
     @media (max-width: 1199px) {
         .schedule-card-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .recap-summary-grid {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
         }
     }
 
@@ -1487,6 +1516,7 @@
                     <div class="recap-summary-card warning"><div class="label">Terlambat</div><div class="value" data-summary="late">0</div></div>
                     <div class="recap-summary-card info"><div class="label">Belum Lengkap</div><div class="value" data-summary="incomplete">0</div></div>
                     <div class="recap-summary-card danger"><div class="label">Alpha</div><div class="value" data-summary="absent">0</div></div>
+                    <div class="recap-summary-card off"><div class="label">Karyawan Libur</div><div class="value" data-summary="day_off">0</div></div>
                     <div class="recap-summary-card overtime"><div class="label">Lembur Pending</div><div class="value" data-summary="overtime_pending">0</div></div>
                 </div>
                 <x-attendance-table id="attendances_table" :headers="['Karyawan','Tanggal & Shift','Jam Absensi','Kedisiplinan','Durasi Kerja','Lembur','Status','Catatan','Aksi']" />
@@ -2021,13 +2051,27 @@ const renderAttendanceActions = (row, payload) => {
     const overtimeStatus = row.overtime_status || 'none';
     const showApprove = calculated > 0 && overtimeStatus !== 'approved';
     const showReject = calculated > 0 && overtimeStatus !== 'rejected' && overtimeStatus !== 'none';
+    const overtimeIndicator = calculated > 0
+        ? '<span class="recap-overtime-alert-dot" title="Terdapat lembur"></span>'
+        : '';
 
     return `
-        <div class="attendance-row-actions">
-            ${showApprove ? `<button type="button" class="btn btn-sm btn-light-success btn-overtime-approve" data-id="${row.id}" data-minutes="${calculated}" data-note="${escapeAttr(row.overtime_note || '')}"><i class="fas fa-check me-1"></i>Approve Lembur</button>` : ''}
-            ${showReject ? `<button type="button" class="btn btn-sm btn-light-warning btn-overtime-reject" data-id="${row.id}" data-note="${escapeAttr(row.overtime_note || '')}"><i class="fas fa-times me-1"></i>Reject Lembur</button>` : ''}
-            <button type="button" class="btn btn-sm btn-light-primary btn-crud-edit" data-table="attendances_table" data-row="${payload}"><i class="fas fa-pen me-1"></i>Edit Rekap</button>
-            <button type="button" class="btn btn-sm btn-light-danger btn-crud-delete" data-table="attendances_table" data-id="${row.id}"><i class="fas fa-trash me-1"></i>Hapus</button>
+        <div class="text-end">
+            <a href="#" class="btn btn-sm btn-light btn-active-light-primary recap-action-trigger" data-kt-menu-trigger="click" data-kt-menu-placement="bottom-end">
+                ${overtimeIndicator}
+                Aksi
+                <span class="svg-icon svg-icon-5 m-0">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+                        <path d="M11.4343 12.7344L7.25 8.55005C6.83579 8.13583 6.16421 8.13584 5.75 8.55005C5.33579 8.96426 5.33579 9.63583 5.75 10.05L11.2929 15.5929C11.6834 15.9835 12.3166 15.9835 12.7071 15.5929L18.25 10.05C18.6642 9.63584 18.6642 8.96426 18.25 8.55005C17.8358 8.13584 17.1642 8.13584 16.75 8.55005L12.5657 12.7344C12.2533 13.0468 11.7467 13.0468 11.4343 12.7344Z" fill="black"></path>
+                    </svg>
+                </span>
+            </a>
+            <div class="menu menu-sub menu-sub-dropdown menu-column menu-rounded menu-gray-600 menu-state-bg-light-primary fw-bold fs-7 w-175px py-3" data-kt-menu="true">
+                ${showApprove ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 text-success btn-overtime-approve" data-id="${row.id}" data-minutes="${calculated}" data-note="${escapeAttr(row.overtime_note || '')}">Approve Lembur</a></div>` : ''}
+                ${showReject ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 text-warning btn-overtime-reject" data-id="${row.id}" data-note="${escapeAttr(row.overtime_note || '')}">Reject Lembur</a></div>` : ''}
+                <div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-crud-edit" data-table="attendances_table" data-row="${payload}">Edit Rekap</a></div>
+                <div class="menu-item px-3"><a href="#" class="menu-link px-3 text-danger btn-crud-delete" data-table="attendances_table" data-id="${row.id}">Hapus</a></div>
+            </div>
         </div>
     `;
 };
@@ -2464,6 +2508,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
             }),
         });
+
+        const refreshTableMenus = () => {
+            if (window.KTMenu) {
+                KTMenu.createInstances();
+            }
+        };
+        refreshTableMenus();
+        tables[id].on('draw', refreshTableMenus);
 
         return tables[id];
     };
@@ -3335,6 +3387,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('click', async (event) => {
         const editButton = event.target.closest('.btn-crud-edit');
         if (editButton) {
+            event.preventDefault();
             const row = JSON.parse(decodeURIComponent(editButton.dataset.row || '{}'));
             fillCrudForm(editButton.dataset.table, row);
             return;
@@ -3394,6 +3447,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const overtimeApproveButton = event.target.closest('.btn-overtime-approve');
         if (overtimeApproveButton) {
+            event.preventDefault();
             const minutes = Number(overtimeApproveButton.dataset.minutes || 0);
             const result = typeof Swal !== 'undefined'
                 ? await Swal.fire({
@@ -3430,6 +3484,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const overtimeRejectButton = event.target.closest('.btn-overtime-reject');
         if (overtimeRejectButton) {
+            event.preventDefault();
             const result = typeof Swal !== 'undefined'
                 ? await Swal.fire({
                     title: 'Reject lembur?',
@@ -3458,6 +3513,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const deleteButton = event.target.closest('.btn-crud-delete');
         if (!deleteButton) return;
+        event.preventDefault();
 
         const tableId = deleteButton.dataset.table;
         const deleteUrl = crudUrl(tableId, 'destroy', deleteButton.dataset.id);

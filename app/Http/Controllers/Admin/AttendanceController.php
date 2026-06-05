@@ -1477,6 +1477,10 @@ class AttendanceController extends Controller
             'late' => (clone $summaryQuery)->where('status', Attendance::STATUS_LATE)->count(),
             'incomplete' => (clone $summaryQuery)->where('status', Attendance::STATUS_INCOMPLETE)->count(),
             'absent' => (clone $summaryQuery)->where('status', Attendance::STATUS_ABSENT)->count(),
+            'day_off' => (clone $summaryQuery)
+                ->where('status', Attendance::STATUS_DAY_OFF)
+                ->distinct()
+                ->count('employee_id'),
             'overtime_pending' => (clone $summaryQuery)->where('overtime_status', Attendance::OVERTIME_PENDING)->count(),
         ];
 

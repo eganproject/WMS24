@@ -47,14 +47,24 @@ class AttendanceRecapDisplayTest extends TestCase
             'attendance_date' => '2026-06-04',
             'status' => Attendance::STATUS_PRESENT,
         ]);
+        $offEmployee = Employee::create([
+            'employee_code' => 'EMP-OFF',
+            'name' => 'Karyawan Libur',
+            'employment_status' => 'active',
+        ]);
+        Attendance::create([
+            'employee_id' => $offEmployee->id,
+            'attendance_date' => '2026-06-05',
+            'status' => Attendance::STATUS_DAY_OFF,
+        ]);
 
         $this->getJson(route('admin.attendance.attendances.data', ['draw' => 1]))
             ->assertOk()
-            ->assertJsonCount(1, 'data')
-            ->assertJsonPath('data.0.attendance_date', '2026-06-05')
-            ->assertJsonPath('summary.total', 1)
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath('summary.total', 2)
             ->assertJsonPath('summary.late', 1)
             ->assertJsonPath('summary.present', 0)
+            ->assertJsonPath('summary.day_off', 1)
             ->assertJsonPath('summary.overtime_pending', 1);
     }
 }

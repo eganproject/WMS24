@@ -4,12 +4,16 @@ namespace Tests\Feature\Admin;
 
 use App\Exports\EmployeesExport;
 use App\Models\Area;
+use App\Models\Attendance;
 use App\Models\Employee;
 use App\Models\EmployeePosition;
+use App\Models\EmployeeSchedule;
 use App\Models\Role;
 use App\Models\User;
+use App\Models\WorkShift;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
@@ -160,6 +164,66 @@ class AttendanceEmployeesImportExportTest extends TestCase
         $this->actingAs($user)
             ->get(route('mobile.picking-list.index'))
             ->assertRedirect(route('mobile.dashboard'));
+    }
+
+    public function test_attendance_performance_uses_individual_daily_schedule_override(): void
+    {
+        Carbon::setTestNow('2026-06-06 12:00:00');
+
+        try {
+            $role = Role::where('slug', 'attendance-performance')->firstOrFail();
+            $user = User::factory()->create();
+            $user->roles()->sync([$role->id]);
+            $employee = Employee::create([
+                'user_id' => $user->id,
+                'employee_code' => 'K9005',
+                'name' => 'Rina Override',
+                'employment_status' => Employee::STATUS_ACTIVE,
+            ]);
+            $shift = WorkShift::create([
+                'name' => 'Pagi Performa',
+                'start_time' => '08:00',
+                'end_time' => '17:00',
+                'is_active' => true,
+            ]);
+
+            EmployeeSchedule::create([
+                'employee_id' => $employee->id,
+                'work_shift_id' => $shift->id,
+                'schedule_date' => '2026-06-05',
+                'schedule_type' => EmployeeSchedule::TYPE_WORK,
+            ]);
+            EmployeeSchedule::create([
+                'employee_id' => $employee->id,
+                'schedule_date' => '2026-06-06',
+                'schedule_type' => EmployeeSchedule::TYPE_DAY_OFF,
+                'note' => 'Libur manual',
+            ]);
+            Attendance::create([
+                'employee_id' => $employee->id,
+                'work_shift_id' => $shift->id,
+                'attendance_date' => '2026-06-05',
+                'check_in_at' => '2026-06-05 08:00:00',
+                'check_out_at' => '2026-06-05 17:00:00',
+                'status' => Attendance::STATUS_PRESENT,
+            ]);
+            Attendance::create([
+                'employee_id' => $employee->id,
+                'work_shift_id' => $shift->id,
+                'attendance_date' => '2026-06-06',
+                'check_in_at' => '2026-06-06 08:00:00',
+                'check_out_at' => '2026-06-06 17:00:00',
+                'status' => Attendance::STATUS_PRESENT,
+            ]);
+
+            $this->actingAs($user)
+                ->get(route('employee.attendance-performance', ['month' => '2026-06']))
+                ->assertOk()
+                ->assertSee('1/1 hari hadir')
+                ->assertSee('2026-06-06 · Libur');
+        } finally {
+            Carbon::setTestNow();
+        }
     }
 
     /**

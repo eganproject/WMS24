@@ -245,17 +245,64 @@
     }
     .schedule-list-toolbar {
         display: flex;
-        align-items: flex-end;
+        align-items: center;
         justify-content: space-between;
         flex-wrap: wrap;
-        gap: 1rem;
+        gap: .75rem;
         margin-bottom: 1rem;
     }
-    .schedule-list-filters {
+    .schedule-list-heading {
+        min-width: 0;
+        flex: 1 1 260px;
+    }
+    .schedule-list-heading .title {
+        color: #181c32;
+        font-weight: 800;
+        font-size: .95rem;
+    }
+    .schedule-list-heading .meta {
+        color: #7e8299;
+        font-size: .76rem;
+        margin-top: .15rem;
+    }
+    .schedule-filter-trigger {
+        position: relative;
+    }
+    .schedule-filter-count {
+        min-width: 20px;
+        height: 20px;
+        border-radius: 999px;
+        background: #1b84ff;
+        color: #fff;
+        font-size: .68rem;
+        font-weight: 800;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 .35rem;
+        margin-left: .35rem;
+    }
+    .schedule-active-filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .4rem;
+        margin-bottom: 1rem;
+    }
+    .schedule-filter-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: .35rem;
+        border-radius: 999px;
+        background: #f1f7ff;
+        color: #1b84ff;
+        font-size: .72rem;
+        font-weight: 700;
+        padding: .38rem .65rem;
+    }
+    .schedule-filter-modal-grid {
         display: grid;
-        grid-template-columns: minmax(190px, 1.5fr) repeat(3, minmax(140px, 1fr));
-        gap: .75rem;
-        flex: 1 1 720px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
     }
     .schedule-view-switch {
         display: inline-flex;
@@ -530,7 +577,6 @@
         background: #f8fbff;
     }
     @media (max-width: 1199px) {
-        .schedule-list-filters,
         .schedule-card-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
         }
@@ -675,8 +721,8 @@
         .recap-summary-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
         }
-        .schedule-list-filters,
-        .schedule-card-grid {
+        .schedule-card-grid,
+        .schedule-filter-modal-grid {
             grid-template-columns: 1fr;
         }
         .schedule-view-switch {
@@ -684,6 +730,10 @@
         }
         .schedule-list-actions {
             width: 100%;
+        }
+        .schedule-list-actions .btn,
+        .schedule-filter-trigger {
+            flex: 1 1 auto;
         }
         .schedule-calendar-toolbar > div,
         .schedule-calendar-toolbar select,
@@ -1005,38 +1055,17 @@
 
                 <div class="schedule-list-panel">
                     <div class="schedule-list-toolbar">
-                        <div class="schedule-list-filters">
-                            <div>
-                                <label class="form-label fw-bold">Karyawan</label>
-                                <select class="form-select form-select-solid" id="schedule_list_employee">
-                                    <option value="">Semua karyawan</option>
-                                    @foreach($employees as $employee)
-                                        <option value="{{ $employee->id }}">{{ $employee->employee_code }} - {{ $employee->name }}</option>
-                                    @endforeach
-                                </select>
-                            </div>
-                            <div>
-                                <label class="form-label fw-bold">Dari Tanggal</label>
-                                <input type="text" class="form-control form-control-solid js-date" id="schedule_list_date_from" placeholder="YYYY-MM-DD">
-                            </div>
-                            <div>
-                                <label class="form-label fw-bold">Sampai Tanggal</label>
-                                <input type="text" class="form-control form-control-solid js-date" id="schedule_list_date_to" placeholder="YYYY-MM-DD">
-                            </div>
-                            <div>
-                                <label class="form-label fw-bold">Tipe Jadwal</label>
-                                <select class="form-select form-select-solid" id="schedule_list_type">
-                                    <option value="">Semua tipe</option>
-                                    <option value="work">Masuk</option>
-                                    <option value="day_off">Libur</option>
-                                    <option value="holiday">Libur Perusahaan</option>
-                                    <option value="leave">Cuti/Izin</option>
-                                </select>
-                            </div>
+                        <div class="schedule-list-heading">
+                            <div class="title">Daftar Jadwal Karyawan</div>
+                            <div class="meta" id="schedule_filter_summary">Menampilkan seluruh jadwal</div>
                         </div>
                         <div class="schedule-list-actions">
-                            <button type="button" class="btn btn-light btn-sm" id="schedule_list_reset">
-                                <i class="fas fa-undo me-1"></i>Reset Filter
+                            <button type="button" class="btn btn-light-primary btn-sm schedule-filter-trigger" data-bs-toggle="modal" data-bs-target="#schedule_filter_modal">
+                                <i class="fas fa-sliders-h me-1"></i>Filter
+                                <span class="schedule-filter-count d-none" id="schedule_filter_count">0</span>
+                            </button>
+                            <button type="button" class="btn btn-light btn-sm d-none" id="schedule_list_reset">
+                                <i class="fas fa-times me-1"></i>Hapus Filter
                             </button>
                             <div class="schedule-view-switch" role="group" aria-label="Pilih tampilan jadwal">
                                 <button type="button" class="schedule-view-button active" data-schedule-view="table">
@@ -1051,6 +1080,7 @@
                             </div>
                         </div>
                     </div>
+                    <div class="schedule-active-filters d-none" id="schedule_active_filters"></div>
 
                     <div id="schedule_table_view">
                         <x-attendance-table id="schedules_table" :headers="['Karyawan','Tanggal','Tipe','Shift','Catatan','Aksi']" />
@@ -1460,6 +1490,61 @@
 </div>
 
 <div id="attendance_form_bank" class="attendance-form-bank"></div>
+
+{{-- ===== Modal Filter Jadwal ===== --}}
+<div class="modal fade" id="schedule_filter_modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header border-0 pb-0">
+                <div>
+                    <h2 class="fw-bolder mb-1"><i class="fas fa-sliders-h text-primary me-2"></i>Filter Jadwal</h2>
+                    <div class="text-muted fs-7">Pilih filter yang diperlukan. Kosongkan untuk menampilkan seluruh jadwal.</div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body py-5">
+                <div class="schedule-filter-modal-grid">
+                    <div>
+                        <label class="form-label fw-bold">Karyawan</label>
+                        <select class="form-select form-select-solid" id="schedule_list_employee">
+                            <option value="">Semua karyawan</option>
+                            @foreach($employees as $employee)
+                                <option value="{{ $employee->id }}">{{ $employee->employee_code }} - {{ $employee->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label fw-bold">Tipe Jadwal</label>
+                        <select class="form-select form-select-solid" id="schedule_list_type">
+                            <option value="">Semua tipe</option>
+                            <option value="work">Masuk</option>
+                            <option value="day_off">Libur</option>
+                            <option value="holiday">Libur Perusahaan</option>
+                            <option value="leave">Cuti/Izin</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label fw-bold">Dari Tanggal</label>
+                        <input type="text" class="form-control form-control-solid js-date" id="schedule_list_date_from" placeholder="YYYY-MM-DD">
+                    </div>
+                    <div>
+                        <label class="form-label fw-bold">Sampai Tanggal</label>
+                        <input type="text" class="form-control form-control-solid js-date" id="schedule_list_date_to" placeholder="YYYY-MM-DD">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-light me-auto" id="schedule_filter_modal_reset">
+                    <i class="fas fa-undo me-1"></i>Reset
+                </button>
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Batal</button>
+                <button type="button" class="btn btn-primary" id="schedule_filter_apply">
+                    <i class="fas fa-check me-1"></i>Terapkan Filter
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
 {{-- ===== Modal Import Karyawan ===== --}}
 <div class="modal fade" id="attendance_import_employees_modal" tabindex="-1" aria-hidden="true">
@@ -2023,6 +2108,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const scheduleCardPrev = document.getElementById('schedule_card_prev');
     const scheduleCardNext = document.getElementById('schedule_card_next');
     const scheduleListReset = document.getElementById('schedule_list_reset');
+    const scheduleFilterApply = document.getElementById('schedule_filter_apply');
+    const scheduleFilterModalReset = document.getElementById('schedule_filter_modal_reset');
+    const scheduleFilterCount = document.getElementById('schedule_filter_count');
+    const scheduleFilterSummary = document.getElementById('schedule_filter_summary');
+    const scheduleActiveFilters = document.getElementById('schedule_active_filters');
+    const scheduleFilterModalEl = document.getElementById('schedule_filter_modal');
+    const scheduleFilterModal = scheduleFilterModalEl && typeof bootstrap !== 'undefined'
+        ? bootstrap.Modal.getOrCreateInstance(scheduleFilterModalEl)
+        : null;
+    let appliedScheduleFilters = {
+        employee_id: '',
+        date_from: '',
+        date_to: '',
+        schedule_type: '',
+    };
     const scheduleViewButtons = document.querySelectorAll('[data-schedule-view]');
     const formCardsBySection = {};
     const formModal = formModalEl && typeof bootstrap !== 'undefined'
@@ -2186,7 +2286,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     if (typeof $ !== 'undefined' && $.fn.select2) {
-        document.querySelectorAll('#attendance_form_bank select, #attendance_form_modal select, #modal_positions select, #template_assignment_panel select, #attendance_recap_filters select, .schedule-list-panel select').forEach((select) => {
+        document.querySelectorAll('#attendance_form_bank select, #attendance_form_modal select, #modal_positions select, #template_assignment_panel select, #attendance_recap_filters select, #schedule_filter_modal select').forEach((select) => {
             const allowClear = select.querySelector('option[value=""]') !== null;
             const parentModal = select.closest('.modal') || (select.closest('#attendance_form_bank') ? formModalEl : null);
             $(select).select2({
@@ -2319,10 +2419,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         params.overtime_status = recapFilterOvertimeStatus?.value || '';
                     }
                     if (id === 'schedules_table') {
-                        params.employee_id = scheduleListEmployee?.value || '';
-                        params.date_from = scheduleListDateFrom?.value || '';
-                        params.date_to = scheduleListDateTo?.value || '';
-                        params.schedule_type = scheduleListType?.value || '';
+                        params.employee_id = appliedScheduleFilters.employee_id;
+                        params.date_from = appliedScheduleFilters.date_from;
+                        params.date_to = appliedScheduleFilters.date_to;
+                        params.schedule_type = appliedScheduleFilters.schedule_type;
                     }
                 },
             },
@@ -2495,10 +2595,10 @@ document.addEventListener('DOMContentLoaded', () => {
             start: String((scheduleCardPage - 1) * scheduleCardPageSize),
             length: String(scheduleCardPageSize),
             q: searchInput?.value || '',
-            employee_id: scheduleListEmployee?.value || '',
-            date_from: scheduleListDateFrom?.value || '',
-            date_to: scheduleListDateTo?.value || '',
-            schedule_type: scheduleListType?.value || '',
+            employee_id: appliedScheduleFilters.employee_id,
+            date_from: appliedScheduleFilters.date_from,
+            date_to: appliedScheduleFilters.date_to,
+            schedule_type: appliedScheduleFilters.schedule_type,
         });
 
         try {
@@ -2527,6 +2627,53 @@ document.addEventListener('DOMContentLoaded', () => {
         initAttendanceTable('schedules_table')?.ajax.reload(null, false);
         loadScheduleCards(resetPage);
     };
+    const clearScheduleFilterFields = () => {
+        [scheduleListDateFrom, scheduleListDateTo].forEach((field) => {
+            if (!field) return;
+            if (field._flatpickr) {
+                field._flatpickr.clear(false);
+            } else {
+                field.value = '';
+            }
+        });
+        [scheduleListEmployee, scheduleListType].forEach((field) => {
+            if (field) field.value = '';
+        });
+        if (typeof $ !== 'undefined') {
+            $('#schedule_list_employee, #schedule_list_type').val('').trigger('change.select2');
+        }
+    };
+    const updateScheduleFilterDisplay = () => {
+        const filters = [];
+        const employeeText = [...(scheduleListEmployee?.options || [])]
+            .find((option) => option.value === appliedScheduleFilters.employee_id)
+            ?.textContent?.trim() || '';
+        const typeText = [...(scheduleListType?.options || [])]
+            .find((option) => option.value === appliedScheduleFilters.schedule_type)
+            ?.textContent?.trim() || '';
+
+        if (employeeText) filters.push({ icon: 'fas fa-user', label: employeeText });
+        if (typeText) filters.push({ icon: 'fas fa-tag', label: typeText });
+        if (appliedScheduleFilters.date_from) filters.push({ icon: 'fas fa-calendar-alt', label: `Dari ${appliedScheduleFilters.date_from}` });
+        if (appliedScheduleFilters.date_to) filters.push({ icon: 'fas fa-calendar-check', label: `Sampai ${appliedScheduleFilters.date_to}` });
+
+        if (scheduleFilterCount) {
+            scheduleFilterCount.textContent = filters.length;
+            scheduleFilterCount.classList.toggle('d-none', filters.length === 0);
+        }
+        scheduleListReset?.classList.toggle('d-none', filters.length === 0);
+        if (scheduleFilterSummary) {
+            scheduleFilterSummary.textContent = filters.length
+                ? `${filters.length} filter aktif`
+                : 'Menampilkan seluruh jadwal';
+        }
+        if (scheduleActiveFilters) {
+            scheduleActiveFilters.classList.toggle('d-none', filters.length === 0);
+            scheduleActiveFilters.innerHTML = filters.map((filter) => `
+                <span class="schedule-filter-chip"><i class="${filter.icon}"></i>${escapeAttr(filter.label)}</span>
+            `).join('');
+        }
+    };
     const applyScheduleView = (view) => {
         activeScheduleView = ['table', 'card', 'calendar'].includes(view) ? view : 'table';
         localStorage.setItem('attendance_schedule_view', activeScheduleView);
@@ -2552,26 +2699,51 @@ document.addEventListener('DOMContentLoaded', () => {
     scheduleViewButtons.forEach((button) => {
         button.addEventListener('click', () => applyScheduleView(button.dataset.scheduleView));
     });
-    [scheduleListEmployee, scheduleListDateFrom, scheduleListDateTo, scheduleListType].forEach((field) => {
-        field?.addEventListener('change', () => reloadScheduleViews(true));
-    });
     scheduleListReset?.addEventListener('click', () => {
-        [scheduleListDateFrom, scheduleListDateTo].forEach((field) => {
-            if (!field) return;
-            if (field._flatpickr) {
-                field._flatpickr.clear(false);
-            } else {
-                field.value = '';
-            }
-        });
-        [scheduleListEmployee, scheduleListType].forEach((field) => {
-            if (field) field.value = '';
-        });
-        if (typeof $ !== 'undefined') {
-            $('#schedule_list_employee, #schedule_list_type').val('').trigger('change.select2');
-        }
+        clearScheduleFilterFields();
+        appliedScheduleFilters = { employee_id: '', date_from: '', date_to: '', schedule_type: '' };
+        updateScheduleFilterDisplay();
         reloadScheduleViews(true);
     });
+    scheduleFilterModalReset?.addEventListener('click', clearScheduleFilterFields);
+    scheduleFilterApply?.addEventListener('click', () => {
+        if (
+            scheduleListDateFrom?.value
+            && scheduleListDateTo?.value
+            && scheduleListDateFrom.value > scheduleListDateTo.value
+        ) {
+            Swal?.fire('Tanggal tidak valid', 'Tanggal mulai tidak boleh setelah tanggal selesai.', 'warning');
+            return;
+        }
+
+        appliedScheduleFilters = {
+            employee_id: scheduleListEmployee?.value || '',
+            date_from: scheduleListDateFrom?.value || '',
+            date_to: scheduleListDateTo?.value || '',
+            schedule_type: scheduleListType?.value || '',
+        };
+        updateScheduleFilterDisplay();
+        reloadScheduleViews(true);
+        scheduleFilterModal?.hide();
+    });
+    scheduleFilterModalEl?.addEventListener('show.bs.modal', () => {
+        if (scheduleListEmployee) scheduleListEmployee.value = appliedScheduleFilters.employee_id;
+        if (scheduleListType) scheduleListType.value = appliedScheduleFilters.schedule_type;
+        if (scheduleListDateFrom?._flatpickr) {
+            scheduleListDateFrom._flatpickr.setDate(appliedScheduleFilters.date_from || null, false);
+        } else if (scheduleListDateFrom) {
+            scheduleListDateFrom.value = appliedScheduleFilters.date_from;
+        }
+        if (scheduleListDateTo?._flatpickr) {
+            scheduleListDateTo._flatpickr.setDate(appliedScheduleFilters.date_to || null, false);
+        } else if (scheduleListDateTo) {
+            scheduleListDateTo.value = appliedScheduleFilters.date_to;
+        }
+        if (typeof $ !== 'undefined') {
+            $('#schedule_list_employee, #schedule_list_type').trigger('change.select2');
+        }
+    });
+    updateScheduleFilterDisplay();
     scheduleCardPrev?.addEventListener('click', () => {
         if (scheduleCardPage <= 1) return;
         scheduleCardPage--;

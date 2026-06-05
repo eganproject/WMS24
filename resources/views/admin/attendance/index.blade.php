@@ -237,6 +237,195 @@
         color: #7e8299;
         background: #f9fafc;
     }
+    .schedule-list-panel {
+        border: 1px solid #eef0f8;
+        border-radius: .9rem;
+        background: #fff;
+        padding: 1rem;
+    }
+    .schedule-list-toolbar {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+    .schedule-list-filters {
+        display: grid;
+        grid-template-columns: minmax(190px, 1.5fr) repeat(3, minmax(140px, 1fr));
+        gap: .75rem;
+        flex: 1 1 720px;
+    }
+    .schedule-view-switch {
+        display: inline-flex;
+        padding: .25rem;
+        border: 1px solid #e4e6ef;
+        border-radius: .65rem;
+        background: #f5f8fa;
+        gap: .2rem;
+    }
+    .schedule-list-actions {
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+        flex-wrap: wrap;
+    }
+    .schedule-view-button {
+        border: 0;
+        border-radius: .45rem;
+        background: transparent;
+        color: #7e8299;
+        font-weight: 700;
+        font-size: .78rem;
+        padding: .55rem .8rem;
+        white-space: nowrap;
+    }
+    .schedule-view-button.active {
+        background: #fff;
+        color: #1b84ff;
+        box-shadow: 0 3px 10px rgba(31, 41, 55, .08);
+    }
+    .schedule-card-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 1rem;
+    }
+    .schedule-card {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        min-height: 245px;
+        border: 1px solid #eef0f8;
+        border-radius: .9rem;
+        background: #fff;
+        padding: 1rem;
+        overflow: hidden;
+        transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+    }
+    .schedule-card::before {
+        content: "";
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 4px;
+        background: #009ef7;
+    }
+    .schedule-card.day_off::before { background: #a1a5b7; }
+    .schedule-card.holiday::before { background: #f1416c; }
+    .schedule-card.leave::before { background: #ffc700; }
+    .schedule-card:hover {
+        transform: translateY(-2px);
+        border-color: #d9e9ff;
+        box-shadow: 0 12px 26px rgba(31, 41, 55, .08);
+    }
+    .schedule-card-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: .75rem;
+    }
+    .schedule-card-date {
+        color: #1e1e2d;
+        font-size: 1rem;
+        font-weight: 800;
+    }
+    .schedule-card-day {
+        color: #7e8299;
+        font-size: .76rem;
+        margin-top: .12rem;
+    }
+    .schedule-card-employee {
+        display: flex;
+        align-items: center;
+        gap: .65rem;
+        padding: .9rem 0;
+        margin: .85rem 0;
+        border-top: 1px dashed #e4e6ef;
+        border-bottom: 1px dashed #e4e6ef;
+    }
+    .schedule-card-avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: .65rem;
+        background: #eef6ff;
+        color: #1b84ff;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 800;
+        flex: 0 0 40px;
+    }
+    .schedule-card-employee .name {
+        color: #181c32;
+        font-weight: 700;
+    }
+    .schedule-card-employee .code {
+        color: #7e8299;
+        font-size: .74rem;
+        margin-top: .1rem;
+    }
+    .schedule-card-details {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: .6rem;
+    }
+    .schedule-card-detail {
+        border-radius: .6rem;
+        background: #f9fafc;
+        padding: .65rem;
+        min-width: 0;
+    }
+    .schedule-card-detail .label {
+        color: #a1a5b7;
+        font-size: .65rem;
+        font-weight: 700;
+        text-transform: uppercase;
+    }
+    .schedule-card-detail .value {
+        color: #3f4254;
+        font-size: .8rem;
+        font-weight: 700;
+        margin-top: .2rem;
+        overflow-wrap: anywhere;
+    }
+    .schedule-card-note {
+        color: #7e8299;
+        font-size: .76rem;
+        line-height: 1.45;
+        margin-top: .75rem;
+        min-height: 34px;
+    }
+    .schedule-card-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: .75rem;
+        margin-top: auto;
+        padding-top: .85rem;
+    }
+    .schedule-card-footer .attendance-row-actions {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+    .schedule-card-pagination {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: .75rem;
+        padding-top: 1rem;
+        margin-top: 1rem;
+        border-top: 1px solid #eef0f8;
+    }
+    .schedule-card-empty {
+        grid-column: 1 / -1;
+        border: 1px dashed #d9e2ec;
+        border-radius: .9rem;
+        padding: 3rem 1rem;
+        text-align: center;
+        color: #7e8299;
+        background: #fbfcfe;
+    }
     .recap-summary-grid {
         display: grid;
         grid-template-columns: repeat(6, minmax(0, 1fr));
@@ -329,6 +518,12 @@
     }
     #attendances_table tbody tr:hover {
         background: #f8fbff;
+    }
+    @media (max-width: 1199px) {
+        .schedule-list-filters,
+        .schedule-card-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
     }
 
     /* ===== Form helpers ===== */
@@ -469,6 +664,19 @@
         }
         .recap-summary-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .schedule-list-filters,
+        .schedule-card-grid {
+            grid-template-columns: 1fr;
+        }
+        .schedule-view-switch {
+            width: 100%;
+        }
+        .schedule-list-actions {
+            width: 100%;
+        }
+        .schedule-view-button {
+            flex: 1;
         }
         #attendance_schedule_calendar { min-height: 560px; }
         #attendance_schedule_calendar .fc-toolbar {
@@ -809,7 +1017,70 @@
                     <div id="attendance_schedule_calendar"></div>
                 </div>
 
-                <x-attendance-table id="schedules_table" :headers="['Karyawan','Tanggal','Tipe','Shift','Catatan','Aksi']" />
+                <div class="schedule-list-panel">
+                    <div class="schedule-list-toolbar">
+                        <div class="schedule-list-filters">
+                            <div>
+                                <label class="form-label fw-bold">Karyawan</label>
+                                <select class="form-select form-select-solid" id="schedule_list_employee">
+                                    <option value="">Semua karyawan</option>
+                                    @foreach($employees as $employee)
+                                        <option value="{{ $employee->id }}">{{ $employee->employee_code }} - {{ $employee->name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div>
+                                <label class="form-label fw-bold">Dari Tanggal</label>
+                                <input type="text" class="form-control form-control-solid js-date" id="schedule_list_date_from" placeholder="YYYY-MM-DD">
+                            </div>
+                            <div>
+                                <label class="form-label fw-bold">Sampai Tanggal</label>
+                                <input type="text" class="form-control form-control-solid js-date" id="schedule_list_date_to" placeholder="YYYY-MM-DD">
+                            </div>
+                            <div>
+                                <label class="form-label fw-bold">Tipe Jadwal</label>
+                                <select class="form-select form-select-solid" id="schedule_list_type">
+                                    <option value="">Semua tipe</option>
+                                    <option value="work">Masuk</option>
+                                    <option value="day_off">Libur</option>
+                                    <option value="holiday">Libur Perusahaan</option>
+                                    <option value="leave">Cuti/Izin</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="schedule-list-actions">
+                            <button type="button" class="btn btn-light btn-sm" id="schedule_list_reset">
+                                <i class="fas fa-undo me-1"></i>Reset Filter
+                            </button>
+                            <div class="schedule-view-switch" role="group" aria-label="Pilih tampilan jadwal">
+                                <button type="button" class="schedule-view-button active" data-schedule-view="table">
+                                    <i class="fas fa-table me-1"></i>Tabel
+                                </button>
+                                <button type="button" class="schedule-view-button" data-schedule-view="card">
+                                    <i class="fas fa-th-large me-1"></i>Card
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="schedule_table_view">
+                        <x-attendance-table id="schedules_table" :headers="['Karyawan','Tanggal','Tipe','Shift','Catatan','Aksi']" />
+                    </div>
+                    <div id="schedule_card_view" class="d-none">
+                        <div class="schedule-card-grid" id="schedule_card_grid"></div>
+                        <div class="schedule-card-pagination">
+                            <div class="text-muted fs-8" id="schedule_card_info">0 jadwal</div>
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-sm btn-light" id="schedule_card_prev">
+                                    <i class="fas fa-chevron-left me-1"></i>Sebelumnya
+                                </button>
+                                <button type="button" class="btn btn-sm btn-light" id="schedule_card_next">
+                                    Berikutnya<i class="fas fa-chevron-right ms-1"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             {{-- ===== HOLIDAYS ===== --}}
@@ -1724,6 +1995,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const recapFilterEmployee = document.getElementById('recap_filter_employee');
     const recapFilterStatus = document.getElementById('recap_filter_status');
     const recapFilterOvertimeStatus = document.getElementById('recap_filter_overtime_status');
+    const scheduleListEmployee = document.getElementById('schedule_list_employee');
+    const scheduleListDateFrom = document.getElementById('schedule_list_date_from');
+    const scheduleListDateTo = document.getElementById('schedule_list_date_to');
+    const scheduleListType = document.getElementById('schedule_list_type');
+    const scheduleTableView = document.getElementById('schedule_table_view');
+    const scheduleCardView = document.getElementById('schedule_card_view');
+    const scheduleCardGrid = document.getElementById('schedule_card_grid');
+    const scheduleCardInfo = document.getElementById('schedule_card_info');
+    const scheduleCardPrev = document.getElementById('schedule_card_prev');
+    const scheduleCardNext = document.getElementById('schedule_card_next');
+    const scheduleListReset = document.getElementById('schedule_list_reset');
+    const scheduleViewButtons = document.querySelectorAll('[data-schedule-view]');
     const formCardsBySection = {};
     const formModal = formModalEl && typeof bootstrap !== 'undefined'
         ? bootstrap.Modal.getOrCreateInstance(formModalEl)
@@ -1886,7 +2169,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     if (typeof $ !== 'undefined' && $.fn.select2) {
-        document.querySelectorAll('#attendance_form_bank select, #attendance_form_modal select, #modal_positions select, #template_assignment_panel select, #attendance_recap_filters select').forEach((select) => {
+        document.querySelectorAll('#attendance_form_bank select, #attendance_form_modal select, #modal_positions select, #template_assignment_panel select, #attendance_recap_filters select, .schedule-list-panel select').forEach((select) => {
             const allowClear = select.querySelector('option[value=""]') !== null;
             const parentModal = select.closest('.modal') || (select.closest('#attendance_form_bank') ? formModalEl : null);
             $(select).select2({
@@ -2018,6 +2301,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         params.status = recapFilterStatus?.value || '';
                         params.overtime_status = recapFilterOvertimeStatus?.value || '';
                     }
+                    if (id === 'schedules_table') {
+                        params.employee_id = scheduleListEmployee?.value || '';
+                        params.date_from = scheduleListDateFrom?.value || '';
+                        params.date_to = scheduleListDateTo?.value || '';
+                        params.schedule_type = scheduleListType?.value || '';
+                    }
                 },
             },
             columns: config.columns.map((column) => {
@@ -2061,6 +2350,9 @@ document.addEventListener('DOMContentLoaded', () => {
         (tabTableMap[activeTabId] || []).forEach((tableId) => {
             initAttendanceTable(tableId)?.ajax.reload();
         });
+        if (activeTabId === 'tab_schedules') {
+            loadScheduleCards(true);
+        }
     });
     const reloadRecapTable = () => initAttendanceTable('attendances_table')?.ajax.reload();
     document.getElementById('recap_apply_filters')?.addEventListener('click', reloadRecapTable);
@@ -2087,6 +2379,185 @@ document.addEventListener('DOMContentLoaded', () => {
     [recapFilterEmployee, recapFilterStatus, recapFilterOvertimeStatus].forEach((field) => {
         field?.addEventListener('change', reloadRecapTable);
     });
+
+    let scheduleCardPage = 1;
+    let scheduleCardTotal = 0;
+    const scheduleCardPageSize = 9;
+    let activeScheduleView = localStorage.getItem('attendance_schedule_view') === 'card' ? 'card' : 'table';
+
+    const scheduleTypeMeta = {
+        work: { label: 'Masuk', badge: 'badge-light-primary', icon: 'fas fa-briefcase' },
+        day_off: { label: 'Libur', badge: 'badge-light-secondary', icon: 'fas fa-mug-hot' },
+        holiday: { label: 'Libur Perusahaan', badge: 'badge-light-danger', icon: 'fas fa-calendar-day' },
+        leave: { label: 'Cuti/Izin', badge: 'badge-light-warning', icon: 'fas fa-plane-departure' },
+    };
+    const scheduleEmployeeParts = (value) => {
+        const parts = String(value || '-').split(' - ');
+        return {
+            code: parts.shift() || '-',
+            name: parts.join(' - ') || '-',
+        };
+    };
+    const scheduleInitials = (name) => String(name || '-')
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part.charAt(0).toUpperCase())
+        .join('') || '-';
+    const renderScheduleCard = (row) => {
+        const meta = scheduleTypeMeta[row.schedule_type] || {
+            label: row.schedule_type || '-',
+            badge: 'badge-light',
+            icon: 'fas fa-calendar',
+        };
+        const employee = scheduleEmployeeParts(row.employee);
+        const date = new Date(`${row.schedule_date}T00:00:00`);
+        const dateLabel = Number.isNaN(date.getTime())
+            ? row.schedule_date
+            : date.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
+        const dayLabel = Number.isNaN(date.getTime())
+            ? '-'
+            : date.toLocaleDateString('id-ID', { weekday: 'long' });
+        const shiftTime = row.shift_start_time && row.shift_end_time
+            ? `${row.shift_start_time} - ${row.shift_end_time}${row.crosses_midnight ? ' (+1 hari)' : ''}`
+            : 'Tidak ada jam kerja';
+        const payload = escapeAttr(encodeURIComponent(JSON.stringify(row)));
+        const actions = row.is_editable
+            ? `<div class="attendance-row-actions">
+                <button type="button" class="btn btn-sm btn-light-primary btn-crud-edit" data-table="schedules_table" data-row="${payload}">
+                    <i class="fas fa-pen me-1"></i>Edit
+                </button>
+                <button type="button" class="btn btn-sm btn-light-danger btn-crud-delete" data-table="schedules_table" data-id="${row.id}">
+                    <i class="fas fa-trash me-1"></i>Hapus
+                </button>
+            </div>`
+            : '<span class="badge badge-light-secondary"><i class="fas fa-lock me-1"></i>Terkunci</span>';
+
+        return `<article class="schedule-card ${escapeAttr(row.schedule_type || '')}">
+            <div class="schedule-card-head">
+                <div>
+                    <div class="schedule-card-date">${escapeAttr(dateLabel)}</div>
+                    <div class="schedule-card-day">${escapeAttr(dayLabel)}</div>
+                </div>
+                <span class="badge ${meta.badge}"><i class="${meta.icon} me-1"></i>${escapeAttr(meta.label)}</span>
+            </div>
+            <div class="schedule-card-employee">
+                <div class="schedule-card-avatar">${escapeAttr(scheduleInitials(employee.name))}</div>
+                <div class="min-w-0">
+                    <div class="name">${escapeAttr(employee.name)}</div>
+                    <div class="code">${escapeAttr(employee.code)}</div>
+                </div>
+            </div>
+            <div class="schedule-card-details">
+                <div class="schedule-card-detail">
+                    <div class="label">Shift</div>
+                    <div class="value">${escapeAttr(row.shift || 'Tanpa shift')}</div>
+                </div>
+                <div class="schedule-card-detail">
+                    <div class="label">Jam Kerja</div>
+                    <div class="value">${escapeAttr(shiftTime)}</div>
+                </div>
+            </div>
+            <div class="schedule-card-note"><i class="fas fa-sticky-note me-1"></i>${escapeAttr(row.note || 'Tidak ada catatan')}</div>
+            <div class="schedule-card-footer">
+                <span class="text-muted fs-9">${row.employee_schedule_assignment_id ? 'Dari template' : 'Jadwal manual'}</span>
+                ${actions}
+            </div>
+        </article>`;
+    };
+    const loadScheduleCards = async (resetPage = false) => {
+        if (!scheduleCardGrid) return;
+        if (resetPage) scheduleCardPage = 1;
+
+        scheduleCardGrid.innerHTML = '<div class="schedule-card-empty"><span class="spinner-border spinner-border-sm me-2"></span>Memuat jadwal...</div>';
+        const params = new URLSearchParams({
+            draw: '1',
+            start: String((scheduleCardPage - 1) * scheduleCardPageSize),
+            length: String(scheduleCardPageSize),
+            q: searchInput?.value || '',
+            employee_id: scheduleListEmployee?.value || '',
+            date_from: scheduleListDateFrom?.value || '',
+            date_to: scheduleListDateTo?.value || '',
+            schedule_type: scheduleListType?.value || '',
+        });
+
+        try {
+            const response = await fetch(`${tableConfigs.schedules_table.url}?${params.toString()}`, {
+                headers: { Accept: 'application/json' },
+            });
+            const json = await response.json();
+            if (!response.ok) throw new Error(json?.message || 'Gagal memuat jadwal');
+
+            const rows = Array.isArray(json.data) ? json.data : [];
+            scheduleCardTotal = Number(json.recordsFiltered || 0);
+            scheduleCardGrid.innerHTML = rows.length
+                ? rows.map(renderScheduleCard).join('')
+                : '<div class="schedule-card-empty"><i class="fas fa-calendar-times fs-2 d-block mb-3"></i><div class="fw-bold text-gray-800 mb-1">Jadwal tidak ditemukan</div><div>Ubah filter atau kata pencarian untuk melihat data lain.</div></div>';
+
+            const from = scheduleCardTotal ? ((scheduleCardPage - 1) * scheduleCardPageSize) + 1 : 0;
+            const to = Math.min(scheduleCardPage * scheduleCardPageSize, scheduleCardTotal);
+            if (scheduleCardInfo) scheduleCardInfo.textContent = `Menampilkan ${from}-${to} dari ${scheduleCardTotal} jadwal`;
+            if (scheduleCardPrev) scheduleCardPrev.disabled = scheduleCardPage <= 1;
+            if (scheduleCardNext) scheduleCardNext.disabled = to >= scheduleCardTotal;
+        } catch (error) {
+            scheduleCardGrid.innerHTML = `<div class="schedule-card-empty text-danger"><i class="fas fa-exclamation-circle fs-2 d-block mb-3"></i>${escapeAttr(error.message || 'Gagal memuat jadwal')}</div>`;
+        }
+    };
+    const reloadScheduleViews = (resetPage = false) => {
+        initAttendanceTable('schedules_table')?.ajax.reload(null, false);
+        loadScheduleCards(resetPage);
+    };
+    const applyScheduleView = (view) => {
+        activeScheduleView = view === 'card' ? 'card' : 'table';
+        localStorage.setItem('attendance_schedule_view', activeScheduleView);
+        scheduleTableView?.classList.toggle('d-none', activeScheduleView !== 'table');
+        scheduleCardView?.classList.toggle('d-none', activeScheduleView !== 'card');
+        scheduleViewButtons.forEach((button) => {
+            button.classList.toggle('active', button.dataset.scheduleView === activeScheduleView);
+        });
+        const scheduleTabActive = document.getElementById('tab_schedules')?.classList.contains('active');
+        if (!scheduleTabActive) return;
+
+        if (activeScheduleView === 'card') {
+            loadScheduleCards();
+        } else {
+            initAttendanceTable('schedules_table')?.columns.adjust();
+        }
+    };
+    scheduleViewButtons.forEach((button) => {
+        button.addEventListener('click', () => applyScheduleView(button.dataset.scheduleView));
+    });
+    [scheduleListEmployee, scheduleListDateFrom, scheduleListDateTo, scheduleListType].forEach((field) => {
+        field?.addEventListener('change', () => reloadScheduleViews(true));
+    });
+    scheduleListReset?.addEventListener('click', () => {
+        [scheduleListDateFrom, scheduleListDateTo].forEach((field) => {
+            if (!field) return;
+            if (field._flatpickr) {
+                field._flatpickr.clear(false);
+            } else {
+                field.value = '';
+            }
+        });
+        [scheduleListEmployee, scheduleListType].forEach((field) => {
+            if (field) field.value = '';
+        });
+        if (typeof $ !== 'undefined') {
+            $('#schedule_list_employee, #schedule_list_type').val('').trigger('change.select2');
+        }
+        reloadScheduleViews(true);
+    });
+    scheduleCardPrev?.addEventListener('click', () => {
+        if (scheduleCardPage <= 1) return;
+        scheduleCardPage--;
+        loadScheduleCards();
+    });
+    scheduleCardNext?.addEventListener('click', () => {
+        if (scheduleCardPage * scheduleCardPageSize >= scheduleCardTotal) return;
+        scheduleCardPage++;
+        loadScheduleCards();
+    });
+    applyScheduleView(activeScheduleView);
 
     const resetFormsInTab = (tabId) => {
         const section = tabId.replace('tab_', '');
@@ -2117,6 +2588,7 @@ document.addEventListener('DOMContentLoaded', () => {
             initScheduleCalendar();
             scheduleCalendar?.refetchEvents();
             scheduleCalendar?.updateSize();
+            loadScheduleCards();
         }
     };
 
@@ -2188,6 +2660,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     document.querySelector('a[href="#tab_schedules"]')?.addEventListener('shown.bs.tab', () => {
+        applyScheduleView(activeScheduleView);
         initScheduleCalendar();
         scheduleCalendar?.updateSize();
     });
@@ -2208,6 +2681,9 @@ document.addEventListener('DOMContentLoaded', () => {
         (tabTableMap[activeTabId] || []).forEach((tableId) => {
             initAttendanceTable(tableId)?.ajax.reload();
         });
+        if (activeTabId === 'tab_schedules') {
+            loadScheduleCards(true);
+        }
     });
     importEmployeesButton?.addEventListener('click', () => {
         if (employeeImportFile) employeeImportFile.value = '';
@@ -2494,8 +2970,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const tableId = form.getAttribute('data-table');
         tables[tableId]?.ajax.reload();
+        if (tableId === 'schedules_table') {
+            loadScheduleCards(true);
+        }
         if (form.action === assignTemplateUrl) {
             tables.schedules_table?.ajax.reload();
+            loadScheduleCards(true);
         }
         scheduleCalendar?.refetchEvents();
         formModal?.hide();
@@ -2795,6 +3275,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         Swal?.fire('Berhasil', json?.message || 'Data berhasil dihapus', 'success');
         tables[tableId]?.ajax.reload(null, false);
+        if (tableId === 'schedules_table') {
+            loadScheduleCards();
+        }
         scheduleCalendar?.refetchEvents();
     });
 

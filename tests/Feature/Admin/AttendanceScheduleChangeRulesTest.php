@@ -181,6 +181,40 @@ class AttendanceScheduleChangeRulesTest extends TestCase
         ]);
     }
 
+    public function test_schedule_list_supports_card_view_fields_and_type_filter(): void
+    {
+        Carbon::setTestNow('2026-06-05 10:00:00');
+        $this->loginAsAdmin();
+
+        $employee = $this->employee();
+        $shift = $this->shift('Malam', '22:00', '06:00');
+        $shift->update(['crosses_midnight' => true]);
+
+        EmployeeSchedule::create([
+            'employee_id' => $employee->id,
+            'work_shift_id' => $shift->id,
+            'schedule_date' => '2026-06-06',
+            'schedule_type' => 'work',
+        ]);
+        EmployeeSchedule::create([
+            'employee_id' => $employee->id,
+            'schedule_date' => '2026-06-07',
+            'schedule_type' => 'day_off',
+        ]);
+
+        $this->getJson(route('admin.attendance.schedules.data', [
+            'draw' => 1,
+            'length' => 9,
+            'schedule_type' => 'work',
+        ]))
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.shift', 'Malam')
+            ->assertJsonPath('data.0.shift_start_time', '22:00')
+            ->assertJsonPath('data.0.shift_end_time', '06:00')
+            ->assertJsonPath('data.0.crosses_midnight', true);
+    }
+
     private function employee(): Employee
     {
         return Employee::create([

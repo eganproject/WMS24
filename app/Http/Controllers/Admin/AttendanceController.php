@@ -742,10 +742,11 @@ class AttendanceController extends Controller
     public function schedulesData(Request $request)
     {
         $query = EmployeeSchedule::query()
-            ->with(['employee:id,employee_code,name', 'shift:id,name'])
+            ->with(['employee:id,employee_code,name', 'shift:id,name,start_time,end_time,crosses_midnight'])
             ->when($request->input('employee_id'), fn ($q, $id) => $q->where('employee_id', $id))
             ->when($request->input('date_from'), fn ($q, $date) => $q->whereDate('schedule_date', '>=', $date))
             ->when($request->input('date_to'), fn ($q, $date) => $q->whereDate('schedule_date', '<=', $date))
+            ->when($request->input('schedule_type'), fn ($q, $type) => $q->where('schedule_type', $type))
             ->latest('schedule_date');
 
         $search = trim((string) $request->input('q', ''));
@@ -768,6 +769,9 @@ class AttendanceController extends Controller
             'schedule_date' => $schedule->schedule_date?->format('Y-m-d'),
             'schedule_type' => $schedule->schedule_type,
             'shift' => $schedule->shift?->name ?? '-',
+            'shift_start_time' => $this->timeValue($schedule->shift?->start_time),
+            'shift_end_time' => $this->timeValue($schedule->shift?->end_time),
+            'crosses_midnight' => $schedule->shift?->crosses_midnight ?? false,
             'note' => $schedule->note,
             'is_editable' => $schedule->schedule_date?->greaterThanOrEqualTo(today()) ?? false,
         ]);

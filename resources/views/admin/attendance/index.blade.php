@@ -417,6 +417,16 @@
         margin-top: 1rem;
         border-top: 1px solid #eef0f8;
     }
+    .schedule-calendar-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: .75rem;
+        padding-bottom: 1rem;
+        margin-bottom: 1rem;
+        border-bottom: 1px dashed #e4e6ef;
+    }
     .schedule-card-empty {
         grid-column: 1 / -1;
         border: 1px dashed #d9e2ec;
@@ -673,6 +683,11 @@
             width: 100%;
         }
         .schedule-list-actions {
+            width: 100%;
+        }
+        .schedule-calendar-toolbar > div,
+        .schedule-calendar-toolbar select,
+        .schedule-calendar-toolbar .btn {
             width: 100%;
         }
         .schedule-view-button {
@@ -988,35 +1003,6 @@
                     </form>
                 </div>
 
-                <div class="att-form-card">
-                    <div class="att-form-head flex-wrap" style="gap:.75rem;">
-                        <span class="icon"><i class="fas fa-calendar-alt"></i></span>
-                        <div class="flex-grow-1">
-                            <h3>Kalender Jadwal</h3>
-                            <p>Klik event untuk melihat detail. Filter karyawan untuk fokus pada satu orang.</p>
-                        </div>
-                        <div class="d-flex flex-wrap gap-2 align-items-center">
-                            <select id="calendar_employee_filter" class="form-select form-select-solid form-select-sm" style="min-width:230px;">
-                                <option value="">Semua karyawan</option>
-                                @foreach($employees as $employee)
-                                    <option value="{{ $employee->id }}">{{ $employee->employee_code }} - {{ $employee->name }}</option>
-                                @endforeach
-                            </select>
-                            <button type="button" class="btn btn-sm btn-light-primary" id="calendar_refresh">
-                                <i class="fas fa-sync-alt me-1"></i>Refresh
-                            </button>
-                        </div>
-                    </div>
-                    <div class="att-legend mb-4">
-                        <span><span class="dot" style="background:#009ef7"></span>Jadwal masuk</span>
-                        <span><span class="dot" style="background:#50cd89"></span>Hadir</span>
-                        <span><span class="dot" style="background:#ffc700"></span>Telat / Cuti</span>
-                        <span><span class="dot" style="background:#f1416c"></span>Libur / Absen</span>
-                        <span><span class="dot" style="background:#7239ea"></span>Tidak lengkap</span>
-                    </div>
-                    <div id="attendance_schedule_calendar"></div>
-                </div>
-
                 <div class="schedule-list-panel">
                     <div class="schedule-list-toolbar">
                         <div class="schedule-list-filters">
@@ -1059,6 +1045,9 @@
                                 <button type="button" class="schedule-view-button" data-schedule-view="card">
                                     <i class="fas fa-th-large me-1"></i>Card
                                 </button>
+                                <button type="button" class="schedule-view-button" data-schedule-view="calendar">
+                                    <i class="fas fa-calendar-alt me-1"></i>Kalender
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -1079,6 +1068,33 @@
                                 </button>
                             </div>
                         </div>
+                    </div>
+                    <div id="schedule_calendar_view" class="d-none">
+                        <div class="schedule-calendar-toolbar">
+                            <div>
+                                <div class="fw-bold text-gray-900">Kalender Jadwal</div>
+                                <div class="text-muted fs-8">Klik event untuk melihat rincian jadwal dan kehadiran.</div>
+                            </div>
+                            <div class="d-flex flex-wrap gap-2 align-items-center">
+                                <select id="calendar_employee_filter" class="form-select form-select-solid form-select-sm" style="min-width:230px;">
+                                    <option value="">Semua karyawan</option>
+                                    @foreach($employees as $employee)
+                                        <option value="{{ $employee->id }}">{{ $employee->employee_code }} - {{ $employee->name }}</option>
+                                    @endforeach
+                                </select>
+                                <button type="button" class="btn btn-sm btn-light-primary" id="calendar_refresh">
+                                    <i class="fas fa-sync-alt me-1"></i>Refresh
+                                </button>
+                            </div>
+                        </div>
+                        <div class="att-legend mb-4">
+                            <span><span class="dot" style="background:#009ef7"></span>Jadwal masuk</span>
+                            <span><span class="dot" style="background:#50cd89"></span>Hadir</span>
+                            <span><span class="dot" style="background:#ffc700"></span>Telat / Cuti</span>
+                            <span><span class="dot" style="background:#f1416c"></span>Libur / Absen</span>
+                            <span><span class="dot" style="background:#7239ea"></span>Tidak lengkap</span>
+                        </div>
+                        <div id="attendance_schedule_calendar"></div>
                     </div>
                 </div>
             </div>
@@ -2001,6 +2017,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const scheduleListType = document.getElementById('schedule_list_type');
     const scheduleTableView = document.getElementById('schedule_table_view');
     const scheduleCardView = document.getElementById('schedule_card_view');
+    const scheduleCalendarView = document.getElementById('schedule_calendar_view');
     const scheduleCardGrid = document.getElementById('schedule_card_grid');
     const scheduleCardInfo = document.getElementById('schedule_card_info');
     const scheduleCardPrev = document.getElementById('schedule_card_prev');
@@ -2383,7 +2400,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let scheduleCardPage = 1;
     let scheduleCardTotal = 0;
     const scheduleCardPageSize = 9;
-    let activeScheduleView = localStorage.getItem('attendance_schedule_view') === 'card' ? 'card' : 'table';
+    const storedScheduleView = localStorage.getItem('attendance_schedule_view');
+    let activeScheduleView = ['table', 'card', 'calendar'].includes(storedScheduleView)
+        ? storedScheduleView
+        : 'table';
 
     const scheduleTypeMeta = {
         work: { label: 'Masuk', badge: 'badge-light-primary', icon: 'fas fa-briefcase' },
@@ -2508,10 +2528,11 @@ document.addEventListener('DOMContentLoaded', () => {
         loadScheduleCards(resetPage);
     };
     const applyScheduleView = (view) => {
-        activeScheduleView = view === 'card' ? 'card' : 'table';
+        activeScheduleView = ['table', 'card', 'calendar'].includes(view) ? view : 'table';
         localStorage.setItem('attendance_schedule_view', activeScheduleView);
         scheduleTableView?.classList.toggle('d-none', activeScheduleView !== 'table');
         scheduleCardView?.classList.toggle('d-none', activeScheduleView !== 'card');
+        scheduleCalendarView?.classList.toggle('d-none', activeScheduleView !== 'calendar');
         scheduleViewButtons.forEach((button) => {
             button.classList.toggle('active', button.dataset.scheduleView === activeScheduleView);
         });
@@ -2520,6 +2541,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (activeScheduleView === 'card') {
             loadScheduleCards();
+        } else if (activeScheduleView === 'calendar') {
+            initScheduleCalendar();
+            scheduleCalendar?.refetchEvents();
+            setTimeout(() => scheduleCalendar?.updateSize(), 0);
         } else {
             initAttendanceTable('schedules_table')?.columns.adjust();
         }
@@ -2557,7 +2582,6 @@ document.addEventListener('DOMContentLoaded', () => {
         scheduleCardPage++;
         loadScheduleCards();
     });
-    applyScheduleView(activeScheduleView);
 
     const resetFormsInTab = (tabId) => {
         const section = tabId.replace('tab_', '');
@@ -2585,10 +2609,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         if (tabId === 'tab_schedules') {
-            initScheduleCalendar();
-            scheduleCalendar?.refetchEvents();
-            scheduleCalendar?.updateSize();
             loadScheduleCards();
+            if (activeScheduleView === 'calendar') {
+                initScheduleCalendar();
+                scheduleCalendar?.refetchEvents();
+                scheduleCalendar?.updateSize();
+            }
         }
     };
 
@@ -2659,10 +2685,10 @@ document.addEventListener('DOMContentLoaded', () => {
         scheduleCalendar.render();
     };
 
+    applyScheduleView(activeScheduleView);
+
     document.querySelector('a[href="#tab_schedules"]')?.addEventListener('shown.bs.tab', () => {
         applyScheduleView(activeScheduleView);
-        initScheduleCalendar();
-        scheduleCalendar?.updateSize();
     });
     document.querySelectorAll('a[data-bs-toggle="tab"]').forEach((tabLink) => {
         tabLink.addEventListener('shown.bs.tab', (event) => {
@@ -2844,7 +2870,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('modal_positions')?.addEventListener('shown.bs.modal', () => {
         initAttendanceTable('positions_table')?.ajax.reload(null, false);
     });
-    if (document.getElementById('tab_schedules')?.classList.contains('show')) {
+    if (document.getElementById('tab_schedules')?.classList.contains('show') && activeScheduleView === 'calendar') {
         initScheduleCalendar();
     }
     calendarEmployeeFilter?.addEventListener('change', () => scheduleCalendar?.refetchEvents());

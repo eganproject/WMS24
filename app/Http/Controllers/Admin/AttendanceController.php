@@ -1473,7 +1473,7 @@ class AttendanceController extends Controller
         $summaryQuery = clone $query;
         $summary = [
             'total' => (clone $summaryQuery)->count(),
-            'present' => (clone $summaryQuery)->where('status', Attendance::STATUS_PRESENT)->count(),
+            'present' => (clone $summaryQuery)->whereNotNull('check_in_at')->count(),
             'late' => (clone $summaryQuery)->where('status', Attendance::STATUS_LATE)->count(),
             'incomplete' => (clone $summaryQuery)->where('status', Attendance::STATUS_INCOMPLETE)->count(),
             'absent' => (clone $summaryQuery)->where('status', Attendance::STATUS_ABSENT)->count(),

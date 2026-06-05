@@ -39,6 +39,8 @@ class AttendanceRecapDisplayTest extends TestCase
             'attendance_date' => '2026-06-05',
             'status' => Attendance::STATUS_LATE,
             'late_minutes' => 10,
+            'check_in_at' => '2026-06-05 08:10:00',
+            'check_out_at' => '2026-06-05 17:00:00',
             'overtime_status' => Attendance::OVERTIME_PENDING,
             'calculated_overtime_minutes' => 30,
         ]);
@@ -57,13 +59,25 @@ class AttendanceRecapDisplayTest extends TestCase
             'attendance_date' => '2026-06-05',
             'status' => Attendance::STATUS_DAY_OFF,
         ]);
+        $checkedInEmployee = Employee::create([
+            'employee_code' => 'EMP-CHECKIN',
+            'name' => 'Karyawan Sudah Masuk',
+            'employment_status' => 'active',
+        ]);
+        Attendance::create([
+            'employee_id' => $checkedInEmployee->id,
+            'attendance_date' => '2026-06-05',
+            'check_in_at' => '2026-06-05 08:00:00',
+            'status' => Attendance::STATUS_INCOMPLETE,
+        ]);
 
         $this->getJson(route('admin.attendance.attendances.data', ['draw' => 1]))
             ->assertOk()
-            ->assertJsonCount(2, 'data')
-            ->assertJsonPath('summary.total', 2)
+            ->assertJsonCount(3, 'data')
+            ->assertJsonPath('summary.total', 3)
             ->assertJsonPath('summary.late', 1)
-            ->assertJsonPath('summary.present', 0)
+            ->assertJsonPath('summary.present', 2)
+            ->assertJsonPath('summary.incomplete', 1)
             ->assertJsonPath('summary.day_off', 1)
             ->assertJsonPath('summary.overtime_pending', 1);
     }

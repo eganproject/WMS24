@@ -304,6 +304,9 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 1rem;
     }
+    .modal .flatpickr-calendar {
+        z-index: 1070 !important;
+    }
     .schedule-view-switch {
         display: inline-flex;
         padding: .25rem;
@@ -2353,11 +2356,21 @@ document.addEventListener('DOMContentLoaded', () => {
     renderTemplateAssignmentPreview();
 
     if (typeof flatpickr !== 'undefined') {
+        const modalFlatpickrOptions = (input) => {
+            const modalContent = input.closest('.modal-content');
+
+            return modalContent ? {
+                appendTo: modalContent,
+                positionElement: input,
+            } : {};
+        };
+
         document.querySelectorAll('.js-date').forEach((input) => {
             flatpickr(input, {
                 minDate: input.classList.contains('js-schedule-date') ? attendanceToday : null,
                 dateFormat: 'Y-m-d',
                 allowInput: true,
+                ...modalFlatpickrOptions(input),
             });
         });
         document.querySelectorAll('.js-time').forEach((input) => {
@@ -2367,6 +2380,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 dateFormat: 'H:i',
                 time_24hr: true,
                 allowInput: true,
+                ...modalFlatpickrOptions(input),
             });
         });
         document.querySelectorAll('.js-datetime').forEach((input) => {
@@ -2375,6 +2389,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 dateFormat: 'Y-m-d H:i',
                 time_24hr: true,
                 allowInput: true,
+                ...modalFlatpickrOptions(input),
             });
         });
     }

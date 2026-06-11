@@ -411,6 +411,7 @@
     const defaultWarehouseId = {{ isset($defaultWarehouseId) ? (int) $defaultWarehouseId : 'null' }};
     const statusLabels = @json($statusLabels ?? []);
     const lockedStatuses = @json($lockedStatuses ?? ['approved']);
+    const deleteLockedStatuses = @json($deleteLockedStatuses ?? ($lockedStatuses ?? ['approved']));
     const showApproveAction = {{ isset($showApproveAction) ? ($showApproveAction ? 'true' : 'false') : 'true' }};
     const deleteWarningText = @json($deleteWarningText ?? 'Data akan dihapus dan stok akan dikembalikan');
     const showScanProgressColumn = {{ !empty($showScanProgressColumn ?? false) ? 'true' : 'false' }};
@@ -1313,6 +1314,9 @@
                     const isLocked = Array.isArray(lockedStatuses)
                         ? lockedStatuses.includes(row?.status)
                         : row?.status === 'approved';
+                    const isDeleteLocked = Array.isArray(deleteLockedStatuses)
+                        ? deleteLockedStatuses.includes(row?.status)
+                        : row?.status === 'approved';
                     const detailItem = `<div class="menu-item px-3"><a href="${resolveRoute(rowType, 'detail').replace(':id', data)}" class="menu-link px-3">Detail</a></div>`;
                     const deliveryNoteRoute = resolveRoute(rowType, 'delivery_note');
                     const deliveryNotePrintRoute = resolveRoute(rowType, 'delivery_note_print');
@@ -1338,7 +1342,7 @@
                     const editItem = (!isLocked && perms.update)
                         ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-edit" data-id="${data}" data-type="${rowType}">Edit</a></div>`
                         : '';
-                    const delItem = (!isLocked && perms.delete)
+                    const delItem = (!isDeleteLocked && perms.delete)
                         ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 text-danger btn-delete" data-id="${data}" data-type="${rowType}">Hapus</a></div>`
                         : '';
                     const actions = `${detailItem}${deliveryNoteItem}${deliveryNotePrintItem}${qrPdfItem}${approveItem}${editItem}${delItem}`;

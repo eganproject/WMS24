@@ -415,6 +415,7 @@ class OutboundController extends Controller
             'templateNote' => 'Header: sku, qty atau koli, supplier. Opsional: warehouse/gudang, ref_no, surat_jalan_no, surat_jalan_at, note, item_note, transacted_at. Jika warehouse adalah Gudang Besar, koli wajib diisi.',
             'statusLabels' => $type === 'manual' ? OutboundManualQcStatus::labels() : [],
             'lockedStatuses' => $type === 'manual' ? OutboundManualQcStatus::lockedForEdit() : ['approved'],
+            'deleteLockedStatuses' => $type === 'manual' ? OutboundManualQcStatus::lockedForDelete() : ['approved'],
             'deleteWarningText' => $type === 'manual'
                 ? 'Data outbound manual akan dihapus jika belum masuk tahap QC.'
                 : 'Data akan dihapus dan stok akan dikembalikan',
@@ -755,7 +756,7 @@ class OutboundController extends Controller
         DB::beginTransaction();
         try {
             $tx = OutboundTransaction::where('type', $type)->findOrFail($id);
-            if (in_array($tx->status ?? 'pending', $this->lockedStatusesFor($type), true)) {
+            if (in_array($tx->status ?? 'pending', $this->deleteLockedStatusesFor($type), true)) {
                 DB::rollBack();
                 return response()->json(['message' => 'Data sudah masuk tahap QC/selesai dan tidak bisa dihapus'], 422);
             }
@@ -1042,6 +1043,15 @@ class OutboundController extends Controller
     {
         if ($type === 'manual') {
             return OutboundManualQcStatus::lockedForEdit();
+        }
+
+        return ['approved'];
+    }
+
+    private function deleteLockedStatusesFor(string $type): array
+    {
+        if ($type === 'manual') {
+            return OutboundManualQcStatus::lockedForDelete();
         }
 
         return ['approved'];

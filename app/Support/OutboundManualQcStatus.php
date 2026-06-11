@@ -23,7 +23,15 @@ class OutboundManualQcStatus
     {
         return [
             self::PENDING,
-            self::PENDING_QC,
+            self::QC_SCANNING,
+            self::APPROVED,
+        ];
+    }
+
+    public static function lockedForDelete(): array
+    {
+        return [
+            self::PENDING,
             self::QC_SCANNING,
             self::APPROVED,
         ];

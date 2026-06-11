@@ -76,6 +76,22 @@
             <div class="modal-body scroll-y mx-5 mx-xl-15 my-7">
                 <form class="form" id="stock_transfer_form">
                     @csrf
+                    <div class="alert alert-primary p-5 mb-7">
+                        <div class="d-flex align-items-center justify-content-between gap-3 flex-wrap mb-2">
+                            <div class="fw-bold">Input Cepat Item</div>
+                            <button type="button" class="btn btn-sm btn-light" id="btn_toggle_transfer_quick_items">Sembunyikan Form</button>
+                        </div>
+                        <div id="transfer_quick_items_body">
+                            <div class="text-muted fs-7 mb-3" id="transfer_quick_item_hint">
+                                Tulis satu item per baris. Format: SKU qty catatan.
+                            </div>
+                            <textarea class="form-control form-control-solid mb-3" id="transfer_quick_items" rows="4" placeholder="SKU-001 2&#10;SKU-002 5 Catatan item"></textarea>
+                            <div class="d-flex align-items-center gap-3 flex-wrap">
+                                <button type="button" class="btn btn-light-primary" id="btn_add_transfer_quick_items">Tambahkan dari Teks</button>
+                                <div class="text-danger fs-7" id="transfer_quick_items_error"></div>
+                            </div>
+                        </div>
+                    </div>
                     <div class="row g-3 mb-7">
                         <div class="col-md-6">
                             <label class="required fs-6 fw-bold form-label mb-2">Dari Gudang</label>
@@ -185,6 +201,12 @@
         const itemsContainer = document.getElementById('transfer_items_container');
         const addItemBtn = document.getElementById('btn_add_transfer_item');
         const openBtn = document.getElementById('btn_open_transfer');
+        const quickItemsBody = document.getElementById('transfer_quick_items_body');
+        const quickItemsToggle = document.getElementById('btn_toggle_transfer_quick_items');
+        const quickItemsInput = document.getElementById('transfer_quick_items');
+        const quickItemsBtn = document.getElementById('btn_add_transfer_quick_items');
+        const quickItemsError = document.getElementById('transfer_quick_items_error');
+        const quickItemsHint = document.getElementById('transfer_quick_item_hint');
         const modalTitle = document.getElementById('transfer_modal_title');
         const transactedAtEl = document.getElementById('transfer_transacted_at');
         const fromWarehouseEl = document.getElementById('transfer_from');
@@ -270,6 +292,30 @@
 
         const requiresKoliTransfer = () => Number(fromWarehouseEl?.value || 0) === Number(defaultWarehouseId)
             && Number(toWarehouseEl?.value || 0) === Number(displayWarehouseId);
+
+        const normalizeSku = (value) => String(value || '').trim().toLowerCase();
+        const itemBySku = new Map();
+        const itemOptionsContainer = document.createElement('select');
+        itemOptionsContainer.innerHTML = itemOptionsHtml;
+        itemOptionsContainer.querySelectorAll('option[data-sku]').forEach((option) => {
+            itemBySku.set(normalizeSku(option.dataset.sku), {
+                id: option.value,
+                sku: option.dataset.sku,
+                koli_qty: parseInt(option.dataset.koliQty || '0', 10),
+            });
+        });
+
+        const updateQuickItemHint = () => {
+            if (!quickItemsHint) return;
+            quickItemsHint.textContent = requiresKoliTransfer()
+                ? 'Tulis satu item per baris. Format: SKU koli catatan. Qty dihitung otomatis dari isi/koli.'
+                : 'Tulis satu item per baris. Format: SKU qty catatan.';
+        };
+
+        const setQuickItemsVisible = (visible) => {
+            if (quickItemsBody) quickItemsBody.style.display = visible ? '' : 'none';
+            if (quickItemsToggle) quickItemsToggle.textContent = visible ? 'Sembunyikan Form' : 'Tampilkan Form';
+        };
 
         const selectedKoliQty = (row) => {
             const selectEl = row?.querySelector('.transfer-item-select');
@@ -727,6 +773,81 @@
             validateUniqueItems();
         };
 
+        const parseQuickItemLine = (line) => {
+            const normalized = String(line || '').trim();
+            if (!normalized) return null;
+
+            const parts = normalized.includes(',') || normalized.includes(';') || normalized.includes('\t')
+                ? normalized.split(/[,\t;]+/).map((part) => part.trim()).filter(Boolean)
+                : normalized.split(/\s+/);
+            const sku = parts.shift() || '';
+            const amountText = parts.shift() || '';
+            const amount = Number(amountText);
+            const note = parts.join(' ').trim();
+
+            if (!sku || !Number.isInteger(amount) || amount < 1) {
+                throw new Error(`Format tidak valid: ${line}`);
+            }
+
+            const item = itemBySku.get(normalizeSku(sku));
+            if (!item) {
+                throw new Error(`SKU tidak ditemukan: ${sku}`);
+            }
+
+            if (requiresKoliTransfer()) {
+                if (!Number.isFinite(item.koli_qty) || item.koli_qty < 1) {
+                    throw new Error(`Isi/koli belum diset untuk SKU: ${sku}`);
+                }
+
+                return {
+                    item_id: item.id,
+                    qty: amount * item.koli_qty,
+                    koli: amount,
+                    note,
+                };
+            }
+
+            return {
+                item_id: item.id,
+                qty: amount,
+                koli: '',
+                note,
+            };
+        };
+
+        const addQuickItems = () => {
+            if (!quickItemsInput) return;
+            if (quickItemsError) quickItemsError.textContent = '';
+
+            const lines = quickItemsInput.value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+            if (!lines.length) {
+                if (quickItemsError) quickItemsError.textContent = 'Isi daftar SKU terlebih dahulu.';
+                return;
+            }
+
+            let parsed = [];
+            try {
+                parsed = lines.map(parseQuickItemLine).filter(Boolean);
+            } catch (err) {
+                if (quickItemsError) quickItemsError.textContent = err.message || 'Input cepat tidak valid.';
+                return;
+            }
+
+            const duplicateItem = parsed
+                .map((row) => String(row.item_id))
+                .find((itemId, index, ids) => ids.indexOf(itemId) !== index);
+            if (duplicateItem) {
+                if (quickItemsError) quickItemsError.textContent = 'SKU pada input cepat tidak boleh duplikat.';
+                return;
+            }
+
+            itemsContainer.innerHTML = '';
+            parsed.forEach((item) => createItemRow(item));
+            quickItemsInput.value = '';
+            clearErrors();
+            validateUniqueItems();
+        };
+
         const resetForm = () => {
             form?.reset();
             if (modalTitle) modalTitle.textContent = 'Tambah Transfer';
@@ -736,6 +857,10 @@
             } else if (transactedAtEl) {
                 transactedAtEl.value = nowJkt;
             }
+            if (quickItemsInput) quickItemsInput.value = '';
+            if (quickItemsError) quickItemsError.textContent = '';
+            setQuickItemsVisible(true);
+            updateQuickItemHint();
             itemsContainer.innerHTML = '';
             createItemRow();
             clearErrors();
@@ -761,6 +886,10 @@
             if (noteEl && prefill?.note) {
                 noteEl.value = prefill.note;
             }
+            if (quickItemsInput) quickItemsInput.value = '';
+            if (quickItemsError) quickItemsError.textContent = '';
+            setQuickItemsVisible(true);
+            updateQuickItemHint();
             itemsContainer.innerHTML = '';
             createItemRow({
                 item_id: prefill?.item_id || '',
@@ -773,6 +902,31 @@
         };
 
         addItemBtn?.addEventListener('click', () => createItemRow());
+        quickItemsToggle?.addEventListener('click', () => {
+            const isVisible = !quickItemsBody || quickItemsBody.style.display !== 'none';
+            setQuickItemsVisible(!isVisible);
+        });
+        quickItemsBtn?.addEventListener('click', addQuickItems);
+        quickItemsInput?.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault();
+                addQuickItems();
+                return;
+            }
+
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                e.stopPropagation();
+
+                const start = quickItemsInput.selectionStart ?? quickItemsInput.value.length;
+                const end = quickItemsInput.selectionEnd ?? start;
+                const before = quickItemsInput.value.slice(0, start);
+                const after = quickItemsInput.value.slice(end);
+                quickItemsInput.value = `${before}\n${after}`;
+                quickItemsInput.selectionStart = start + 1;
+                quickItemsInput.selectionEnd = start + 1;
+            }
+        });
         openBtn?.addEventListener('click', resetForm);
 
         const params = new URLSearchParams(window.location.search);
@@ -799,8 +953,14 @@
                 syncRowKoliMode(e.target.closest('.transfer-item-row'));
             }
         });
-        fromWarehouseEl?.addEventListener('change', syncAllKoliMode);
-        toWarehouseEl?.addEventListener('change', syncAllKoliMode);
+        fromWarehouseEl?.addEventListener('change', () => {
+            syncAllKoliMode();
+            updateQuickItemHint();
+        });
+        toWarehouseEl?.addEventListener('change', () => {
+            syncAllKoliMode();
+            updateQuickItemHint();
+        });
 
         itemsContainer?.addEventListener('click', (e) => {
             const btn = e.target.closest('.btn-remove-item');

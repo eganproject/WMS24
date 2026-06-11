@@ -1434,7 +1434,7 @@
                                 <div class="col-12 col-md-6 col-lg-4"><label class="form-label fw-bold">Karyawan</label><select name="employee_id" class="form-select form-select-solid" required>@foreach($employees as $employee)<option value="{{ $employee->id }}">{{ $employee->employee_code }} - {{ $employee->name }}</option>@endforeach</select></div>
                                 <div class="col-6 col-md-6 col-lg-2"><label class="form-label fw-bold">Tanggal</label><input type="text" name="attendance_date" class="form-control form-control-solid js-date" placeholder="YYYY-MM-DD" required></div>
                                 <div class="col-6 col-md-6 col-lg-3"><label class="form-label fw-bold">Shift</label><select name="work_shift_id" class="form-select form-select-solid"><option value="">Tanpa shift</option>@foreach($shifts as $shift)<option value="{{ $shift->id }}">{{ $shift->name }}</option>@endforeach</select></div>
-                                <div class="col-6 col-md-6 col-lg-3"><label class="form-label fw-bold">Status Absensi</label><select name="status" class="form-select form-select-solid"><option value="present">Hadir</option><option value="late">Terlambat</option><option value="absent">Alpha</option><option value="incomplete">Belum Lengkap</option><option value="leave">Cuti/Izin</option><option value="holiday">Libur Perusahaan</option><option value="day_off">Libur</option></select></div>
+                                <div class="col-6 col-md-6 col-lg-3"><label class="form-label fw-bold">Status Absensi</label><select name="status" class="form-select form-select-solid"><option value="present">Hadir</option><option value="late">Terlambat</option><option value="absent">Alfa</option><option value="incomplete">Belum Check-out</option><option value="leave">Cuti/Izin</option><option value="holiday">Libur Perusahaan</option><option value="day_off">Libur</option></select></div>
                                 <div class="col-12 col-md-6 col-lg-3"><label class="form-label fw-bold">Waktu Masuk</label><input type="text" name="check_in_at" class="form-control form-control-solid js-datetime" placeholder="YYYY-MM-DD HH:mm"></div>
                                 <div class="col-12 col-md-6 col-lg-3"><label class="form-label fw-bold">Waktu Pulang</label><input type="text" name="check_out_at" class="form-control form-control-solid js-datetime" placeholder="YYYY-MM-DD HH:mm"></div>
                                 <div class="col-4 col-md-3 col-lg-2"><label class="form-label fw-bold">Telat (Menit)</label><input type="number" name="late_minutes" min="0" value="0" class="form-control form-control-solid"></div>
@@ -1472,9 +1472,19 @@
                             <label class="form-label fw-bold">Karyawan</label>
                             <select class="form-select form-select-solid" id="recap_filter_employee">
                                 <option value="">Semua karyawan</option>
-                                @foreach($employees as $employee)
-                                    <option value="{{ $employee->id }}">{{ $employee->employee_code }} - {{ $employee->name }}</option>
+                                @foreach($recapEmployees as $employee)
+                                    <option value="{{ $employee->id }}">
+                                        {{ $employee->employee_code }} - {{ $employee->name }}{{ $employee->employment_status === \App\Models\Employee::STATUS_INACTIVE ? ' (Nonaktif)' : '' }}
+                                    </option>
                                 @endforeach
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-6 col-lg-2">
+                            <label class="form-label fw-bold">Status Karyawan</label>
+                            <select class="form-select form-select-solid" id="recap_filter_employment_status">
+                                <option value="active">Aktif</option>
+                                <option value="inactive">Nonaktif</option>
+                                <option value="all">Semua</option>
                             </select>
                         </div>
                         <div class="col-12 col-md-6 col-lg-2">
@@ -1483,8 +1493,8 @@
                                 <option value="">Semua status</option>
                                 <option value="present">Hadir</option>
                                 <option value="late">Terlambat</option>
-                                <option value="absent">Alpha</option>
-                                <option value="incomplete">Belum Lengkap</option>
+                                <option value="absent">Alfa</option>
+                                <option value="incomplete">Belum Check-out</option>
                                 <option value="leave">Cuti/Izin</option>
                                 <option value="holiday">Libur Perusahaan</option>
                                 <option value="day_off">Libur</option>
@@ -1512,10 +1522,10 @@
                 </div>
                 <div class="recap-summary-grid" id="attendance_recap_summary">
                     <div class="recap-summary-card primary"><div class="label">Total Rekap</div><div class="value" data-summary="total">0</div></div>
-                    <div class="recap-summary-card success"><div class="label">Hadir</div><div class="value" data-summary="present">0</div></div>
+                    <div class="recap-summary-card success"><div class="label">Sudah Check-in</div><div class="value" data-summary="present">0</div></div>
                     <div class="recap-summary-card warning"><div class="label">Terlambat</div><div class="value" data-summary="late">0</div></div>
-                    <div class="recap-summary-card info"><div class="label">Belum Lengkap</div><div class="value" data-summary="incomplete">0</div></div>
-                    <div class="recap-summary-card danger"><div class="label">Alpha</div><div class="value" data-summary="absent">0</div></div>
+                    <div class="recap-summary-card info"><div class="label">Belum Check-out</div><div class="value" data-summary="incomplete">0</div></div>
+                    <div class="recap-summary-card danger"><div class="label">Alfa</div><div class="value" data-summary="absent">0</div></div>
                     <div class="recap-summary-card off"><div class="label">Karyawan Libur</div><div class="value" data-summary="day_off">0</div></div>
                     <div class="recap-summary-card overtime"><div class="label">Lembur Pending</div><div class="value" data-summary="overtime_pending">0</div></div>
                 </div>
@@ -1827,11 +1837,11 @@ function renderAttendanceStatusBadge(value) {
     const labels = {
         present: 'Hadir',
         late: 'Terlambat',
-        absent: 'Absen',
+        absent: 'Alfa',
         leave: 'Cuti/Izin',
         holiday: 'Libur',
         day_off: 'Libur',
-        incomplete: 'Belum Lengkap',
+        incomplete: 'Belum Check-out',
     };
     const classes = {
         present: 'badge-light-success',
@@ -2144,6 +2154,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const recapFilterDateFrom = document.getElementById('recap_filter_date_from');
     const recapFilterDateTo = document.getElementById('recap_filter_date_to');
     const recapFilterEmployee = document.getElementById('recap_filter_employee');
+    const recapFilterEmploymentStatus = document.getElementById('recap_filter_employment_status');
     const recapFilterStatus = document.getElementById('recap_filter_status');
     const recapFilterOvertimeStatus = document.getElementById('recap_filter_overtime_status');
     const scheduleListEmployee = document.getElementById('schedule_list_employee');
@@ -2474,6 +2485,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         params.date_from = recapFilterDateFrom?.value || '';
                         params.date_to = recapFilterDateTo?.value || '';
                         params.employee_id = recapFilterEmployee?.value || '';
+                        params.employment_status = recapFilterEmploymentStatus?.value || 'active';
                         params.status = recapFilterStatus?.value || '';
                         params.overtime_status = recapFilterOvertimeStatus?.value || '';
                     }
@@ -2552,15 +2564,17 @@ document.addEventListener('DOMContentLoaded', () => {
         [recapFilterEmployee, recapFilterStatus, recapFilterOvertimeStatus].forEach((field) => {
             if (field) field.value = '';
         });
+        if (recapFilterEmploymentStatus) recapFilterEmploymentStatus.value = 'active';
         if (typeof $ !== 'undefined') {
             $('#attendance_recap_filters select').val('').trigger('change.select2');
+            $('#recap_filter_employment_status').val('active').trigger('change.select2');
         }
         reloadRecapTable();
     });
     [recapFilterDateFrom, recapFilterDateTo].forEach((field) => {
         field?.addEventListener('change', reloadRecapTable);
     });
-    [recapFilterEmployee, recapFilterStatus, recapFilterOvertimeStatus].forEach((field) => {
+    [recapFilterEmployee, recapFilterEmploymentStatus, recapFilterStatus, recapFilterOvertimeStatus].forEach((field) => {
         field?.addEventListener('change', reloadRecapTable);
     });
 

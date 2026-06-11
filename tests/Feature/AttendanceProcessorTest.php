@@ -111,6 +111,35 @@ class AttendanceProcessorTest extends TestCase
             ->assertJsonPath('employee_id', $employee->id);
     }
 
+    public function test_inactive_employee_fingerprint_scan_does_not_create_attendance(): void
+    {
+        $employee = Employee::create([
+            'employee_code' => 'EMP-INACTIVE-SCAN',
+            'name' => 'Karyawan Nonaktif Scan',
+            'employment_status' => Employee::STATUS_INACTIVE,
+        ]);
+        $device = AttendanceDevice::create([
+            'name' => 'Mesin Nonaktif',
+            'serial_number' => 'SN-INACTIVE',
+            'is_active' => true,
+        ]);
+        EmployeeFingerprint::create([
+            'employee_id' => $employee->id,
+            'attendance_device_id' => $device->id,
+            'device_user_id' => '99001',
+            'is_active' => true,
+        ]);
+
+        $rawLog = app(AttendanceProcessor::class)
+            ->recordFingerprintScan($device, '99001', '2026-04-27 08:00:00');
+
+        $this->assertNull($rawLog->employee_id);
+        $this->assertDatabaseMissing('attendances', [
+            'employee_id' => $employee->id,
+            'attendance_date' => '2026-04-27',
+        ]);
+    }
+
     public function test_adms_attlog_acknowledges_machine_push(): void
     {
         $employee = Employee::create([
@@ -898,7 +927,7 @@ class AttendanceProcessorTest extends TestCase
         $this->assertSame('pending', $pendingAttendance->overtime_status);
     }
 
-    public function test_attendance_update_approves_overtime_as_final_minutes(): void
+    public function test_attendance_overtime_approval_sets_final_minutes(): void
     {
         $user = User::factory()->create();
         $role = Role::create(['name' => 'Admin', 'slug' => 'admin']);
@@ -939,12 +968,15 @@ class AttendanceProcessorTest extends TestCase
             'early_leave_minutes' => 0,
             'work_minutes' => 600,
             'calculated_overtime_minutes' => 60,
-            'approved_overtime_minutes' => 45,
-            'overtime_status' => 'approved',
             'overtime_note' => 'Disetujui sesuai surat lembur',
             'status' => 'present',
             'source' => 'manual',
             'note' => 'Koreksi lembur',
+        ])->assertOk();
+
+        $this->postJson(route('admin.attendance.attendances.overtime.approve', $attendance), [
+            'approved_overtime_minutes' => 45,
+            'overtime_note' => 'Disetujui sesuai surat lembur',
         ])->assertOk();
 
         $this->assertDatabaseHas('attendances', [
@@ -1017,6 +1049,16 @@ class AttendanceProcessorTest extends TestCase
             'status' => 'absent',
             'source' => 'system',
         ]);
+        $inactiveEmployee = Employee::create([
+            'employee_code' => 'EMP014-OFF',
+            'name' => 'Maya Nonaktif',
+            'employment_status' => Employee::STATUS_INACTIVE,
+        ]);
+        Attendance::create([
+            'employee_id' => $inactiveEmployee->id,
+            'attendance_date' => '2026-04-27',
+            'status' => Attendance::STATUS_PRESENT,
+        ]);
 
         $response = $this->getJson(route('admin.reports.attendance.data', [
             'draw' => 1,
@@ -1038,5 +1080,24 @@ class AttendanceProcessorTest extends TestCase
             ->assertJsonPath('data.0.approved_overtime_minutes', 45);
 
         $this->assertCount(3, $response->json('data.0.detail_rows'));
+
+        $this->getJson(route('admin.reports.attendance.data', [
+            'draw' => 1,
+            'date_from' => '2026-04-27',
+            'date_to' => '2026-04-29',
+        ]))
+            ->assertOk()
+            ->assertJsonPath('summary.employees', 1)
+            ->assertJsonPath('data.0.employee_id', $employee->id);
+
+        $this->getJson(route('admin.reports.attendance.data', [
+            'draw' => 1,
+            'date_from' => '2026-04-27',
+            'date_to' => '2026-04-29',
+            'employment_status' => Employee::STATUS_INACTIVE,
+        ]))
+            ->assertOk()
+            ->assertJsonPath('summary.employees', 1)
+            ->assertJsonPath('data.0.employee_id', $inactiveEmployee->id);
     }
 }

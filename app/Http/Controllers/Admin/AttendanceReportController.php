@@ -10,6 +10,7 @@ use App\Models\EmployeePosition;
 use App\Models\EmployeeSchedule;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Validation\Rule;
 
 class AttendanceReportController extends Controller
 {
@@ -19,12 +20,20 @@ class AttendanceReportController extends Controller
             'dataUrl' => route('admin.reports.attendance.data'),
             'areas' => Area::query()->orderBy('code')->get(['id', 'code', 'name']),
             'positions' => EmployeePosition::query()->orderBy('name')->get(['id', 'name']),
-            'employees' => Employee::query()->orderBy('name')->get(['id', 'employee_code', 'name']),
+            'employees' => Employee::query()->orderBy('name')->get(['id', 'employee_code', 'name', 'employment_status']),
         ]);
     }
 
     public function data(Request $request)
     {
+        $request->validate([
+            'employment_status' => ['nullable', Rule::in([
+                Employee::STATUS_ACTIVE,
+                Employee::STATUS_INACTIVE,
+                'all',
+            ])],
+        ]);
+
         [$from, $to] = $this->dateRange($request);
         $employees = $this->employeeQuery($request)
             ->with([
@@ -81,11 +90,12 @@ class AttendanceReportController extends Controller
 
     private function employeeQuery(Request $request)
     {
+        $employmentStatus = $request->input('employment_status', Employee::STATUS_ACTIVE);
         $query = Employee::query()
             ->when($request->input('employee_id'), fn ($q, $id) => $q->where('id', $id))
             ->when($request->input('area_id'), fn ($q, $id) => $q->where('area_id', $id))
             ->when($request->input('position_id'), fn ($q, $id) => $q->where('position_id', $id))
-            ->when($request->input('employment_status'), fn ($q, $status) => $q->where('employment_status', $status))
+            ->when($employmentStatus !== 'all', fn ($q) => $q->where('employment_status', $employmentStatus))
             ->orderBy('name');
 
         $search = trim((string) $request->input('q', ''));

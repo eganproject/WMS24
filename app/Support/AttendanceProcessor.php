@@ -303,6 +303,7 @@ class AttendanceProcessor
         return EmployeeFingerprint::query()
             ->where('device_user_id', $deviceUserId)
             ->where('is_active', true)
+            ->whereHas('employee', fn ($query) => $query->active())
             ->where(function ($query) use ($device) {
                 $query->where('attendance_device_id', $device->id)
                     ->orWhereNull('attendance_device_id');

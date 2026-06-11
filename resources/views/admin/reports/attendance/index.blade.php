@@ -188,7 +188,9 @@
                 <select id="filter_employee" class="form-select form-select-solid">
                     <option value="">Semua karyawan</option>
                     @foreach($employees as $employee)
-                        <option value="{{ $employee->id }}">{{ $employee->employee_code }} - {{ $employee->name }}</option>
+                        <option value="{{ $employee->id }}">
+                            {{ $employee->employee_code }} - {{ $employee->name }}{{ $employee->employment_status === \App\Models\Employee::STATUS_INACTIVE ? ' (Nonaktif)' : '' }}
+                        </option>
                     @endforeach
                 </select>
             </div>
@@ -208,6 +210,14 @@
                     @foreach($positions as $position)
                         <option value="{{ $position->id }}">{{ $position->name }}</option>
                     @endforeach
+                </select>
+            </div>
+            <div>
+                <label class="form-label fw-bold fs-8">Status Karyawan</label>
+                <select id="filter_employment_status" class="form-select form-select-solid">
+                    <option value="active">Aktif</option>
+                    <option value="inactive">Nonaktif</option>
+                    <option value="all">Semua</option>
                 </select>
             </div>
             <div>
@@ -356,6 +366,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const employeeEl = document.getElementById('filter_employee');
     const areaEl = document.getElementById('filter_area');
     const positionEl = document.getElementById('filter_position');
+    const employmentStatusEl = document.getElementById('filter_employment_status');
     const reportStatusEl = document.getElementById('filter_report_status');
     const applyBtn = document.getElementById('filter_apply');
     const resetBtn = document.getElementById('filter_reset');
@@ -369,7 +380,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (typeof $ !== 'undefined' && $.fn.select2) {
-        [employeeEl, areaEl, positionEl, reportStatusEl].forEach((select) => {
+        [employeeEl, areaEl, positionEl, employmentStatusEl, reportStatusEl].forEach((select) => {
             $(select).select2({ width: '100%', allowClear: true, placeholder: select.querySelector('option[value=""]')?.textContent || 'Pilih' });
         });
     }
@@ -456,7 +467,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 params.area_id = areaEl.value || '';
                 params.position_id = positionEl.value || '';
                 params.report_status = reportStatusEl.value || '';
-                params.employment_status = 'active';
+                params.employment_status = employmentStatusEl.value || 'active';
             },
         },
         columns: [
@@ -493,7 +504,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const reload = () => table.ajax.reload();
     applyBtn.addEventListener('click', reload);
-    [employeeEl, areaEl, positionEl, reportStatusEl].forEach((el) => el.addEventListener('change', reload));
+    [employeeEl, areaEl, positionEl, employmentStatusEl, reportStatusEl].forEach((el) => el.addEventListener('change', reload));
     searchEl.addEventListener('keyup', () => reload());
     resetBtn.addEventListener('click', () => {
         searchEl.value = '';
@@ -505,6 +516,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 $(select).trigger('change.select2');
             }
         });
+        employmentStatusEl.value = 'active';
+        if (typeof $ !== 'undefined' && $(employmentStatusEl).data('select2')) {
+            $(employmentStatusEl).trigger('change.select2');
+        }
         reload();
     });
 

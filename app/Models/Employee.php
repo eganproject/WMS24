@@ -28,6 +28,11 @@ class Employee extends Model
         'join_date' => 'date',
     ];
 
+    public function scopeActive($query)
+    {
+        return $query->where('employment_status', self::STATUS_ACTIVE);
+    }
+
     public function user()
     {
         return $this->belongsTo(User::class);

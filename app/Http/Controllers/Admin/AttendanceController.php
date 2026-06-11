@@ -47,7 +47,7 @@ class AttendanceController extends Controller
     public function employeeSchedule()
     {
         return view('admin.attendance.employee-schedule', [
-            'employees' => Employee::query()->orderBy('name')->get(['id', 'employee_code', 'name']),
+            'employees' => Employee::query()->active()->orderBy('name')->get(['id', 'employee_code', 'name']),
         ]);
     }
 
@@ -69,7 +69,10 @@ class AttendanceController extends Controller
             'areas' => Area::query()->orderBy('code')->get(['id', 'code', 'name']),
             'users' => User::query()->orderBy('name')->get(['id', 'name', 'email']),
             'positions' => EmployeePosition::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']),
-            'employees' => Employee::query()->orderBy('name')->get(['id', 'employee_code', 'name']),
+            'employees' => Employee::query()->active()->orderBy('name')->get(['id', 'employee_code', 'name']),
+            'recapEmployees' => Employee::query()
+                ->orderBy('name')
+                ->get(['id', 'employee_code', 'name', 'employment_status']),
             'devices' => AttendanceDevice::query()->orderBy('name')->get(['id', 'name']),
             'shifts' => WorkShift::query()->orderBy('name')->get(['id', 'name', 'start_time', 'end_time']),
             'templates' => $templates,
@@ -129,6 +132,10 @@ class AttendanceController extends Controller
         $logs = AttendanceRawLog::query()
             ->with(['employee:id,employee_code,name,position,position_id', 'employee.positionRelation:id,name', 'device:id,name,location'])
             ->whereDate('scan_at', $date)
+            ->where(function ($query) {
+                $query->whereNull('employee_id')
+                    ->orWhereHas('employee', fn ($employeeQuery) => $employeeQuery->active());
+            })
             ->latest('scan_at')
             ->latest('id')
             ->limit(12)
@@ -138,13 +145,19 @@ class AttendanceController extends Controller
             ? AttendanceRawLog::query()
                 ->with(['employee:id,employee_code,name,position,position_id', 'employee.positionRelation:id,name', 'device:id,name,location'])
                 ->whereDate('scan_at', $date)
+                ->where(function ($query) {
+                    $query->whereNull('employee_id')
+                        ->orWhereHas('employee', fn ($employeeQuery) => $employeeQuery->active());
+                })
                 ->where('id', '>', $latestId)
                 ->orderBy('scan_at')
                 ->orderBy('id')
                 ->get()
             : collect();
 
-        $attendanceBase = Attendance::query()->whereDate('attendance_date', $date);
+        $attendanceBase = Attendance::query()
+            ->whereDate('attendance_date', $date)
+            ->whereHas('employee', fn ($query) => $query->active());
 
         return response()->json([
             'server_time' => now()->format('Y-m-d H:i:s'),
@@ -193,7 +206,7 @@ class AttendanceController extends Controller
         return view('admin.attendance.absences', [
             'sectionLinks' => $this->sectionLinks(),
             'employees' => Employee::query()
-                ->where('employment_status', Employee::STATUS_ACTIVE)
+                ->active()
                 ->orderBy('name')
                 ->get(['id', 'employee_code', 'name']),
             'today' => now()->toDateString(),
@@ -743,6 +756,7 @@ class AttendanceController extends Controller
     {
         $query = EmployeeSchedule::query()
             ->with(['employee:id,employee_code,name', 'shift:id,name,start_time,end_time,crosses_midnight'])
+            ->whereHas('employee', fn ($employeeQuery) => $employeeQuery->active())
             ->when($request->input('employee_id'), fn ($q, $id) => $q->where('employee_id', $id))
             ->when($request->input('date_from'), fn ($q, $date) => $q->whereDate('schedule_date', '>=', $date))
             ->when($request->input('date_to'), fn ($q, $date) => $q->whereDate('schedule_date', '<=', $date))
@@ -786,6 +800,7 @@ class AttendanceController extends Controller
 
         EmployeeSchedule::query()
             ->with(['employee:id,employee_code,name', 'shift:id,name'])
+            ->whereHas('employee', fn ($query) => $query->active())
             ->when($employeeId, fn ($query) => $query->where('employee_id', $employeeId))
             ->whereDate('schedule_date', '>=', $start)
             ->whereDate('schedule_date', '<=', $end)
@@ -1132,7 +1147,7 @@ class AttendanceController extends Controller
     public function assignTemplate(Request $request)
     {
         $validated = $request->validate([
-            'employee_id' => ['required', 'integer', 'exists:employees,id'],
+            'employee_id' => ['required', 'integer', $this->activeEmployeeExistsRule()],
             'weekly_schedule_template_id' => ['required', 'integer', 'exists:weekly_schedule_templates,id'],
             'effective_from' => ['required', 'date', 'after_or_equal:today'],
             'effective_until' => ['nullable', 'date', 'after_or_equal:effective_from'],
@@ -1459,15 +1474,41 @@ class AttendanceController extends Controller
 
     public function attendancesData(Request $request)
     {
+        $request->validate([
+            'date_from' => ['nullable', 'date_format:Y-m-d'],
+            'date_to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:date_from'],
+            'employee_id' => ['nullable', 'integer', 'exists:employees,id'],
+            'status' => ['nullable', Rule::in($this->attendanceStatusValues())],
+            'overtime_status' => ['nullable', Rule::in($this->overtimeStatusValues())],
+            'employment_status' => ['nullable', Rule::in([
+                Employee::STATUS_ACTIVE,
+                Employee::STATUS_INACTIVE,
+                'all',
+            ])],
+            'q' => ['nullable', 'string', 'max:150'],
+        ]);
+
         $dateFrom = $request->input('date_from') ?: today()->toDateString();
         $dateTo = $request->input('date_to') ?: $dateFrom;
+        $employmentStatus = $request->input('employment_status', Employee::STATUS_ACTIVE);
         $query = Attendance::query()
-            ->with(['employee:id,employee_code,name', 'shift:id,name', 'approver:id,name'])
+            ->with(['employee:id,employee_code,name,employment_status', 'shift:id,name', 'approver:id,name'])
             ->whereDate('attendance_date', '>=', $dateFrom)
             ->whereDate('attendance_date', '<=', $dateTo)
+            ->when($employmentStatus !== 'all', fn ($q) => $q->whereHas(
+                'employee',
+                fn ($employeeQuery) => $employeeQuery->where('employment_status', $employmentStatus)
+            ))
             ->when($request->input('employee_id'), fn ($q, $employeeId) => $q->where('employee_id', $employeeId))
             ->when($request->input('status'), fn ($q, $status) => $q->where('status', $status))
             ->when($request->input('overtime_status'), fn ($q, $status) => $q->where('overtime_status', $status))
+            ->when(trim((string) $request->input('q', '')) !== '', function ($q) use ($request) {
+                $search = trim((string) $request->input('q'));
+                $q->whereHas('employee', fn ($employeeQuery) => $employeeQuery
+                    ->where('name', 'like', "%{$search}%")
+                    ->orWhere('employee_code', 'like', "%{$search}%")
+                    ->orWhere('phone', 'like', "%{$search}%"));
+            })
             ->latest('attendance_date');
 
         $summaryQuery = clone $query;
@@ -1489,6 +1530,7 @@ class AttendanceController extends Controller
             'employee_id' => $attendance->employee_id,
             'work_shift_id' => $attendance->work_shift_id,
             'employee' => $attendance->employee ? "{$attendance->employee->employee_code} - {$attendance->employee->name}" : '-',
+            'employment_status' => $attendance->employee?->employment_status,
             'attendance_date' => $attendance->attendance_date?->format('Y-m-d'),
             'shift' => $attendance->shift?->name ?? '-',
             'check_in_at' => $attendance->check_in_at?->format('Y-m-d H:i:s'),
@@ -1758,56 +1800,60 @@ class AttendanceController extends Controller
 
     private function dailyAttendanceMonitorRows(Request $request)
     {
+        $request->validate([
+            'date' => ['nullable', 'date_format:Y-m-d'],
+            'employee_id' => ['nullable', 'integer', 'exists:employees,id'],
+            'status' => ['nullable', Rule::in($this->dailyAttendanceStatusValues())],
+            'q' => ['nullable', 'string', 'max:150'],
+        ]);
+
         $date = $this->monitorDate($request);
         $search = trim((string) $request->input('q', ''));
         $status = trim((string) $request->input('status', ''));
 
         $schedules = EmployeeSchedule::query()
-            ->with(['employee.area:id,code,name', 'employee.positionRelation:id,name', 'shift:id,name,start_time,end_time,late_tolerance_minutes'])
+            ->with('shift:id,name,start_time,end_time,late_tolerance_minutes')
             ->whereDate('schedule_date', $date)
             ->when($request->input('employee_id'), fn ($query, $employeeId) => $query->where('employee_id', $employeeId))
-            ->when($search !== '', function ($query) use ($search) {
-                $query->whereHas('employee', fn ($employeeQuery) => $employeeQuery
-                    ->where('name', 'like', "%{$search}%")
-                    ->orWhere('employee_code', 'like', "%{$search}%")
-                    ->orWhere('phone', 'like', "%{$search}%"));
-            })
             ->orderBy('employee_id')
-            ->get();
+            ->get()
+            ->keyBy('employee_id');
 
-        $employeeIds = $schedules->pluck('employee_id');
-        $attendanceQuery = Attendance::query()
-            ->with(['employee.area:id,code,name', 'employee.positionRelation:id,name', 'shift:id,name,start_time,end_time,late_tolerance_minutes'])
+        $attendances = Attendance::query()
+            ->with('shift:id,name,start_time,end_time,late_tolerance_minutes')
             ->whereDate('attendance_date', $date)
             ->when($request->input('employee_id'), fn ($query, $employeeId) => $query->where('employee_id', $employeeId))
+            ->get()
+            ->keyBy('employee_id');
+
+        $employees = Employee::query()
+            ->with(['area:id,code,name', 'positionRelation:id,name'])
+            ->active()
+            ->where(function ($joinDateQuery) use ($date) {
+                $joinDateQuery
+                    ->whereNull('join_date')
+                    ->orWhereDate('join_date', '<=', $date);
+            })
+            ->when($request->input('employee_id'), fn ($query, $employeeId) => $query->whereKey($employeeId))
             ->when($search !== '', function ($query) use ($search) {
-                $query->whereHas('employee', fn ($employeeQuery) => $employeeQuery
+                $query->where(function ($employeeQuery) use ($search) {
+                    $employeeQuery
                     ->where('name', 'like', "%{$search}%")
                     ->orWhere('employee_code', 'like', "%{$search}%")
-                    ->orWhere('phone', 'like', "%{$search}%"));
-            });
+                    ->orWhere('phone', 'like', "%{$search}%");
+                });
+            })
+            ->orderBy('name')
+            ->get();
 
-        $attendances = $attendanceQuery->get()->keyBy('employee_id');
-        $rows = $schedules->map(fn (EmployeeSchedule $schedule) => $this->dailyAttendanceMonitorRow(
-            $date,
-            $schedule->employee,
-            $schedule,
-            $attendances->get($schedule->employee_id)
-        ));
-
-        $attendanceOnlyRows = $attendances
-            ->reject(fn (Attendance $attendance) => $employeeIds->contains($attendance->employee_id))
-            ->map(fn (Attendance $attendance) => $this->dailyAttendanceMonitorRow(
+        return $employees
+            ->map(fn (Employee $employee) => $this->dailyAttendanceMonitorRow(
                 $date,
-                $attendance->employee,
-                null,
-                $attendance
-            ));
-
-        return $rows
-            ->concat($attendanceOnlyRows)
+                $employee,
+                $schedules->get($employee->id),
+                $attendances->get($employee->id)
+            ))
             ->when($status !== '', fn ($collection) => $collection->where('status_key', $status))
-            ->sortBy([['attendance_date', 'asc'], ['employee_name', 'asc']])
             ->values();
     }
 
@@ -1888,6 +1934,38 @@ class AttendanceController extends Controller
             EmployeeSchedule::TYPE_DAY_OFF => 'Libur',
             'not_checked_in' => 'Belum Check-in',
             'unscheduled' => 'Tidak Ada Jadwal',
+        ];
+    }
+
+    private function attendanceStatusValues(): array
+    {
+        return [
+            Attendance::STATUS_PRESENT,
+            Attendance::STATUS_LATE,
+            Attendance::STATUS_ABSENT,
+            Attendance::STATUS_LEAVE,
+            Attendance::STATUS_HOLIDAY,
+            Attendance::STATUS_DAY_OFF,
+            Attendance::STATUS_INCOMPLETE,
+        ];
+    }
+
+    private function overtimeStatusValues(): array
+    {
+        return [
+            Attendance::OVERTIME_NONE,
+            Attendance::OVERTIME_PENDING,
+            Attendance::OVERTIME_APPROVED,
+            Attendance::OVERTIME_REJECTED,
+        ];
+    }
+
+    private function dailyAttendanceStatusValues(): array
+    {
+        return [
+            ...$this->attendanceStatusValues(),
+            'not_checked_in',
+            'unscheduled',
         ];
     }
 
@@ -1993,7 +2071,7 @@ class AttendanceController extends Controller
     private function validateFingerprint(Request $request, ?EmployeeFingerprint $fingerprint = null): array
     {
         $validated = $request->validate([
-            'employee_id' => ['required', 'integer', 'exists:employees,id'],
+            'employee_id' => ['required', 'integer', $this->activeEmployeeExistsRule()],
             'attendance_device_id' => ['nullable', 'integer', 'exists:attendance_devices,id'],
             'device_user_id' => [
                 'required',
@@ -2036,7 +2114,7 @@ class AttendanceController extends Controller
     private function validateSchedule(Request $request): array
     {
         return $request->validate([
-            'employee_id' => ['required', 'integer', 'exists:employees,id'],
+            'employee_id' => ['required', 'integer', $this->activeEmployeeExistsRule()],
             'work_shift_id' => [Rule::requiredIf($request->input('schedule_type') === EmployeeSchedule::TYPE_WORK), 'nullable', 'integer', 'exists:work_shifts,id'],
             'schedule_date' => ['required', 'date', 'after_or_equal:today'],
             'schedule_type' => ['required', Rule::in([
@@ -2061,7 +2139,7 @@ class AttendanceController extends Controller
     private function validateLeave(Request $request, bool $allowStatus = true): array
     {
         $rules = [
-            'employee_id' => ['required', 'integer', 'exists:employees,id'],
+            'employee_id' => ['required', 'integer', $this->activeEmployeeExistsRule()],
             'leave_type' => ['required', 'string', 'max:30'],
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
@@ -2104,6 +2182,12 @@ class AttendanceController extends Controller
         unset($validated['proof_image'], $validated['remove_proof_image']);
 
         return $validated;
+    }
+
+    private function activeEmployeeExistsRule()
+    {
+        return Rule::exists('employees', 'id')
+            ->where('employment_status', Employee::STATUS_ACTIVE);
     }
 
     private function leaveProofImageUrl(EmployeeLeave $leave): ?string

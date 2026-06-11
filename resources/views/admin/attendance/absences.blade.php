@@ -213,6 +213,10 @@
                     <div class="label">Belum Check-out</div>
                     <div class="value" id="summary_incomplete">0</div>
                 </div>
+                <div class="abs-stat">
+                    <div class="label">Libur/Cuti</div>
+                    <div class="value" id="summary_off">0</div>
+                </div>
             </div>
             <div class="d-flex flex-wrap gap-2">
                 <button type="button" class="btn btn-light" id="btn_reset_absences">
@@ -256,7 +260,7 @@
                 </tr>
             </thead>
             <tbody id="absence_rows">
-                <tr><td colspan="11"><div class="abs-empty">Memuat data...</div></td></tr>
+                <tr><td colspan="12"><div class="abs-empty">Memuat data...</div></td></tr>
             </tbody>
         </table>
     </div>
@@ -285,6 +289,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const summaryNotCheckedInEl = document.getElementById('summary_not_checked_in');
     const summaryAbsentEl = document.getElementById('summary_absent_count');
     const summaryIncompleteEl = document.getElementById('summary_incomplete');
+    const summaryOffEl = document.getElementById('summary_off');
     const dateEl = document.getElementById('filter_date');
     const employeeEl = document.getElementById('filter_employee');
     const statusEl = document.getElementById('filter_status');
@@ -321,7 +326,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const renderRows = (rows) => {
         if (!rows.length) {
-            rowsEl.innerHTML = '<tr><td colspan="11"><div class="abs-empty"><i class="fas fa-check-circle fs-2 d-block mb-2 text-success"></i>Tidak ada data pada filter ini.</div></td></tr>';
+            rowsEl.innerHTML = '<tr><td colspan="12"><div class="abs-empty"><i class="fas fa-check-circle fs-2 d-block mb-2 text-success"></i>Tidak ada data pada filter ini.</div></td></tr>';
             return;
         }
 
@@ -357,7 +362,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const loadAbsences = async (page = 1) => {
         currentPage = page;
-        rowsEl.innerHTML = '<tr><td colspan="11"><div class="abs-empty"><span class="spinner-border spinner-border-sm me-2"></span>Memuat data...</div></td></tr>';
+        rowsEl.innerHTML = '<tr><td colspan="12"><div class="abs-empty"><span class="spinner-border spinner-border-sm me-2"></span>Memuat data...</div></td></tr>';
         updateExportLink();
 
         try {
@@ -374,13 +379,14 @@ document.addEventListener('DOMContentLoaded', () => {
             summaryNotCheckedInEl.textContent = json.summary?.not_checked_in_count ?? 0;
             summaryAbsentEl.textContent = json.summary?.absent_count ?? 0;
             summaryIncompleteEl.textContent = json.summary?.incomplete_count ?? 0;
+            summaryOffEl.textContent = json.summary?.off_count ?? 0;
             rangeLabelEl.textContent = `Tanggal ${json.summary?.date || dateEl.value}`;
             infoEl.textContent = `${json.total || 0} data ditemukan`;
             pageInfoEl.textContent = `Halaman ${json.current_page || 1} dari ${json.last_page || 1}`;
             prevEl.disabled = currentPage <= 1;
             nextEl.disabled = currentPage >= lastPage;
         } catch (error) {
-            rowsEl.innerHTML = '<tr><td colspan="11"><div class="abs-empty text-danger">Gagal memuat data monitoring.</div></td></tr>';
+            rowsEl.innerHTML = '<tr><td colspan="12"><div class="abs-empty text-danger">Gagal memuat data monitoring.</div></td></tr>';
             infoEl.textContent = 'Gagal memuat data';
         }
     };

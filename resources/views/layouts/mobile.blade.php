@@ -289,10 +289,10 @@
             const getScanAudioContext = async () => {
                 const Context = window.AudioContext || window.webkitAudioContext;
                 if (!Context) return null;
-                if (!scanAudioContext) {
+                if (!scanAudioContext || scanAudioContext.state === 'closed') {
                     scanAudioContext = new Context();
                 }
-                if (scanAudioContext.state === 'suspended') {
+                if (scanAudioContext.state !== 'running') {
                     await scanAudioContext.resume().catch(() => {});
                 }
                 return scanAudioContext;
@@ -324,8 +324,10 @@
                     totalDuration = Math.max(totalDuration, (step.offset || 0) + duration);
                 });
 
-                gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + totalDuration + 0.05);
-                window.setTimeout(() => gain.disconnect(), (totalDuration + 0.12) * 1000);
+                const fadeStart = context.currentTime + totalDuration;
+                gain.gain.setValueAtTime(peakVolume, fadeStart);
+                gain.gain.exponentialRampToValueAtTime(0.0001, fadeStart + 0.04);
+                window.setTimeout(() => gain.disconnect(), (totalDuration + 0.1) * 1000);
             };
 
             window.AppScanSound = {

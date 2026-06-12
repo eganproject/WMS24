@@ -1142,12 +1142,12 @@
             return window.AppScanSound.unlock();
         }
         if (!window.AudioContext && !window.webkitAudioContext) return null;
-        if (!audioContext) {
+        if (!audioContext || audioContext.state === 'closed') {
             const Context = window.AudioContext || window.webkitAudioContext;
             audioContext = new Context();
         }
-        if (audioContext.state === 'suspended') {
-            await audioContext.resume();
+        if (audioContext.state !== 'running') {
+            await audioContext.resume().catch(() => {});
         }
         return audioContext;
     };
@@ -1182,7 +1182,8 @@
 
             if (type === 'success') {
                 gain.gain.linearRampToValueAtTime(1, context.currentTime + 0.01);
-                gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.18);
+                gain.gain.setValueAtTime(1, context.currentTime + 0.16);
+                gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.2);
                 tone(880, context.currentTime, 0.08);
                 tone(1180, context.currentTime + 0.08, 0.08);
                 return;
@@ -1190,7 +1191,8 @@
 
             if (type === 'complete') {
                 gain.gain.linearRampToValueAtTime(1, context.currentTime + 0.01);
-                gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.28);
+                gain.gain.setValueAtTime(1, context.currentTime + 0.26);
+                gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.3);
                 tone(880, context.currentTime, 0.08);
                 tone(1174, context.currentTime + 0.08, 0.08);
                 tone(1568, context.currentTime + 0.16, 0.10);
@@ -1198,7 +1200,8 @@
             }
 
             gain.gain.linearRampToValueAtTime(1, context.currentTime + 0.01);
-            gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.22);
+            gain.gain.setValueAtTime(1, context.currentTime + 0.2);
+            gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.24);
             tone(320, context.currentTime, 0.10);
             tone(220, context.currentTime + 0.10, 0.10);
         } catch (error) {

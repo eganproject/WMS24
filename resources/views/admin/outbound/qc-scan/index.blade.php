@@ -1154,12 +1154,12 @@
         if (!window.AudioContext && !window.webkitAudioContext) {
             return null;
         }
-        if (!audioContext) {
+        if (!audioContext || audioContext.state === 'closed') {
             const Context = window.AudioContext || window.webkitAudioContext;
             audioContext = new Context();
         }
-        if (audioContext.state === 'suspended') {
-            await audioContext.resume();
+        if (audioContext.state !== 'running') {
+            await audioContext.resume().catch(() => {});
         }
         return audioContext;
     };
@@ -1194,7 +1194,8 @@
 
             if (tone === 'success') {
                 gain.gain.linearRampToValueAtTime(1, context.currentTime + 0.01);
-                gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.18);
+                gain.gain.setValueAtTime(1, context.currentTime + 0.16);
+                gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.2);
                 makeOsc(880, context.currentTime, 0.08);
                 makeOsc(1180, context.currentTime + 0.08, 0.08);
                 return;
@@ -1202,7 +1203,8 @@
 
             if (tone === 'complete') {
                 gain.gain.linearRampToValueAtTime(1, context.currentTime + 0.01);
-                gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.28);
+                gain.gain.setValueAtTime(1, context.currentTime + 0.26);
+                gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.3);
                 makeOsc(880, context.currentTime, 0.08);
                 makeOsc(1174, context.currentTime + 0.08, 0.08);
                 makeOsc(1568, context.currentTime + 0.16, 0.10);
@@ -1210,6 +1212,7 @@
             }
 
             gain.gain.linearRampToValueAtTime(1, context.currentTime + 0.01);
+            gain.gain.setValueAtTime(1, context.currentTime + 0.2);
             gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.24);
             makeOsc(320, context.currentTime, 0.10);
             makeOsc(220, context.currentTime + 0.10, 0.10);

@@ -1181,7 +1181,7 @@
             };
 
             if (type === 'success') {
-                gain.gain.linearRampToValueAtTime(0.07, context.currentTime + 0.01);
+                gain.gain.linearRampToValueAtTime(1, context.currentTime + 0.01);
                 gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.18);
                 tone(880, context.currentTime, 0.08);
                 tone(1180, context.currentTime + 0.08, 0.08);
@@ -1189,7 +1189,7 @@
             }
 
             if (type === 'complete') {
-                gain.gain.linearRampToValueAtTime(0.08, context.currentTime + 0.01);
+                gain.gain.linearRampToValueAtTime(1, context.currentTime + 0.01);
                 gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.28);
                 tone(880, context.currentTime, 0.08);
                 tone(1174, context.currentTime + 0.08, 0.08);
@@ -1197,7 +1197,7 @@
                 return;
             }
 
-            gain.gain.linearRampToValueAtTime(0.07, context.currentTime + 0.01);
+            gain.gain.linearRampToValueAtTime(1, context.currentTime + 0.01);
             gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.22);
             tone(320, context.currentTime, 0.10);
             tone(220, context.currentTime + 0.10, 0.10);

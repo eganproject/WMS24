@@ -1193,7 +1193,7 @@
             };
 
             if (tone === 'success') {
-                gain.gain.linearRampToValueAtTime(0.07, context.currentTime + 0.01);
+                gain.gain.linearRampToValueAtTime(1, context.currentTime + 0.01);
                 gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.18);
                 makeOsc(880, context.currentTime, 0.08);
                 makeOsc(1180, context.currentTime + 0.08, 0.08);
@@ -1201,7 +1201,7 @@
             }
 
             if (tone === 'complete') {
-                gain.gain.linearRampToValueAtTime(0.08, context.currentTime + 0.01);
+                gain.gain.linearRampToValueAtTime(1, context.currentTime + 0.01);
                 gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.28);
                 makeOsc(880, context.currentTime, 0.08);
                 makeOsc(1174, context.currentTime + 0.08, 0.08);
@@ -1209,7 +1209,7 @@
                 return;
             }
 
-            gain.gain.linearRampToValueAtTime(0.07, context.currentTime + 0.01);
+            gain.gain.linearRampToValueAtTime(1, context.currentTime + 0.01);
             gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.24);
             makeOsc(320, context.currentTime, 0.10);
             makeOsc(220, context.currentTime + 0.10, 0.10);

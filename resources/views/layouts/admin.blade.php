@@ -764,7 +764,7 @@
                     return scanAudioContext;
                 };
 
-                const playTone = async (steps, peakVolume = 0.18) => {
+                const playTone = async (steps, peakVolume = 1) => {
                     const now = Date.now();
                     if (now - lastPlayedAt < 90) return;
                     lastPlayedAt = now;
@@ -799,16 +799,16 @@
                     success: () => playTone([
                         { frequency: 1046, duration: 0.09 },
                         { frequency: 1568, offset: 0.09, duration: 0.11 },
-                    ], 0.18),
+                    ], 1),
                     complete: () => playTone([
                         { frequency: 988, duration: 0.1 },
                         { frequency: 1319, offset: 0.1, duration: 0.1 },
                         { frequency: 1760, offset: 0.2, duration: 0.14 },
-                    ], 0.2),
+                    ], 1),
                     error: () => playTone([
                         { frequency: 260, duration: 0.14, type: 'square' },
                         { frequency: 190, offset: 0.14, duration: 0.16, type: 'square' },
-                    ], 0.17),
+                    ], 1),
                 };
             }
 

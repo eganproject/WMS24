@@ -33,7 +33,7 @@
         left: 50%;
         z-index: 0;
         transform: translate(-50%, -50%) rotate(-28deg);
-        color: rgba(17, 24, 39, 0.06);
+        color: rgba(17, 24, 39, 0.12);
         font-size: 128px;
         font-weight: 900;
         letter-spacing: 10px;
@@ -70,6 +70,19 @@
     .dn-title {
         text-align: right;
         min-width: 260px;
+    }
+    .dn-copy-badge {
+        display: inline-block;
+        margin-bottom: 8px;
+        border: 2px solid #111827;
+        padding: 5px 12px 4px;
+        color: #111827;
+        background: #fff;
+        font-size: 14px;
+        font-weight: 900;
+        letter-spacing: 2px;
+        line-height: 1;
+        text-transform: uppercase;
     }
     .dn-title h1 {
         margin: 0 0 8px;
@@ -203,8 +216,14 @@
         }
         .delivery-note-paper:last-child { page-break-after: auto; }
         .delivery-note-paper::before {
-            color: rgba(17, 24, 39, 0.08);
+            color: rgba(17, 24, 39, 0.16);
             font-size: 118px;
+        }
+        .delivery-note-paper,
+        .delivery-note-paper::before,
+        .dn-copy-badge {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
         }
         .dn-topbar { margin-top: 0; }
     }
@@ -250,6 +269,7 @@
                         </div>
                     </div>
                     <div class="dn-title">
+                        <div class="dn-copy-badge">{{ $copyLabel }}</div>
                         <h1>SURAT JALAN</h1>
                         <div class="dn-number">{{ $transaction->surat_jalan_no }}</div>
                     </div>

@@ -754,6 +754,7 @@ class AttendanceController extends Controller
 
     public function schedulesData(Request $request)
     {
+        $holidayCache = [];
         $query = EmployeeSchedule::query()
             ->with(['employee:id,employee_code,name', 'shift:id,name,start_time,end_time,crosses_midnight'])
             ->whereHas('employee', fn ($employeeQuery) => $employeeQuery->active())
@@ -774,21 +775,35 @@ class AttendanceController extends Controller
             });
         }
 
-        return $this->datatable($query, $request, fn (EmployeeSchedule $schedule) => [
-            'id' => $schedule->id,
-            'employee_id' => $schedule->employee_id,
-            'work_shift_id' => $schedule->work_shift_id,
-            'employee_schedule_assignment_id' => $schedule->employee_schedule_assignment_id,
-            'employee' => $schedule->employee ? "{$schedule->employee->employee_code} - {$schedule->employee->name}" : '-',
-            'schedule_date' => $schedule->schedule_date?->format('Y-m-d'),
-            'schedule_type' => $schedule->schedule_type,
-            'shift' => $schedule->shift?->name ?? '-',
-            'shift_start_time' => $this->timeValue($schedule->shift?->start_time),
-            'shift_end_time' => $this->timeValue($schedule->shift?->end_time),
-            'crosses_midnight' => $schedule->shift?->crosses_midnight ?? false,
-            'note' => $schedule->note,
-            'is_editable' => $schedule->schedule_date?->greaterThanOrEqualTo(today()) ?? false,
-        ]);
+        return $this->datatable($query, $request, function (EmployeeSchedule $schedule) use (&$holidayCache) {
+            $dateKey = $schedule->schedule_date?->toDateString();
+            $holiday = $dateKey
+                ? ($holidayCache[$dateKey] ??= Holiday::query()->whereDate('holiday_date', $dateKey)->first())
+                : null;
+            $effectiveType = $holiday ? EmployeeSchedule::TYPE_HOLIDAY : $schedule->schedule_type;
+            $effectiveShift = $effectiveType === EmployeeSchedule::TYPE_WORK ? $schedule->shift : null;
+
+            return [
+                'id' => $schedule->id,
+                'employee_id' => $schedule->employee_id,
+                'work_shift_id' => $schedule->work_shift_id,
+                'employee_schedule_assignment_id' => $schedule->employee_schedule_assignment_id,
+                'employee' => $schedule->employee ? "{$schedule->employee->employee_code} - {$schedule->employee->name}" : '-',
+                'schedule_date' => $schedule->schedule_date?->format('Y-m-d'),
+                'schedule_type' => $schedule->schedule_type,
+                'effective_schedule_type' => $effectiveType,
+                'effective_schedule_type_label' => $this->scheduleTypeLabel($effectiveType, $holiday),
+                'is_effective_override' => $effectiveType !== $schedule->schedule_type,
+                'shift' => $schedule->shift?->name ?? '-',
+                'effective_shift' => $effectiveShift?->name ?? '-',
+                'shift_start_time' => $this->timeValue($effectiveShift?->start_time),
+                'shift_end_time' => $this->timeValue($effectiveShift?->end_time),
+                'crosses_midnight' => $effectiveShift?->crosses_midnight ?? false,
+                'note' => $schedule->note,
+                'effective_note' => $holiday?->name ?: $schedule->note,
+                'is_editable' => $schedule->schedule_date?->greaterThanOrEqualTo(today()) ?? false,
+            ];
+        });
     }
 
     public function calendarEvents(Request $request)
@@ -833,6 +848,22 @@ class AttendanceController extends Controller
                 ]);
             });
 
+        Holiday::query()
+            ->whereDate('holiday_date', '>=', $start)
+            ->whereDate('holiday_date', '<=', $end)
+            ->get()
+            ->each(function (Holiday $holiday) use (&$eventsByDate) {
+                $date = $holiday->holiday_date?->toDateString();
+                $label = $this->scheduleTypeLabel(EmployeeSchedule::TYPE_HOLIDAY, $holiday);
+
+                $this->addCalendarSummary($eventsByDate, $date, 'global_holiday', [
+                    'label' => $label,
+                    'color' => '#f1416c',
+                    'textColor' => '#ffffff',
+                    'detail' => $holiday->name,
+                ]);
+            });
+
         $events = collect($eventsByDate)
             ->flatMap(fn (array $groups, string $date) => collect($groups)->map(fn (array $group) => [
                 'title' => $group['count'].' '.$group['label'],
@@ -851,6 +882,21 @@ class AttendanceController extends Controller
             ->values();
 
         return response()->json($events->values());
+    }
+
+    private function scheduleTypeLabel(string $scheduleType, ?Holiday $holiday = null): string
+    {
+        if ($scheduleType === EmployeeSchedule::TYPE_HOLIDAY && $holiday) {
+            return $holiday->type === 'national' ? 'Libur Nasional' : 'Libur Perusahaan';
+        }
+
+        return match ($scheduleType) {
+            EmployeeSchedule::TYPE_WORK => 'Masuk',
+            EmployeeSchedule::TYPE_DAY_OFF => 'Libur',
+            EmployeeSchedule::TYPE_HOLIDAY => 'Libur Perusahaan',
+            EmployeeSchedule::TYPE_LEAVE => 'Cuti/Izin',
+            default => $scheduleType,
+        };
     }
 
     private function addCalendarSummary(array &$eventsByDate, ?string $date, string $key, array $payload): void

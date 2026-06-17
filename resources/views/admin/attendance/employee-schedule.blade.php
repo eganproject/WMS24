@@ -367,9 +367,9 @@ function refreshTable() {
 
 function renderResults(rows) {
     document.getElementById('stat_total').textContent = rows.length;
-    document.getElementById('stat_work').textContent  = rows.filter(r => r.schedule_type === 'work').length;
-    document.getElementById('stat_off').textContent   = rows.filter(r => ['day_off','holiday'].includes(r.schedule_type)).length;
-    document.getElementById('stat_leave').textContent = rows.filter(r => r.schedule_type === 'leave').length;
+    document.getElementById('stat_work').textContent  = rows.filter(r => (r.effective_schedule_type || r.schedule_type) === 'work').length;
+    document.getElementById('stat_off').textContent   = rows.filter(r => ['day_off','holiday'].includes(r.effective_schedule_type || r.schedule_type)).length;
+    document.getElementById('stat_leave').textContent = rows.filter(r => (r.effective_schedule_type || r.schedule_type) === 'leave').length;
 
     if (activeDateFrom) {
         const d = new Date(activeDateFrom + 'T00:00:00');
@@ -387,15 +387,18 @@ function renderResults(rows) {
     tbody.innerHTML = rows.map(row => {
         const dayIdx  = new Date(row.schedule_date + 'T00:00:00').getDay();
         const dayName = DAY_NAMES[dayIdx];
-        const label   = TYPE_LABEL[row.schedule_type] || row.schedule_type;
-        const badge   = TYPE_BADGE[row.schedule_type] || 'badge-light';
+        const type    = row.effective_schedule_type || row.schedule_type;
+        const label   = row.effective_schedule_type_label || TYPE_LABEL[type] || type;
+        const badge   = TYPE_BADGE[type] || 'badge-light';
         const isWeekend = dayIdx === 0 || dayIdx === 6;
+        const note = row.effective_note ?? row.note ?? '-';
+        const overrideNote = row.is_effective_override ? '<div class="text-danger fs-8">Override libur global</div>' : '';
         return `<tr class="${isWeekend ? 'text-muted' : ''}">
             <td class="fw-bold">${escHtml(row.schedule_date)}</td>
             <td>${escHtml(dayName)}</td>
-            <td><span class="badge ${badge}">${escHtml(label)}</span></td>
-            <td>${escHtml(row.shift ?? '-')}</td>
-            <td class="text-muted">${escHtml(row.note ?? '-')}</td>
+            <td><span class="badge ${badge}">${escHtml(label)}</span>${overrideNote}</td>
+            <td>${escHtml(row.effective_shift ?? row.shift ?? '-')}</td>
+            <td class="text-muted">${escHtml(note)}</td>
         </tr>`;
     }).join('');
 }

@@ -6,6 +6,7 @@ use App\Models\Attendance;
 use App\Models\Employee;
 use App\Models\EmployeeSchedule;
 use App\Models\EmployeeScheduleAssignment;
+use App\Models\Holiday;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\WeeklyScheduleTemplate;
@@ -244,6 +245,74 @@ class AttendanceScheduleChangeRulesTest extends TestCase
         ]))->assertOk();
 
         $this->assertSame(['1 Jadwal Masuk'], collect($response->json())->pluck('title')->all());
+    }
+
+    public function test_employee_schedule_page_data_exposes_effective_holiday_overlay(): void
+    {
+        Carbon::setTestNow('2026-06-05 10:00:00');
+        $this->loginAsAdmin();
+
+        $employee = $this->employee();
+        $shift = $this->shift('Pagi', '08:00', '17:00');
+
+        EmployeeSchedule::create([
+            'employee_id' => $employee->id,
+            'work_shift_id' => $shift->id,
+            'schedule_date' => '2026-06-17',
+            'schedule_type' => EmployeeSchedule::TYPE_WORK,
+        ]);
+        Holiday::create([
+            'holiday_date' => '2026-06-17',
+            'name' => 'Libur Nasional',
+            'type' => 'national',
+            'is_paid' => true,
+        ]);
+
+        $this->getJson(route('admin.attendance.schedules.data', [
+            'draw' => 1,
+            'length' => 9,
+            'employee_id' => $employee->id,
+            'date_from' => '2026-06-01',
+            'date_to' => '2026-06-30',
+        ]))
+            ->assertOk()
+            ->assertJsonPath('data.0.schedule_type', EmployeeSchedule::TYPE_WORK)
+            ->assertJsonPath('data.0.effective_schedule_type', EmployeeSchedule::TYPE_HOLIDAY)
+            ->assertJsonPath('data.0.effective_schedule_type_label', 'Libur Nasional')
+            ->assertJsonPath('data.0.is_effective_override', true)
+            ->assertJsonPath('data.0.effective_shift', '-')
+            ->assertJsonPath('data.0.effective_note', 'Libur Nasional');
+    }
+
+    public function test_schedule_calendar_includes_global_holiday_overlay(): void
+    {
+        Carbon::setTestNow('2026-06-05 10:00:00');
+        $this->loginAsAdmin();
+
+        $employee = $this->employee();
+        $shift = $this->shift('Pagi', '08:00', '17:00');
+
+        EmployeeSchedule::create([
+            'employee_id' => $employee->id,
+            'work_shift_id' => $shift->id,
+            'schedule_date' => '2026-06-17',
+            'schedule_type' => EmployeeSchedule::TYPE_WORK,
+        ]);
+        Holiday::create([
+            'holiday_date' => '2026-06-17',
+            'name' => 'Libur Nasional',
+            'type' => 'national',
+            'is_paid' => true,
+        ]);
+
+        $titles = collect($this->getJson(route('admin.attendance.schedules.calendar-events', [
+            'start' => '2026-06-01',
+            'end' => '2026-07-01',
+            'employee_id' => $employee->id,
+        ]))->assertOk()->json())->pluck('title')->all();
+
+        $this->assertContains('1 Jadwal Masuk', $titles);
+        $this->assertContains('1 Libur Nasional', $titles);
     }
 
     private function employee(): Employee

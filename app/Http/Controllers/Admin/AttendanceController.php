@@ -1846,6 +1846,18 @@ class AttendanceController extends Controller
             ->get()
             ->keyBy('employee_id');
 
+        $holiday = Holiday::query()
+            ->whereDate('holiday_date', $date)
+            ->first();
+
+        $leaves = EmployeeLeave::query()
+            ->where('status', EmployeeLeave::STATUS_APPROVED)
+            ->whereDate('start_date', '<=', $date)
+            ->whereDate('end_date', '>=', $date)
+            ->when($request->input('employee_id'), fn ($query, $employeeId) => $query->where('employee_id', $employeeId))
+            ->get()
+            ->keyBy('employee_id');
+
         $employees = Employee::query()
             ->with(['area:id,code,name', 'positionRelation:id,name'])
             ->active()
@@ -1871,16 +1883,28 @@ class AttendanceController extends Controller
                 $date,
                 $employee,
                 $schedules->get($employee->id),
-                $attendances->get($employee->id)
+                $attendances->get($employee->id),
+                $leaves->get($employee->id),
+                $holiday
             ))
             ->when($status !== '', fn ($collection) => $collection->where('status_key', $status))
             ->values();
     }
 
-    private function dailyAttendanceMonitorRow(string $date, ?Employee $employee, ?EmployeeSchedule $schedule, ?Attendance $attendance): array
+    private function dailyAttendanceMonitorRow(
+        string $date,
+        ?Employee $employee,
+        ?EmployeeSchedule $schedule,
+        ?Attendance $attendance,
+        ?EmployeeLeave $leave,
+        ?Holiday $holiday
+    ): array
     {
-        $shift = $schedule?->shift ?? $attendance?->shift;
-        $statusKey = $this->dailyAttendanceStatusKey($date, $schedule, $attendance);
+        $scheduleType = $this->dailyMonitorScheduleType($schedule, $attendance, $leave, $holiday);
+        $shift = $scheduleType === EmployeeSchedule::TYPE_WORK
+            ? ($schedule?->shift ?? $attendance?->shift)
+            : null;
+        $statusKey = $this->dailyAttendanceStatusKey($date, $schedule, $attendance, $leave, $holiday);
         $statusLabels = $this->dailyAttendanceStatusLabels();
         $scheduleLabels = [
             EmployeeSchedule::TYPE_WORK => 'Masuk',
@@ -1898,8 +1922,8 @@ class AttendanceController extends Controller
             'position' => $employee?->positionRelation?->name ?? $employee?->position ?? '-',
             'area' => $employee?->area ? "{$employee->area->code} - {$employee->area->name}" : '-',
             'attendance_date' => $date,
-            'schedule_type' => $schedule?->schedule_type ?? 'unscheduled',
-            'schedule_type_label' => $scheduleLabels[$schedule?->schedule_type ?? 'unscheduled'] ?? ($schedule?->schedule_type ?? '-'),
+            'schedule_type' => $scheduleType,
+            'schedule_type_label' => $this->dailyMonitorScheduleLabel($scheduleType, $holiday, $scheduleLabels),
             'shift' => $shift?->name ?? '-',
             'shift_time' => $shift ? substr((string) $shift->start_time, 0, 5).' - '.substr((string) $shift->end_time, 0, 5) : '-',
             'check_in_at' => $attendance?->check_in_at?->format('H:i') ?? '-',
@@ -1908,14 +1932,60 @@ class AttendanceController extends Controller
             'status_label' => $statusLabels[$statusKey] ?? $statusKey,
             'late_minutes' => (int) ($attendance?->late_minutes ?? 0),
             'early_leave_minutes' => (int) ($attendance?->early_leave_minutes ?? 0),
-            'note' => $attendance?->note ?: $schedule?->note ?: '-',
+            'note' => $attendance?->note
+                ?: ($leave ? 'Cuti/Izin: '.$leave->leave_type : null)
+                ?: $holiday?->name
+                ?: $schedule?->note
+                ?: '-',
         ];
     }
 
-    private function dailyAttendanceStatusKey(string $date, ?EmployeeSchedule $schedule, ?Attendance $attendance): string
+    private function dailyMonitorScheduleType(
+        ?EmployeeSchedule $schedule,
+        ?Attendance $attendance,
+        ?EmployeeLeave $leave,
+        ?Holiday $holiday
+    ): string
+    {
+        return match ($attendance?->status) {
+            Attendance::STATUS_LEAVE => EmployeeSchedule::TYPE_LEAVE,
+            Attendance::STATUS_HOLIDAY => EmployeeSchedule::TYPE_HOLIDAY,
+            Attendance::STATUS_DAY_OFF => EmployeeSchedule::TYPE_DAY_OFF,
+            default => match (true) {
+                (bool) $leave => EmployeeSchedule::TYPE_LEAVE,
+                (bool) $holiday => EmployeeSchedule::TYPE_HOLIDAY,
+                default => $schedule?->schedule_type ?? 'unscheduled',
+            },
+        };
+    }
+
+    private function dailyMonitorScheduleLabel(string $scheduleType, ?Holiday $holiday, array $scheduleLabels): string
+    {
+        if ($scheduleType === EmployeeSchedule::TYPE_HOLIDAY && $holiday) {
+            return $holiday->type === 'national' ? 'Libur Nasional' : 'Libur Perusahaan';
+        }
+
+        return $scheduleLabels[$scheduleType] ?? $scheduleType;
+    }
+
+    private function dailyAttendanceStatusKey(
+        string $date,
+        ?EmployeeSchedule $schedule,
+        ?Attendance $attendance,
+        ?EmployeeLeave $leave,
+        ?Holiday $holiday
+    ): string
     {
         if ($attendance?->status) {
             return $attendance->status;
+        }
+
+        if ($leave) {
+            return Attendance::STATUS_LEAVE;
+        }
+
+        if ($holiday) {
+            return Attendance::STATUS_HOLIDAY;
         }
 
         if (!$schedule) {

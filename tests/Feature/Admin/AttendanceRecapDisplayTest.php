@@ -4,6 +4,7 @@ namespace Tests\Feature\Admin;
 
 use App\Models\Attendance;
 use App\Models\Employee;
+use App\Models\EmployeeLeave;
 use App\Models\EmployeeSchedule;
 use App\Models\Holiday;
 use App\Models\Role;
@@ -185,6 +186,90 @@ class AttendanceRecapDisplayTest extends TestCase
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.status_key', Attendance::STATUS_ABSENT)
             ->assertJsonPath('summary.absent_count', 1);
+    }
+
+    public function test_daily_monitor_uses_effective_holiday_without_existing_recap(): void
+    {
+        Carbon::setTestNow('2026-06-05 10:00:00');
+        $this->actingAsAdmin();
+
+        $employee = Employee::create([
+            'employee_code' => 'EMP-MON-HOLIDAY',
+            'name' => 'Karyawan Monitor Libur',
+            'employment_status' => Employee::STATUS_ACTIVE,
+        ]);
+        $shift = WorkShift::create([
+            'name' => 'Shift Monitor Holiday',
+            'start_time' => '08:00:00',
+            'end_time' => '17:00:00',
+        ]);
+        EmployeeSchedule::create([
+            'employee_id' => $employee->id,
+            'work_shift_id' => $shift->id,
+            'schedule_date' => '2026-06-17',
+            'schedule_type' => EmployeeSchedule::TYPE_WORK,
+        ]);
+        Holiday::create([
+            'holiday_date' => '2026-06-17',
+            'name' => 'Libur Nasional',
+            'type' => 'national',
+            'is_paid' => true,
+        ]);
+
+        $this->getJson(route('admin.attendance.absences.data', [
+            'date' => '2026-06-17',
+            'employee_id' => $employee->id,
+        ]))
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.status_key', Attendance::STATUS_HOLIDAY)
+            ->assertJsonPath('data.0.schedule_type', EmployeeSchedule::TYPE_HOLIDAY)
+            ->assertJsonPath('data.0.schedule_type_label', 'Libur Nasional')
+            ->assertJsonPath('data.0.shift', '-')
+            ->assertJsonPath('data.0.note', 'Libur Nasional')
+            ->assertJsonPath('summary.off_count', 1);
+    }
+
+    public function test_daily_monitor_uses_effective_approved_leave_without_existing_recap(): void
+    {
+        Carbon::setTestNow('2026-06-05 10:00:00');
+        $this->actingAsAdmin();
+
+        $employee = Employee::create([
+            'employee_code' => 'EMP-MON-LEAVE',
+            'name' => 'Karyawan Monitor Cuti',
+            'employment_status' => Employee::STATUS_ACTIVE,
+        ]);
+        $shift = WorkShift::create([
+            'name' => 'Shift Monitor Leave',
+            'start_time' => '08:00:00',
+            'end_time' => '17:00:00',
+        ]);
+        EmployeeSchedule::create([
+            'employee_id' => $employee->id,
+            'work_shift_id' => $shift->id,
+            'schedule_date' => '2026-06-06',
+            'schedule_type' => EmployeeSchedule::TYPE_WORK,
+        ]);
+        EmployeeLeave::create([
+            'employee_id' => $employee->id,
+            'leave_type' => 'izin',
+            'start_date' => '2026-06-06',
+            'end_date' => '2026-06-06',
+            'status' => EmployeeLeave::STATUS_APPROVED,
+        ]);
+
+        $this->getJson(route('admin.attendance.absences.data', [
+            'date' => '2026-06-06',
+            'employee_id' => $employee->id,
+        ]))
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.status_key', Attendance::STATUS_LEAVE)
+            ->assertJsonPath('data.0.schedule_type', EmployeeSchedule::TYPE_LEAVE)
+            ->assertJsonPath('data.0.shift', '-')
+            ->assertJsonPath('data.0.note', 'Cuti/Izin: izin')
+            ->assertJsonPath('summary.off_count', 1);
     }
 
     public function test_storing_holiday_rebuilds_active_employee_recap_as_holiday(): void

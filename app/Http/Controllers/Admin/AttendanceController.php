@@ -614,6 +614,23 @@ class AttendanceController extends Controller
             ->with(['employee:id,employee_code,name', 'device:id,name'])
             ->latest('id');
 
+        $search = trim((string) $request->input('q', ''));
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->where('device_user_id', 'like', "%{$search}%")
+                    ->orWhere('fingerprint_uid', 'like', "%{$search}%")
+                    ->orWhereHas('employee', fn ($employeeQuery) => $employeeQuery
+                        ->where('employee_code', 'like', "%{$search}%")
+                        ->orWhere('name', 'like', "%{$search}%"))
+                    ->orWhereHas('device', fn ($deviceQuery) => $deviceQuery
+                        ->where('name', 'like', "%{$search}%"));
+
+                if (str_contains(strtolower($search), 'semua')) {
+                    $q->orWhereNull('attendance_device_id');
+                }
+            });
+        }
+
         return $this->datatable($query, $request, fn (EmployeeFingerprint $fingerprint) => [
             'id' => $fingerprint->id,
             'employee_id' => $fingerprint->employee_id,

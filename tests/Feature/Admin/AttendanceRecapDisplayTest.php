@@ -123,6 +123,118 @@ class AttendanceRecapDisplayTest extends TestCase
             ->assertJsonPath('summary.present', 1);
     }
 
+    public function test_recap_filters_by_date_employee_status_overtime_and_employment_status(): void
+    {
+        Carbon::setTestNow('2026-06-05 10:00:00');
+        $this->actingAsAdmin();
+
+        $active = Employee::create([
+            'employee_code' => 'EMP-FILTER-ACTIVE',
+            'name' => 'Karyawan Filter Aktif',
+            'employment_status' => Employee::STATUS_ACTIVE,
+        ]);
+        $other = Employee::create([
+            'employee_code' => 'EMP-FILTER-OTHER',
+            'name' => 'Karyawan Filter Lain',
+            'employment_status' => Employee::STATUS_ACTIVE,
+        ]);
+        $inactive = Employee::create([
+            'employee_code' => 'EMP-FILTER-INACTIVE',
+            'name' => 'Karyawan Filter Nonaktif',
+            'employment_status' => Employee::STATUS_INACTIVE,
+        ]);
+
+        Attendance::create([
+            'employee_id' => $active->id,
+            'attendance_date' => '2026-06-04',
+            'status' => Attendance::STATUS_PRESENT,
+            'check_in_at' => '2026-06-04 08:00:00',
+            'overtime_status' => Attendance::OVERTIME_APPROVED,
+        ]);
+        Attendance::create([
+            'employee_id' => $active->id,
+            'attendance_date' => '2026-06-05',
+            'status' => Attendance::STATUS_LATE,
+            'check_in_at' => '2026-06-05 08:20:00',
+            'overtime_status' => Attendance::OVERTIME_PENDING,
+        ]);
+        Attendance::create([
+            'employee_id' => $other->id,
+            'attendance_date' => '2026-06-05',
+            'status' => Attendance::STATUS_ABSENT,
+            'overtime_status' => Attendance::OVERTIME_NONE,
+        ]);
+        Attendance::create([
+            'employee_id' => $inactive->id,
+            'attendance_date' => '2026-06-05',
+            'status' => Attendance::STATUS_LATE,
+            'check_in_at' => '2026-06-05 08:10:00',
+            'overtime_status' => Attendance::OVERTIME_PENDING,
+        ]);
+
+        $this->getJson(route('admin.attendance.attendances.data', [
+            'draw' => 1,
+            'date_from' => '2026-06-05',
+            'date_to' => '2026-06-05',
+            'employee_id' => $active->id,
+            'status' => Attendance::STATUS_LATE,
+            'overtime_status' => Attendance::OVERTIME_PENDING,
+            'employment_status' => Employee::STATUS_ACTIVE,
+        ]))
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.employee_id', $active->id)
+            ->assertJsonPath('data.0.status', Attendance::STATUS_LATE)
+            ->assertJsonPath('data.0.overtime_status', Attendance::OVERTIME_PENDING)
+            ->assertJsonPath('summary.total', 1)
+            ->assertJsonPath('summary.late', 1)
+            ->assertJsonPath('summary.overtime_pending', 1);
+
+        $this->getJson(route('admin.attendance.attendances.data', [
+            'draw' => 1,
+            'date_from' => '2026-06-05',
+            'date_to' => '2026-06-05',
+            'employment_status' => Employee::STATUS_INACTIVE,
+        ]))
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.employee_id', $inactive->id)
+            ->assertJsonPath('summary.total', 1);
+    }
+
+    public function test_recap_off_summary_counts_day_off_holiday_and_leave(): void
+    {
+        Carbon::setTestNow('2026-06-05 10:00:00');
+        $this->actingAsAdmin();
+
+        foreach ([
+            ['EMP-OFF-DAY', Attendance::STATUS_DAY_OFF],
+            ['EMP-OFF-HOLIDAY', Attendance::STATUS_HOLIDAY],
+            ['EMP-OFF-LEAVE', Attendance::STATUS_LEAVE],
+        ] as [$code, $status]) {
+            $employee = Employee::create([
+                'employee_code' => $code,
+                'name' => $code,
+                'employment_status' => Employee::STATUS_ACTIVE,
+            ]);
+            Attendance::create([
+                'employee_id' => $employee->id,
+                'attendance_date' => '2026-06-05',
+                'status' => $status,
+            ]);
+        }
+
+        $this->getJson(route('admin.attendance.attendances.data', [
+            'draw' => 1,
+            'date_from' => '2026-06-05',
+            'date_to' => '2026-06-05',
+        ]))
+            ->assertOk()
+            ->assertJsonCount(3, 'data')
+            ->assertJsonPath('summary.total', 3)
+            ->assertJsonPath('summary.day_off', 3);
+    }
+
     public function test_daily_monitor_includes_active_employee_without_schedule_or_recap(): void
     {
         Carbon::setTestNow('2026-06-05 10:00:00');

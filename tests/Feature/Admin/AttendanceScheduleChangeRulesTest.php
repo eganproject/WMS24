@@ -4,6 +4,7 @@ namespace Tests\Feature\Admin;
 
 use App\Models\Attendance;
 use App\Models\Employee;
+use App\Models\EmployeeLeave;
 use App\Models\EmployeeSchedule;
 use App\Models\EmployeeScheduleAssignment;
 use App\Models\Holiday;
@@ -313,6 +314,41 @@ class AttendanceScheduleChangeRulesTest extends TestCase
 
         $this->assertNotContains('1 Jadwal Masuk', $titles);
         $this->assertContains('1 Libur Nasional', $titles);
+    }
+
+    public function test_schedule_calendar_includes_approved_leave_and_hides_work_schedule_on_leave_date(): void
+    {
+        Carbon::setTestNow('2026-06-05 10:00:00');
+        $this->loginAsAdmin();
+
+        $employee = $this->employee();
+        $shift = $this->shift('Pagi', '08:00', '17:00');
+
+        EmployeeSchedule::create([
+            'employee_id' => $employee->id,
+            'work_shift_id' => $shift->id,
+            'schedule_date' => '2026-06-10',
+            'schedule_type' => EmployeeSchedule::TYPE_WORK,
+        ]);
+        EmployeeLeave::create([
+            'employee_id' => $employee->id,
+            'leave_type' => 'izin',
+            'start_date' => '2026-06-10',
+            'end_date' => '2026-06-10',
+            'reason' => 'Urus keluarga',
+            'status' => EmployeeLeave::STATUS_APPROVED,
+        ]);
+
+        $events = collect($this->getJson(route('admin.attendance.schedules.calendar-events', [
+            'start' => '2026-06-01',
+            'end' => '2026-07-01',
+            'employee_id' => $employee->id,
+        ]))->assertOk()->json());
+        $titles = $events->pluck('title')->all();
+
+        $this->assertNotContains('1 Jadwal Masuk', $titles);
+        $this->assertContains('1 Cuti/Izin', $titles);
+        $this->assertStringContainsString('EMP-RULE - Karyawan Jadwal', $events->firstWhere('title', '1 Cuti/Izin')['extendedProps']['details'][0]);
     }
 
     private function employee(): Employee

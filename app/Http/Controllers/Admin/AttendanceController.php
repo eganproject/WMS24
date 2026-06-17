@@ -837,6 +837,25 @@ class AttendanceController extends Controller
             ->map(fn (Holiday $holiday) => $holiday->holiday_date?->toDateString())
             ->filter()
             ->flip();
+        $leaveDatesByEmployee = [];
+        $approvedLeaves = EmployeeLeave::query()
+            ->with('employee:id,employee_code,name')
+            ->where('status', EmployeeLeave::STATUS_APPROVED)
+            ->when($employeeId, fn ($query) => $query->where('employee_id', $employeeId))
+            ->whereDate('start_date', '<=', $end)
+            ->whereDate('end_date', '>=', $start)
+            ->get();
+
+        $approvedLeaves->each(function (EmployeeLeave $leave) use (&$leaveDatesByEmployee, $start, $end) {
+            $current = $leave->start_date->copy()->max(Carbon::parse($start));
+            $until = $leave->end_date->copy()->min(Carbon::parse($end));
+
+            while ($current->lte($until)) {
+                $dateKey = $current->toDateString();
+                $leaveDatesByEmployee[$leave->employee_id][$dateKey] = true;
+                $current->addDay();
+            }
+        });
 
         EmployeeSchedule::query()
             ->with(['employee:id,employee_code,name', 'shift:id,name'])
@@ -845,9 +864,12 @@ class AttendanceController extends Controller
             ->whereDate('schedule_date', '>=', $start)
             ->whereDate('schedule_date', '<=', $end)
             ->get()
-            ->each(function (EmployeeSchedule $schedule) use (&$eventsByDate, $holidayDates) {
+            ->each(function (EmployeeSchedule $schedule) use (&$eventsByDate, $holidayDates, $leaveDatesByEmployee) {
                 $date = $schedule->schedule_date?->toDateString();
-                if ($schedule->schedule_type === EmployeeSchedule::TYPE_WORK && $holidayDates->has($date)) {
+                if (
+                    $schedule->schedule_type === EmployeeSchedule::TYPE_WORK
+                    && ($holidayDates->has($date) || !empty($leaveDatesByEmployee[$schedule->employee_id][$date]))
+                ) {
                     return;
                 }
 
@@ -887,6 +909,28 @@ class AttendanceController extends Controller
                 'textColor' => '#ffffff',
                 'detail' => $holiday->name,
             ]);
+        });
+
+        $approvedLeaves->each(function (EmployeeLeave $leave) use (&$eventsByDate, $start, $end) {
+            $current = $leave->start_date->copy()->max(Carbon::parse($start));
+            $until = $leave->end_date->copy()->min(Carbon::parse($end));
+
+            while ($current->lte($until)) {
+                $date = $current->toDateString();
+
+                $this->addCalendarSummary($eventsByDate, $date, 'approved_leave', [
+                    'label' => 'Cuti/Izin',
+                    'color' => '#ffc700',
+                    'textColor' => '#181c32',
+                    'detail' => trim(implode(' ', array_filter([
+                        $leave->employee ? "{$leave->employee->employee_code} - {$leave->employee->name}" : null,
+                        $leave->leave_type ? "({$leave->leave_type})" : null,
+                        $leave->reason ? "- {$leave->reason}" : null,
+                    ]))),
+                ]);
+
+                $current->addDay();
+            }
         });
 
         $events = collect($eventsByDate)

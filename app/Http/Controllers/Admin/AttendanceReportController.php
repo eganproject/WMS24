@@ -40,6 +40,7 @@ class AttendanceReportController extends Controller
                 'area:id,code,name',
                 'positionRelation:id,name',
                 'schedules' => fn ($query) => $query
+                    ->with('shift:id,name')
                     ->whereDate('schedule_date', '>=', $from)
                     ->whereDate('schedule_date', '<=', $to),
                 'attendances' => fn ($query) => $query
@@ -118,7 +119,7 @@ class AttendanceReportController extends Controller
         $schedulesByDate = $employee->schedules->keyBy(fn (EmployeeSchedule $schedule) => $schedule->schedule_date?->toDateString());
         $attendancesByDate = $employee->attendances->keyBy(fn (Attendance $attendance) => $attendance->attendance_date?->toDateString());
 
-        $scheduledWorkDays = $schedulesByDate->where('schedule_type', EmployeeSchedule::TYPE_WORK)->count();
+        $scheduledWorkDays = 0;
         $presentDays = 0;
         $lateDays = 0;
         $absentDays = 0;
@@ -138,6 +139,11 @@ class AttendanceReportController extends Controller
             $schedule = $schedulesByDate->get($dateKey);
             $attendance = $attendancesByDate->get($dateKey);
             $status = $attendance?->status;
+            $effectiveScheduleType = $this->effectiveScheduleType($schedule, $attendance);
+
+            if ($this->isReportWorkDay($effectiveScheduleType, $status)) {
+                $scheduledWorkDays++;
+            }
 
             if ($status === Attendance::STATUS_PRESENT) {
                 $presentDays++;
@@ -165,8 +171,8 @@ class AttendanceReportController extends Controller
             if ($schedule || $attendance) {
                 $detailRows[] = [
                     'date' => $dateKey,
-                    'schedule_type' => $schedule?->schedule_type ?? '-',
-                    'shift' => $attendance?->shift?->name ?? '-',
+                    'schedule_type' => $effectiveScheduleType,
+                    'shift' => $attendance?->shift?->name ?? $schedule?->shift?->name ?? '-',
                     'check_in_at' => $attendance?->check_in_at?->format('H:i') ?? '-',
                     'check_out_at' => $attendance?->check_out_at?->format('H:i') ?? '-',
                     'status' => $status ?? '-',
@@ -212,6 +218,30 @@ class AttendanceReportController extends Controller
             'pending_overtime_minutes' => $pendingOvertimeMinutes,
             'detail_rows' => $detailRows,
         ];
+    }
+
+    private function effectiveScheduleType(?EmployeeSchedule $schedule, ?Attendance $attendance): string
+    {
+        return match ($attendance?->status) {
+            Attendance::STATUS_LEAVE => EmployeeSchedule::TYPE_LEAVE,
+            Attendance::STATUS_HOLIDAY => EmployeeSchedule::TYPE_HOLIDAY,
+            Attendance::STATUS_DAY_OFF => EmployeeSchedule::TYPE_DAY_OFF,
+            default => $schedule?->schedule_type ?? '-',
+        };
+    }
+
+    private function isReportWorkDay(string $scheduleType, ?string $status): bool
+    {
+        if (in_array($status, [
+            Attendance::STATUS_PRESENT,
+            Attendance::STATUS_LATE,
+            Attendance::STATUS_ABSENT,
+            Attendance::STATUS_INCOMPLETE,
+        ], true)) {
+            return true;
+        }
+
+        return $scheduleType === EmployeeSchedule::TYPE_WORK;
     }
 
     private function passesReportStatus(array $row, string $status): bool

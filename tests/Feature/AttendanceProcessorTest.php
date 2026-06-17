@@ -1135,4 +1135,67 @@ class AttendanceProcessorTest extends TestCase
             ->assertJsonPath('summary.employees', 1)
             ->assertJsonPath('data.0.employee_id', $inactiveEmployee->id);
     }
+
+    public function test_attendance_report_excludes_holiday_from_workday_denominator(): void
+    {
+        $user = User::factory()->create();
+        $role = Role::create(['name' => 'Admin', 'slug' => 'admin']);
+        $user->roles()->attach($role);
+        $this->actingAs($user);
+
+        $employee = Employee::create([
+            'employee_code' => 'EMP015',
+            'name' => 'Nina',
+            'employment_status' => Employee::STATUS_ACTIVE,
+        ]);
+        $shift = WorkShift::create([
+            'name' => 'Pagi Report Holiday',
+            'start_time' => '08:00',
+            'end_time' => '17:00',
+            'is_active' => true,
+        ]);
+
+        foreach (['2026-06-16', '2026-06-17'] as $date) {
+            EmployeeSchedule::create([
+                'employee_id' => $employee->id,
+                'work_shift_id' => $shift->id,
+                'schedule_date' => $date,
+                'schedule_type' => EmployeeSchedule::TYPE_WORK,
+            ]);
+        }
+
+        Attendance::create([
+            'employee_id' => $employee->id,
+            'attendance_date' => '2026-06-16',
+            'work_shift_id' => $shift->id,
+            'check_in_at' => '2026-06-16 08:00:00',
+            'check_out_at' => '2026-06-16 17:00:00',
+            'status' => Attendance::STATUS_PRESENT,
+            'source' => 'fingerprint',
+        ]);
+        Holiday::create([
+            'holiday_date' => '2026-06-17',
+            'name' => 'Libur Nasional',
+            'type' => 'national',
+            'is_paid' => true,
+        ]);
+        app(AttendanceProcessor::class)->rebuildDailyAttendance($employee, '2026-06-17');
+
+        $response = $this->getJson(route('admin.reports.attendance.data', [
+            'draw' => 1,
+            'date_from' => '2026-06-16',
+            'date_to' => '2026-06-17',
+            'employee_id' => $employee->id,
+        ]));
+
+        $response->assertOk()
+            ->assertJsonPath('summary.scheduled_work_days', 1)
+            ->assertJsonPath('summary.present_days', 1)
+            ->assertJsonPath('summary.attendance_rate', 100)
+            ->assertJsonPath('data.0.scheduled_work_days', 1)
+            ->assertJsonPath('data.0.holiday_days', 1)
+            ->assertJsonPath('data.0.attendance_rate', 100)
+            ->assertJsonPath('data.0.detail_rows.1.schedule_type', EmployeeSchedule::TYPE_HOLIDAY)
+            ->assertJsonPath('data.0.detail_rows.1.status', Attendance::STATUS_HOLIDAY);
+    }
 }

@@ -812,6 +812,14 @@ class AttendanceController extends Controller
         $end = Carbon::parse($request->input('end', now()->endOfMonth()->toDateString()))->toDateString();
         $employeeId = $request->integer('employee_id') ?: null;
         $eventsByDate = [];
+        $holidays = Holiday::query()
+            ->whereDate('holiday_date', '>=', $start)
+            ->whereDate('holiday_date', '<=', $end)
+            ->get();
+        $holidayDates = $holidays
+            ->map(fn (Holiday $holiday) => $holiday->holiday_date?->toDateString())
+            ->filter()
+            ->flip();
 
         EmployeeSchedule::query()
             ->with(['employee:id,employee_code,name', 'shift:id,name'])
@@ -820,7 +828,12 @@ class AttendanceController extends Controller
             ->whereDate('schedule_date', '>=', $start)
             ->whereDate('schedule_date', '<=', $end)
             ->get()
-            ->each(function (EmployeeSchedule $schedule) use (&$eventsByDate) {
+            ->each(function (EmployeeSchedule $schedule) use (&$eventsByDate, $holidayDates) {
+                $date = $schedule->schedule_date?->toDateString();
+                if ($schedule->schedule_type === EmployeeSchedule::TYPE_WORK && $holidayDates->has($date)) {
+                    return;
+                }
+
                 $label = match ($schedule->schedule_type) {
                     EmployeeSchedule::TYPE_WORK => 'Masuk',
                     EmployeeSchedule::TYPE_DAY_OFF => 'Libur',
@@ -828,7 +841,6 @@ class AttendanceController extends Controller
                     EmployeeSchedule::TYPE_LEAVE => 'Cuti/Izin',
                     default => $schedule->schedule_type,
                 };
-                $date = $schedule->schedule_date?->toDateString();
 
                 $this->addCalendarSummary($eventsByDate, $date, 'schedule_'.$schedule->schedule_type, [
                     'label' => 'Jadwal '.$label,
@@ -848,21 +860,17 @@ class AttendanceController extends Controller
                 ]);
             });
 
-        Holiday::query()
-            ->whereDate('holiday_date', '>=', $start)
-            ->whereDate('holiday_date', '<=', $end)
-            ->get()
-            ->each(function (Holiday $holiday) use (&$eventsByDate) {
-                $date = $holiday->holiday_date?->toDateString();
-                $label = $this->scheduleTypeLabel(EmployeeSchedule::TYPE_HOLIDAY, $holiday);
+        $holidays->each(function (Holiday $holiday) use (&$eventsByDate) {
+            $date = $holiday->holiday_date?->toDateString();
+            $label = $this->scheduleTypeLabel(EmployeeSchedule::TYPE_HOLIDAY, $holiday);
 
-                $this->addCalendarSummary($eventsByDate, $date, 'global_holiday', [
-                    'label' => $label,
-                    'color' => '#f1416c',
-                    'textColor' => '#ffffff',
-                    'detail' => $holiday->name,
-                ]);
-            });
+            $this->addCalendarSummary($eventsByDate, $date, 'global_holiday', [
+                'label' => $label,
+                'color' => '#f1416c',
+                'textColor' => '#ffffff',
+                'detail' => $holiday->name,
+            ]);
+        });
 
         $events = collect($eventsByDate)
             ->flatMap(fn (array $groups, string $date) => collect($groups)->map(fn (array $group) => [

@@ -284,7 +284,7 @@ class AttendanceScheduleChangeRulesTest extends TestCase
             ->assertJsonPath('data.0.effective_note', 'Libur Nasional');
     }
 
-    public function test_schedule_calendar_includes_global_holiday_overlay(): void
+    public function test_schedule_calendar_hides_work_schedule_on_global_holiday(): void
     {
         Carbon::setTestNow('2026-06-05 10:00:00');
         $this->loginAsAdmin();
@@ -311,7 +311,7 @@ class AttendanceScheduleChangeRulesTest extends TestCase
             'employee_id' => $employee->id,
         ]))->assertOk()->json())->pluck('title')->all();
 
-        $this->assertContains('1 Jadwal Masuk', $titles);
+        $this->assertNotContains('1 Jadwal Masuk', $titles);
         $this->assertContains('1 Libur Nasional', $titles);
     }
 

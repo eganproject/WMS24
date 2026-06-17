@@ -957,12 +957,18 @@ class AttendanceController extends Controller
         ]);
         $validated['is_paid'] = $request->boolean('is_paid');
         $holiday = Holiday::create($validated);
+        $rebuiltCount = $this->rebuildAttendanceForHolidayDates([$holiday->holiday_date]);
 
-        return response()->json(['message' => 'Hari libur berhasil dibuat', 'holiday' => $holiday]);
+        return response()->json([
+            'message' => "Hari libur berhasil dibuat dan rekap {$rebuiltCount} karyawan diperbarui.",
+            'holiday' => $holiday,
+            'rebuilt_count' => $rebuiltCount,
+        ]);
     }
 
     public function updateHoliday(Request $request, Holiday $holiday)
     {
+        $oldDate = $holiday->holiday_date?->copy();
         $validated = $request->validate([
             'holiday_date' => ['required', 'date', Rule::unique('holidays', 'holiday_date')->ignore($holiday->id)],
             'name' => ['required', 'string', 'max:150'],
@@ -971,15 +977,29 @@ class AttendanceController extends Controller
         ]);
         $validated['is_paid'] = $request->boolean('is_paid');
         $holiday->update($validated);
+        $holiday->refresh();
+        $rebuiltCount = $this->rebuildAttendanceForHolidayDates(array_filter([
+            $oldDate,
+            $holiday->holiday_date,
+        ]));
 
-        return response()->json(['message' => 'Hari libur berhasil diperbarui', 'holiday' => $holiday]);
+        return response()->json([
+            'message' => "Hari libur berhasil diperbarui dan rekap {$rebuiltCount} karyawan diperbarui.",
+            'holiday' => $holiday,
+            'rebuilt_count' => $rebuiltCount,
+        ]);
     }
 
     public function destroyHoliday(Holiday $holiday)
     {
+        $date = $holiday->holiday_date?->copy();
         $holiday->delete();
+        $rebuiltCount = $this->rebuildAttendanceForHolidayDates([$date]);
 
-        return response()->json(['message' => 'Hari libur berhasil dihapus']);
+        return response()->json([
+            'message' => "Hari libur berhasil dihapus dan rekap {$rebuiltCount} karyawan diperbarui.",
+            'rebuilt_count' => $rebuiltCount,
+        ]);
     }
 
     public function templatesData(Request $request)
@@ -2306,6 +2326,40 @@ class AttendanceController extends Controller
             app(AttendanceProcessor::class)->rebuildDailyAttendance($employee, $current);
             $current->addDay();
         }
+    }
+
+    private function rebuildAttendanceForHolidayDates(array $dates): int
+    {
+        $dateKeys = collect($dates)
+            ->filter()
+            ->map(fn ($date) => $date instanceof Carbon ? $date->toDateString() : Carbon::parse($date)->toDateString())
+            ->unique()
+            ->values();
+
+        if ($dateKeys->isEmpty()) {
+            return 0;
+        }
+
+        $rebuiltCount = 0;
+        $processor = app(AttendanceProcessor::class);
+
+        foreach ($dateKeys as $dateKey) {
+            Employee::query()
+                ->active()
+                ->where(function ($query) use ($dateKey) {
+                    $query->whereNull('join_date')
+                        ->orWhereDate('join_date', '<=', $dateKey);
+                })
+                ->orderBy('id')
+                ->chunkById(100, function ($employees) use ($processor, $dateKey, &$rebuiltCount) {
+                    foreach ($employees as $employee) {
+                        $processor->rebuildDailyAttendance($employee, $dateKey);
+                        $rebuiltCount++;
+                    }
+                });
+        }
+
+        return $rebuiltCount;
     }
 
     private function syncTemplateDays(WeeklyScheduleTemplate $template, array $days): void

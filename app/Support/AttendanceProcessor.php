@@ -238,6 +238,16 @@ class AttendanceProcessor
             ];
         }
 
+        $holiday = Holiday::query()->whereDate('holiday_date', $date)->first();
+        if ($holiday) {
+            return [
+                'type' => EmployeeSchedule::TYPE_HOLIDAY,
+                'status' => Attendance::STATUS_HOLIDAY,
+                'shift' => null,
+                'note' => $holiday->name,
+            ];
+        }
+
         $manualSchedule = EmployeeSchedule::query()
             ->with('shift')
             ->where('employee_id', $employee->id)
@@ -250,16 +260,6 @@ class AttendanceProcessor
                 'status' => $this->statusForScheduleType($manualSchedule->schedule_type),
                 'shift' => $manualSchedule->shift,
                 'note' => $manualSchedule->note,
-            ];
-        }
-
-        $holiday = Holiday::query()->whereDate('holiday_date', $date)->first();
-        if ($holiday) {
-            return [
-                'type' => EmployeeSchedule::TYPE_HOLIDAY,
-                'status' => Attendance::STATUS_HOLIDAY,
-                'shift' => null,
-                'note' => $holiday->name,
             ];
         }
 

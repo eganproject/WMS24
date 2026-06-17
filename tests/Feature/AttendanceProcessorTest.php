@@ -9,6 +9,7 @@ use App\Models\Employee;
 use App\Models\EmployeeFingerprint;
 use App\Models\EmployeeLeave;
 use App\Models\EmployeePosition;
+use App\Models\Holiday;
 use App\Models\Role;
 use App\Models\EmployeeSchedule;
 use App\Models\User;
@@ -73,6 +74,40 @@ class AttendanceProcessorTest extends TestCase
         $this->assertSame('fingerprint', $attendance->source);
         $this->assertEquals('2026-04-27 08:10:00', $attendance->check_in_at->format('Y-m-d H:i:s'));
         $this->assertEquals('2026-04-27 17:15:00', $attendance->check_out_at->format('Y-m-d H:i:s'));
+    }
+
+    public function test_holiday_overrides_existing_work_schedule(): void
+    {
+        $employee = Employee::create([
+            'employee_code' => 'EMP-HOLIDAY',
+            'name' => 'Karyawan Libur Nasional',
+            'employment_status' => Employee::STATUS_ACTIVE,
+        ]);
+        $shift = WorkShift::create([
+            'name' => 'Pagi Holiday',
+            'start_time' => '08:00',
+            'end_time' => '17:00',
+            'is_active' => true,
+        ]);
+        EmployeeSchedule::create([
+            'employee_id' => $employee->id,
+            'work_shift_id' => $shift->id,
+            'schedule_date' => '2026-06-17',
+            'schedule_type' => EmployeeSchedule::TYPE_WORK,
+        ]);
+        Holiday::create([
+            'holiday_date' => '2026-06-17',
+            'name' => 'Libur Nasional',
+            'type' => 'national',
+            'is_paid' => true,
+        ]);
+
+        $attendance = app(AttendanceProcessor::class)
+            ->rebuildDailyAttendance($employee, '2026-06-17');
+
+        $this->assertSame(Attendance::STATUS_HOLIDAY, $attendance->status);
+        $this->assertNull($attendance->work_shift_id);
+        $this->assertSame('Libur Nasional', $attendance->note);
     }
 
     public function test_fingerprint_webhook_records_scan_with_secret(): void

@@ -5,6 +5,7 @@ namespace Tests\Feature\Admin;
 use App\Models\Attendance;
 use App\Models\Employee;
 use App\Models\EmployeeSchedule;
+use App\Models\Holiday;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\WorkShift;
@@ -184,6 +185,61 @@ class AttendanceRecapDisplayTest extends TestCase
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.status_key', Attendance::STATUS_ABSENT)
             ->assertJsonPath('summary.absent_count', 1);
+    }
+
+    public function test_storing_holiday_rebuilds_active_employee_recap_as_holiday(): void
+    {
+        Carbon::setTestNow('2026-06-05 10:00:00');
+        $this->actingAsAdmin();
+
+        $employee = Employee::create([
+            'employee_code' => 'EMP-HOLIDAY-RECAP',
+            'name' => 'Karyawan Rekap Libur',
+            'employment_status' => Employee::STATUS_ACTIVE,
+        ]);
+        $futureEmployee = Employee::create([
+            'employee_code' => 'EMP-HOLIDAY-FUTURE',
+            'name' => 'Karyawan Belum Join',
+            'join_date' => '2026-06-18',
+            'employment_status' => Employee::STATUS_ACTIVE,
+        ]);
+        $shift = WorkShift::create([
+            'name' => 'Shift Holiday Recap',
+            'start_time' => '08:00:00',
+            'end_time' => '17:00:00',
+        ]);
+        EmployeeSchedule::create([
+            'employee_id' => $employee->id,
+            'work_shift_id' => $shift->id,
+            'schedule_date' => '2026-06-17',
+            'schedule_type' => EmployeeSchedule::TYPE_WORK,
+        ]);
+
+        $this->postJson(route('admin.attendance.holidays.store'), [
+            'holiday_date' => '2026-06-17',
+            'name' => 'Libur Nasional',
+            'type' => 'national',
+            'is_paid' => true,
+        ])
+            ->assertOk()
+            ->assertJsonPath('rebuilt_count', 1);
+
+        $this->assertTrue(Holiday::query()
+            ->whereDate('holiday_date', '2026-06-17')
+            ->where('name', 'Libur Nasional')
+            ->where('type', 'national')
+            ->exists());
+        $attendance = Attendance::query()
+            ->where('employee_id', $employee->id)
+            ->whereDate('attendance_date', '2026-06-17')
+            ->firstOrFail();
+        $this->assertSame(Attendance::STATUS_HOLIDAY, $attendance->status);
+        $this->assertNull($attendance->work_shift_id);
+        $this->assertSame('Libur Nasional', $attendance->note);
+        $this->assertDatabaseMissing('attendances', [
+            'employee_id' => $futureEmployee->id,
+            'attendance_date' => '2026-06-17',
+        ]);
     }
 
     public function test_inactive_employee_is_hidden_from_monitor_and_default_recap(): void

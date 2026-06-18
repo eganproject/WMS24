@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Exports\AttendanceReportExport;
 use App\Models\Area;
 use App\Models\Attendance;
 use App\Models\Employee;
@@ -11,6 +12,7 @@ use App\Models\EmployeeSchedule;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
+use Maatwebsite\Excel\Facades\Excel;
 
 class AttendanceReportController extends Controller
 {
@@ -18,6 +20,7 @@ class AttendanceReportController extends Controller
     {
         return view('admin.reports.attendance.index', [
             'dataUrl' => route('admin.reports.attendance.data'),
+            'exportUrl' => route('admin.reports.attendance.export'),
             'areas' => Area::query()->orderBy('code')->get(['id', 'code', 'name']),
             'positions' => EmployeePosition::query()->orderBy('name')->get(['id', 'name']),
             'employees' => Employee::query()->orderBy('name')->get(['id', 'employee_code', 'name', 'employment_status']),
@@ -34,6 +37,47 @@ class AttendanceReportController extends Controller
             ])],
         ]);
 
+        $report = $this->buildReport($request);
+        $rows = $report['rows'];
+        $summary = $report['summary'];
+        $period = $report['period'];
+        $recordsTotal = $report['records_total'];
+
+        $start = max(0, (int) $request->input('start', 0));
+        $length = (int) $request->input('length', 10);
+        $data = $length > 0 ? $rows->slice($start, $length)->values() : $rows;
+
+        return response()->json([
+            'draw' => (int) $request->input('draw'),
+            'recordsTotal' => $recordsTotal,
+            'recordsFiltered' => $rows->count(),
+            'period' => $period,
+            'summary' => $summary,
+            'data' => $data,
+        ]);
+    }
+
+    public function export(Request $request)
+    {
+        $request->validate([
+            'employment_status' => ['nullable', Rule::in([
+                Employee::STATUS_ACTIVE,
+                Employee::STATUS_INACTIVE,
+                'all',
+            ])],
+        ]);
+
+        $report = $this->buildReport($request);
+        $filename = 'laporan_absensi_'.$report['period']['from'].'_'.$report['period']['to'].'_'.now()->format('His').'.xlsx';
+
+        return Excel::download(
+            new AttendanceReportExport($report['rows'], $report['summary'], $report['period']),
+            $filename
+        );
+    }
+
+    private function buildReport(Request $request): array
+    {
         [$from, $to] = $this->dateRange($request);
         $employees = $this->employeeQuery($request)
             ->with([
@@ -72,21 +116,15 @@ class AttendanceReportController extends Controller
             ),
         ];
 
-        $start = max(0, (int) $request->input('start', 0));
-        $length = (int) $request->input('length', 10);
-        $data = $length > 0 ? $rows->slice($start, $length)->values() : $rows;
-
-        return response()->json([
-            'draw' => (int) $request->input('draw'),
-            'recordsTotal' => $employees->count(),
-            'recordsFiltered' => $rows->count(),
+        return [
+            'rows' => $rows,
+            'summary' => $summary,
+            'records_total' => $employees->count(),
             'period' => [
                 'from' => $from->toDateString(),
                 'to' => $to->toDateString(),
             ],
-            'summary' => $summary,
-            'data' => $data,
-        ]);
+        ];
     }
 
     private function employeeQuery(Request $request)

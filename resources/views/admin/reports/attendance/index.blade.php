@@ -289,6 +289,11 @@
         <div class="card-title">
             <h3 class="card-label fw-bolder mb-0"><i class="fas fa-table text-primary me-2"></i>Ringkasan Per Karyawan</h3>
         </div>
+        <div class="card-toolbar">
+            <button type="button" class="btn btn-light-primary" id="btn_export_attendance_report">
+                <i class="fas fa-file-excel me-1"></i>Export Excel
+            </button>
+        </div>
     </div>
     <div class="card-body py-6">
         <div class="table-responsive">
@@ -357,6 +362,7 @@
 @push('scripts')
 <script>
 const dataUrl = '{{ $dataUrl }}';
+const exportUrl = '{{ $exportUrl }}';
 
 document.addEventListener('DOMContentLoaded', () => {
     const tableEl = $('#attendance_report_table');
@@ -370,6 +376,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const reportStatusEl = document.getElementById('filter_report_status');
     const applyBtn = document.getElementById('filter_apply');
     const resetBtn = document.getElementById('filter_reset');
+    const exportBtn = document.getElementById('btn_export_attendance_report');
     const detailModalEl = document.getElementById('attendance_detail_modal');
     const detailModal = detailModalEl ? new bootstrap.Modal(detailModalEl) : null;
     let currentRows = [];
@@ -394,6 +401,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const hours = (minutes) => `${(Number(minutes || 0) / 60).toFixed(2)} jam`;
     const pct = (value) => `${Number(value || 0).toFixed(2)}%`;
+
+    const filterParams = () => {
+        const params = new URLSearchParams();
+        params.set('q', searchEl.value || '');
+        params.set('date_from', dateFromEl.value || '');
+        params.set('date_to', dateToEl.value || '');
+        params.set('employee_id', employeeEl.value || '');
+        params.set('area_id', areaEl.value || '');
+        params.set('position_id', positionEl.value || '');
+        params.set('report_status', reportStatusEl.value || '');
+        params.set('employment_status', employmentStatusEl.value || 'active');
+        [...params.keys()].forEach((key) => {
+            if (!params.get(key)) params.delete(key);
+        });
+        return params;
+    };
 
     const statusLabel = (value) => ({
         present: 'Hadir',
@@ -460,14 +483,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 return currentRows;
             },
             data: (params) => {
-                params.q = searchEl.value || '';
-                params.date_from = dateFromEl.value || '';
-                params.date_to = dateToEl.value || '';
-                params.employee_id = employeeEl.value || '';
-                params.area_id = areaEl.value || '';
-                params.position_id = positionEl.value || '';
-                params.report_status = reportStatusEl.value || '';
-                params.employment_status = employmentStatusEl.value || 'active';
+                filterParams().forEach((value, key) => {
+                    params[key] = value;
+                });
             },
         },
         columns: [
@@ -504,6 +522,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const reload = () => table.ajax.reload();
     applyBtn.addEventListener('click', reload);
+    exportBtn?.addEventListener('click', () => {
+        const query = filterParams().toString();
+        window.location.href = query ? `${exportUrl}?${query}` : exportUrl;
+    });
     [employeeEl, areaEl, positionEl, employmentStatusEl, reportStatusEl].forEach((el) => el.addEventListener('change', reload));
     searchEl.addEventListener('keyup', () => reload());
     resetBtn.addEventListener('click', () => {

@@ -424,6 +424,7 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/returns/data', [ReturnReportController::class, 'data'])->name('returns.data');
         Route::get('/attendance', [AttendanceReportController::class, 'index'])->name('attendance.index');
         Route::get('/attendance/data', [AttendanceReportController::class, 'data'])->name('attendance.data');
+        Route::get('/attendance/export', [AttendanceReportController::class, 'export'])->name('attendance.export');
         Route::get('/replenishment', [ReplenishmentReportController::class, 'index'])->name('replenishment.index');
         Route::get('/replenishment/data', [ReplenishmentReportController::class, 'data'])->name('replenishment.data');
         Route::get('/stock-transfers', [StockTransferReportController::class, 'index'])->name('stock-transfers.index');

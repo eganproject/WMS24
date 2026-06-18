@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Kurir;
+use App\Models\QcResiScan;
 use App\Models\Resi;
 use App\Models\ShipmentScanOut;
 use Illuminate\Http\Request;
@@ -26,14 +27,33 @@ class DashboardController extends Controller
         $totalCanceled = Resi::whereDate('tanggal_upload', $selectedDate)
             ->where('status', 'canceled')
             ->count();
+        $totalQcScan = QcResiScan::where('status', 'passed')
+            ->whereHas('resi', function ($q) use ($selectedDate) {
+                $q->whereDate('tanggal_upload', $selectedDate)
+                    ->where(function ($resiQuery) {
+                        $resiQuery->whereNull('status')
+                            ->orWhere('status', '!=', 'canceled');
+                    });
+            })
+            ->count();
         $totalScanOut = ShipmentScanOut::whereDate('scan_date', $selectedDate)->count();
         $totalResiUpdatedAt = (clone $activeResiQuery)->max('updated_at');
         $totalCanceledUpdatedAt = Resi::whereDate('tanggal_upload', $selectedDate)
             ->where('status', 'canceled')
             ->max('canceled_at');
+        $totalQcUpdatedAt = QcResiScan::where('status', 'passed')
+            ->whereHas('resi', function ($q) use ($selectedDate) {
+                $q->whereDate('tanggal_upload', $selectedDate)
+                    ->where(function ($resiQuery) {
+                        $resiQuery->whereNull('status')
+                            ->orWhere('status', '!=', 'canceled');
+                    });
+            })
+            ->max('completed_at');
         $totalScanUpdatedAt = ShipmentScanOut::whereDate('scan_date', $selectedDate)->max('scanned_at');
         $totalResiUpdated = $totalResiUpdatedAt ? Carbon::parse($totalResiUpdatedAt)->format('H:i') : '-';
         $totalCanceledUpdated = $totalCanceledUpdatedAt ? Carbon::parse($totalCanceledUpdatedAt)->format('H:i') : '-';
+        $totalQcUpdated = $totalQcUpdatedAt ? Carbon::parse($totalQcUpdatedAt)->format('H:i') : '-';
         $totalScanUpdated = $totalScanUpdatedAt ? Carbon::parse($totalScanUpdatedAt)->format('H:i') : '-';
 
         $resiCounts = Resi::select('kurir_id', DB::raw('count(*) as total'))
@@ -104,9 +124,11 @@ class DashboardController extends Controller
             'currentDate' => $currentDate,
             'totalResi' => $totalResi,
             'totalCanceled' => $totalCanceled,
+            'totalQcScan' => $totalQcScan,
             'totalScanOut' => $totalScanOut,
             'totalResiUpdated' => $totalResiUpdated,
             'totalCanceledUpdated' => $totalCanceledUpdated,
+            'totalQcUpdated' => $totalQcUpdated,
             'totalScanUpdated' => $totalScanUpdated,
             'kurirs' => $kurirs,
         ]);

@@ -327,6 +327,19 @@
         </div>
     </div>
 
+    {{-- QC Scan Selesai --}}
+    <div class="kpi-card">
+        <div class="kpi-icon" style="background:#eef2ff;">
+            <i class="fas fa-clipboard-check" style="color:#6366f1;"></i>
+        </div>
+        <div class="kpi-label">QC Scan Selesai</div>
+        <div class="kpi-value" style="color:#4f46e5;">{{ number_format($totalQcScan ?? 0) }}</div>
+        <div class="kpi-meta">
+            <i class="fas fa-clock" style="font-size:10px;"></i>
+            Update {{ $totalQcUpdated ?? '-' }}
+        </div>
+    </div>
+
     {{-- Sisa / Belum Scan --}}
     <div class="kpi-card">
         <div class="kpi-icon" style="background:#fffbeb;">

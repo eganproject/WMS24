@@ -373,6 +373,42 @@
     </div>
 @endif
 
+<div class="modal fade" id="modal_flow_item_detail" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h2 class="fw-bolder mb-1" id="flow_item_detail_title">Detail Item</h2>
+                    <div class="text-muted" id="flow_item_detail_subtitle">-</div>
+                </div>
+                <div class="btn btn-icon btn-sm btn-active-icon-primary" data-bs-dismiss="modal">
+                    <span class="svg-icon svg-icon-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+                            <rect opacity="0.5" x="6" y="17.3137" width="16" height="2" rx="1" transform="rotate(-45 6 17.3137)" fill="black" />
+                            <rect x="7.41422" y="6" width="16" height="2" rx="1" transform="rotate(45 7.41422 6)" fill="black" />
+                        </svg>
+                    </span>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div class="table-responsive">
+                    <table class="table table-row-dashed align-middle fs-7 mb-0">
+                        <thead>
+                            <tr class="text-gray-400 fw-bolder text-uppercase">
+                                <th>SKU</th>
+                                <th>Nama Item</th>
+                                <th class="text-end">Qty</th>
+                                <th>Catatan</th>
+                            </tr>
+                        </thead>
+                        <tbody id="flow_item_detail_rows"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 @endsection
 
 @push('scripts')
@@ -426,6 +462,11 @@
         const modalEl = document.getElementById('modal_stock_flow');
         const modal = modalEl ? new bootstrap.Modal(modalEl) : null;
         const modalContentEl = modalEl?.querySelector('.modal-content') || modalEl;
+        const itemDetailModalEl = document.getElementById('modal_flow_item_detail');
+        const itemDetailModal = itemDetailModalEl ? new bootstrap.Modal(itemDetailModalEl) : null;
+        const itemDetailTitle = document.getElementById('flow_item_detail_title');
+        const itemDetailSubtitle = document.getElementById('flow_item_detail_subtitle');
+        const itemDetailRows = document.getElementById('flow_item_detail_rows');
         const itemsContainer = document.getElementById('flow_items_container');
         const quickItemsBody = document.getElementById('flow_quick_items_body');
         const quickItemsToggle = document.getElementById('btn_toggle_quick_items');
@@ -527,6 +568,45 @@
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
+
+        const renderItemSummary = (row) => {
+            if (row?.type !== 'manual' || !showRecipientFields) {
+                return escapeHtml(row?.item || '-');
+            }
+
+            const skuCount = Number(row?.sku_count || 0);
+            const qty = Number(row?.qty || 0);
+            const label = `${skuCount.toLocaleString('id-ID')} SKU / ${qty.toLocaleString('id-ID')} Qty`;
+            return `
+                <button type="button" class="btn btn-sm btn-light-primary btn-flow-item-detail" title="Lihat detail item">
+                    <i class="fas fa-boxes me-1"></i>${escapeHtml(label)}
+                </button>
+            `;
+        };
+
+        const showItemDetail = (row) => {
+            if (!row || !itemDetailModal) return;
+            const details = Array.isArray(row.item_details) ? row.item_details : [];
+            const totalQty = details.reduce((sum, item) => sum + Number(item?.qty || 0), 0);
+
+            if (itemDetailTitle) itemDetailTitle.textContent = `Detail Item ${row.code || ''}`.trim();
+            if (itemDetailSubtitle) {
+                itemDetailSubtitle.textContent = `${details.length.toLocaleString('id-ID')} SKU / ${totalQty.toLocaleString('id-ID')} Qty`;
+            }
+            if (itemDetailRows) {
+                itemDetailRows.innerHTML = details.length
+                    ? details.map((item) => `
+                        <tr>
+                            <td class="fw-bold">${escapeHtml(item.sku || '-')}</td>
+                            <td>${escapeHtml(item.name || '-')}</td>
+                            <td class="text-end">${Number(item.qty || 0).toLocaleString('id-ID')}</td>
+                            <td>${escapeHtml(item.note || '-')}</td>
+                        </tr>
+                    `).join('')
+                    : '<tr><td colspan="4" class="text-center text-muted py-8">Tidak ada item.</td></tr>';
+            }
+            itemDetailModal.show();
+        };
 
         const renderScanProgress = (progress) => {
             const expectedKoli = Number(progress?.expected_koli || 0);
@@ -1302,7 +1382,7 @@
                         return lines.join('');
                     }},
                 @endif
-                { data: 'item' },
+                { data: 'item', orderable: false, searchable: false, render: (data, type, row) => renderItemSummary(row) },
                 { data: 'qty' },
                 @if(!empty($showScanProgressColumn ?? false))
                     { data: 'scan_progress', orderable:false, searchable:false, render: (data) => renderScanProgress(data) },
@@ -1367,6 +1447,12 @@
         });
         refreshMenus();
         dt.on('draw', refreshMenus);
+
+        tableEl.on('click', '.btn-flow-item-detail', function () {
+            const tr = $(this).closest('tr');
+            const row = dt.row(tr.hasClass('child') ? tr.prev() : tr).data();
+            showItemDetail(row);
+        });
 
         const reloadTable = () => dt.ajax.reload();
         searchInput?.addEventListener('keyup', reloadTable);

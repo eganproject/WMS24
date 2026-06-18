@@ -512,6 +512,14 @@ class OutboundController extends Controller
             })->filter()->values();
             $itemLabel = $labels->implode(', ');
             $totalQty = (int) $items->sum('qty');
+            $itemDetails = $items->map(function ($it) {
+                return [
+                    'sku' => $it->item?->sku ?? '-',
+                    'name' => $it->item?->name ?? '-',
+                    'qty' => (int) ($it->qty ?? 0),
+                    'note' => $it->note ?? '',
+                ];
+            })->values();
             $qcItems = $row->qcSession?->items ?? collect();
             $scanProgress = null;
             if (($row->type ?? '') === 'manual') {
@@ -537,6 +545,8 @@ class OutboundController extends Controller
                 'recipient_phone' => $row->recipient_phone ?? '',
                 'recipient_address' => $row->recipient_address ?? '',
                 'item' => $itemLabel ?: '-',
+                'item_details' => $itemDetails,
+                'sku_count' => $itemDetails->count(),
                 'qty' => $totalQty,
                 'note' => $row->note ?? '',
                 'type' => $row->type,

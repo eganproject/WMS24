@@ -1263,6 +1263,35 @@ class AttendanceController extends Controller
     {
         $query = WeeklyScheduleTemplate::query()->with('days.shift')->orderBy('name');
 
+        $search = trim((string) $request->input('q', ''));
+        if ($search !== '') {
+            $normalizedSearch = mb_strtolower($search);
+            $activeSearch = in_array($normalizedSearch, ['aktif', 'active', '1', 'yes', 'ya'], true);
+            $inactiveSearch = in_array($normalizedSearch, ['nonaktif', 'non_aktif', 'inactive', '0', 'no', 'tidak'], true);
+            $typeSearch = match ($normalizedSearch) {
+                'masuk', 'work', 'kerja' => EmployeeSchedule::TYPE_WORK,
+                'libur', 'off', 'day_off' => EmployeeSchedule::TYPE_DAY_OFF,
+                default => null,
+            };
+
+            $query->where(function ($q) use ($search, $activeSearch, $inactiveSearch, $typeSearch) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhereHas('days.shift', fn ($shift) => $shift->where('name', 'like', "%{$search}%"));
+
+                if ($activeSearch) {
+                    $q->orWhere('is_active', true);
+                }
+
+                if ($inactiveSearch) {
+                    $q->orWhere('is_active', false);
+                }
+
+                if ($typeSearch) {
+                    $q->orWhereHas('days', fn ($day) => $day->where('schedule_type', $typeSearch));
+                }
+            });
+        }
+
         return $this->datatable($query, $request, fn (WeeklyScheduleTemplate $template) => [
             'id' => $template->id,
             'name' => $template->name,

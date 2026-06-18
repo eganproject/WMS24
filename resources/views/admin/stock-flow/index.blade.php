@@ -570,7 +570,10 @@
             .replace(/'/g, '&#039;');
 
         const renderItemSummary = (row) => {
-            if (row?.type !== 'manual' || !showRecipientFields) {
+            const useCompactSummary = defaultTypeFilter === 'receipt'
+                || (row?.type === 'manual' && showRecipientFields);
+
+            if (!useCompactSummary) {
                 return escapeHtml(row?.item || '-');
             }
 

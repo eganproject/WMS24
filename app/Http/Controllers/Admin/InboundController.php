@@ -482,6 +482,15 @@ class InboundController extends Controller
             $expectedKoli = (int) $items->sum(fn ($item) => (int) ($item->koli ?? 0));
             $scannedQty = (int) $scanItems->sum('scanned_qty');
             $scannedKoli = (int) $scanItems->sum('scanned_koli');
+            $itemDetails = $items->map(function (InboundItem $item) {
+                return [
+                    'sku' => $item->item?->sku ?? '-',
+                    'name' => $item->item?->name ?? '-',
+                    'qty' => (int) ($item->qty ?? 0),
+                    'koli' => (int) ($item->koli ?? 0),
+                    'note' => $item->note ?? '',
+                ];
+            })->values();
 
             return [
                 'id' => $row->id,
@@ -492,6 +501,8 @@ class InboundController extends Controller
                 'warehouse_id' => $row->warehouse_id,
                 'supplier' => $row->supplier?->name ?? '-',
                 'item' => $labels->implode(', ') ?: '-',
+                'item_details' => $itemDetails,
+                'sku_count' => $itemDetails->count(),
                 'qty' => $expectedQty,
                 'scan_progress' => [
                     'expected_koli' => $expectedKoli,

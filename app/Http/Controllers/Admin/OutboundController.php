@@ -512,11 +512,20 @@ class OutboundController extends Controller
             })->filter()->values();
             $itemLabel = $labels->implode(', ');
             $totalQty = (int) $items->sum('qty');
-            $itemDetails = $items->map(function ($it) {
+            $usesKoli = in_array($row->type ?? '', ['manual', 'return'], true)
+                && (int) $row->warehouse_id === WarehouseService::defaultWarehouseId();
+            $itemDetails = $items->map(function ($it) use ($usesKoli) {
+                $qty = (int) ($it->qty ?? 0);
+                $qtyPerKoli = (int) ($it->item?->koli_qty ?? 0);
+                $koli = $usesKoli && $qty > 0 && $qtyPerKoli > 0 && $qty % $qtyPerKoli === 0
+                    ? (int) ($qty / $qtyPerKoli)
+                    : 0;
+
                 return [
                     'sku' => $it->item?->sku ?? '-',
                     'name' => $it->item?->name ?? '-',
-                    'qty' => (int) ($it->qty ?? 0),
+                    'qty' => $qty,
+                    'koli' => $koli,
                     'note' => $it->note ?? '',
                 ];
             })->values();

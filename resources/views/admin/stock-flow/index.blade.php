@@ -397,6 +397,7 @@
                             <tr class="text-gray-400 fw-bolder text-uppercase">
                                 <th>SKU</th>
                                 <th>Nama Item</th>
+                                <th class="text-end" data-flow-item-detail-koli-head style="display:none;">Koli</th>
                                 <th class="text-end">Qty</th>
                                 <th>Catatan</th>
                             </tr>
@@ -467,6 +468,7 @@
         const itemDetailTitle = document.getElementById('flow_item_detail_title');
         const itemDetailSubtitle = document.getElementById('flow_item_detail_subtitle');
         const itemDetailRows = document.getElementById('flow_item_detail_rows');
+        const itemDetailKoliHead = document.querySelector('[data-flow-item-detail-koli-head]');
         const itemsContainer = document.getElementById('flow_items_container');
         const quickItemsBody = document.getElementById('flow_quick_items_body');
         const quickItemsToggle = document.getElementById('btn_toggle_quick_items');
@@ -562,6 +564,8 @@
             return `<span class="badge ${warehouseBadgeClass(warehouseId)}">${text}</span>`;
         };
 
+        const isDefaultWarehouse = (warehouseId) => defaultWarehouseId && Number(warehouseId || 0) === Number(defaultWarehouseId);
+
         const escapeHtml = (value) => String(value ?? '')
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
@@ -591,22 +595,29 @@
             if (!row || !itemDetailModal) return;
             const details = Array.isArray(row.item_details) ? row.item_details : [];
             const totalQty = details.reduce((sum, item) => sum + Number(item?.qty || 0), 0);
+            const totalKoli = details.reduce((sum, item) => sum + Number(item?.koli || 0), 0);
+            const showKoli = isDefaultWarehouse(row.warehouse_id);
 
             if (itemDetailTitle) itemDetailTitle.textContent = `Detail Item ${row.code || ''}`.trim();
             if (itemDetailSubtitle) {
-                itemDetailSubtitle.textContent = `${details.length.toLocaleString('id-ID')} SKU / ${totalQty.toLocaleString('id-ID')} Qty`;
+                const warehouse = renderWarehouseBadge(row.warehouse || '-', row.warehouse_id);
+                const summary = `${details.length.toLocaleString('id-ID')} SKU / ${totalQty.toLocaleString('id-ID')} Qty`;
+                const koliSummary = showKoli ? ` / ${totalKoli.toLocaleString('id-ID')} Koli` : '';
+                itemDetailSubtitle.innerHTML = `${warehouse}<span class="ms-2">${escapeHtml(summary + koliSummary)}</span>`;
             }
+            if (itemDetailKoliHead) itemDetailKoliHead.style.display = showKoli ? '' : 'none';
             if (itemDetailRows) {
                 itemDetailRows.innerHTML = details.length
                     ? details.map((item) => `
                         <tr>
                             <td class="fw-bold">${escapeHtml(item.sku || '-')}</td>
                             <td>${escapeHtml(item.name || '-')}</td>
+                            ${showKoli ? `<td class="text-end">${Number(item.koli || 0).toLocaleString('id-ID')}</td>` : ''}
                             <td class="text-end">${Number(item.qty || 0).toLocaleString('id-ID')}</td>
                             <td>${escapeHtml(item.note || '-')}</td>
                         </tr>
                     `).join('')
-                    : '<tr><td colspan="4" class="text-center text-muted py-8">Tidak ada item.</td></tr>';
+                    : `<tr><td colspan="${showKoli ? 5 : 4}" class="text-center text-muted py-8">Tidak ada item.</td></tr>`;
             }
             itemDetailModal.show();
         };

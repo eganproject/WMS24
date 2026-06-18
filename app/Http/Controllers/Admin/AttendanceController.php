@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Exports\AbsentEmployeesExport;
+use App\Exports\AttendancesExport;
 use App\Exports\EmployeesExport;
 use App\Exports\EmployeesTemplateExport;
 use App\Exports\WeeklyScheduleTemplatesExport;
@@ -1609,42 +1610,9 @@ class AttendanceController extends Controller
 
     public function attendancesData(Request $request)
     {
-        $request->validate([
-            'date_from' => ['nullable', 'date_format:Y-m-d'],
-            'date_to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:date_from'],
-            'employee_id' => ['nullable', 'integer', 'exists:employees,id'],
-            'status' => ['nullable', Rule::in($this->attendanceStatusValues())],
-            'overtime_status' => ['nullable', Rule::in($this->overtimeStatusValues())],
-            'employment_status' => ['nullable', Rule::in([
-                Employee::STATUS_ACTIVE,
-                Employee::STATUS_INACTIVE,
-                'all',
-            ])],
-            'q' => ['nullable', 'string', 'max:150'],
-        ]);
+        $this->validateAttendanceRecapFilters($request);
 
-        $dateFrom = $request->input('date_from') ?: today()->toDateString();
-        $dateTo = $request->input('date_to') ?: $dateFrom;
-        $employmentStatus = $request->input('employment_status', Employee::STATUS_ACTIVE);
-        $query = Attendance::query()
-            ->with(['employee:id,employee_code,name,employment_status', 'shift:id,name', 'approver:id,name'])
-            ->whereDate('attendance_date', '>=', $dateFrom)
-            ->whereDate('attendance_date', '<=', $dateTo)
-            ->when($employmentStatus !== 'all', fn ($q) => $q->whereHas(
-                'employee',
-                fn ($employeeQuery) => $employeeQuery->where('employment_status', $employmentStatus)
-            ))
-            ->when($request->input('employee_id'), fn ($q, $employeeId) => $q->where('employee_id', $employeeId))
-            ->when($request->input('status'), fn ($q, $status) => $q->where('status', $status))
-            ->when($request->input('overtime_status'), fn ($q, $status) => $q->where('overtime_status', $status))
-            ->when(trim((string) $request->input('q', '')) !== '', function ($q) use ($request) {
-                $search = trim((string) $request->input('q'));
-                $q->whereHas('employee', fn ($employeeQuery) => $employeeQuery
-                    ->where('name', 'like', "%{$search}%")
-                    ->orWhere('employee_code', 'like', "%{$search}%")
-                    ->orWhere('phone', 'like', "%{$search}%"));
-            })
-            ->latest('attendance_date');
+        $query = $this->attendanceRecapQuery($request);
 
         $summaryQuery = clone $query;
         $summary = [
@@ -1693,6 +1661,64 @@ class AttendanceController extends Controller
         $payload['summary'] = $summary;
 
         return response()->json($payload);
+    }
+
+    public function exportAttendances(Request $request)
+    {
+        $this->validateAttendanceRecapFilters($request);
+
+        $dateFrom = $request->input('date_from') ?: today()->toDateString();
+        $dateTo = $request->input('date_to') ?: $dateFrom;
+        $rows = $this->attendanceRecapQuery($request)->get();
+
+        return Excel::download(
+            new AttendancesExport($rows, $dateFrom, $dateTo),
+            'rekap_absensi_'.$dateFrom.'_'.$dateTo.'_'.now()->format('His').'.xlsx'
+        );
+    }
+
+    private function validateAttendanceRecapFilters(Request $request): void
+    {
+        $request->validate([
+            'date_from' => ['nullable', 'date_format:Y-m-d'],
+            'date_to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:date_from'],
+            'employee_id' => ['nullable', 'integer', 'exists:employees,id'],
+            'status' => ['nullable', Rule::in($this->attendanceStatusValues())],
+            'overtime_status' => ['nullable', Rule::in($this->overtimeStatusValues())],
+            'employment_status' => ['nullable', Rule::in([
+                Employee::STATUS_ACTIVE,
+                Employee::STATUS_INACTIVE,
+                'all',
+            ])],
+            'q' => ['nullable', 'string', 'max:150'],
+        ]);
+    }
+
+    private function attendanceRecapQuery(Request $request)
+    {
+        $dateFrom = $request->input('date_from') ?: today()->toDateString();
+        $dateTo = $request->input('date_to') ?: $dateFrom;
+        $employmentStatus = $request->input('employment_status', Employee::STATUS_ACTIVE);
+
+        return Attendance::query()
+            ->with(['employee:id,employee_code,name,phone,employment_status', 'shift:id,name', 'approver:id,name'])
+            ->whereDate('attendance_date', '>=', $dateFrom)
+            ->whereDate('attendance_date', '<=', $dateTo)
+            ->when($employmentStatus !== 'all', fn ($q) => $q->whereHas(
+                'employee',
+                fn ($employeeQuery) => $employeeQuery->where('employment_status', $employmentStatus)
+            ))
+            ->when($request->input('employee_id'), fn ($q, $employeeId) => $q->where('employee_id', $employeeId))
+            ->when($request->input('status'), fn ($q, $status) => $q->where('status', $status))
+            ->when($request->input('overtime_status'), fn ($q, $status) => $q->where('overtime_status', $status))
+            ->when(trim((string) $request->input('q', '')) !== '', function ($q) use ($request) {
+                $search = trim((string) $request->input('q'));
+                $q->whereHas('employee', fn ($employeeQuery) => $employeeQuery
+                    ->where('name', 'like', "%{$search}%")
+                    ->orWhere('employee_code', 'like', "%{$search}%")
+                    ->orWhere('phone', 'like', "%{$search}%"));
+            })
+            ->latest('attendance_date');
     }
 
     public function absencesData(Request $request)

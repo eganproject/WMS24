@@ -871,6 +871,9 @@
                 <button type="button" class="btn btn-light-primary d-none" id="attendance_export_shifts">
                     <i class="fas fa-file-excel me-1"></i>Export Shift
                 </button>
+                <button type="button" class="btn btn-light-primary d-none" id="attendance_export_attendances">
+                    <i class="fas fa-file-excel me-1"></i>Export Rekap
+                </button>
                 <button type="button" class="btn btn-light-primary d-none" id="attendance_import_shifts">
                     <i class="fas fa-file-import me-1"></i>Import Shift
                 </button>
@@ -1804,6 +1807,7 @@ const templateImportUrl = '{{ route('admin.attendance.templates.import') }}';
 const templateExportUrl = '{{ route('admin.attendance.templates.export') }}';
 const shiftImportUrl = '{{ route('admin.attendance.shifts.import') }}';
 const shiftExportUrl = '{{ route('admin.attendance.shifts.export') }}';
+const attendanceRecapExportUrl = '{{ route('admin.attendance.attendances.export') }}';
 const nextEmployeeCode = @json($nextEmployeeCode ?? 'K0001');
 const weeklyTemplateOptions = @json($templateOptions ?? []);
 const positionStoreUrl = '{{ route('admin.attendance.positions.store') }}';
@@ -2157,6 +2161,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const recapFilterEmploymentStatus = document.getElementById('recap_filter_employment_status');
     const recapFilterStatus = document.getElementById('recap_filter_status');
     const recapFilterOvertimeStatus = document.getElementById('recap_filter_overtime_status');
+    const exportAttendancesButton = document.getElementById('attendance_export_attendances');
     const scheduleListEmployee = document.getElementById('schedule_list_employee');
     const scheduleListDateFrom = document.getElementById('schedule_list_date_from');
     const scheduleListDateTo = document.getElementById('schedule_list_date_to');
@@ -2272,6 +2277,7 @@ document.addEventListener('DOMContentLoaded', () => {
         importTemplatesButton?.classList.toggle('d-none', section !== 'templates');
         exportShiftsButton?.classList.toggle('d-none', section !== 'shifts');
         importShiftsButton?.classList.toggle('d-none', section !== 'shifts');
+        exportAttendancesButton?.classList.toggle('d-none', section !== 'attendances');
         openFormButton.dataset.activeSection = section;
         openFormButton.querySelector('span').textContent = section === 'raw_logs'
             ? 'Input Manual Raw Log'
@@ -2989,6 +2995,21 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     exportTemplatesButton?.addEventListener('click', () => {
         window.location.href = templateExportUrl;
+    });
+    exportAttendancesButton?.addEventListener('click', () => {
+        const params = new URLSearchParams();
+        params.set('q', searchInput?.value || '');
+        params.set('date_from', recapFilterDateFrom?.value || '');
+        params.set('date_to', recapFilterDateTo?.value || '');
+        params.set('employee_id', recapFilterEmployee?.value || '');
+        params.set('employment_status', recapFilterEmploymentStatus?.value || 'active');
+        params.set('status', recapFilterStatus?.value || '');
+        params.set('overtime_status', recapFilterOvertimeStatus?.value || '');
+        [...params.keys()].forEach((key) => {
+            if (!params.get(key)) params.delete(key);
+        });
+        const query = params.toString();
+        window.location.href = query ? `${attendanceRecapExportUrl}?${query}` : attendanceRecapExportUrl;
     });
     employeeImportSubmit?.addEventListener('click', async () => {
         if (!employeeImportUrl) return;

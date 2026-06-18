@@ -506,6 +506,7 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::put('/raw-logs/{rawLog}', [AttendanceController::class, 'updateRawLog'])->name('raw-logs.update');
         Route::delete('/raw-logs/{rawLog}', [AttendanceController::class, 'destroyRawLog'])->name('raw-logs.destroy');
         Route::get('/attendances/data', [AttendanceController::class, 'attendancesData'])->name('attendances.data');
+        Route::get('/attendances/export', [AttendanceController::class, 'exportAttendances'])->name('attendances.export');
         Route::post('/attendances/{attendance}/overtime/approve', [AttendanceController::class, 'approveOvertime'])->name('attendances.overtime.approve');
         Route::post('/attendances/{attendance}/overtime/reject', [AttendanceController::class, 'rejectOvertime'])->name('attendances.overtime.reject');
         Route::put('/attendances/{attendance}', [AttendanceController::class, 'updateAttendance'])->name('attendances.update');

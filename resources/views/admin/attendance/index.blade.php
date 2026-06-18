@@ -1616,9 +1616,8 @@
                 <div class="alert alert-info border-0 mb-5" style="background:#eff8ff;">
                     <div class="fw-bold mb-2">Format kolom Excel</div>
                     <div class="fs-7 text-muted">
-                        Wajib: salah satu <code>employee_code</code>/<code>employee_id</code>/<code>employee_name</code>,
-                        lalu <code>schedule_date</code> dan <code>schedule_type</code>.
-                        Untuk <code>schedule_type</code> = <code>work</code>, isi <code>shift</code> atau <code>work_shift_id</code>.
+                        Wajib: <code>employee_code</code>, <code>schedule_date</code>, dan <code>schedule_type</code>.
+                        Untuk <code>schedule_type</code> = <code>work</code>, isi nama shift pada kolom <code>shift</code>.
                     </div>
                     <div class="fs-8 text-muted mt-2">
                         <code>schedule_type</code> bisa diisi <code>work</code>, <code>day_off</code>, <code>holiday</code>, atau <code>leave</code>.

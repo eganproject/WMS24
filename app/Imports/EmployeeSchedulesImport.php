@@ -39,7 +39,7 @@ class EmployeeSchedulesImport implements ToCollection, WithHeadingRow, SkipsEmpt
         if (!empty($missing) || empty($hasEmployeeIdentifier)) {
             $detected = implode(', ', array_filter($headers));
             throw ValidationException::withMessages([
-                'file' => 'Header wajib: employee_code/employee_id/employee_name, schedule_date, schedule_type. Header lengkap: employee_code, employee_name, schedule_date, schedule_type, shift, work_shift_id, note. '
+                'file' => 'Header wajib: employee_code, schedule_date, schedule_type. Header import yang disarankan: employee_code, schedule_date, schedule_type, shift, note. '
                     .($detected !== '' ? 'Header terdeteksi: '.$detected : ''),
             ]);
         }

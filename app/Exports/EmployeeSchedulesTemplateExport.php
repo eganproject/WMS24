@@ -19,28 +19,22 @@ class EmployeeSchedulesTemplateExport implements FromCollection, WithHeadings, S
         return new Collection([
             [
                 'K0001',
-                '',
                 now()->toDateString(),
                 'work',
                 'Shift Pagi',
-                '',
                 'Jadwal masuk normal',
             ],
             [
                 'K0002',
-                '',
                 now()->addDay()->toDateString(),
                 'day_off',
-                '',
                 '',
                 'Libur mingguan',
             ],
             [
-                '',
-                'Nama Karyawan',
+                'K0003',
                 now()->addDays(2)->toDateString(),
                 'leave',
-                '',
                 '',
                 'Cuti/Izin',
             ],
@@ -51,11 +45,9 @@ class EmployeeSchedulesTemplateExport implements FromCollection, WithHeadings, S
     {
         return [
             'employee_code',
-            'employee_name',
             'schedule_date',
             'schedule_type',
             'shift',
-            'work_shift_id',
             'note',
         ];
     }
@@ -66,18 +58,18 @@ class EmployeeSchedulesTemplateExport implements FromCollection, WithHeadings, S
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
                 $lastRow = 4;
-                $range = 'A1:G'.$lastRow;
+                $range = 'A1:E'.$lastRow;
 
                 $sheet->freezePane('A2');
                 $sheet->setAutoFilter($range);
-                $sheet->getStyle('A1:G1')->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
-                $sheet->getStyle('A1:G1')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('1B84FF');
+                $sheet->getStyle('A1:E1')->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
+                $sheet->getStyle('A1:E1')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('1B84FF');
                 $sheet->getStyle($range)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setRGB('E4E6EF');
                 $sheet->getStyle($range)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
-                $sheet->getComment('A1')->getText()->createTextRun('Isi salah satu identifier karyawan: employee_code, employee_id, atau employee_name.');
-                $sheet->getComment('C1')->getText()->createTextRun('Tanggal wajib format YYYY-MM-DD dan tidak boleh tanggal lampau.');
-                $sheet->getComment('D1')->getText()->createTextRun('Pilihan: work, day_off, holiday, leave.');
-                $sheet->getComment('E1')->getText()->createTextRun('Wajib diisi jika schedule_type = work, kecuali work_shift_id sudah diisi.');
+                $sheet->getComment('A1')->getText()->createTextRun('Isi kode karyawan aktif, contoh K0001.');
+                $sheet->getComment('B1')->getText()->createTextRun('Tanggal wajib format YYYY-MM-DD dan tidak boleh tanggal lampau.');
+                $sheet->getComment('C1')->getText()->createTextRun('Pilihan: work, day_off, holiday, leave.');
+                $sheet->getComment('D1')->getText()->createTextRun('Wajib diisi jika schedule_type = work. Isi nama shift sesuai master shift.');
             },
         ];
     }

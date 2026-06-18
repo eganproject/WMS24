@@ -480,8 +480,11 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::put('/shifts/{shift}', [AttendanceController::class, 'updateShift'])->name('shifts.update');
         Route::delete('/shifts/{shift}', [AttendanceController::class, 'destroyShift'])->name('shifts.destroy');
         Route::get('/schedules/data', [AttendanceController::class, 'schedulesData'])->name('schedules.data');
+        Route::get('/schedules/export', [AttendanceController::class, 'exportSchedules'])->name('schedules.export');
+        Route::get('/schedules/import-template', [AttendanceController::class, 'downloadSchedulesImportTemplate'])->name('schedules.import-template');
         Route::get('/schedules/calendar-events', [AttendanceController::class, 'calendarEvents'])->name('schedules.calendar-events');
         Route::post('/schedules', [AttendanceController::class, 'storeSchedule'])->name('schedules.store');
+        Route::post('/schedules/import', [AttendanceController::class, 'importSchedules'])->name('schedules.import');
         Route::put('/schedules/{schedule}', [AttendanceController::class, 'updateSchedule'])->name('schedules.update');
         Route::delete('/schedules/{schedule}', [AttendanceController::class, 'destroySchedule'])->name('schedules.destroy');
         Route::get('/holidays/data', [AttendanceController::class, 'holidaysData'])->name('holidays.data');

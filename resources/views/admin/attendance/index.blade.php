@@ -877,6 +877,12 @@
                 <button type="button" class="btn btn-light-primary d-none" id="attendance_import_shifts">
                     <i class="fas fa-file-import me-1"></i>Import Shift
                 </button>
+                <button type="button" class="btn btn-light-primary d-none" id="attendance_export_schedules">
+                    <i class="fas fa-file-excel me-1"></i>Export Jadwal
+                </button>
+                <button type="button" class="btn btn-light-primary d-none" id="attendance_import_schedules">
+                    <i class="fas fa-file-import me-1"></i>Import Jadwal
+                </button>
                 <button type="button" class="btn btn-primary" id="attendance_open_form" data-active-section="{{ $activeSection }}">
                     <i class="fas fa-plus me-1"></i><span>Tambah {{ $activeSectionLabel }}</span>
                 </button>
@@ -1595,6 +1601,50 @@
     </div>
 </div>
 
+{{-- ===== Modal Import Jadwal Kerja ===== --}}
+<div class="modal fade" id="attendance_import_schedules_modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h2 class="fw-bolder mb-1"><i class="fas fa-file-import text-primary me-2"></i>Import Jadwal Kerja</h2>
+                    <div class="text-muted fs-7">Upload Excel untuk membuat atau memperbarui jadwal harian karyawan.</div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info border-0 mb-5" style="background:#eff8ff;">
+                    <div class="fw-bold mb-2">Format kolom Excel</div>
+                    <div class="fs-7 text-muted">
+                        Wajib: salah satu <code>employee_code</code>/<code>employee_id</code>/<code>employee_name</code>,
+                        lalu <code>schedule_date</code> dan <code>schedule_type</code>.
+                        Untuk <code>schedule_type</code> = <code>work</code>, isi <code>shift</code> atau <code>work_shift_id</code>.
+                    </div>
+                    <div class="fs-8 text-muted mt-2">
+                        <code>schedule_type</code> bisa diisi <code>work</code>, <code>day_off</code>, <code>holiday</code>, atau <code>leave</code>.
+                        Tanggal wajib hari ini atau setelahnya karena jadwal lampau dikunci sistem.
+                    </div>
+                    <div class="fs-8 text-muted mt-2">Import akan update jadwal jika karyawan dan tanggalnya sudah ada.</div>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-bold">File Excel</label>
+                    <input type="file" id="schedule_import_file" class="form-control form-control-solid" accept=".xlsx,.xls">
+                    <div class="invalid-feedback d-block" id="schedule_import_error"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <a href="{{ route('admin.attendance.schedules.import-template') }}" class="btn btn-light-primary me-auto" id="schedule_import_template">
+                    <i class="fas fa-download me-1"></i>Download Template
+                </a>
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Batal</button>
+                <button type="button" class="btn btn-primary" id="schedule_import_submit">
+                    <i class="fas fa-file-import me-1"></i>Import
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {{-- ===== Modal Import Karyawan ===== --}}
 <div class="modal fade" id="attendance_import_employees_modal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
@@ -1807,6 +1857,8 @@ const templateImportUrl = '{{ route('admin.attendance.templates.import') }}';
 const templateExportUrl = '{{ route('admin.attendance.templates.export') }}';
 const shiftImportUrl = '{{ route('admin.attendance.shifts.import') }}';
 const shiftExportUrl = '{{ route('admin.attendance.shifts.export') }}';
+const scheduleImportUrl = '{{ route('admin.attendance.schedules.import') }}';
+const scheduleExportUrl = '{{ route('admin.attendance.schedules.export') }}';
 const attendanceRecapExportUrl = '{{ route('admin.attendance.attendances.export') }}';
 const nextEmployeeCode = @json($nextEmployeeCode ?? 'K0001');
 const weeklyTemplateOptions = @json($templateOptions ?? []);
@@ -2133,6 +2185,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const importTemplatesButton = document.getElementById('attendance_import_templates');
     const exportShiftsButton = document.getElementById('attendance_export_shifts');
     const importShiftsButton = document.getElementById('attendance_import_shifts');
+    const exportSchedulesButton = document.getElementById('attendance_export_schedules');
+    const importSchedulesButton = document.getElementById('attendance_import_schedules');
     const importEmployeesModalEl = document.getElementById('attendance_import_employees_modal');
     const importEmployeesModal = importEmployeesModalEl && typeof bootstrap !== 'undefined'
         ? bootstrap.Modal.getOrCreateInstance(importEmployeesModalEl)
@@ -2145,6 +2199,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const importTemplatesModal = importTemplatesModalEl && typeof bootstrap !== 'undefined'
         ? bootstrap.Modal.getOrCreateInstance(importTemplatesModalEl)
         : null;
+    const importSchedulesModalEl = document.getElementById('attendance_import_schedules_modal');
+    const importSchedulesModal = importSchedulesModalEl && typeof bootstrap !== 'undefined'
+        ? bootstrap.Modal.getOrCreateInstance(importSchedulesModalEl)
+        : null;
     const employeeImportFile = document.getElementById('employee_import_file');
     const employeeImportMode = document.getElementById('employee_import_mode');
     const employeeImportError = document.getElementById('employee_import_error');
@@ -2155,6 +2213,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const shiftImportFile = document.getElementById('shift_import_file');
     const shiftImportError = document.getElementById('shift_import_error');
     const shiftImportSubmit = document.getElementById('shift_import_submit');
+    const scheduleImportFile = document.getElementById('schedule_import_file');
+    const scheduleImportError = document.getElementById('schedule_import_error');
+    const scheduleImportSubmit = document.getElementById('schedule_import_submit');
     const recapFilterDateFrom = document.getElementById('recap_filter_date_from');
     const recapFilterDateTo = document.getElementById('recap_filter_date_to');
     const recapFilterEmployee = document.getElementById('recap_filter_employee');
@@ -2277,6 +2338,8 @@ document.addEventListener('DOMContentLoaded', () => {
         importTemplatesButton?.classList.toggle('d-none', section !== 'templates');
         exportShiftsButton?.classList.toggle('d-none', section !== 'shifts');
         importShiftsButton?.classList.toggle('d-none', section !== 'shifts');
+        exportSchedulesButton?.classList.toggle('d-none', section !== 'schedules');
+        importSchedulesButton?.classList.toggle('d-none', section !== 'schedules');
         exportAttendancesButton?.classList.toggle('d-none', section !== 'attendances');
         openFormButton.dataset.activeSection = section;
         openFormButton.querySelector('span').textContent = section === 'raw_logs'
@@ -2988,6 +3051,24 @@ document.addEventListener('DOMContentLoaded', () => {
     exportShiftsButton?.addEventListener('click', () => {
         window.location.href = shiftExportUrl;
     });
+    importSchedulesButton?.addEventListener('click', () => {
+        if (scheduleImportFile) scheduleImportFile.value = '';
+        if (scheduleImportError) scheduleImportError.textContent = '';
+        importSchedulesModal?.show();
+    });
+    exportSchedulesButton?.addEventListener('click', () => {
+        const params = new URLSearchParams();
+        params.set('q', searchInput?.value || '');
+        params.set('employee_id', appliedScheduleFilters.employee_id || '');
+        params.set('date_from', appliedScheduleFilters.date_from || '');
+        params.set('date_to', appliedScheduleFilters.date_to || '');
+        params.set('schedule_type', appliedScheduleFilters.schedule_type || '');
+        [...params.keys()].forEach((key) => {
+            if (!params.get(key)) params.delete(key);
+        });
+        const query = params.toString();
+        window.location.href = query ? `${scheduleExportUrl}?${query}` : scheduleExportUrl;
+    });
     importTemplatesButton?.addEventListener('click', () => {
         if (templateImportFile) templateImportFile.value = '';
         if (templateImportError) templateImportError.textContent = '';
@@ -3053,6 +3134,50 @@ document.addEventListener('DOMContentLoaded', () => {
         } finally {
             employeeImportSubmit.disabled = false;
             employeeImportSubmit.innerHTML = '<i class="fas fa-file-import me-1"></i>Import';
+        }
+    });
+    scheduleImportSubmit?.addEventListener('click', async () => {
+        if (!scheduleImportUrl) return;
+        if (scheduleImportError) scheduleImportError.textContent = '';
+
+        const file = scheduleImportFile?.files?.[0];
+        if (!file) {
+            if (scheduleImportError) scheduleImportError.textContent = 'Pilih file Excel terlebih dahulu.';
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        scheduleImportSubmit.disabled = true;
+        scheduleImportSubmit.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Mengimport...';
+
+        try {
+            const response = await fetch(scheduleImportUrl, {
+                method: 'POST',
+                headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' },
+                body: formData,
+            });
+            const json = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                const message = json?.errors?.file?.[0] || json?.message || 'Gagal import jadwal kerja';
+                if (scheduleImportError) scheduleImportError.textContent = message;
+                Swal?.fire('Error', message, 'error');
+                return;
+            }
+
+            const detail = `Created: ${json.created ?? 0}, Updated: ${json.updated ?? 0}`;
+            Swal?.fire('Berhasil', `${json.message || 'Import jadwal kerja berhasil'} (${detail})`, 'success');
+            if (scheduleImportFile) scheduleImportFile.value = '';
+            importSchedulesModal?.hide();
+            reloadScheduleViews(true);
+            scheduleCalendar?.refetchEvents();
+        } catch (error) {
+            if (scheduleImportError) scheduleImportError.textContent = 'Gagal import jadwal kerja';
+            Swal?.fire('Error', 'Gagal import jadwal kerja', 'error');
+        } finally {
+            scheduleImportSubmit.disabled = false;
+            scheduleImportSubmit.innerHTML = '<i class="fas fa-file-import me-1"></i>Import';
         }
     });
     shiftImportSubmit?.addEventListener('click', async () => {

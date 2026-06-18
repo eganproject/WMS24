@@ -7,9 +7,12 @@ use App\Exports\AbsentEmployeesExport;
 use App\Exports\AttendancesExport;
 use App\Exports\EmployeesExport;
 use App\Exports\EmployeesTemplateExport;
+use App\Exports\EmployeeSchedulesExport;
+use App\Exports\EmployeeSchedulesTemplateExport;
 use App\Exports\WeeklyScheduleTemplatesExport;
 use App\Exports\WorkShiftsExport;
 use App\Imports\EmployeesImport;
+use App\Imports\EmployeeSchedulesImport;
 use App\Imports\WeeklyScheduleTemplatesImport;
 use App\Imports\WorkShiftsImport;
 use App\Models\ActivityLog;
@@ -822,6 +825,144 @@ class AttendanceController extends Controller
                 'is_editable' => $schedule->schedule_date?->greaterThanOrEqualTo(today()) ?? false,
             ];
         });
+    }
+
+    public function exportSchedules(Request $request)
+    {
+        return Excel::download(
+            new EmployeeSchedulesExport($request->only(['q', 'employee_id', 'date_from', 'date_to', 'schedule_type'])),
+            'jadwal_kerja_'.now()->format('Ymd_His').'.xlsx'
+        );
+    }
+
+    public function downloadSchedulesImportTemplate()
+    {
+        return Excel::download(
+            new EmployeeSchedulesTemplateExport(),
+            'template_import_jadwal_kerja.xlsx'
+        );
+    }
+
+    public function importSchedules(Request $request)
+    {
+        $validated = $request->validate([
+            'file' => ['required', 'file', 'mimes:xlsx,xls'],
+        ]);
+
+        $import = new EmployeeSchedulesImport();
+        Excel::import($import, $validated['file']);
+
+        $rows = $import->rows;
+        if (empty($rows)) {
+            throw ValidationException::withMessages([
+                'file' => 'Tidak ada data valid untuk diimport',
+            ]);
+        }
+
+        $employees = Employee::query()
+            ->active()
+            ->get(['id', 'employee_code', 'name']);
+        $employeeById = $employees->keyBy(fn ($employee) => (string) $employee->id);
+        $employeeByCode = $employees->keyBy(fn ($employee) => mb_strtolower((string) $employee->employee_code));
+        $employeeByName = $employees->groupBy(fn ($employee) => mb_strtolower(trim((string) $employee->name)));
+
+        $shifts = WorkShift::query()->get(['id', 'name']);
+        $shiftById = $shifts->keyBy(fn ($shift) => (string) $shift->id);
+        $shiftByName = $shifts->keyBy(fn ($shift) => mb_strtolower(trim((string) $shift->name)));
+
+        $errors = [];
+        $prepared = [];
+
+        foreach ($rows as $row) {
+            $rowNo = $row['row'] ?? '?';
+            $employee = null;
+            $employeeIdRaw = trim((string) ($row['employee_id'] ?? ''));
+            $employeeCode = trim((string) ($row['employee_code'] ?? ''));
+            $employeeName = trim((string) ($row['employee_name'] ?? ''));
+
+            if ($employeeIdRaw !== '') {
+                $employee = $employeeById->get($employeeIdRaw);
+            } elseif ($employeeCode !== '') {
+                $employee = $employeeByCode->get(mb_strtolower($employeeCode));
+            } elseif ($employeeName !== '') {
+                $matches = $employeeByName->get(mb_strtolower($employeeName), collect());
+                if ($matches->count() > 1) {
+                    $errors[] = "Baris {$rowNo}: nama karyawan ambigu ({$employeeName}), gunakan employee_code";
+                    continue;
+                }
+                $employee = $matches->first();
+            }
+
+            if (!$employee) {
+                $identifier = $employeeIdRaw ?: ($employeeCode ?: $employeeName);
+                $errors[] = "Baris {$rowNo}: karyawan aktif tidak ditemukan ({$identifier})";
+                continue;
+            }
+
+            $workShiftId = null;
+            if (($row['schedule_type'] ?? '') === EmployeeSchedule::TYPE_WORK) {
+                $shiftIdRaw = trim((string) ($row['work_shift_id'] ?? ''));
+                $shiftName = trim((string) ($row['shift'] ?? ''));
+                $shift = $shiftIdRaw !== ''
+                    ? $shiftById->get($shiftIdRaw)
+                    : $shiftByName->get(mb_strtolower($shiftName));
+
+                if (!$shift) {
+                    $identifier = $shiftIdRaw ?: $shiftName;
+                    $errors[] = "Baris {$rowNo}: shift tidak ditemukan ({$identifier})";
+                    continue;
+                }
+
+                $workShiftId = $shift->id;
+            }
+
+            $prepared[] = [
+                'row' => $rowNo,
+                'employee' => $employee,
+                'attributes' => [
+                    'employee_id' => $employee->id,
+                    'schedule_date' => $row['schedule_date'],
+                ],
+                'values' => [
+                    'employee_schedule_assignment_id' => null,
+                    'work_shift_id' => $workShiftId,
+                    'schedule_type' => $row['schedule_type'],
+                    'note' => $row['note'] ?: null,
+                    'created_by' => auth()->id(),
+                ],
+            ];
+        }
+
+        if (!empty($errors)) {
+            throw ValidationException::withMessages([
+                'file' => implode(' | ', array_slice($errors, 0, 8)),
+            ]);
+        }
+
+        $created = 0;
+        $updated = 0;
+
+        DB::transaction(function () use ($prepared, &$created, &$updated) {
+            foreach ($prepared as $row) {
+                $existing = EmployeeSchedule::query()
+                    ->where($row['attributes'])
+                    ->first();
+
+                $schedule = EmployeeSchedule::query()->updateOrCreate(
+                    $row['attributes'],
+                    $row['values']
+                );
+
+                $existing ? $updated++ : $created++;
+                app(AttendanceProcessor::class)->rebuildDailyAttendance($row['employee'], $schedule->schedule_date);
+            }
+        });
+
+        return response()->json([
+            'message' => 'Import jadwal kerja berhasil',
+            'created' => $created,
+            'updated' => $updated,
+        ]);
     }
 
     public function calendarEvents(Request $request)

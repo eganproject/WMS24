@@ -429,6 +429,7 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/replenishment/data', [ReplenishmentReportController::class, 'data'])->name('replenishment.data');
         Route::get('/stock-transfers', [StockTransferReportController::class, 'index'])->name('stock-transfers.index');
         Route::get('/stock-transfers/data', [StockTransferReportController::class, 'data'])->name('stock-transfers.data');
+        Route::get('/stock-transfers/chart-data', [StockTransferReportController::class, 'chartData'])->name('stock-transfers.chart-data');
         Route::get('/stock-opname', [StockOpnameReportController::class, 'index'])->name('stock-opname.index');
         Route::get('/stock-opname/data', [StockOpnameReportController::class, 'data'])->name('stock-opname.data');
         Route::get('/stock-opname/sku-diff', [StockOpnameReportController::class, 'diffSku'])->name('stock-opname.diff-sku');

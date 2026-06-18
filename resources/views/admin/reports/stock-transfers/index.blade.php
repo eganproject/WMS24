@@ -23,6 +23,155 @@
         padding: 28px;
     }
 
+    .report-tabs {
+        align-items: center;
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        display: flex;
+        gap: 8px;
+        margin: 0 auto 18px;
+        max-width: 1320px;
+        padding: 6px;
+    }
+
+    .report-tab {
+        background: transparent;
+        border: 0;
+        border-radius: 6px;
+        color: #6b7280;
+        font-weight: 700;
+        padding: 10px 16px;
+    }
+
+    .report-tab.active {
+        background: #111827;
+        color: #fff;
+    }
+
+    .report-panel {
+        display: none;
+    }
+
+    .report-panel.active {
+        display: block;
+    }
+
+    .transfer-analytics {
+        margin: 0 auto;
+        max-width: 1320px;
+    }
+
+    .analytics-kpi-grid,
+    .analytics-grid {
+        display: grid;
+        gap: 14px;
+    }
+
+    .analytics-kpi-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        margin-bottom: 14px;
+    }
+
+    .analytics-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .analytics-card,
+    .analytics-kpi {
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+    }
+
+    .analytics-card {
+        padding: 18px;
+    }
+
+    .analytics-kpi {
+        padding: 16px;
+    }
+
+    .analytics-title {
+        color: #111827;
+        font-size: 15px;
+        font-weight: 800;
+        margin-bottom: 2px;
+    }
+
+    .analytics-subtitle {
+        color: #6b7280;
+        font-size: 12px;
+        margin-bottom: 14px;
+    }
+
+    .analytics-kpi-label {
+        color: #6b7280;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+    }
+
+    .analytics-kpi-value {
+        color: #111827;
+        font-size: 26px;
+        font-weight: 800;
+        line-height: 1.2;
+        margin-top: 6px;
+    }
+
+    .analytics-kpi-note {
+        color: #6b7280;
+        font-size: 12px;
+        margin-top: 4px;
+    }
+
+    .chart-box {
+        min-height: 315px;
+    }
+
+    .analytics-list {
+        display: grid;
+        gap: 10px;
+        margin: 0;
+        padding: 0;
+    }
+
+    .analytics-list li {
+        align-items: flex-start;
+        border-bottom: 1px solid #f3f4f6;
+        display: flex;
+        gap: 10px;
+        justify-content: space-between;
+        list-style: none;
+        padding: 0 0 10px;
+    }
+
+    .analytics-list li:last-child {
+        border-bottom: 0;
+        padding-bottom: 0;
+    }
+
+    .analytics-list strong {
+        color: #111827;
+    }
+
+    .analytics-list span {
+        color: #6b7280;
+        font-size: 12px;
+    }
+
+    .analytics-state {
+        align-items: center;
+        border: 1px dashed #d1d5db;
+        color: #6b7280;
+        display: flex;
+        justify-content: center;
+        min-height: 220px;
+        padding: 18px;
+        text-align: center;
+    }
+
     .document-header {
         border-bottom: 3px double #111827;
         display: flex;
@@ -143,11 +292,15 @@
 
     @media (max-width: 991.98px) {
         .document-header,
-        .document-summary {
+        .document-summary,
+        .analytics-kpi-grid,
+        .analytics-grid {
             display: block;
         }
 
-        .summary-cell {
+        .summary-cell,
+        .analytics-kpi,
+        .analytics-card {
             margin-bottom: 8px;
         }
     }
@@ -171,6 +324,10 @@
             position: absolute;
             top: 0;
             width: 100%;
+        }
+
+        .report-panel {
+            display: block;
         }
 
         .document-table {
@@ -284,6 +441,12 @@
     </div>
 </div>
 
+<div class="report-tabs no-print" role="tablist" aria-label="Tab laporan transfer gudang">
+    <button type="button" class="report-tab active" data-report-tab="data">Data Laporan</button>
+    <button type="button" class="report-tab" data-report-tab="analytics">Analitik Transfer</button>
+</div>
+
+<div class="report-panel active" id="report_tab_data">
 <div class="transfer-report-document" id="report_document">
     <div class="document-header">
         <div>
@@ -351,17 +514,90 @@
         </table>
     </div>
 </div>
+</div>
+
+<div class="report-panel no-print" id="report_tab_analytics">
+    <div class="transfer-analytics">
+        <div class="analytics-kpi-grid">
+            <div class="analytics-kpi">
+                <div class="analytics-kpi-label">Total Transfer</div>
+                <div class="analytics-kpi-value" id="analytics_transfer_count">0</div>
+                <div class="analytics-kpi-note" id="analytics_sku_line_count">0 baris SKU</div>
+            </div>
+            <div class="analytics-kpi">
+                <div class="analytics-kpi-label">Total Qty Kirim</div>
+                <div class="analytics-kpi-value" id="analytics_total_qty">0</div>
+                <div class="analytics-kpi-note" id="analytics_total_ok">0 qty OK</div>
+            </div>
+            <div class="analytics-kpi">
+                <div class="analytics-kpi-label">Akurasi QC</div>
+                <div class="analytics-kpi-value" id="analytics_accuracy_rate">0%</div>
+                <div class="analytics-kpi-note">Qty OK dibanding qty kirim</div>
+            </div>
+            <div class="analytics-kpi">
+                <div class="analytics-kpi-label">Qty Bermasalah</div>
+                <div class="analytics-kpi-value" id="analytics_issue_qty">0</div>
+                <div class="analytics-kpi-note" id="analytics_issue_rate">0% dari qty kirim</div>
+            </div>
+        </div>
+
+        <div class="analytics-grid">
+            <div class="analytics-card">
+                <div class="analytics-title">Tren Volume Harian</div>
+                <div class="analytics-subtitle">Perbandingan qty OK, reject, dan kurang per tanggal transfer.</div>
+                <div id="chart_daily_volume" class="chart-box"></div>
+            </div>
+            <div class="analytics-card">
+                <div class="analytics-title">Arus Antar Gudang</div>
+                <div class="analytics-subtitle">Rute transfer dengan volume qty kirim terbesar.</div>
+                <div id="chart_warehouse_flow" class="chart-box"></div>
+            </div>
+            <div class="analytics-card">
+                <div class="analytics-title">SKU Bermasalah</div>
+                <div class="analytics-subtitle">SKU dengan akumulasi reject dan kekurangan terbesar.</div>
+                <div id="chart_issue_skus" class="chart-box"></div>
+            </div>
+            <div class="analytics-card">
+                <div class="analytics-title">SKU Paling Banyak Ditransfer</div>
+                <div class="analytics-subtitle">SKU dengan total qty kirim tertinggi.</div>
+                <div id="chart_moved_skus" class="chart-box"></div>
+            </div>
+            <div class="analytics-card">
+                <div class="analytics-title">Status Transfer</div>
+                <div class="analytics-subtitle">Distribusi jumlah dokumen transfer per status.</div>
+                <div id="chart_status" class="chart-box"></div>
+            </div>
+            <div class="analytics-card">
+                <div class="analytics-title">Mode Traceability</div>
+                <div class="analytics-subtitle">Perbandingan transfer QR inbound, legacy, dan belum bermode.</div>
+                <div id="chart_traceability" class="chart-box"></div>
+            </div>
+            <div class="analytics-card">
+                <div class="analytics-title">Insight Cepat</div>
+                <div class="analytics-subtitle" id="analytics_period">Periode: -</div>
+                <ul class="analytics-list" id="analytics_insights">
+                    <li><span>Memuat insight...</span></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
 @endsection
 
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     const dataUrl = @json($dataUrl);
+    const chartUrl = @json($chartUrl);
     const defaultDateFrom = @json($defaultDateFrom);
     const defaultDateTo = @json($defaultDateTo);
     const rowsEl = document.getElementById('report_rows');
     let abortController = null;
+    let analyticsAbortController = null;
     let draw = 0;
+    let activeTab = 'data';
+    let analyticsLoaded = false;
+    const charts = {};
 
     const filters = {
         q: document.getElementById('filter_q'),
@@ -386,6 +622,9 @@ document.addEventListener('DOMContentLoaded', () => {
         .replace(/'/g, '&#039;');
 
     const number = (value) => new Intl.NumberFormat('id-ID').format(Number(value || 0));
+    const percent = (value) => `${new Intl.NumberFormat('id-ID', {
+        maximumFractionDigits: 2,
+    }).format(Number(value || 0))}%`;
 
     const filterValueText = (select) => {
         if (!select || !select.value) return '';
@@ -507,6 +746,220 @@ document.addEventListener('DOMContentLoaded', () => {
         setText('doc_filter_summary', active.length ? active.join(' | ') : 'Semua data');
     };
 
+    const emptyChart = (id, message = 'Tidak ada data untuk filter ini.') => {
+        if (charts[id]) {
+            charts[id].destroy();
+            delete charts[id];
+        }
+        const el = document.getElementById(id);
+        if (el) {
+            el.innerHTML = `<div class="analytics-state">${escapeHtml(message)}</div>`;
+        }
+    };
+
+    const renderChart = (id, options, hasData) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (!hasData) {
+            emptyChart(id);
+            return;
+        }
+        if (typeof ApexCharts === 'undefined') {
+            emptyChart(id, 'Library grafik belum tersedia.');
+            return;
+        }
+        if (charts[id]) {
+            charts[id].destroy();
+        }
+        el.innerHTML = '';
+        const chartOptions = {
+            dataLabels: { enabled: false },
+            grid: { borderColor: '#eef2f7' },
+            legend: { position: 'top', horizontalAlign: 'left' },
+            stroke: { width: 2, curve: 'smooth' },
+            tooltip: {
+                y: { formatter: (value) => number(value) },
+            },
+            ...options,
+            chart: {
+                fontFamily: 'Inter, Helvetica, sans-serif',
+                toolbar: { show: false },
+                zoom: { enabled: false },
+                ...(options.chart || {}),
+            },
+            tooltip: {
+                y: { formatter: (value) => number(value) },
+                ...(options.tooltip || {}),
+            },
+        };
+        charts[id] = new ApexCharts(el, chartOptions);
+        charts[id].render();
+    };
+
+    const analyticsKpi = (summary) => {
+        setText('analytics_transfer_count', number(summary.transfer_count));
+        setText('analytics_sku_line_count', `${number(summary.sku_line_count)} baris SKU`);
+        setText('analytics_total_qty', number(summary.total_qty));
+        setText('analytics_total_ok', `${number(summary.total_ok)} qty OK`);
+        setText('analytics_accuracy_rate', percent(summary.accuracy_rate));
+        setText('analytics_issue_qty', number(summary.issue_qty));
+        setText('analytics_issue_rate', `${percent(summary.issue_rate)} dari qty kirim`);
+    };
+
+    const renderInsights = (payload) => {
+        const summary = payload.summary || {};
+        const chartsData = payload.charts || {};
+        const topRoute = (chartsData.warehouse_flow || [])[0];
+        const topIssue = (chartsData.top_issue_skus || [])[0];
+        const topMoved = (chartsData.top_moved_skus || [])[0];
+        const insights = [];
+
+        insights.push({
+            title: `Akurasi QC ${percent(summary.accuracy_rate)}`,
+            body: `${number(summary.total_ok)} dari ${number(summary.total_qty)} qty kirim tercatat OK.`,
+        });
+
+        if (topRoute) {
+            insights.push({
+                title: `Rute terbesar: ${topRoute.route}`,
+                body: `${number(topRoute.qty)} qty dari ${number(topRoute.transfer_count)} transfer.`,
+            });
+        }
+
+        if (topIssue) {
+            insights.push({
+                title: `SKU issue tertinggi: ${topIssue.sku}`,
+                body: `${number(topIssue.issue_qty)} qty bermasalah, terdiri dari ${number(topIssue.reject)} reject dan ${number(topIssue.short)} kurang.`,
+            });
+        } else {
+            insights.push({
+                title: 'Tidak ada SKU bermasalah',
+                body: 'Tidak ditemukan reject atau kekurangan pada filter aktif.',
+            });
+        }
+
+        if (topMoved) {
+            insights.push({
+                title: `SKU paling aktif: ${topMoved.sku}`,
+                body: `${number(topMoved.qty)} qty ditransfer untuk ${topMoved.name}.`,
+            });
+        }
+
+        const list = document.getElementById('analytics_insights');
+        if (list) {
+            list.innerHTML = insights.map((insight) => `
+                <li>
+                    <div>
+                        <strong>${escapeHtml(insight.title)}</strong>
+                        <div><span>${escapeHtml(insight.body)}</span></div>
+                    </div>
+                </li>
+            `).join('');
+        }
+    };
+
+    const renderAnalytics = (payload) => {
+        const summary = payload.summary || {};
+        const chartsData = payload.charts || {};
+        analyticsKpi(summary);
+        setText('analytics_period', `Periode: ${payload.period?.from || '-'} s/d ${payload.period?.to || '-'} | Dibuat ${payload.period?.generated_at || '-'}`);
+
+        const daily = chartsData.daily_volume || [];
+        renderChart('chart_daily_volume', {
+            chart: { type: 'bar', height: 315, stacked: true },
+            colors: ['#16a34a', '#dc2626', '#f59e0b'],
+            series: [
+                { name: 'OK', data: daily.map((row) => row.ok || 0) },
+                { name: 'Reject', data: daily.map((row) => row.reject || 0) },
+                { name: 'Kurang', data: daily.map((row) => row.short || 0) },
+            ],
+            xaxis: { categories: daily.map((row) => row.date) },
+            yaxis: { labels: { formatter: (value) => number(value) } },
+        }, daily.length > 0);
+
+        const flows = chartsData.warehouse_flow || [];
+        renderChart('chart_warehouse_flow', {
+            chart: { type: 'bar', height: 315 },
+            plotOptions: { bar: { horizontal: true, borderRadius: 3 } },
+            colors: ['#2563eb'],
+            series: [{ name: 'Qty Kirim', data: flows.map((row) => row.qty || 0) }],
+            xaxis: { categories: flows.map((row) => row.route), labels: { formatter: (value) => number(value) } },
+        }, flows.length > 0);
+
+        const issues = chartsData.top_issue_skus || [];
+        renderChart('chart_issue_skus', {
+            chart: { type: 'bar', height: 315, stacked: true },
+            plotOptions: { bar: { horizontal: true, borderRadius: 3 } },
+            colors: ['#dc2626', '#f59e0b'],
+            series: [
+                { name: 'Reject', data: issues.map((row) => row.reject || 0) },
+                { name: 'Kurang', data: issues.map((row) => row.short || 0) },
+            ],
+            xaxis: { categories: issues.map((row) => row.sku), labels: { formatter: (value) => number(value) } },
+        }, issues.length > 0);
+
+        const moved = chartsData.top_moved_skus || [];
+        renderChart('chart_moved_skus', {
+            chart: { type: 'bar', height: 315 },
+            plotOptions: { bar: { horizontal: true, borderRadius: 3 } },
+            colors: ['#0f766e'],
+            series: [{ name: 'Qty Kirim', data: moved.map((row) => row.qty || 0) }],
+            xaxis: { categories: moved.map((row) => row.sku), labels: { formatter: (value) => number(value) } },
+        }, moved.length > 0);
+
+        const status = chartsData.status_breakdown || [];
+        renderChart('chart_status', {
+            chart: { type: 'donut', height: 315 },
+            colors: ['#16a34a', '#f59e0b', '#dc2626', '#6b7280', '#2563eb'],
+            labels: status.map((row) => row.label),
+            series: status.map((row) => row.transfer_count || 0),
+            tooltip: { y: { formatter: (value) => `${number(value)} transfer` } },
+        }, status.length > 0);
+
+        const traceability = chartsData.traceability_breakdown || [];
+        renderChart('chart_traceability', {
+            chart: { type: 'donut', height: 315 },
+            colors: ['#2563eb', '#f97316', '#6b7280'],
+            labels: traceability.map((row) => row.label),
+            series: traceability.map((row) => row.transfer_count || 0),
+            tooltip: { y: { formatter: (value) => `${number(value)} transfer` } },
+        }, traceability.length > 0);
+
+        renderInsights(payload);
+    };
+
+    const loadAnalytics = async () => {
+        if (analyticsAbortController) analyticsAbortController.abort();
+        analyticsAbortController = new AbortController();
+        ['chart_daily_volume', 'chart_warehouse_flow', 'chart_issue_skus', 'chart_moved_skus', 'chart_status', 'chart_traceability'].forEach((id) => {
+            emptyChart(id, 'Memuat grafik...');
+        });
+
+        try {
+            const response = await fetch(`${chartUrl}?${params().toString()}`, {
+                headers: { 'Accept': 'application/json' },
+                signal: analyticsAbortController.signal,
+            });
+
+            const json = await response.json();
+            if (!response.ok) {
+                throw new Error(json.message || 'Gagal memuat analitik.');
+            }
+
+            analyticsLoaded = true;
+            renderAnalytics(json);
+        } catch (error) {
+            if (error.name === 'AbortError') return;
+            ['chart_daily_volume', 'chart_warehouse_flow', 'chart_issue_skus', 'chart_moved_skus', 'chart_status', 'chart_traceability'].forEach((id) => {
+                emptyChart(id, error.message || 'Gagal memuat analitik.');
+            });
+            const list = document.getElementById('analytics_insights');
+            if (list) {
+                list.innerHTML = `<li><span>${escapeHtml(error.message || 'Gagal memuat analitik.')}</span></li>`;
+            }
+        }
+    };
+
     const loadReport = async () => {
         if (abortController) abortController.abort();
         abortController = new AbortController();
@@ -531,7 +984,28 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    document.getElementById('btn_apply')?.addEventListener('click', loadReport);
+    document.querySelectorAll('[data-report-tab]').forEach((button) => {
+        button.addEventListener('click', () => {
+            activeTab = button.dataset.reportTab || 'data';
+            document.querySelectorAll('[data-report-tab]').forEach((tab) => {
+                tab.classList.toggle('active', tab === button);
+            });
+            document.getElementById('report_tab_data')?.classList.toggle('active', activeTab === 'data');
+            document.getElementById('report_tab_analytics')?.classList.toggle('active', activeTab === 'analytics');
+            if (activeTab === 'analytics' && !analyticsLoaded) {
+                loadAnalytics();
+            }
+        });
+    });
+
+    document.getElementById('btn_apply')?.addEventListener('click', () => {
+        loadReport();
+        if (activeTab === 'analytics') {
+            loadAnalytics();
+        } else {
+            analyticsLoaded = false;
+        }
+    });
     document.getElementById('btn_print')?.addEventListener('click', () => window.print());
     document.getElementById('btn_reset')?.addEventListener('click', () => {
         Object.values(filters).forEach((el) => {
@@ -542,6 +1016,11 @@ document.addEventListener('DOMContentLoaded', () => {
         filters.date_to.value = defaultDateTo;
         filters.length.value = '25';
         loadReport();
+        if (activeTab === 'analytics') {
+            loadAnalytics();
+        } else {
+            analyticsLoaded = false;
+        }
     });
     filters.q?.addEventListener('keyup', (event) => {
         if (event.key === 'Enter') loadReport();

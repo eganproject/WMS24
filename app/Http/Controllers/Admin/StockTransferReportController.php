@@ -16,6 +16,7 @@ class StockTransferReportController extends Controller
     {
         return view('admin.reports.stock-transfers.index', [
             'dataUrl' => route('admin.reports.stock-transfers.data'),
+            'chartUrl' => route('admin.reports.stock-transfers.chart-data'),
             'warehouses' => Warehouse::orderBy('name')->get(['id', 'name']),
             'users' => User::orderBy('name')->get(['id', 'name']),
             'defaultDateFrom' => now()->startOfMonth()->toDateString(),
@@ -93,6 +94,144 @@ class StockTransferReportController extends Controller
                 'legacy_count' => $legacyCount,
             ],
             'data' => $data,
+        ]);
+    }
+
+    public function chartData(Request $request)
+    {
+        $query = StockTransferItem::query()
+            ->with([
+                'item:id,sku,name',
+                'transfer:id,code,from_warehouse_id,to_warehouse_id,transacted_at,status,traceability_mode',
+                'transfer.fromWarehouse:id,name',
+                'transfer.toWarehouse:id,name',
+            ]);
+
+        $this->applyFilters($query, $request);
+
+        $rows = $query->get();
+        $totalQty = (int) $rows->sum('qty');
+        $totalOk = (int) $rows->sum('qty_ok');
+        $totalReject = (int) $rows->sum('qty_reject');
+        $totalShort = (int) $rows->sum('qty_short');
+        $issueQty = $totalReject + $totalShort;
+
+        $summary = [
+            'transfer_count' => $rows->pluck('stock_transfer_id')->unique()->count(),
+            'sku_line_count' => $rows->count(),
+            'total_qty' => $totalQty,
+            'total_ok' => $totalOk,
+            'total_reject' => $totalReject,
+            'total_short' => $totalShort,
+            'issue_qty' => $issueQty,
+            'accuracy_rate' => $totalQty > 0 ? round(($totalOk / $totalQty) * 100, 2) : 0,
+            'issue_rate' => $totalQty > 0 ? round(($issueQty / $totalQty) * 100, 2) : 0,
+        ];
+
+        $dailyVolume = $rows
+            ->groupBy(fn (StockTransferItem $row) => $row->transfer?->transacted_at?->format('Y-m-d') ?: '-')
+            ->sortKeys()
+            ->map(fn ($group, string $date) => [
+                'date' => $date,
+                'qty' => (int) $group->sum('qty'),
+                'ok' => (int) $group->sum('qty_ok'),
+                'reject' => (int) $group->sum('qty_reject'),
+                'short' => (int) $group->sum('qty_short'),
+                'transfer_count' => $group->pluck('stock_transfer_id')->unique()->count(),
+            ])
+            ->values();
+
+        $warehouseFlow = $rows
+            ->groupBy(function (StockTransferItem $row) {
+                $from = $row->transfer?->fromWarehouse?->name ?: 'Gudang tidak diketahui';
+                $to = $row->transfer?->toWarehouse?->name ?: 'Gudang tidak diketahui';
+
+                return $from . ' -> ' . $to;
+            })
+            ->map(fn ($group, string $route) => [
+                'route' => $route,
+                'qty' => (int) $group->sum('qty'),
+                'ok' => (int) $group->sum('qty_ok'),
+                'reject' => (int) $group->sum('qty_reject'),
+                'short' => (int) $group->sum('qty_short'),
+                'transfer_count' => $group->pluck('stock_transfer_id')->unique()->count(),
+            ])
+            ->sortByDesc('qty')
+            ->take(10)
+            ->values();
+
+        $topMovedSkus = $rows
+            ->groupBy(fn (StockTransferItem $row) => $row->item?->sku ?: 'SKU tidak diketahui')
+            ->map(function ($group, string $sku) {
+                $item = $group->first()?->item;
+
+                return [
+                    'sku' => $sku,
+                    'name' => $item?->name ?: '-',
+                    'qty' => (int) $group->sum('qty'),
+                    'ok' => (int) $group->sum('qty_ok'),
+                    'reject' => (int) $group->sum('qty_reject'),
+                    'short' => (int) $group->sum('qty_short'),
+                ];
+            })
+            ->sortByDesc('qty')
+            ->take(10)
+            ->values();
+
+        $topIssueSkus = $rows
+            ->groupBy(fn (StockTransferItem $row) => $row->item?->sku ?: 'SKU tidak diketahui')
+            ->map(function ($group, string $sku) {
+                $item = $group->first()?->item;
+                $reject = (int) $group->sum('qty_reject');
+                $short = (int) $group->sum('qty_short');
+
+                return [
+                    'sku' => $sku,
+                    'name' => $item?->name ?: '-',
+                    'issue_qty' => $reject + $short,
+                    'reject' => $reject,
+                    'short' => $short,
+                    'qty' => (int) $group->sum('qty'),
+                ];
+            })
+            ->filter(fn (array $row) => $row['issue_qty'] > 0)
+            ->sortByDesc('issue_qty')
+            ->take(10)
+            ->values();
+
+        $statusBreakdown = $rows
+            ->groupBy(fn (StockTransferItem $row) => $row->transfer?->status ?: '-')
+            ->map(fn ($group, string $status) => [
+                'status' => $status,
+                'label' => $this->statusLabel($status),
+                'transfer_count' => $group->pluck('stock_transfer_id')->unique()->count(),
+            ])
+            ->values();
+
+        $traceabilityBreakdown = $rows
+            ->groupBy(fn (StockTransferItem $row) => $row->transfer?->traceability_mode ?: 'none')
+            ->map(fn ($group, string $mode) => [
+                'mode' => $mode,
+                'label' => $this->traceabilitySummaryLabel($mode),
+                'transfer_count' => $group->pluck('stock_transfer_id')->unique()->count(),
+            ])
+            ->values();
+
+        return response()->json([
+            'period' => [
+                'from' => $request->input('date_from'),
+                'to' => $request->input('date_to'),
+                'generated_at' => now()->format('d/m/Y H:i'),
+            ],
+            'summary' => $summary,
+            'charts' => [
+                'daily_volume' => $dailyVolume,
+                'warehouse_flow' => $warehouseFlow,
+                'top_moved_skus' => $topMovedSkus,
+                'top_issue_skus' => $topIssueSkus,
+                'status_breakdown' => $statusBreakdown,
+                'traceability_breakdown' => $traceabilityBreakdown,
+            ],
         ]);
     }
 
@@ -249,6 +388,15 @@ class StockTransferReportController extends Controller
             'qr' => 'QR Inbound',
             'legacy' => 'Legacy / Tanpa QR' . ($legacyReason ? ': ' . $legacyReason : ''),
             default => '-',
+        };
+    }
+
+    private function traceabilitySummaryLabel(?string $mode): string
+    {
+        return match ($mode) {
+            'qr' => 'QR Inbound',
+            'legacy' => 'Legacy / Tanpa QR',
+            default => 'Belum Ada Mode',
         };
     }
 }

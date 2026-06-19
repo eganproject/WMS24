@@ -114,8 +114,34 @@ class AttendanceReportDetailSheet implements FromCollection, WithHeadings, WithT
                 $sheet->getStyle('K5:O'.$lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
                 $sheet->getStyle('A1:Q'.$lastRow)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
                 $sheet->getStyle('M5:O'.$lastRow)->getNumberFormat()->setFormatCode('#,##0.00');
+
+                $rowNumber = 5;
+                foreach ($this->rows as $employeeRow) {
+                    foreach ($employeeRow['detail_rows'] ?? [] as $detail) {
+                        $fillColor = $this->statusFillColor($detail['status'] ?? null);
+                        if ($fillColor) {
+                            $sheet->getStyle('A'.$rowNumber.':Q'.$rowNumber)
+                                ->getFill()
+                                ->setFillType(Fill::FILL_SOLID)
+                                ->getStartColor()
+                                ->setRGB($fillColor);
+                        }
+
+                        $rowNumber++;
+                    }
+                }
             },
         ];
+    }
+
+    private function statusFillColor(?string $status): ?string
+    {
+        return match ($status) {
+            'late' => 'FFF4CC',
+            'incomplete' => 'DDEBFF',
+            'absent' => 'FFD6D6',
+            default => null,
+        };
     }
 
     private function scheduleTypeLabel(?string $value): string

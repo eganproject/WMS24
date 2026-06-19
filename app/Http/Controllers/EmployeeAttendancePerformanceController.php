@@ -35,12 +35,13 @@ class EmployeeAttendancePerformanceController extends Controller
         $effectiveEnd = $end->greaterThan($today) ? $today : $end;
 
         $records = Attendance::query()
-            ->with('shift:id,name,start_time,end_time')
+            ->with('shift:id,name,start_time,end_time,late_tolerance_minutes')
             ->where('employee_id', $employee->id)
             ->whereBetween('attendance_date', [$start->toDateString(), $end->toDateString()])
             ->orderBy('attendance_date')
             ->get();
         $schedules = EmployeeSchedule::query()
+            ->with('shift:id,name,start_time,end_time,late_tolerance_minutes')
             ->where('employee_id', $employee->id)
             ->whereBetween('schedule_date', [$start->toDateString(), $end->toDateString()])
             ->orderBy('schedule_date')

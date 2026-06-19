@@ -2310,7 +2310,7 @@ class AttendanceController extends Controller
             ->orderBy('name')
             ->get();
 
-        return $employees
+        $rows = $employees
             ->map(fn (Employee $employee) => $this->dailyAttendanceMonitorRow(
                 $date,
                 $employee,
@@ -2318,9 +2318,21 @@ class AttendanceController extends Controller
                 $attendances->get($employee->id),
                 $leaves->get($employee->id),
                 $holiday
-            ))
-            ->when($status !== '', fn ($collection) => $collection->where('status_key', $status))
-            ->values();
+            ));
+
+        if ($status === AttendanceDailyStatusResolver::STATUS_UNSCHEDULED) {
+            return $rows
+                ->where('status_key', AttendanceDailyStatusResolver::STATUS_UNSCHEDULED)
+                ->values();
+        }
+
+        $rows = $rows->reject(fn (array $row) => $row['status_key'] === AttendanceDailyStatusResolver::STATUS_UNSCHEDULED);
+
+        if ($status !== '') {
+            $rows = $rows->where('status_key', $status);
+        }
+
+        return $rows->values();
     }
 
     private function dailyAttendanceMonitorRow(

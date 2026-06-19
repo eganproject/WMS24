@@ -87,11 +87,11 @@ class AttendanceReportController extends Controller
                 'area:id,code,name',
                 'positionRelation:id,name',
                 'schedules' => fn ($query) => $query
-                    ->with('shift:id,name')
+                    ->with('shift:id,name,start_time,end_time,late_tolerance_minutes')
                     ->whereDate('schedule_date', '>=', $from)
                     ->whereDate('schedule_date', '<=', $to),
                 'attendances' => fn ($query) => $query
-                    ->with('shift:id,name')
+                    ->with('shift:id,name,start_time,end_time,late_tolerance_minutes')
                     ->whereDate('attendance_date', '>=', $from)
                     ->whereDate('attendance_date', '<=', $to)
                     ->orderBy('attendance_date'),

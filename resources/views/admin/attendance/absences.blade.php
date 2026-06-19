@@ -183,7 +183,7 @@
                 <option value="present">Hadir</option>
                 <option value="leave">Cuti/Izin</option>
                 <option value="day_off">Libur</option>
-                <option value="holiday">Libur Perusahaan</option>
+                <option value="holiday">Libur Nasional/Perusahaan</option>
                 <option value="unscheduled">Tidak Ada Jadwal</option>
             </select>
         </div>
@@ -194,7 +194,7 @@
         <div class="col-12 d-flex flex-wrap gap-2 justify-content-between align-items-center pt-2">
             <div class="d-flex flex-wrap gap-2">
                 <div class="abs-stat info">
-                    <div class="label">Total Jadwal</div>
+                    <div class="label">Total Terjadwal</div>
                     <div class="value" id="summary_total">0</div>
                 </div>
                 <div class="abs-stat success">

@@ -307,6 +307,7 @@
                         <th class="text-end">Telat</th>
                         <th class="text-end">Alpha</th>
                         <th class="text-end">Tidak Lengkap</th>
+                        <th class="text-end">Belum Check-in</th>
                         <th class="text-end">Cuti</th>
                         <th class="text-end">Libur</th>
                         <th class="text-end">Rate</th>
@@ -440,6 +441,7 @@ document.addEventListener('DOMContentLoaded', () => {
         leave: 'Cuti/Izin',
         holiday: 'Libur Perusahaan',
         day_off: 'Libur Mingguan',
+        not_checked_in: 'Belum Check-in',
         none: 'Tidak Ada',
         pending: 'Pending',
         approved: 'Approved',
@@ -447,7 +449,7 @@ document.addEventListener('DOMContentLoaded', () => {
         work: 'Masuk',
     }[value] || value || '-');
 
-    const statusBadge = (value) => {
+    const statusBadge = (value, label = null) => {
         const cls = {
             present: 'badge-light-success',
             late: 'badge-light-warning',
@@ -456,13 +458,14 @@ document.addEventListener('DOMContentLoaded', () => {
             leave: 'badge-light-info',
             holiday: 'badge-light-danger',
             day_off: 'badge-light-secondary',
+            not_checked_in: 'badge-light-secondary',
             pending: 'badge-light-warning',
             approved: 'badge-light-success',
             rejected: 'badge-light-danger',
             none: 'badge-light-secondary',
         }[value] || 'badge-light';
 
-        return `<span class="badge ${cls}">${escapeHtml(statusLabel(value))}</span>`;
+        return `<span class="badge ${cls}">${escapeHtml(label || statusLabel(value))}</span>`;
     };
 
     const updateSummary = (summary = {}, period = {}) => {
@@ -471,7 +474,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('summary_attendance_rate').textContent = pct(summary.attendance_rate);
         document.getElementById('summary_scheduled').textContent = `${Number(summary.scheduled_work_days || 0).toLocaleString('id-ID')} hari kerja | ${Number(summary.non_work_days || 0).toLocaleString('id-ID')} libur`;
         document.getElementById('summary_problem_days').textContent = Number((summary.absent_days || 0) + (summary.incomplete_days || 0)).toLocaleString('id-ID');
-        document.getElementById('summary_problem_meta').textContent = `Alpha ${Number(summary.absent_days || 0).toLocaleString('id-ID')} | Tidak lengkap ${Number(summary.incomplete_days || 0).toLocaleString('id-ID')}`;
+        document.getElementById('summary_problem_meta').textContent = `Alpha ${Number(summary.absent_days || 0).toLocaleString('id-ID')} | Tidak lengkap ${Number(summary.incomplete_days || 0).toLocaleString('id-ID')} | Belum check-in ${Number(summary.not_checked_in_days || 0).toLocaleString('id-ID')}`;
         document.getElementById('summary_overtime').textContent = hours(summary.approved_overtime_minutes);
         document.getElementById('summary_overtime_meta').textContent = `Pending ${hours(summary.pending_overtime_minutes)}`;
     };
@@ -516,11 +519,12 @@ document.addEventListener('DOMContentLoaded', () => {
             { data: 'late_days', className: 'text-end' },
             { data: 'absent_days', className: 'text-end' },
             { data: 'incomplete_days', className: 'text-end' },
+            { data: 'not_checked_in_days', className: 'text-end' },
             { data: 'leave_days', className: 'text-end' },
             {
                 data: 'non_work_days',
                 className: 'text-end',
-                render: (value, type, row) => `<div>${Number(value || 0).toLocaleString('id-ID')}</div><div class="text-muted fs-8">Perusahaan ${Number(row.holiday_days || 0).toLocaleString('id-ID')} | Mingguan ${Number(row.day_off_days || 0).toLocaleString('id-ID')}</div>`,
+                render: (value, type, row) => `<div>${Number(value || 0).toLocaleString('id-ID')}</div><div class="text-muted fs-8">Kalender ${Number(row.holiday_days || 0).toLocaleString('id-ID')} | Mingguan ${Number(row.day_off_days || 0).toLocaleString('id-ID')}</div>`,
             },
             { data: 'attendance_rate', className: 'text-end', render: pct },
             { data: 'work_minutes', className: 'text-end', render: hours },
@@ -583,11 +587,11 @@ document.addEventListener('DOMContentLoaded', () => {
             ? row.detail_rows.map((detail) => `
                 <tr>
                     <td class="fw-semibold">${escapeHtml(detail.date)}</td>
-                    <td>${escapeHtml(statusLabel(detail.schedule_type))}</td>
+                    <td>${escapeHtml(detail.schedule_label || statusLabel(detail.schedule_type))}</td>
                     <td>${escapeHtml(detail.shift)}</td>
                     <td>${escapeHtml(detail.check_in_at)}</td>
                     <td>${escapeHtml(detail.check_out_at)}</td>
-                    <td>${statusBadge(detail.status)}</td>
+                    <td>${statusBadge(detail.status, detail.status_label)}</td>
                     <td class="text-end">${Number(detail.late_minutes || 0)}</td>
                     <td class="text-end">${Number(detail.early_leave_minutes || 0)}</td>
                     <td class="text-end">${hours(detail.work_minutes)}</td>

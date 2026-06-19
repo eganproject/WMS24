@@ -1503,6 +1503,7 @@
                                 <option value="present">Hadir</option>
                                 <option value="late">Terlambat</option>
                                 <option value="absent">Alfa</option>
+                                <option value="not_checked_in">Belum Check-in</option>
                                 <option value="incomplete">Belum Check-out</option>
                                 <option value="leave">Cuti/Izin</option>
                                 <option value="holiday">Libur Perusahaan</option>
@@ -1534,8 +1535,9 @@
                     <div class="recap-summary-card success"><div class="label">Sudah Check-in</div><div class="value" data-summary="present">0</div></div>
                     <div class="recap-summary-card warning"><div class="label">Terlambat</div><div class="value" data-summary="late">0</div></div>
                     <div class="recap-summary-card info"><div class="label">Belum Check-out</div><div class="value" data-summary="incomplete">0</div></div>
+                    <div class="recap-summary-card info"><div class="label">Belum Check-in</div><div class="value" data-summary="not_checked_in">0</div></div>
                     <div class="recap-summary-card danger"><div class="label">Alfa</div><div class="value" data-summary="absent">0</div></div>
-                    <div class="recap-summary-card off"><div class="label">Karyawan Libur</div><div class="value" data-summary="day_off">0</div></div>
+                    <div class="recap-summary-card off"><div class="label">Hari Libur/Cuti</div><div class="value" data-summary="day_off">0</div></div>
                     <div class="recap-summary-card overtime"><div class="label">Lembur Pending</div><div class="value" data-summary="overtime_pending">0</div></div>
                 </div>
                 <x-attendance-table id="attendances_table" :headers="['Karyawan','Tanggal & Shift','Jam Absensi','Kedisiplinan','Durasi Kerja','Lembur','Status','Catatan','Aksi']" />
@@ -1888,7 +1890,7 @@ const crudUrls = {
         rejectOvertime: '{{ route('admin.attendance.attendances.overtime.reject', ':id') }}',
     },
 };
-function renderAttendanceStatusBadge(value) {
+function renderAttendanceStatusBadge(value, label = null) {
     const labels = {
         present: 'Hadir',
         late: 'Terlambat',
@@ -1896,6 +1898,7 @@ function renderAttendanceStatusBadge(value) {
         leave: 'Cuti/Izin',
         holiday: 'Libur',
         day_off: 'Libur',
+        not_checked_in: 'Belum Check-in',
         incomplete: 'Belum Check-out',
     };
     const classes = {
@@ -1905,10 +1908,11 @@ function renderAttendanceStatusBadge(value) {
         leave: 'badge-light-info',
         holiday: 'badge-light-danger',
         day_off: 'badge-light-secondary',
+        not_checked_in: 'badge-light-secondary',
         incomplete: 'badge-light-primary',
     };
 
-    return `<span class="badge ${classes[value] || 'badge-light'}">${labels[value] || value || '-'}</span>`;
+    return `<span class="badge ${classes[value] || 'badge-light'}">${label || labels[value] || value || '-'}</span>`;
 }
 function renderOvertimeStatusBadge(value) {
     const labels = {
@@ -2011,8 +2015,8 @@ function renderRecapOvertime(value, row) {
         ${approved !== null && approved !== undefined ? `<div class="recap-cell-meta">Approved: ${escapeAttr(formatMinutes(approved))}</div>` : ''}`;
 }
 function renderRecapStatus(value, row) {
-    const sourceLabels = { fingerprint: 'Mesin', manual: 'Manual', system: 'Sistem' };
-    return `<div>${renderAttendanceStatusBadge(row.status)}</div>
+    const sourceLabels = { fingerprint: 'Mesin', manual: 'Manual', system: 'Sistem', effective: 'Efektif' };
+    return `<div>${renderAttendanceStatusBadge(row.status, row.status_label)}</div>
         <div class="recap-cell-meta mt-1">Sumber: ${escapeAttr(sourceLabels[row.source] || row.source || '-')}</div>`;
 }
 function renderRecapNote(value, row) {
@@ -2112,6 +2116,10 @@ const renderLeaveActions = (row, payload) => {
     `;
 };
 const renderAttendanceActions = (row, payload) => {
+    if (!row.id) {
+        return '<span class="badge badge-light-secondary">Efektif</span>';
+    }
+
     const calculated = Number(row.calculated_overtime_minutes || 0);
     const overtimeStatus = row.overtime_status || 'none';
     const showApprove = calculated > 0 && overtimeStatus !== 'approved';
@@ -2141,14 +2149,15 @@ const renderAttendanceActions = (row, payload) => {
     `;
 };
 const renderCrudActions = (tableId, row) => {
+    if (tableId === 'attendances_table') {
+        const payload = escapeAttr(encodeURIComponent(JSON.stringify(row)));
+        return renderAttendanceActions(row, payload);
+    }
     if (!row?.id || !crudUrls[tableId]) return '-';
     const payload = escapeAttr(encodeURIComponent(JSON.stringify(row)));
 
     if (tableId === 'leaves_table') {
         return renderLeaveActions(row, payload);
-    }
-    if (tableId === 'attendances_table') {
-        return renderAttendanceActions(row, payload);
     }
     if (tableId === 'schedules_table' && !row.is_editable) {
         return '<span class="badge badge-light-secondary">Terkunci</span>';

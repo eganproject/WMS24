@@ -69,26 +69,28 @@ class AttendancesExport implements FromCollection, WithHeadings, WithMapping, Wi
 
     public function map($row): array
     {
+        $isArray = is_array($row);
+
         return [
-            $row->attendance_date?->format('Y-m-d') ?? '-',
-            $row->employee?->employee_code ?? '-',
-            $row->employee?->name ?? '-',
-            $this->employmentStatusLabel($row->employee?->employment_status),
-            $row->shift?->name ?? '-',
-            $row->check_in_at?->format('Y-m-d H:i:s') ?? '-',
-            $row->check_out_at?->format('Y-m-d H:i:s') ?? '-',
-            $this->attendanceStatusLabel($row->status),
-            (int) ($row->late_minutes ?? 0),
-            (int) ($row->early_leave_minutes ?? 0),
-            round(((int) ($row->work_minutes ?? 0)) / 60, 2),
-            round(((int) ($row->calculated_overtime_minutes ?? 0)) / 60, 2),
-            round(((int) ($row->approved_overtime_minutes ?? 0)) / 60, 2),
-            $this->overtimeStatusLabel($row->overtime_status),
-            $row->approver?->name ?? '-',
-            $row->approved_at?->format('Y-m-d H:i:s') ?? '-',
-            $row->source ?? '-',
-            $row->note ?? '-',
-            $row->overtime_note ?? '-',
+            $isArray ? ($row['attendance_date'] ?? '-') : ($row->attendance_date?->format('Y-m-d') ?? '-'),
+            $isArray ? $this->employeeCode($row['employee'] ?? '-') : ($row->employee?->employee_code ?? '-'),
+            $isArray ? $this->employeeName($row['employee'] ?? '-') : ($row->employee?->name ?? '-'),
+            $this->employmentStatusLabel($isArray ? ($row['employment_status'] ?? null) : $row->employee?->employment_status),
+            $isArray ? ($row['shift'] ?? '-') : ($row->shift?->name ?? '-'),
+            $isArray ? ($row['check_in_at'] ?? '-') : ($row->check_in_at?->format('Y-m-d H:i:s') ?? '-'),
+            $isArray ? ($row['check_out_at'] ?? '-') : ($row->check_out_at?->format('Y-m-d H:i:s') ?? '-'),
+            $isArray ? ($row['status_label'] ?? $this->attendanceStatusLabel($row['status'] ?? null)) : $this->attendanceStatusLabel($row->status),
+            (int) ($isArray ? ($row['late_minutes'] ?? 0) : ($row->late_minutes ?? 0)),
+            (int) ($isArray ? ($row['early_leave_minutes'] ?? 0) : ($row->early_leave_minutes ?? 0)),
+            round(((int) ($isArray ? ($row['work_minutes'] ?? 0) : ($row->work_minutes ?? 0))) / 60, 2),
+            round(((int) ($isArray ? ($row['calculated_overtime_minutes'] ?? 0) : ($row->calculated_overtime_minutes ?? 0))) / 60, 2),
+            round(((int) ($isArray ? ($row['approved_overtime_minutes'] ?? 0) : ($row->approved_overtime_minutes ?? 0))) / 60, 2),
+            $this->overtimeStatusLabel($isArray ? ($row['overtime_status'] ?? null) : $row->overtime_status),
+            $isArray ? ($row['approved_by'] ?? '-') : ($row->approver?->name ?? '-'),
+            $isArray ? ($row['approved_at'] ?? '-') : ($row->approved_at?->format('Y-m-d H:i:s') ?? '-'),
+            $isArray ? ($row['source'] ?? '-') : ($row->source ?? '-'),
+            $isArray ? ($row['note'] ?? '-') : ($row->note ?? '-'),
+            $isArray ? ($row['overtime_note'] ?? '-') : ($row->overtime_note ?? '-'),
         ];
     }
 
@@ -149,8 +151,20 @@ class AttendancesExport implements FromCollection, WithHeadings, WithMapping, Wi
             Attendance::STATUS_LEAVE => 'Cuti/Izin',
             Attendance::STATUS_HOLIDAY => 'Libur Perusahaan',
             Attendance::STATUS_DAY_OFF => 'Libur',
+            'not_checked_in' => 'Belum Check-in',
             default => $status ?: '-',
         };
+    }
+
+    private function employeeCode(string $employee): string
+    {
+        return trim(explode(' - ', $employee, 2)[0] ?? '-') ?: '-';
+    }
+
+    private function employeeName(string $employee): string
+    {
+        $parts = explode(' - ', $employee, 2);
+        return trim($parts[1] ?? $employee) ?: '-';
     }
 
     private function overtimeStatusLabel(?string $status): string

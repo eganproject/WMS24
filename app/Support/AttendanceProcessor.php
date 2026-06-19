@@ -69,14 +69,7 @@ class AttendanceProcessor
 
             if ($employeeId) {
                 $employee = Employee::findOrFail($employeeId);
-
-                if (
-                    $isNewRawLog
-                    || $employeeChanged
-                    || !$this->hasAttendanceNearScan($employee, $scanAt)
-                ) {
-                    $attendance = $this->rebuildAttendanceForScan($employee, $scanAt);
-                }
+                $attendance = $this->rebuildAttendanceForScan($employee, $scanAt);
             }
 
             return [
@@ -193,7 +186,7 @@ class AttendanceProcessor
         $checkInStates = ['check_in', 'break_in', 'overtime_in', '0', 0];
         $checkOutStates = ['check_out', 'break_out', 'overtime_out', '1', 1];
 
-        $checkIn = $scans->reverse()->first(fn (AttendanceRawLog $scan) => in_array($scan->state, $checkInStates, true));
+        $checkIn = $scans->first(fn (AttendanceRawLog $scan) => in_array($scan->state, $checkInStates, true));
         $checkOut = $scans->reverse()->first(fn (AttendanceRawLog $scan) => in_array($scan->state, $checkOutStates, true));
 
         if ($checkIn) {
@@ -207,17 +200,6 @@ class AttendanceProcessor
             $scans->first()?->scan_at,
             $scans->count() > 1 ? $scans->last()?->scan_at : null,
         ];
-    }
-
-    private function hasAttendanceNearScan(Employee $employee, Carbon $scanAt): bool
-    {
-        return Attendance::query()
-            ->where('employee_id', $employee->id)
-            ->whereBetween('attendance_date', [
-                $scanAt->copy()->subDay()->toDateString(),
-                $scanAt->toDateString(),
-            ])
-            ->exists();
     }
 
     public function resolveSchedule(Employee $employee, Carbon $date): array

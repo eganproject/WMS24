@@ -54,9 +54,10 @@ class AttendanceReportSummarySheet implements FromCollection, WithHeadings, With
             'Telat',
             'Alpha',
             'Tidak Lengkap',
+            'Belum Check-in',
             'Cuti/Izin',
             'Libur',
-            'Libur Perusahaan',
+            'Libur Nasional/Perusahaan',
             'Libur Mingguan',
             'Rate Hadir (%)',
             'Rate Tepat Waktu (%)',
@@ -79,6 +80,7 @@ class AttendanceReportSummarySheet implements FromCollection, WithHeadings, With
             (int) ($row['late_days'] ?? 0),
             (int) ($row['absent_days'] ?? 0),
             (int) ($row['incomplete_days'] ?? 0),
+            (int) ($row['not_checked_in_days'] ?? 0),
             (int) ($row['leave_days'] ?? 0),
             (int) ($row['non_work_days'] ?? 0),
             (int) ($row['holiday_days'] ?? 0),
@@ -93,12 +95,12 @@ class AttendanceReportSummarySheet implements FromCollection, WithHeadings, With
 
     public function styles(Worksheet $sheet): array
     {
-        $sheet->mergeCells('A1:S1');
-        $sheet->mergeCells('A2:S2');
+        $sheet->mergeCells('A1:T1');
+        $sheet->mergeCells('A2:T2');
         $sheet->mergeCells('A4:D4');
         $sheet->mergeCells('E4:H4');
         $sheet->mergeCells('I4:M4');
-        $sheet->mergeCells('N4:S4');
+        $sheet->mergeCells('N4:T4');
 
         $sheet->setCellValue('A1', 'Laporan Absensi');
         $sheet->setCellValue('A2', 'Periode '.$this->period['from'].' sampai '.$this->period['to']);
@@ -124,14 +126,14 @@ class AttendanceReportSummarySheet implements FromCollection, WithHeadings, With
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
                 $lastRow = max(7, 7 + $this->rows->count());
-                $range = 'A7:S'.$lastRow;
+                $range = 'A7:T'.$lastRow;
 
                 $sheet->freezePane('A8');
                 $sheet->setAutoFilter($range);
                 $sheet->getStyle($range)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setRGB('E4E6EF');
-                $sheet->getStyle('F8:S'.$lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
-                $sheet->getStyle('A1:S'.$lastRow)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
-                $sheet->getStyle('O8:S'.$lastRow)->getNumberFormat()->setFormatCode('#,##0.00');
+                $sheet->getStyle('F8:T'.$lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                $sheet->getStyle('A1:T'.$lastRow)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+                $sheet->getStyle('P8:T'.$lastRow)->getNumberFormat()->setFormatCode('#,##0.00');
             },
         ];
     }

@@ -288,6 +288,7 @@
         .status-leave { background: #e8f6fa; border-color: #adddea; color: #0b7285; }
         .status-holiday,
         .status-day-off { background: #f2f4f7; border-color: #d0d5dd; color: #667085; }
+        .status-not-checked-in { background: #fff7e6; border-color: #ffd591; color: #ad6800; }
         .status-no-record { background: #fff; color: #98a2b3; }
         .status-future { background: #f8fafc; color: #b0b7c3; }
 
@@ -552,6 +553,7 @@
                     <span class="legend-item"><span class="dot" style="background:#0f8f72"></span>Tepat waktu</span>
                     <span class="legend-item"><span class="dot" style="background:#c77700"></span>Terlambat</span>
                     <span class="legend-item"><span class="dot" style="background:#c23b3b"></span>Alpha</span>
+                    <span class="legend-item"><span class="dot" style="background:#ad6800"></span>Belum Check-in</span>
                     <span class="legend-item"><span class="dot" style="background:#0b7285"></span>Cuti/Izin</span>
                     <span class="legend-item"><span class="dot" style="background:#98a2b3"></span>Libur</span>
                 </div>

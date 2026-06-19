@@ -7,8 +7,11 @@ use App\Exports\AttendanceReportExport;
 use App\Models\Area;
 use App\Models\Attendance;
 use App\Models\Employee;
+use App\Models\EmployeeLeave;
 use App\Models\EmployeePosition;
 use App\Models\EmployeeSchedule;
+use App\Models\Holiday;
+use App\Support\AttendanceDailyStatusResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
@@ -95,8 +98,15 @@ class AttendanceReportController extends Controller
             ])
             ->get();
 
+        $holidaysByDate = Holiday::query()
+            ->whereDate('holiday_date', '>=', $from)
+            ->whereDate('holiday_date', '<=', $to)
+            ->get()
+            ->keyBy(fn (Holiday $holiday) => $holiday->holiday_date?->toDateString());
+        $leavesByEmployeeDate = $this->approvedLeavesByEmployeeDate($employees->pluck('id')->all(), $from, $to);
+
         $rows = $employees
-            ->map(fn (Employee $employee) => $this->serializeEmployee($employee, $from, $to))
+            ->map(fn (Employee $employee) => $this->serializeEmployee($employee, $from, $to, $leavesByEmployeeDate, $holidaysByDate))
             ->filter(fn (array $row) => $this->passesReportStatus($row, (string) $request->input('report_status', '')))
             ->values();
 
@@ -107,6 +117,7 @@ class AttendanceReportController extends Controller
             'late_days' => (int) $rows->sum('late_days'),
             'absent_days' => (int) $rows->sum('absent_days'),
             'incomplete_days' => (int) $rows->sum('incomplete_days'),
+            'not_checked_in_days' => (int) $rows->sum('not_checked_in_days'),
             'leave_days' => (int) $rows->sum('leave_days'),
             'holiday_days' => (int) $rows->sum('holiday_days'),
             'day_off_days' => (int) $rows->sum('day_off_days'),
@@ -155,16 +166,18 @@ class AttendanceReportController extends Controller
         return $query;
     }
 
-    private function serializeEmployee(Employee $employee, Carbon $from, Carbon $to): array
+    private function serializeEmployee(Employee $employee, Carbon $from, Carbon $to, array $leavesByEmployeeDate, $holidaysByDate): array
     {
         $schedulesByDate = $employee->schedules->keyBy(fn (EmployeeSchedule $schedule) => $schedule->schedule_date?->toDateString());
         $attendancesByDate = $employee->attendances->keyBy(fn (Attendance $attendance) => $attendance->attendance_date?->toDateString());
+        $resolver = app(AttendanceDailyStatusResolver::class);
 
         $scheduledWorkDays = 0;
         $presentDays = 0;
         $lateDays = 0;
         $absentDays = 0;
         $incompleteDays = 0;
+        $notCheckedInDays = 0;
         $leaveDays = 0;
         $holidayDays = 0;
         $dayOffDays = 0;
@@ -179,11 +192,18 @@ class AttendanceReportController extends Controller
             $dateKey = $current->toDateString();
             $schedule = $schedulesByDate->get($dateKey);
             $attendance = $attendancesByDate->get($dateKey);
-            $status = $attendance?->status;
-            $effectiveScheduleType = $this->effectiveScheduleType($schedule, $attendance);
-            $reportStatus = $status ?? $this->statusForScheduleType($effectiveScheduleType);
+            $daily = $resolver->resolve(
+                $employee,
+                $current,
+                $schedule,
+                $attendance,
+                $leavesByEmployeeDate[$employee->id][$dateKey] ?? null,
+                $holidaysByDate->get($dateKey)
+            );
+            $effectiveScheduleType = $daily['schedule_type'];
+            $reportStatus = $daily['status'];
 
-            if ($this->isReportWorkDay($effectiveScheduleType, $status)) {
+            if ($daily['is_work_day']) {
                 $scheduledWorkDays++;
             }
 
@@ -203,6 +223,8 @@ class AttendanceReportController extends Controller
                 $absentDays++;
             } elseif ($reportStatus === Attendance::STATUS_INCOMPLETE) {
                 $incompleteDays++;
+            } elseif ($reportStatus === AttendanceDailyStatusResolver::STATUS_NOT_CHECKED_IN) {
+                $notCheckedInDays++;
             }
 
             $workMinutes += (int) ($attendance?->work_minutes ?? 0);
@@ -212,21 +234,24 @@ class AttendanceReportController extends Controller
                 $pendingOvertimeMinutes += (int) $attendance->calculated_overtime_minutes;
             }
 
-            if ($schedule || $attendance) {
+            if ($daily['schedule_type'] !== AttendanceDailyStatusResolver::STATUS_UNSCHEDULED || $attendance) {
                 $detailRows[] = [
                     'date' => $dateKey,
                     'schedule_type' => $effectiveScheduleType,
-                    'shift' => $attendance?->shift?->name ?? $schedule?->shift?->name ?? '-',
+                    'schedule_label' => $daily['schedule_label'],
+                    'shift' => $daily['shift']?->name ?? '-',
                     'check_in_at' => $attendance?->check_in_at?->format('H:i') ?? '-',
                     'check_out_at' => $attendance?->check_out_at?->format('H:i') ?? '-',
                     'status' => $reportStatus,
+                    'status_label' => $daily['status_label'],
+                    'holiday_type' => $daily['holiday_type'],
                     'late_minutes' => (int) ($attendance?->late_minutes ?? 0),
                     'early_leave_minutes' => (int) ($attendance?->early_leave_minutes ?? 0),
                     'work_minutes' => (int) ($attendance?->work_minutes ?? 0),
                     'calculated_overtime_minutes' => (int) ($attendance?->calculated_overtime_minutes ?? 0),
                     'approved_overtime_minutes' => (int) ($attendance?->approved_overtime_minutes ?? 0),
                     'overtime_status' => $attendance?->overtime_status ?? Attendance::OVERTIME_NONE,
-                    'note' => $attendance?->note ?: $schedule?->note,
+                    'note' => $daily['note'],
                 ];
             }
 
@@ -250,6 +275,7 @@ class AttendanceReportController extends Controller
             'late_days' => $lateDays,
             'absent_days' => $absentDays,
             'incomplete_days' => $incompleteDays,
+            'not_checked_in_days' => $notCheckedInDays,
             'leave_days' => $leaveDays,
             'holiday_days' => $holidayDays,
             'day_off_days' => $dayOffDays,
@@ -264,40 +290,6 @@ class AttendanceReportController extends Controller
             'pending_overtime_minutes' => $pendingOvertimeMinutes,
             'detail_rows' => $detailRows,
         ];
-    }
-
-    private function effectiveScheduleType(?EmployeeSchedule $schedule, ?Attendance $attendance): string
-    {
-        return match ($attendance?->status) {
-            Attendance::STATUS_LEAVE => EmployeeSchedule::TYPE_LEAVE,
-            Attendance::STATUS_HOLIDAY => EmployeeSchedule::TYPE_HOLIDAY,
-            Attendance::STATUS_DAY_OFF => EmployeeSchedule::TYPE_DAY_OFF,
-            default => $schedule?->schedule_type ?? '-',
-        };
-    }
-
-    private function isReportWorkDay(string $scheduleType, ?string $status): bool
-    {
-        if (in_array($status, [
-            Attendance::STATUS_PRESENT,
-            Attendance::STATUS_LATE,
-            Attendance::STATUS_ABSENT,
-            Attendance::STATUS_INCOMPLETE,
-        ], true)) {
-            return true;
-        }
-
-        return $scheduleType === EmployeeSchedule::TYPE_WORK;
-    }
-
-    private function statusForScheduleType(string $scheduleType): string
-    {
-        return match ($scheduleType) {
-            EmployeeSchedule::TYPE_LEAVE => Attendance::STATUS_LEAVE,
-            EmployeeSchedule::TYPE_HOLIDAY => Attendance::STATUS_HOLIDAY,
-            EmployeeSchedule::TYPE_DAY_OFF => Attendance::STATUS_DAY_OFF,
-            default => Attendance::STATUS_ABSENT,
-        };
     }
 
     private function passesReportStatus(array $row, string $status): bool
@@ -319,6 +311,32 @@ class AttendanceReportController extends Controller
         }
 
         return round(($numerator / $denominator) * 100, 2);
+    }
+
+    private function approvedLeavesByEmployeeDate(array $employeeIds, Carbon $from, Carbon $to): array
+    {
+        if (empty($employeeIds)) {
+            return [];
+        }
+
+        $leavesByEmployeeDate = [];
+        EmployeeLeave::query()
+            ->whereIn('employee_id', $employeeIds)
+            ->where('status', EmployeeLeave::STATUS_APPROVED)
+            ->whereDate('start_date', '<=', $to)
+            ->whereDate('end_date', '>=', $from)
+            ->get()
+            ->each(function (EmployeeLeave $leave) use (&$leavesByEmployeeDate, $from, $to) {
+                $current = $leave->start_date->copy()->max($from);
+                $until = $leave->end_date->copy()->min($to);
+
+                while ($current->lte($until)) {
+                    $leavesByEmployeeDate[$leave->employee_id][$current->toDateString()] = $leave;
+                    $current->addDay();
+                }
+            });
+
+        return $leavesByEmployeeDate;
     }
 
     private function dateRange(Request $request): array

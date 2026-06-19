@@ -4,6 +4,7 @@ namespace App\Exports;
 
 use App\Models\EmployeeSchedule;
 use App\Models\Employee;
+use App\Models\Holiday;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
@@ -23,10 +24,18 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 class EmployeeSchedulesExport implements FromCollection, WithHeadings, WithMapping, WithTitle, WithCustomStartCell, ShouldAutoSize, WithStyles, WithEvents
 {
     private Collection $rows;
+    private Collection $holidaysByDate;
 
     public function __construct(private array $filters = [])
     {
         $this->rows = $this->query()->get();
+        $this->holidaysByDate = $this->rows->isEmpty()
+            ? collect()
+            : Holiday::query()
+                ->whereDate('holiday_date', '>=', $this->rows->min('schedule_date'))
+                ->whereDate('holiday_date', '<=', $this->rows->max('schedule_date'))
+                ->get()
+                ->keyBy(fn (Holiday $holiday) => $holiday->holiday_date?->toDateString());
     }
 
     public function title(): string
@@ -67,22 +76,25 @@ class EmployeeSchedulesExport implements FromCollection, WithHeadings, WithMappi
 
     public function map($schedule): array
     {
-        $shiftStart = $this->timeValue($schedule->shift?->start_time);
-        $shiftEnd = $this->timeValue($schedule->shift?->end_time);
+        $holiday = $this->holidaysByDate->get($schedule->schedule_date?->toDateString());
+        $effectiveType = $holiday ? EmployeeSchedule::TYPE_HOLIDAY : $schedule->schedule_type;
+        $effectiveShift = $effectiveType === EmployeeSchedule::TYPE_WORK ? $schedule->shift : null;
+        $shiftStart = $this->timeValue($effectiveShift?->start_time);
+        $shiftEnd = $this->timeValue($effectiveShift?->end_time);
         $shiftTime = $shiftStart && $shiftEnd
-            ? $shiftStart.' - '.$shiftEnd.($schedule->shift?->crosses_midnight ? ' (+1 hari)' : '')
+            ? $shiftStart.' - '.$shiftEnd.($effectiveShift?->crosses_midnight ? ' (+1 hari)' : '')
             : '';
 
         return [
             $schedule->employee?->employee_code ?? '',
             $schedule->employee?->name ?? '',
             $schedule->schedule_date?->format('Y-m-d') ?? '',
-            $schedule->schedule_type,
-            $this->scheduleTypeLabel($schedule->schedule_type),
-            $schedule->shift?->name ?? '',
-            $schedule->work_shift_id,
+            $effectiveType,
+            $this->scheduleTypeLabel($effectiveType, $holiday),
+            $effectiveShift?->name ?? '',
+            $effectiveType === EmployeeSchedule::TYPE_WORK ? $schedule->work_shift_id : null,
             $shiftTime,
-            $schedule->note ?? '',
+            $holiday?->name ?? $schedule->note ?? '',
             $schedule->employee_schedule_assignment_id ? 'template' : 'manual',
         ];
     }
@@ -175,8 +187,12 @@ class EmployeeSchedulesExport implements FromCollection, WithHeadings, WithMappi
         return ($from ?: 'awal').' sampai '.($to ?: 'akhir');
     }
 
-    private function scheduleTypeLabel(?string $type): string
+    private function scheduleTypeLabel(?string $type, ?Holiday $holiday = null): string
     {
+        if ($type === EmployeeSchedule::TYPE_HOLIDAY && $holiday) {
+            return $holiday->type === 'national' ? 'Libur Nasional' : 'Libur Perusahaan';
+        }
+
         return match ($type) {
             EmployeeSchedule::TYPE_WORK => 'Masuk',
             EmployeeSchedule::TYPE_DAY_OFF => 'Libur',

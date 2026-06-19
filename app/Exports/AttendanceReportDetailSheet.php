@@ -43,11 +43,11 @@ class AttendanceReportDetailSheet implements FromCollection, WithHeadings, WithT
                 $row['employee_name'] ?? '-',
                 $row['area'] ?? '-',
                 $row['position'] ?? '-',
-                $this->scheduleTypeLabel($detail['schedule_type'] ?? null),
+                $detail['schedule_label'] ?? $this->scheduleTypeLabel($detail['schedule_type'] ?? null),
                 $detail['shift'] ?? '-',
                 $detail['check_in_at'] ?? '-',
                 $detail['check_out_at'] ?? '-',
-                $this->attendanceStatusLabel($detail['status'] ?? null),
+                $detail['status_label'] ?? $this->attendanceStatusLabel($detail['status'] ?? null),
                 (int) ($detail['late_minutes'] ?? 0),
                 (int) ($detail['early_leave_minutes'] ?? 0),
                 round(((int) ($detail['work_minutes'] ?? 0)) / 60, 2),
@@ -125,6 +125,7 @@ class AttendanceReportDetailSheet implements FromCollection, WithHeadings, WithT
             'leave' => 'Cuti/Izin',
             'holiday' => 'Libur Perusahaan',
             'day_off' => 'Libur Mingguan',
+            'not_checked_in' => 'Belum Check-in',
             default => $value ?: '-',
         };
     }
@@ -139,6 +140,7 @@ class AttendanceReportDetailSheet implements FromCollection, WithHeadings, WithT
             'leave' => 'Cuti/Izin',
             'holiday' => 'Libur Perusahaan',
             'day_off' => 'Libur Mingguan',
+            'not_checked_in' => 'Belum Check-in',
             default => $value ?: '-',
         };
     }

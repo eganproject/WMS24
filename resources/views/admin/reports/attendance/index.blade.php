@@ -242,7 +242,7 @@
         </div>
         <div class="attendance-report-note mt-5">
             <i class="fas fa-info-circle me-1"></i>
-            Persentase hadir dihitung dari <strong>hari kerja terjadwal</strong>. Status hadir mencakup Hadir dan Terlambat. Alpha dan scan tidak lengkap ditampilkan terpisah agar evaluasi HR tidak bercampur dengan hari libur/cuti.
+            Persentase hadir dihitung dari <strong>hari kerja terjadwal</strong>. Hari kerja tanpa rekap/scan dihitung sebagai Alpha di laporan. Status hadir mencakup Hadir dan Terlambat, sedangkan hari libur/cuti ditampilkan terpisah.
         </div>
     </div>
 </div>

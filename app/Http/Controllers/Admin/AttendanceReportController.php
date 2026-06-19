@@ -181,6 +181,7 @@ class AttendanceReportController extends Controller
             $attendance = $attendancesByDate->get($dateKey);
             $status = $attendance?->status;
             $effectiveScheduleType = $this->effectiveScheduleType($schedule, $attendance);
+            $reportStatus = $status ?? $this->statusForScheduleType($effectiveScheduleType);
 
             if ($this->isReportWorkDay($effectiveScheduleType, $status)) {
                 $scheduledWorkDays++;
@@ -194,13 +195,13 @@ class AttendanceReportController extends Controller
                 $dayOffDays++;
             }
 
-            if ($status === Attendance::STATUS_PRESENT) {
+            if ($reportStatus === Attendance::STATUS_PRESENT) {
                 $presentDays++;
-            } elseif ($status === Attendance::STATUS_LATE) {
+            } elseif ($reportStatus === Attendance::STATUS_LATE) {
                 $lateDays++;
-            } elseif ($status === Attendance::STATUS_ABSENT) {
+            } elseif ($reportStatus === Attendance::STATUS_ABSENT) {
                 $absentDays++;
-            } elseif ($status === Attendance::STATUS_INCOMPLETE) {
+            } elseif ($reportStatus === Attendance::STATUS_INCOMPLETE) {
                 $incompleteDays++;
             }
 
@@ -218,7 +219,7 @@ class AttendanceReportController extends Controller
                     'shift' => $attendance?->shift?->name ?? $schedule?->shift?->name ?? '-',
                     'check_in_at' => $attendance?->check_in_at?->format('H:i') ?? '-',
                     'check_out_at' => $attendance?->check_out_at?->format('H:i') ?? '-',
-                    'status' => $status ?? '-',
+                    'status' => $reportStatus,
                     'late_minutes' => (int) ($attendance?->late_minutes ?? 0),
                     'early_leave_minutes' => (int) ($attendance?->early_leave_minutes ?? 0),
                     'work_minutes' => (int) ($attendance?->work_minutes ?? 0),
@@ -287,6 +288,16 @@ class AttendanceReportController extends Controller
         }
 
         return $scheduleType === EmployeeSchedule::TYPE_WORK;
+    }
+
+    private function statusForScheduleType(string $scheduleType): string
+    {
+        return match ($scheduleType) {
+            EmployeeSchedule::TYPE_LEAVE => Attendance::STATUS_LEAVE,
+            EmployeeSchedule::TYPE_HOLIDAY => Attendance::STATUS_HOLIDAY,
+            EmployeeSchedule::TYPE_DAY_OFF => Attendance::STATUS_DAY_OFF,
+            default => Attendance::STATUS_ABSENT,
+        };
     }
 
     private function passesReportStatus(array $row, string $status): bool

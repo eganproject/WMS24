@@ -283,6 +283,7 @@
     $totalCanceledVal = ($totalCanceled ?? 0);
     $totalScanVal = ($totalScanOut ?? 0);
     $overallPct = $totalActive > 0 ? min(100, round($totalScanVal / $totalActive * 100)) : 0;
+    $scanDiff = (int) ($scanOutDifference ?? (($totalScanOut ?? 0) - ($totalResi ?? 0)));
 @endphp
 
 {{-- ──────────────────────────────────────────────────────────────────── --}}
@@ -411,13 +412,15 @@
 {{-- ──────────────────────────────────────────────────────────────────── --}}
 <div class="dashboard-action-panel mb-6">
     <div>
-        <div class="dashboard-action-title">Resi siap scan out dari upload sebelumnya</div>
+        <div class="dashboard-action-title">Audit Selisih Scan Out</div>
         <div class="dashboard-action-sub">
-            {{ number_format($readyPreviousUploadCount ?? 0) }} resi sudah lolos QC, belum scan out, dan bukan upload hari ini.
+            Selisih scan out vs total resi aktif: {{ number_format(abs($scanDiff)) }}
+            {{ $scanDiff > 0 ? 'lebih scan out' : ($scanDiff < 0 ? 'kurang scan out' : 'sesuai') }}.
+            Lebih: {{ number_format($scanOutOverCount ?? 0) }}, Kurang: {{ number_format($scanOutUnderCount ?? 0) }}.
         </div>
     </div>
-    <button type="button" class="btn btn-warning btn-sm" id="btn_ready_previous_uploads">
-        <i class="fas fa-eye me-1"></i>Lihat Data
+    <button type="button" class="btn btn-warning btn-sm" id="btn_scan_discrepancy">
+        <i class="fas fa-search me-1"></i>Lihat Selisih
     </button>
 </div>
 
@@ -565,35 +568,48 @@
     </div>
 </div>
 
-<div class="modal fade" id="modal_ready_previous_uploads" tabindex="-1" aria-hidden="true">
+<div class="modal fade" id="modal_scan_discrepancy" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header border-0 pb-0">
                 <div>
                     <h5 class="modal-title fw-bolder mb-1">
                         <i class="fas fa-clipboard-check me-2 text-warning"></i>
-                        Resi Siap Scan Out Dari Upload Sebelumnya
+                        Detail Selisih Scan Out
                     </h5>
-                    <div class="text-muted fs-7" id="ready_previous_subtitle">Belum dimuat.</div>
+                    <div class="text-muted fs-7" id="scan_discrepancy_subtitle">Belum dimuat.</div>
                 </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
 
             <div class="modal-body pt-4">
+                <div class="modal-kpi-grid">
+                    <button type="button" class="modal-kpi-chip js-scan-discrepancy-type" data-type="over" style="background:#fef2f2; color:#b91c1c;">
+                        <div class="chip-label" style="color:#ef4444;">Lebih Scan Out</div>
+                        <div class="chip-value" style="color:#b91c1c;" id="scan_discrepancy_over">0</div>
+                    </button>
+                    <button type="button" class="modal-kpi-chip js-scan-discrepancy-type" data-type="under" style="background:#fffbeb; color:#b45309;">
+                        <div class="chip-label" style="color:#f59e0b;">Kurang Scan Out</div>
+                        <div class="chip-value" style="color:#b45309;" id="scan_discrepancy_under">0</div>
+                    </button>
+                </div>
+
                 <div class="table-responsive">
                     <table class="table table-row-dashed align-middle">
                         <thead>
                             <tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0">
-                                <th width="18%">ID Pesanan</th>
-                                <th width="20%">No Resi</th>
-                                <th width="16%">Kurir</th>
-                                <th width="31%">SKU</th>
-                                <th width="15%">Tanggal Upload</th>
+                                <th width="14%">Kategori</th>
+                                <th width="15%">ID Pesanan</th>
+                                <th width="17%">No Resi</th>
+                                <th width="12%">Kurir</th>
+                                <th width="22%">SKU</th>
+                                <th width="10%">Upload</th>
+                                <th width="10%">Scan Out</th>
                             </tr>
                         </thead>
-                        <tbody id="ready_previous_body">
+                        <tbody id="scan_discrepancy_body">
                             <tr>
-                                <td colspan="5" class="text-center text-muted py-6">Belum ada data.</td>
+                                <td colspan="7" class="text-center text-muted py-6">Belum ada data.</td>
                             </tr>
                         </tbody>
                     </table>
@@ -607,7 +623,7 @@
 @push('scripts')
 <script>
     const kurirDetailUrl  = '{{ route('admin.dashboard.kurir-detail') }}';
-    const readyPreviousUrl = '{{ route('admin.dashboard.ready-scan-out-previous-uploads') }}';
+    const scanDiscrepancyUrl = '{{ route('admin.dashboard.scan-out-discrepancy') }}';
     const selectedDateStr = '{{ $today ?? '' }}';
     const currentDateStr  = '{{ $currentDate ?? '' }}';
 
@@ -653,11 +669,16 @@
         const detailCanceled = document.getElementById('kurir_detail_canceled');
         const detailBody     = document.getElementById('kurir_detail_body');
         const detailTypeButtons = Array.from(document.querySelectorAll('.js-kurir-detail-type'));
-        const readyPreviousBtn = document.getElementById('btn_ready_previous_uploads');
-        const readyPreviousModalEl = document.getElementById('modal_ready_previous_uploads');
-        const readyPreviousModal = readyPreviousModalEl ? new bootstrap.Modal(readyPreviousModalEl) : null;
-        const readyPreviousSubtitle = document.getElementById('ready_previous_subtitle');
-        const readyPreviousBody = document.getElementById('ready_previous_body');
+        const scanDiscrepancyBtn = document.getElementById('btn_scan_discrepancy');
+        const scanDiscrepancyModalEl = document.getElementById('modal_scan_discrepancy');
+        const scanDiscrepancyModal = scanDiscrepancyModalEl ? new bootstrap.Modal(scanDiscrepancyModalEl) : null;
+        const scanDiscrepancySubtitle = document.getElementById('scan_discrepancy_subtitle');
+        const scanDiscrepancyBody = document.getElementById('scan_discrepancy_body');
+        const scanDiscrepancyOver = document.getElementById('scan_discrepancy_over');
+        const scanDiscrepancyUnder = document.getElementById('scan_discrepancy_under');
+        const scanDiscrepancyTypeButtons = Array.from(document.querySelectorAll('.js-scan-discrepancy-type'));
+        let scanDiscrepancyRows = { over: [], under: [] };
+        let activeScanDiscrepancyType = 'over';
         let activeDetailRequest = {
             kurirId: null,
             kurirName: '-',
@@ -685,63 +706,89 @@
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
 
-        const setReadyPreviousLoading = () => {
-            if (readyPreviousSubtitle) readyPreviousSubtitle.textContent = 'Memuat data resi siap scan out...';
-            if (readyPreviousBody) readyPreviousBody.innerHTML = `
+        const setScanDiscrepancyActiveType = (type) => {
+            activeScanDiscrepancyType = type;
+            scanDiscrepancyTypeButtons.forEach(button => {
+                button.classList.toggle('is-active', button.getAttribute('data-type') === type);
+            });
+        };
+
+        const setScanDiscrepancyLoading = () => {
+            if (scanDiscrepancySubtitle) scanDiscrepancySubtitle.textContent = 'Memuat data selisih scan out...';
+            if (scanDiscrepancyOver) scanDiscrepancyOver.textContent = '-';
+            if (scanDiscrepancyUnder) scanDiscrepancyUnder.textContent = '-';
+            if (scanDiscrepancyBody) scanDiscrepancyBody.innerHTML = `
                 <tr>
-                    <td colspan="5" class="text-center text-muted py-6">
+                    <td colspan="7" class="text-center text-muted py-6">
                         <span class="spinner-border spinner-border-sm me-2"></span>Memuat data...
                     </td>
                 </tr>`;
         };
 
-        const renderReadyPreviousRows = (rows) => {
-            if (!readyPreviousBody) return;
+        const renderScanDiscrepancyRows = (type) => {
+            if (!scanDiscrepancyBody) return;
 
+            const rows = scanDiscrepancyRows[type] || [];
             if (!Array.isArray(rows) || !rows.length) {
-                readyPreviousBody.innerHTML = `
+                scanDiscrepancyBody.innerHTML = `
                     <tr>
-                        <td colspan="5" class="text-center text-muted py-8">
+                        <td colspan="7" class="text-center text-muted py-8">
                             <i class="fas fa-check-circle text-success fs-2 mb-3 d-block"></i>
-                            Tidak ada resi upload sebelumnya yang siap scan out.
+                            Tidak ada data ${type === 'over' ? 'lebih scan out' : 'kurang scan out'} untuk tanggal ini.
                         </td>
                     </tr>`;
                 return;
             }
 
-            readyPreviousBody.innerHTML = rows.map(row => `
+            const badgeClass = type === 'over' ? 'badge-light-danger' : 'badge-light-warning';
+            scanDiscrepancyBody.innerHTML = rows.map(row => `
                 <tr>
+                    <td>
+                        <span class="badge ${badgeClass}">${escapeHtml(row.type_label)}</span>
+                        <div class="text-muted fs-8 mt-1">${escapeHtml(row.reason)}</div>
+                    </td>
                     <td>${escapeHtml(row.id_pesanan)}</td>
                     <td>${escapeHtml(row.no_resi)}</td>
                     <td>${escapeHtml(row.kurir)}</td>
                     <td>${escapeHtml(row.sku)}</td>
-                    <td><span class="badge badge-light-warning">${escapeHtml(row.tanggal_upload)}</span></td>
+                    <td>${escapeHtml(row.tanggal_upload)}</td>
+                    <td>${escapeHtml(row.scanned_at)}</td>
                 </tr>`).join('');
         };
 
-        const loadReadyPreviousUploads = async () => {
-            if (!readyPreviousModal) return;
+        const loadScanDiscrepancy = async () => {
+            if (!scanDiscrepancyModal) return;
 
-            readyPreviousModal.show();
-            setReadyPreviousLoading();
+            scanDiscrepancyModal.show();
+            setScanDiscrepancyActiveType(activeScanDiscrepancyType);
+            setScanDiscrepancyLoading();
 
             try {
-                const response = await fetch(readyPreviousUrl);
+                const params = new URLSearchParams({ date: selectedDateStr || currentDateStr || '' });
+                const response = await fetch(`${scanDiscrepancyUrl}?${params.toString()}`);
                 const payload = await response.json();
 
                 if (!response.ok) throw new Error(payload?.message || 'Gagal memuat data.');
 
-                const total = Number(payload?.meta?.total || 0).toLocaleString('id-ID');
-                const currentDate = payload?.meta?.current_date || currentDateStr || '-';
-                if (readyPreviousSubtitle) {
-                    readyPreviousSubtitle.textContent = `${total} resi siap scan out. Hari ini: ${currentDate}.`;
+                scanDiscrepancyRows = payload?.data || { over: [], under: [] };
+                const overTotal = Number(payload?.meta?.over_total || 0);
+                const underTotal = Number(payload?.meta?.under_total || 0);
+                const difference = Number(payload?.meta?.difference || 0);
+                if (scanDiscrepancyOver) scanDiscrepancyOver.textContent = overTotal.toLocaleString('id-ID');
+                if (scanDiscrepancyUnder) scanDiscrepancyUnder.textContent = underTotal.toLocaleString('id-ID');
+                if (scanDiscrepancySubtitle) {
+                    const diffLabel = difference > 0
+                        ? `${difference.toLocaleString('id-ID')} lebih scan out`
+                        : (difference < 0 ? `${Math.abs(difference).toLocaleString('id-ID')} kurang scan out` : 'tidak ada selisih');
+                    scanDiscrepancySubtitle.textContent = `Tanggal ${payload?.meta?.date || selectedDateStr || '-'} - ${diffLabel}.`;
                 }
-                renderReadyPreviousRows(payload?.data || []);
+                setScanDiscrepancyActiveType(overTotal > 0 ? 'over' : 'under');
+                renderScanDiscrepancyRows(activeScanDiscrepancyType);
             } catch (error) {
-                if (readyPreviousSubtitle) readyPreviousSubtitle.textContent = 'Gagal memuat data.';
-                if (readyPreviousBody) readyPreviousBody.innerHTML = `
+                if (scanDiscrepancySubtitle) scanDiscrepancySubtitle.textContent = 'Gagal memuat data.';
+                if (scanDiscrepancyBody) scanDiscrepancyBody.innerHTML = `
                     <tr>
-                        <td colspan="5" class="text-center text-danger py-6">
+                        <td colspan="7" class="text-center text-danger py-6">
                             <i class="fas fa-exclamation-triangle me-2"></i>
                             ${escapeHtml(error.message || 'Gagal memuat data.')}
                         </td>
@@ -848,7 +895,15 @@
             });
         });
 
-        readyPreviousBtn?.addEventListener('click', loadReadyPreviousUploads);
+        scanDiscrepancyTypeButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const type = button.getAttribute('data-type') || 'over';
+                setScanDiscrepancyActiveType(type);
+                renderScanDiscrepancyRows(type);
+            });
+        });
+
+        scanDiscrepancyBtn?.addEventListener('click', loadScanDiscrepancy);
     });
 </script>
 @endpush

@@ -130,7 +130,7 @@ require __DIR__.'/auth.php';
 Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as('admin.')->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/dashboard/kurir-detail', [DashboardController::class, 'kurirDetail'])->name('dashboard.kurir-detail');
-    Route::get('/dashboard/ready-scan-out-previous-uploads', [DashboardController::class, 'readyScanOutPreviousUploads'])->name('dashboard.ready-scan-out-previous-uploads');
+    Route::get('/dashboard/scan-out-discrepancy', [DashboardController::class, 'scanOutDiscrepancy'])->name('dashboard.scan-out-discrepancy');
 
     Route::prefix('masterdata')->as('masterdata.')->group(function () {
         // Users DataTables

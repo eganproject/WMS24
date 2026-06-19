@@ -55,7 +55,9 @@ class DashboardController extends Controller
         $totalCanceledUpdated = $totalCanceledUpdatedAt ? Carbon::parse($totalCanceledUpdatedAt)->format('H:i') : '-';
         $totalQcUpdated = $totalQcUpdatedAt ? Carbon::parse($totalQcUpdatedAt)->format('H:i') : '-';
         $totalScanUpdated = $totalScanUpdatedAt ? Carbon::parse($totalScanUpdatedAt)->format('H:i') : '-';
-        $readyPreviousUploadCount = $this->readyScanOutPreviousUploadsQuery($currentDate)->count();
+        $scanOutOverCount = $this->scanOutOverQuery($selectedDate)->count();
+        $scanOutUnderCount = $this->scanOutUnderQuery($selectedDate)->count();
+        $scanOutDifference = $totalScanOut - $totalResi;
 
         $resiCounts = Resi::select('kurir_id', DB::raw('count(*) as total'))
             ->whereDate('tanggal_upload', $selectedDate)
@@ -131,40 +133,78 @@ class DashboardController extends Controller
             'totalCanceledUpdated' => $totalCanceledUpdated,
             'totalQcUpdated' => $totalQcUpdated,
             'totalScanUpdated' => $totalScanUpdated,
-            'readyPreviousUploadCount' => $readyPreviousUploadCount,
+            'scanOutOverCount' => $scanOutOverCount,
+            'scanOutUnderCount' => $scanOutUnderCount,
+            'scanOutDifference' => $scanOutDifference,
             'kurirs' => $kurirs,
         ]);
     }
 
-    public function readyScanOutPreviousUploads()
+    public function scanOutDiscrepancy(Request $request)
     {
-        $currentDate = now()->toDateString();
+        $date = $this->parseDate($request->input('date')) ?: now()->toDateString();
 
-        $resis = $this->readyScanOutPreviousUploadsQuery($currentDate)
-            ->with(['kurir:id,name', 'details:id,resi_id,sku,qty'])
+        $overRows = $this->scanOutOverQuery($date)
+            ->with(['resi.kurir:id,name', 'resi.details:id,resi_id,sku,qty'])
+            ->orderByDesc('scanned_at')
+            ->orderByDesc('id')
+            ->get()
+            ->map(function (ShipmentScanOut $scanOut) use ($date) {
+                $resi = $scanOut->resi;
+                $tanggalUpload = $resi?->tanggal_upload
+                    ? Carbon::parse($resi->tanggal_upload)->format('Y-m-d')
+                    : '-';
+                $isCanceled = ($resi?->status ?? 'active') === 'canceled';
+                $reason = $isCanceled
+                    ? 'Resi canceled tetapi ada scan out tanggal ini'
+                    : 'Tanggal upload bukan '.$date;
+
+                return $this->formatDiscrepancyRow($resi, [
+                    'type' => 'over',
+                    'type_label' => 'Lebih Scan Out',
+                    'reason' => $reason,
+                    'scanned_at' => $scanOut->scanned_at
+                        ? Carbon::parse($scanOut->scanned_at)->format('Y-m-d H:i')
+                        : '-',
+                    'tanggal_upload' => $tanggalUpload,
+                ]);
+            })
+            ->values();
+
+        $underRows = $this->scanOutUnderQuery($date)
+            ->with(['kurir:id,name', 'details:id,resi_id,sku,qty', 'scanOut'])
             ->orderBy('tanggal_upload')
             ->orderByDesc('updated_at')
             ->orderByDesc('id')
-            ->get(['id', 'id_pesanan', 'no_resi', 'kurir_id', 'tanggal_upload', 'updated_at']);
+            ->get(['id', 'id_pesanan', 'no_resi', 'kurir_id', 'tanggal_upload', 'status', 'updated_at'])
+            ->map(function (Resi $resi) use ($date) {
+                $otherScanOut = $resi->scanOut;
+                $reason = $otherScanOut
+                    ? 'Scan out tercatat di tanggal lain'
+                    : 'Belum ada scan out tanggal '.$date;
 
-        $data = $resis->map(function (Resi $resi) {
-            return [
-                'id_pesanan' => $resi->id_pesanan ?? '-',
-                'no_resi' => $resi->no_resi ?? '-',
-                'kurir' => $resi->kurir?->name ?? '-',
-                'sku' => $this->formatSkuSummary($resi),
-                'tanggal_upload' => $resi->tanggal_upload
-                    ? Carbon::parse($resi->tanggal_upload)->format('Y-m-d')
-                    : '-',
-            ];
-        })->values();
+                return $this->formatDiscrepancyRow($resi, [
+                    'type' => 'under',
+                    'type_label' => 'Kurang Scan Out',
+                    'reason' => $reason,
+                    'scanned_at' => $otherScanOut?->scanned_at
+                        ? Carbon::parse($otherScanOut->scanned_at)->format('Y-m-d H:i')
+                        : '-',
+                ]);
+            })
+            ->values();
 
         return response()->json([
             'meta' => [
-                'current_date' => $currentDate,
-                'total' => $data->count(),
+                'date' => $date,
+                'over_total' => $overRows->count(),
+                'under_total' => $underRows->count(),
+                'difference' => $overRows->count() - $underRows->count(),
             ],
-            'data' => $data,
+            'data' => [
+                'over' => $overRows,
+                'under' => $underRows,
+            ],
         ]);
     }
 
@@ -256,18 +296,47 @@ class DashboardController extends Controller
         ]);
     }
 
-    private function readyScanOutPreviousUploadsQuery(string $currentDate)
+    private function scanOutOverQuery(string $date)
+    {
+        return ShipmentScanOut::query()
+            ->whereDate('scan_date', $date)
+            ->whereHas('resi')
+            ->where(function ($q) use ($date) {
+                $q->whereHas('resi', function ($resiQuery) {
+                    $resiQuery->where('status', 'canceled');
+                })->orWhereHas('resi', function ($resiQuery) use ($date) {
+                    $resiQuery->whereDate('tanggal_upload', '!=', $date);
+                });
+            });
+    }
+
+    private function scanOutUnderQuery(string $date)
     {
         return Resi::query()
-            ->whereDate('tanggal_upload', '!=', $currentDate)
+            ->whereDate('tanggal_upload', $date)
             ->where(function ($q) {
                 $q->whereNull('status')
                     ->orWhere('status', '!=', 'canceled');
             })
-            ->whereHas('qcScan', function ($q) {
-                $q->where('status', 'passed');
-            })
-            ->whereDoesntHave('scanOut');
+            ->whereDoesntHave('scanOut', function ($q) use ($date) {
+                $q->whereDate('scan_date', $date);
+            });
+    }
+
+    private function formatDiscrepancyRow(?Resi $resi, array $extra): array
+    {
+        return [
+            'type' => $extra['type'],
+            'type_label' => $extra['type_label'],
+            'reason' => $extra['reason'],
+            'id_pesanan' => $resi?->id_pesanan ?? '-',
+            'no_resi' => $resi?->no_resi ?? '-',
+            'kurir' => $resi?->kurir?->name ?? '-',
+            'sku' => $resi ? $this->formatSkuSummary($resi) : '-',
+            'tanggal_upload' => $extra['tanggal_upload']
+                ?? ($resi?->tanggal_upload ? Carbon::parse($resi->tanggal_upload)->format('Y-m-d') : '-'),
+            'scanned_at' => $extra['scanned_at'],
+        ];
     }
 
     private function formatSkuSummary(Resi $resi): string

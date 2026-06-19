@@ -123,8 +123,8 @@ class AttendanceReportDetailSheet implements FromCollection, WithHeadings, WithT
         return match ($value) {
             'work' => 'Masuk',
             'leave' => 'Cuti/Izin',
-            'holiday' => 'Libur',
-            'day_off' => 'Libur',
+            'holiday' => 'Libur Perusahaan',
+            'day_off' => 'Libur Mingguan',
             default => $value ?: '-',
         };
     }
@@ -137,8 +137,8 @@ class AttendanceReportDetailSheet implements FromCollection, WithHeadings, WithT
             'absent' => 'Alpha',
             'incomplete' => 'Tidak Lengkap',
             'leave' => 'Cuti/Izin',
-            'holiday' => 'Libur',
-            'day_off' => 'Libur',
+            'holiday' => 'Libur Perusahaan',
+            'day_off' => 'Libur Mingguan',
             default => $value ?: '-',
         };
     }

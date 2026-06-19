@@ -55,6 +55,9 @@ class AttendanceReportSummarySheet implements FromCollection, WithHeadings, With
             'Alpha',
             'Tidak Lengkap',
             'Cuti/Izin',
+            'Libur',
+            'Libur Perusahaan',
+            'Libur Mingguan',
             'Rate Hadir (%)',
             'Rate Tepat Waktu (%)',
             'Jam Kerja',
@@ -77,6 +80,9 @@ class AttendanceReportSummarySheet implements FromCollection, WithHeadings, With
             (int) ($row['absent_days'] ?? 0),
             (int) ($row['incomplete_days'] ?? 0),
             (int) ($row['leave_days'] ?? 0),
+            (int) ($row['non_work_days'] ?? 0),
+            (int) ($row['holiday_days'] ?? 0),
+            (int) ($row['day_off_days'] ?? 0),
             (float) ($row['attendance_rate'] ?? 0),
             (float) ($row['punctual_rate'] ?? 0),
             round(((int) ($row['work_minutes'] ?? 0)) / 60, 2),
@@ -87,19 +93,19 @@ class AttendanceReportSummarySheet implements FromCollection, WithHeadings, With
 
     public function styles(Worksheet $sheet): array
     {
-        $sheet->mergeCells('A1:P1');
-        $sheet->mergeCells('A2:P2');
+        $sheet->mergeCells('A1:S1');
+        $sheet->mergeCells('A2:S2');
         $sheet->mergeCells('A4:D4');
         $sheet->mergeCells('E4:H4');
-        $sheet->mergeCells('I4:L4');
-        $sheet->mergeCells('M4:P4');
+        $sheet->mergeCells('I4:M4');
+        $sheet->mergeCells('N4:S4');
 
         $sheet->setCellValue('A1', 'Laporan Absensi');
         $sheet->setCellValue('A2', 'Periode '.$this->period['from'].' sampai '.$this->period['to']);
         $sheet->setCellValue('A4', 'Karyawan: '.number_format((int) ($this->summary['employees'] ?? 0), 0, ',', '.'));
         $sheet->setCellValue('E4', 'Hari Kerja: '.number_format((int) ($this->summary['scheduled_work_days'] ?? 0), 0, ',', '.'));
         $sheet->setCellValue('I4', 'Rate Hadir: '.number_format((float) ($this->summary['attendance_rate'] ?? 0), 2, ',', '.').'%');
-        $sheet->setCellValue('M4', 'Lembur Approved: '.$this->hours((int) ($this->summary['approved_overtime_minutes'] ?? 0)));
+        $sheet->setCellValue('N4', 'Libur: '.number_format((int) ($this->summary['non_work_days'] ?? 0), 0, ',', '.').' hari | Lembur Approved: '.$this->hours((int) ($this->summary['approved_overtime_minutes'] ?? 0)));
 
         return [
             1 => ['font' => ['bold' => true, 'size' => 16]],
@@ -118,14 +124,14 @@ class AttendanceReportSummarySheet implements FromCollection, WithHeadings, With
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
                 $lastRow = max(7, 7 + $this->rows->count());
-                $range = 'A7:P'.$lastRow;
+                $range = 'A7:S'.$lastRow;
 
                 $sheet->freezePane('A8');
                 $sheet->setAutoFilter($range);
                 $sheet->getStyle($range)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setRGB('E4E6EF');
-                $sheet->getStyle('F8:P'.$lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
-                $sheet->getStyle('A1:P'.$lastRow)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
-                $sheet->getStyle('L8:P'.$lastRow)->getNumberFormat()->setFormatCode('#,##0.00');
+                $sheet->getStyle('F8:S'.$lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                $sheet->getStyle('A1:S'.$lastRow)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+                $sheet->getStyle('O8:S'.$lastRow)->getNumberFormat()->setFormatCode('#,##0.00');
             },
         ];
     }

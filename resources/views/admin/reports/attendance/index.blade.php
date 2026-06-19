@@ -308,6 +308,7 @@
                         <th class="text-end">Alpha</th>
                         <th class="text-end">Tidak Lengkap</th>
                         <th class="text-end">Cuti</th>
+                        <th class="text-end">Libur</th>
                         <th class="text-end">Rate</th>
                         <th class="text-end">Jam Kerja</th>
                         <th class="text-end">Lembur</th>
@@ -380,11 +381,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const detailModalEl = document.getElementById('attendance_detail_modal');
     const detailModal = detailModalEl ? new bootstrap.Modal(detailModalEl) : null;
     let currentRows = [];
+    const today = new Date();
+    const formatDate = (date) => [
+        date.getFullYear(),
+        String(date.getMonth() + 1).padStart(2, '0'),
+        String(date.getDate()).padStart(2, '0'),
+    ].join('-');
+    const defaultDateFrom = formatDate(new Date(today.getFullYear(), today.getMonth(), 1));
+    const defaultDateTo = formatDate(today);
 
-    if (typeof flatpickr !== 'undefined') {
-        flatpickr(dateFromEl, { dateFormat: 'Y-m-d', allowInput: true });
-        flatpickr(dateToEl, { dateFormat: 'Y-m-d', allowInput: true });
-    }
+    dateFromEl.value = dateFromEl.value || defaultDateFrom;
+    dateToEl.value = dateToEl.value || defaultDateTo;
+
+    const dateFromPicker = typeof flatpickr !== 'undefined'
+        ? flatpickr(dateFromEl, { dateFormat: 'Y-m-d', allowInput: true, defaultDate: dateFromEl.value })
+        : null;
+    const dateToPicker = typeof flatpickr !== 'undefined'
+        ? flatpickr(dateToEl, { dateFormat: 'Y-m-d', allowInput: true, defaultDate: dateToEl.value })
+        : null;
 
     if (typeof $ !== 'undefined' && $.fn.select2) {
         [employeeEl, areaEl, positionEl, employmentStatusEl, reportStatusEl].forEach((select) => {
@@ -424,8 +438,8 @@ document.addEventListener('DOMContentLoaded', () => {
         absent: 'Alpha',
         incomplete: 'Tidak Lengkap',
         leave: 'Cuti/Izin',
-        holiday: 'Libur',
-        day_off: 'Libur',
+        holiday: 'Libur Perusahaan',
+        day_off: 'Libur Mingguan',
         none: 'Tidak Ada',
         pending: 'Pending',
         approved: 'Approved',
@@ -455,7 +469,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('summary_employees').textContent = Number(summary.employees || 0).toLocaleString('id-ID');
         document.getElementById('summary_period').textContent = `Periode ${period.from || '-'} sampai ${period.to || '-'}`;
         document.getElementById('summary_attendance_rate').textContent = pct(summary.attendance_rate);
-        document.getElementById('summary_scheduled').textContent = `${Number(summary.scheduled_work_days || 0).toLocaleString('id-ID')} hari kerja terjadwal`;
+        document.getElementById('summary_scheduled').textContent = `${Number(summary.scheduled_work_days || 0).toLocaleString('id-ID')} hari kerja | ${Number(summary.non_work_days || 0).toLocaleString('id-ID')} libur`;
         document.getElementById('summary_problem_days').textContent = Number((summary.absent_days || 0) + (summary.incomplete_days || 0)).toLocaleString('id-ID');
         document.getElementById('summary_problem_meta').textContent = `Alpha ${Number(summary.absent_days || 0).toLocaleString('id-ID')} | Tidak lengkap ${Number(summary.incomplete_days || 0).toLocaleString('id-ID')}`;
         document.getElementById('summary_overtime').textContent = hours(summary.approved_overtime_minutes);
@@ -503,6 +517,11 @@ document.addEventListener('DOMContentLoaded', () => {
             { data: 'absent_days', className: 'text-end' },
             { data: 'incomplete_days', className: 'text-end' },
             { data: 'leave_days', className: 'text-end' },
+            {
+                data: 'non_work_days',
+                className: 'text-end',
+                render: (value, type, row) => `<div>${Number(value || 0).toLocaleString('id-ID')}</div><div class="text-muted fs-8">Perusahaan ${Number(row.holiday_days || 0).toLocaleString('id-ID')} | Mingguan ${Number(row.day_off_days || 0).toLocaleString('id-ID')}</div>`,
+            },
             { data: 'attendance_rate', className: 'text-end', render: pct },
             { data: 'work_minutes', className: 'text-end', render: hours },
             {
@@ -530,8 +549,16 @@ document.addEventListener('DOMContentLoaded', () => {
     searchEl.addEventListener('keyup', () => reload());
     resetBtn.addEventListener('click', () => {
         searchEl.value = '';
-        dateFromEl.value = '';
-        dateToEl.value = '';
+        if (dateFromPicker) {
+            dateFromPicker.setDate(defaultDateFrom, false);
+        } else {
+            dateFromEl.value = defaultDateFrom;
+        }
+        if (dateToPicker) {
+            dateToPicker.setDate(defaultDateTo, false);
+        } else {
+            dateToEl.value = defaultDateTo;
+        }
         [employeeEl, areaEl, positionEl, reportStatusEl].forEach((select) => {
             select.value = '';
             if (typeof $ !== 'undefined' && $(select).data('select2')) {

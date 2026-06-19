@@ -108,6 +108,9 @@ class AttendanceReportController extends Controller
             'absent_days' => (int) $rows->sum('absent_days'),
             'incomplete_days' => (int) $rows->sum('incomplete_days'),
             'leave_days' => (int) $rows->sum('leave_days'),
+            'holiday_days' => (int) $rows->sum('holiday_days'),
+            'day_off_days' => (int) $rows->sum('day_off_days'),
+            'non_work_days' => (int) $rows->sum('non_work_days'),
             'approved_overtime_minutes' => (int) $rows->sum('approved_overtime_minutes'),
             'pending_overtime_minutes' => (int) $rows->sum('pending_overtime_minutes'),
             'attendance_rate' => $this->rate(
@@ -183,6 +186,14 @@ class AttendanceReportController extends Controller
                 $scheduledWorkDays++;
             }
 
+            if ($effectiveScheduleType === EmployeeSchedule::TYPE_LEAVE) {
+                $leaveDays++;
+            } elseif ($effectiveScheduleType === EmployeeSchedule::TYPE_HOLIDAY) {
+                $holidayDays++;
+            } elseif ($effectiveScheduleType === EmployeeSchedule::TYPE_DAY_OFF) {
+                $dayOffDays++;
+            }
+
             if ($status === Attendance::STATUS_PRESENT) {
                 $presentDays++;
             } elseif ($status === Attendance::STATUS_LATE) {
@@ -191,12 +202,6 @@ class AttendanceReportController extends Controller
                 $absentDays++;
             } elseif ($status === Attendance::STATUS_INCOMPLETE) {
                 $incompleteDays++;
-            } elseif ($status === Attendance::STATUS_LEAVE) {
-                $leaveDays++;
-            } elseif ($status === Attendance::STATUS_HOLIDAY) {
-                $holidayDays++;
-            } elseif ($status === Attendance::STATUS_DAY_OFF) {
-                $dayOffDays++;
             }
 
             $workMinutes += (int) ($attendance?->work_minutes ?? 0);
@@ -229,6 +234,7 @@ class AttendanceReportController extends Controller
 
         $attendedDays = $presentDays + $lateDays;
         $problemDays = $absentDays + $incompleteDays;
+        $nonWorkDays = $holidayDays + $dayOffDays;
 
         return [
             'employee_id' => $employee->id,
@@ -246,6 +252,7 @@ class AttendanceReportController extends Controller
             'leave_days' => $leaveDays,
             'holiday_days' => $holidayDays,
             'day_off_days' => $dayOffDays,
+            'non_work_days' => $nonWorkDays,
             'problem_days' => $problemDays,
             'attendance_rate' => $this->rate($attendedDays, $scheduledWorkDays),
             'punctual_rate' => $this->rate($presentDays, $scheduledWorkDays),
@@ -310,7 +317,7 @@ class AttendanceReportController extends Controller
             : now()->startOfMonth();
         $to = $request->filled('date_to')
             ? Carbon::parse($request->input('date_to'))->startOfDay()
-            : now()->endOfMonth()->startOfDay();
+            : now()->startOfDay();
 
         if ($to->lt($from)) {
             [$from, $to] = [$to, $from];

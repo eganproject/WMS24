@@ -253,6 +253,26 @@
         grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
         gap: 16px;
     }
+    .dashboard-action-panel {
+        border: 1px solid #fcd34d;
+        border-radius: 12px;
+        background: #fffbeb;
+        padding: 14px 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+    .dashboard-action-title {
+        font-size: 13px;
+        font-weight: 800;
+        color: #92400e;
+    }
+    .dashboard-action-sub {
+        font-size: 12px;
+        color: #b45309;
+    }
 </style>
 @endpush
 
@@ -389,6 +409,18 @@
 {{-- ──────────────────────────────────────────────────────────────────── --}}
 {{--  Per-kurir grid                                                        --}}
 {{-- ──────────────────────────────────────────────────────────────────── --}}
+<div class="dashboard-action-panel mb-6">
+    <div>
+        <div class="dashboard-action-title">Resi siap scan out dari upload sebelumnya</div>
+        <div class="dashboard-action-sub">
+            {{ number_format($readyPreviousUploadCount ?? 0) }} resi sudah lolos QC, belum scan out, dan bukan upload hari ini.
+        </div>
+    </div>
+    <button type="button" class="btn btn-warning btn-sm" id="btn_ready_previous_uploads">
+        <i class="fas fa-eye me-1"></i>Lihat Data
+    </button>
+</div>
+
 <div class="card">
     <div class="card-header border-0 pt-6 pb-2">
         <div class="card-title flex-column">
@@ -532,11 +564,50 @@
         </div>
     </div>
 </div>
+
+<div class="modal fade" id="modal_ready_previous_uploads" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header border-0 pb-0">
+                <div>
+                    <h5 class="modal-title fw-bolder mb-1">
+                        <i class="fas fa-clipboard-check me-2 text-warning"></i>
+                        Resi Siap Scan Out Dari Upload Sebelumnya
+                    </h5>
+                    <div class="text-muted fs-7" id="ready_previous_subtitle">Belum dimuat.</div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <div class="modal-body pt-4">
+                <div class="table-responsive">
+                    <table class="table table-row-dashed align-middle">
+                        <thead>
+                            <tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0">
+                                <th width="18%">ID Pesanan</th>
+                                <th width="20%">No Resi</th>
+                                <th width="16%">Kurir</th>
+                                <th width="31%">SKU</th>
+                                <th width="15%">Tanggal Upload</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ready_previous_body">
+                            <tr>
+                                <td colspan="5" class="text-center text-muted py-6">Belum ada data.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 @endsection
 
 @push('scripts')
 <script>
     const kurirDetailUrl  = '{{ route('admin.dashboard.kurir-detail') }}';
+    const readyPreviousUrl = '{{ route('admin.dashboard.ready-scan-out-previous-uploads') }}';
     const selectedDateStr = '{{ $today ?? '' }}';
     const currentDateStr  = '{{ $currentDate ?? '' }}';
 
@@ -582,6 +653,11 @@
         const detailCanceled = document.getElementById('kurir_detail_canceled');
         const detailBody     = document.getElementById('kurir_detail_body');
         const detailTypeButtons = Array.from(document.querySelectorAll('.js-kurir-detail-type'));
+        const readyPreviousBtn = document.getElementById('btn_ready_previous_uploads');
+        const readyPreviousModalEl = document.getElementById('modal_ready_previous_uploads');
+        const readyPreviousModal = readyPreviousModalEl ? new bootstrap.Modal(readyPreviousModalEl) : null;
+        const readyPreviousSubtitle = document.getElementById('ready_previous_subtitle');
+        const readyPreviousBody = document.getElementById('ready_previous_body');
         let activeDetailRequest = {
             kurirId: null,
             kurirName: '-',
@@ -608,6 +684,70 @@
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
+
+        const setReadyPreviousLoading = () => {
+            if (readyPreviousSubtitle) readyPreviousSubtitle.textContent = 'Memuat data resi siap scan out...';
+            if (readyPreviousBody) readyPreviousBody.innerHTML = `
+                <tr>
+                    <td colspan="5" class="text-center text-muted py-6">
+                        <span class="spinner-border spinner-border-sm me-2"></span>Memuat data...
+                    </td>
+                </tr>`;
+        };
+
+        const renderReadyPreviousRows = (rows) => {
+            if (!readyPreviousBody) return;
+
+            if (!Array.isArray(rows) || !rows.length) {
+                readyPreviousBody.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="text-center text-muted py-8">
+                            <i class="fas fa-check-circle text-success fs-2 mb-3 d-block"></i>
+                            Tidak ada resi upload sebelumnya yang siap scan out.
+                        </td>
+                    </tr>`;
+                return;
+            }
+
+            readyPreviousBody.innerHTML = rows.map(row => `
+                <tr>
+                    <td>${escapeHtml(row.id_pesanan)}</td>
+                    <td>${escapeHtml(row.no_resi)}</td>
+                    <td>${escapeHtml(row.kurir)}</td>
+                    <td>${escapeHtml(row.sku)}</td>
+                    <td><span class="badge badge-light-warning">${escapeHtml(row.tanggal_upload)}</span></td>
+                </tr>`).join('');
+        };
+
+        const loadReadyPreviousUploads = async () => {
+            if (!readyPreviousModal) return;
+
+            readyPreviousModal.show();
+            setReadyPreviousLoading();
+
+            try {
+                const response = await fetch(readyPreviousUrl);
+                const payload = await response.json();
+
+                if (!response.ok) throw new Error(payload?.message || 'Gagal memuat data.');
+
+                const total = Number(payload?.meta?.total || 0).toLocaleString('id-ID');
+                const currentDate = payload?.meta?.current_date || currentDateStr || '-';
+                if (readyPreviousSubtitle) {
+                    readyPreviousSubtitle.textContent = `${total} resi siap scan out. Hari ini: ${currentDate}.`;
+                }
+                renderReadyPreviousRows(payload?.data || []);
+            } catch (error) {
+                if (readyPreviousSubtitle) readyPreviousSubtitle.textContent = 'Gagal memuat data.';
+                if (readyPreviousBody) readyPreviousBody.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="text-center text-danger py-6">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            ${escapeHtml(error.message || 'Gagal memuat data.')}
+                        </td>
+                    </tr>`;
+            }
+        };
 
         const setActiveDetailType = (type) => {
             detailTypeButtons.forEach(button => {
@@ -707,6 +847,8 @@
                 loadKurirDetail({ kurirId, kurirName, date, type: 'remaining' });
             });
         });
+
+        readyPreviousBtn?.addEventListener('click', loadReadyPreviousUploads);
     });
 </script>
 @endpush

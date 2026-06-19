@@ -55,6 +55,7 @@ class DashboardController extends Controller
         $totalCanceledUpdated = $totalCanceledUpdatedAt ? Carbon::parse($totalCanceledUpdatedAt)->format('H:i') : '-';
         $totalQcUpdated = $totalQcUpdatedAt ? Carbon::parse($totalQcUpdatedAt)->format('H:i') : '-';
         $totalScanUpdated = $totalScanUpdatedAt ? Carbon::parse($totalScanUpdatedAt)->format('H:i') : '-';
+        $readyPreviousUploadCount = $this->readyScanOutPreviousUploadsQuery($currentDate)->count();
 
         $resiCounts = Resi::select('kurir_id', DB::raw('count(*) as total'))
             ->whereDate('tanggal_upload', $selectedDate)
@@ -130,7 +131,40 @@ class DashboardController extends Controller
             'totalCanceledUpdated' => $totalCanceledUpdated,
             'totalQcUpdated' => $totalQcUpdated,
             'totalScanUpdated' => $totalScanUpdated,
+            'readyPreviousUploadCount' => $readyPreviousUploadCount,
             'kurirs' => $kurirs,
+        ]);
+    }
+
+    public function readyScanOutPreviousUploads()
+    {
+        $currentDate = now()->toDateString();
+
+        $resis = $this->readyScanOutPreviousUploadsQuery($currentDate)
+            ->with(['kurir:id,name', 'details:id,resi_id,sku,qty'])
+            ->orderBy('tanggal_upload')
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id')
+            ->get(['id', 'id_pesanan', 'no_resi', 'kurir_id', 'tanggal_upload', 'updated_at']);
+
+        $data = $resis->map(function (Resi $resi) {
+            return [
+                'id_pesanan' => $resi->id_pesanan ?? '-',
+                'no_resi' => $resi->no_resi ?? '-',
+                'kurir' => $resi->kurir?->name ?? '-',
+                'sku' => $this->formatSkuSummary($resi),
+                'tanggal_upload' => $resi->tanggal_upload
+                    ? Carbon::parse($resi->tanggal_upload)->format('Y-m-d')
+                    : '-',
+            ];
+        })->values();
+
+        return response()->json([
+            'meta' => [
+                'current_date' => $currentDate,
+                'total' => $data->count(),
+            ],
+            'data' => $data,
         ]);
     }
 
@@ -192,22 +226,10 @@ class DashboardController extends Controller
         $data = $selectedResis->map(function ($resi) use ($scanOutsByResi) {
             $scanOut = $scanOutsByResi->get($resi->id);
             $isCanceled = ($resi->status ?? 'active') === 'canceled';
-            $skuSummary = $resi->details
-                ->map(function ($detail) {
-                    $sku = trim((string) ($detail->sku ?? ''));
-                    if ($sku === '') {
-                        return null;
-                    }
-
-                    return $sku.' ('.(int) $detail->qty.')';
-                })
-                ->filter()
-                ->implode(', ');
-
             return [
                 'id_pesanan' => $resi->id_pesanan ?? '-',
                 'no_resi' => $resi->no_resi ?? '-',
-                'sku' => $skuSummary ?: '-',
+                'sku' => $this->formatSkuSummary($resi),
                 'status' => $isCanceled
                     ? 'Canceled'
                     : ($scanOut ? 'Scan Out' : 'Siap Scan Out'),
@@ -232,6 +254,37 @@ class DashboardController extends Controller
             ],
             'data' => $data,
         ]);
+    }
+
+    private function readyScanOutPreviousUploadsQuery(string $currentDate)
+    {
+        return Resi::query()
+            ->whereDate('tanggal_upload', '!=', $currentDate)
+            ->where(function ($q) {
+                $q->whereNull('status')
+                    ->orWhere('status', '!=', 'canceled');
+            })
+            ->whereHas('qcScan', function ($q) {
+                $q->where('status', 'passed');
+            })
+            ->whereDoesntHave('scanOut');
+    }
+
+    private function formatSkuSummary(Resi $resi): string
+    {
+        $skuSummary = $resi->details
+            ->map(function ($detail) {
+                $sku = trim((string) ($detail->sku ?? ''));
+                if ($sku === '') {
+                    return null;
+                }
+
+                return $sku.' ('.(int) $detail->qty.')';
+            })
+            ->filter()
+            ->implode(', ');
+
+        return $skuSummary ?: '-';
     }
 
     private function parseDate(?string $value): ?string

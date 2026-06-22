@@ -273,6 +273,69 @@
         font-size: 12px;
         color: #b45309;
     }
+    .dashboard-tabs {
+        border-bottom: 1px solid var(--dash-border);
+        gap: 8px;
+    }
+    .dashboard-tabs .nav-link {
+        border: 0;
+        border-bottom: 3px solid transparent;
+        border-radius: 0;
+        color: #6b7280;
+        font-weight: 700;
+        padding: 10px 4px;
+        margin-right: 18px;
+    }
+    .dashboard-tabs .nav-link.active {
+        color: #1d4ed8;
+        border-bottom-color: #3b82f6;
+        background: transparent;
+    }
+    .dash-mini-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 14px;
+    }
+    .dash-mini-card {
+        border: 1px solid var(--dash-border);
+        border-radius: 12px;
+        padding: 16px;
+        background: #fff;
+        box-shadow: var(--dash-shadow);
+    }
+    .dash-mini-label {
+        font-size: 11px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+        color: #6b7280;
+    }
+    .dash-mini-value {
+        font-size: 28px;
+        font-weight: 800;
+        line-height: 1.15;
+    }
+    .approval-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 14px 0;
+        border-bottom: 1px dashed #e5e7eb;
+    }
+    .approval-row:last-child { border-bottom: 0; }
+    .warehouse-progress {
+        height: 7px;
+        border-radius: 999px;
+        overflow: hidden;
+        background: #f3f4f6;
+    }
+    .warehouse-progress > span {
+        display: block;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, #ef4444, #f59e0b);
+    }
 </style>
 @endpush
 
@@ -284,6 +347,9 @@
     $totalScanVal = ($totalScanOut ?? 0);
     $overallPct = $totalActive > 0 ? min(100, round($totalScanVal / $totalActive * 100)) : 0;
     $scanDiff = (int) ($scanOutDifference ?? (($totalScanOut ?? 0) - ($totalResi ?? 0)));
+    $emptyStockTotal = (int) ($emptyStockSummary['total_empty'] ?? 0);
+    $emptyWarehouseTotal = (int) ($emptyStockSummary['warehouse_total'] ?? 0);
+    $pendingApprovalTotal = (int) ($pendingApprovalSummary['total'] ?? 0);
 @endphp
 
 {{-- ──────────────────────────────────────────────────────────────────── --}}
@@ -317,6 +383,33 @@
         </button>
     </div>
 </div>
+
+<ul class="nav nav-tabs dashboard-tabs mb-6" id="dashboard_tabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="tab-operational-tab" data-bs-toggle="tab" data-bs-target="#tab_operational" type="button" role="tab" aria-controls="tab_operational" aria-selected="true">
+            <i class="fas fa-chart-line me-2"></i>Operasional
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-empty-stock-tab" data-bs-toggle="tab" data-bs-target="#tab_empty_stock" type="button" role="tab" aria-controls="tab_empty_stock" aria-selected="false">
+            <i class="fas fa-box-open me-2"></i>Stock Kosong
+            @if($emptyStockTotal > 0)
+                <span class="badge badge-light-danger ms-2">{{ number_format($emptyStockTotal) }}</span>
+            @endif
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-pending-approval-tab" data-bs-toggle="tab" data-bs-target="#tab_pending_approval" type="button" role="tab" aria-controls="tab_pending_approval" aria-selected="false">
+            <i class="fas fa-user-clock me-2"></i>Pending Approval
+            @if($pendingApprovalTotal > 0)
+                <span class="badge badge-light-warning ms-2">{{ number_format($pendingApprovalTotal) }}</span>
+            @endif
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="dashboard_tab_content">
+<div class="tab-pane fade show active" id="tab_operational" role="tabpanel" aria-labelledby="tab-operational-tab">
 
 {{-- ──────────────────────────────────────────────────────────────────── --}}
 {{--  KPI summary cards                                                     --}}
@@ -504,6 +597,157 @@
             </div>
         @endif
     </div>
+</div>
+
+</div>
+
+<div class="tab-pane fade" id="tab_empty_stock" role="tabpanel" aria-labelledby="tab-empty-stock-tab">
+    <div class="dash-mini-grid mb-6">
+        <div class="dash-mini-card">
+            <div class="dash-mini-label">Total SKU Stock Kosong</div>
+            <div class="dash-mini-value text-danger">{{ number_format($emptyStockTotal) }}</div>
+            <div class="text-muted fs-8">Akumulasi seluruh gudang aktif.</div>
+        </div>
+        <div class="dash-mini-card">
+            <div class="dash-mini-label">Gudang Terdampak</div>
+            <div class="dash-mini-value text-warning">{{ number_format($emptyWarehouseTotal) }}</div>
+            <div class="text-muted fs-8">Gudang non-rusak dengan stock kosong.</div>
+        </div>
+        <div class="dash-mini-card">
+            <div class="dash-mini-label">Referensi Laporan</div>
+            <div class="dash-mini-value text-primary">Low Stock</div>
+            <a href="{{ route('admin.reports.low-stock.index', ['status' => 'out', 'warehouse_id' => 'all']) }}" class="btn btn-sm btn-light-primary mt-2">
+                Buka Report Stock
+            </a>
+        </div>
+    </div>
+
+    <div class="row g-6">
+        <div class="col-xl-4">
+            <div class="card h-100">
+                <div class="card-header border-0 pt-6 pb-2">
+                    <div class="card-title flex-column">
+                        <span class="dash-section-title">Ringkasan per Gudang</span>
+                        <span class="dash-section-sub mt-1">Jumlah SKU dengan stock 0 atau minus.</span>
+                    </div>
+                </div>
+                <div class="card-body pt-2">
+                    @forelse(($emptyStockSummary['warehouses'] ?? collect()) as $warehouse)
+                        <div class="mb-5">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div>
+                                    <div class="fw-bold text-gray-800">{{ $warehouse['name'] }}</div>
+                                    <div class="text-muted fs-8">{{ $warehouse['code'] }} · Update {{ $warehouse['latest_update'] }}</div>
+                                </div>
+                                <span class="badge badge-light-danger">{{ number_format($warehouse['total_empty']) }}</span>
+                            </div>
+                            <div class="warehouse-progress">
+                                <span style="width: {{ min(100, $warehouse['percent']) }}%;"></span>
+                            </div>
+                        </div>
+                    @empty
+                        <div class="dash-empty py-8">
+                            <i class="fas fa-check-circle text-success"></i>
+                            <p>Tidak ada stock kosong.</p>
+                        </div>
+                    @endforelse
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-8">
+            <div class="card h-100">
+                <div class="card-header border-0 pt-6 pb-2">
+                    <div class="card-title flex-column">
+                        <span class="dash-section-title">Detail Stock Kosong</span>
+                        <span class="dash-section-sub mt-1">Maksimal 50 SKU pertama, urut gudang dan SKU.</span>
+                    </div>
+                </div>
+                <div class="card-body pt-2">
+                    <div class="table-responsive">
+                        <table class="table table-row-dashed align-middle">
+                            <thead>
+                                <tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0">
+                                    <th>SKU</th>
+                                    <th>Nama Barang</th>
+                                    <th>Gudang</th>
+                                    <th>Kategori</th>
+                                    <th class="text-end">Stock</th>
+                                    <th class="text-end">Safety</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @forelse(($emptyStockRows ?? collect()) as $row)
+                                    <tr>
+                                        <td class="fw-bold">{{ $row['sku'] }}</td>
+                                        <td>
+                                            <div>{{ $row['name'] }}</div>
+                                            <div class="text-muted fs-8">{{ $row['address'] }}</div>
+                                        </td>
+                                        <td>
+                                            <span class="badge badge-light-secondary">{{ $row['warehouse'] }}</span>
+                                        </td>
+                                        <td>{{ $row['category'] }}</td>
+                                        <td class="text-end text-danger fw-bolder">{{ number_format($row['stock']) }}</td>
+                                        <td class="text-end">{{ number_format($row['safety_stock']) }}</td>
+                                    </tr>
+                                @empty
+                                    <tr>
+                                        <td colspan="6" class="text-center text-muted py-8">Tidak ada stock kosong.</td>
+                                    </tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="tab-pane fade" id="tab_pending_approval" role="tabpanel" aria-labelledby="tab-pending-approval-tab">
+    <div class="dash-mini-grid mb-6">
+        <div class="dash-mini-card">
+            <div class="dash-mini-label">Total Pending Approval</div>
+            <div class="dash-mini-value text-warning">{{ number_format($pendingApprovalTotal) }}</div>
+            <div class="text-muted fs-8">Gabungan dokumen menunggu tindakan.</div>
+        </div>
+        <div class="dash-mini-card">
+            <div class="dash-mini-label">Menu dengan Pending</div>
+            <div class="dash-mini-value text-primary">{{ number_format(collect($pendingApprovalSummary['items'] ?? [])->where('count', '>', 0)->count()) }}</div>
+            <div class="text-muted fs-8">Dari semua modul approval utama.</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header border-0 pt-6 pb-2">
+            <div class="card-title flex-column">
+                <span class="dash-section-title">Pending Approval per Menu</span>
+                <span class="dash-section-sub mt-1">Klik menu untuk membuka daftar terkait.</span>
+            </div>
+        </div>
+        <div class="card-body pt-2">
+            @forelse(($pendingApprovalSummary['items'] ?? collect()) as $item)
+                <div class="approval-row">
+                    <div>
+                        <div class="fw-bold text-gray-800">{{ $item['label'] }}</div>
+                        <div class="text-muted fs-8">{{ $item['group'] }}</div>
+                    </div>
+                    <div class="d-flex align-items-center gap-3">
+                        <span class="badge {{ $item['count'] > 0 ? 'badge-light-warning' : 'badge-light-success' }}">
+                            {{ number_format($item['count']) }} pending
+                        </span>
+                        <a href="{{ $item['url'] }}" class="btn btn-sm btn-light-primary">Buka</a>
+                    </div>
+                </div>
+            @empty
+                <div class="dash-empty">
+                    <i class="fas fa-check-circle text-success"></i>
+                    <p>Tidak ada pending approval.</p>
+                </div>
+            @endforelse
+        </div>
+    </div>
+</div>
 </div>
 
 {{-- ──────────────────────────────────────────────────────────────────── --}}

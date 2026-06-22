@@ -661,23 +661,12 @@ class CustomerReturnController extends Controller
             ]);
         }
 
-        $hasReceivedQty = false;
         foreach ($rows as $index => $row) {
             if (((int) $row['good_qty'] + (int) $row['damaged_qty']) !== (int) $row['received_qty']) {
                 throw ValidationException::withMessages([
                     "items.{$index}.received_qty" => 'Qty bagus + qty rusak harus sama dengan qty diterima.',
                 ]);
             }
-
-            if ((int) $row['received_qty'] > 0) {
-                $hasReceivedQty = true;
-            }
-        }
-
-        if (!$hasReceivedQty) {
-            throw ValidationException::withMessages([
-                'items' => 'Minimal 1 item harus memiliki qty diterima lebih dari 0.',
-            ]);
         }
 
         BundleService::assertPhysicalItems(

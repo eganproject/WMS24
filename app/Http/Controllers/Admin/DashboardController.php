@@ -3,6 +3,13 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\DamagedAllocation;
+use App\Models\DamagedGood;
+use App\Models\InboundTransaction;
+use App\Models\OutboundTransaction;
+use App\Models\StockAdjustment;
+use App\Models\StockOpname;
+use App\Models\StockTransfer;
 use App\Models\Kurir;
 use App\Models\QcResiScan;
 use App\Models\Resi;
@@ -137,7 +144,193 @@ class DashboardController extends Controller
             'scanOutUnderCount' => $scanOutUnderCount,
             'scanOutDifference' => $scanOutDifference,
             'kurirs' => $kurirs,
+            'emptyStockSummary' => $this->emptyStockSummary(),
+            'emptyStockRows' => $this->emptyStockRows(),
+            'pendingApprovalSummary' => $this->pendingApprovalSummary(),
         ]);
+    }
+
+    private function emptyStockSummary()
+    {
+        $stockExpr = 'COALESCE(s.stock, 0)';
+
+        $rows = DB::table('warehouses as w')
+            ->crossJoin('items as i')
+            ->leftJoin('item_stocks as s', function ($join) {
+                $join->on('s.item_id', '=', 'i.id')
+                    ->on('s.warehouse_id', '=', 'w.id');
+            })
+            ->where(function ($query) {
+                $query->whereNull('i.item_type')
+                    ->orWhere('i.item_type', '!=', 'bundle');
+            })
+            ->where(function ($query) {
+                $query->whereNull('w.type')
+                    ->orWhere('w.type', '!=', 'damaged');
+            })
+            ->whereRaw("{$stockExpr} <= 0")
+            ->select([
+                'w.id',
+                'w.name',
+                'w.code',
+                DB::raw('COUNT(*) as total_empty'),
+                DB::raw('MAX(s.updated_at) as latest_update'),
+            ])
+            ->groupBy('w.id', 'w.name', 'w.code')
+            ->orderByDesc('total_empty')
+            ->orderBy('w.name')
+            ->get();
+
+        $totalEmpty = (int) $rows->sum('total_empty');
+
+        return [
+            'total_empty' => $totalEmpty,
+            'warehouse_total' => $rows->where('total_empty', '>', 0)->count(),
+            'warehouses' => $rows->map(function ($row) use ($totalEmpty) {
+                $total = (int) ($row->total_empty ?? 0);
+
+                return [
+                    'id' => (int) $row->id,
+                    'name' => $row->name ?? '-',
+                    'code' => $row->code ?? '-',
+                    'total_empty' => $total,
+                    'percent' => $totalEmpty > 0 ? round($total / $totalEmpty * 100, 1) : 0,
+                    'latest_update' => $row->latest_update
+                        ? Carbon::parse($row->latest_update)->format('Y-m-d H:i')
+                        : '-',
+                ];
+            })->values(),
+        ];
+    }
+
+    private function emptyStockRows()
+    {
+        $stockExpr = 'COALESCE(s.stock, 0)';
+        $safetyExpr = 'COALESCE(s.safety_stock, i.safety_stock, 0)';
+
+        return DB::table('warehouses as w')
+            ->crossJoin('items as i')
+            ->leftJoin('item_stocks as s', function ($join) {
+                $join->on('s.item_id', '=', 'i.id')
+                    ->on('s.warehouse_id', '=', 'w.id');
+            })
+            ->leftJoin('categories as c', 'c.id', '=', 'i.category_id')
+            ->where(function ($query) {
+                $query->whereNull('i.item_type')
+                    ->orWhere('i.item_type', '!=', 'bundle');
+            })
+            ->where(function ($query) {
+                $query->whereNull('w.type')
+                    ->orWhere('w.type', '!=', 'damaged');
+            })
+            ->whereRaw("{$stockExpr} <= 0")
+            ->select([
+                'i.sku',
+                'i.name',
+                'i.address',
+                'w.name as warehouse',
+                'w.code as warehouse_code',
+                DB::raw("{$stockExpr} as stock"),
+                DB::raw("{$safetyExpr} as safety_stock"),
+                DB::raw("CASE WHEN i.category_id = 0 THEN 'Tanpa Kategori' ELSE COALESCE(c.name, '-') END as category"),
+                's.updated_at',
+            ])
+            ->orderBy('w.name')
+            ->orderBy('i.sku')
+            ->limit(50)
+            ->get()
+            ->map(function ($row) {
+                return [
+                    'sku' => $row->sku ?? '-',
+                    'name' => $row->name ?? '-',
+                    'warehouse' => $row->warehouse ?? '-',
+                    'warehouse_code' => $row->warehouse_code ?? '-',
+                    'category' => $row->category ?? '-',
+                    'address' => $row->address ?? '-',
+                    'stock' => (int) ($row->stock ?? 0),
+                    'safety_stock' => (int) ($row->safety_stock ?? 0),
+                    'updated_at' => $row->updated_at ? Carbon::parse($row->updated_at)->format('Y-m-d H:i') : '-',
+                ];
+            });
+    }
+
+    private function pendingApprovalSummary(): array
+    {
+        $items = [
+            [
+                'label' => 'Inbound Penerimaan',
+                'group' => 'Inbound',
+                'count' => InboundTransaction::where('type', 'receipt')->where('status', 'pending')->count(),
+                'url' => route('admin.inbound.receipts.index', ['status' => 'pending']),
+            ],
+            [
+                'label' => 'Inbound Retur',
+                'group' => 'Inbound',
+                'count' => InboundTransaction::where('type', 'return')->where('status', 'pending')->count(),
+                'url' => route('admin.inbound.returns.index', ['status' => 'pending']),
+            ],
+            [
+                'label' => 'Inbound Manual',
+                'group' => 'Inbound',
+                'count' => InboundTransaction::where('type', 'manual')->where('status', 'pending')->count(),
+                'url' => route('admin.inbound.manuals.index', ['status' => 'pending']),
+            ],
+            [
+                'label' => 'Outbound Picker',
+                'group' => 'Outbound',
+                'count' => OutboundTransaction::where('type', 'picker')->where('status', 'pending')->count(),
+                'url' => route('admin.outbound.pickers.index', ['status' => 'pending']),
+            ],
+            [
+                'label' => 'Outbound Manual',
+                'group' => 'Outbound',
+                'count' => OutboundTransaction::where('type', 'manual')->where('status', 'pending')->count(),
+                'url' => route('admin.outbound.manuals.index', ['status' => 'pending']),
+            ],
+            [
+                'label' => 'Outbound Retur',
+                'group' => 'Outbound',
+                'count' => OutboundTransaction::where('type', 'return')->where('status', 'pending')->count(),
+                'url' => route('admin.outbound.returns.index', ['status' => 'pending']),
+            ],
+            [
+                'label' => 'Barang Rusak',
+                'group' => 'Inventory',
+                'count' => DamagedGood::where('status', 'pending')->count(),
+                'url' => route('admin.inventory.damaged-goods.index', ['status' => 'pending']),
+            ],
+            [
+                'label' => 'Alokasi Rusak',
+                'group' => 'Inventory',
+                'count' => DamagedAllocation::where('status', 'pending')->count(),
+                'url' => route('admin.inventory.damaged-allocations.index', ['status' => 'pending']),
+            ],
+            [
+                'label' => 'Stock Adjustment',
+                'group' => 'Inventory',
+                'count' => StockAdjustment::where('status', 'pending')->count(),
+                'url' => route('admin.inventory.stock-adjustments.index', ['status' => 'pending']),
+            ],
+            [
+                'label' => 'Stock Opname Berjalan',
+                'group' => 'Inventory',
+                'count' => StockOpname::where('status', 'open')->count(),
+                'url' => route('admin.inventory.stock-opname.index', ['status' => 'open']),
+            ],
+            [
+                'label' => 'Transfer Gudang QC',
+                'group' => 'Inventory',
+                'count' => StockTransfer::where('status', 'qc_pending')->count(),
+                'url' => route('admin.inventory.stock-transfers.index', ['status' => 'qc_pending']),
+            ],
+        ];
+
+        return [
+            'total' => array_sum(array_column($items, 'count')),
+            'items' => collect($items)
+                ->sortByDesc('count')
+                ->values(),
+        ];
     }
 
     public function scanOutDiscrepancy(Request $request)

@@ -107,6 +107,8 @@ class CustomerReturnController extends Controller
                 'resi_no' => $row->resi_no,
                 'order_ref' => $row->order_ref ?? '-',
                 'status' => $row->status,
+                'status_label' => $row->statusLabel(),
+                'status_badge' => $row->statusBadgeClass(),
                 'matched' => (bool) $row->resi_id,
                 'received_at' => $row->received_at?->format('Y-m-d H:i') ?? '',
                 'inspected_at' => $row->inspected_at?->format('Y-m-d H:i') ?? '',
@@ -502,13 +504,18 @@ class CustomerReturnController extends Controller
             return (int) $item->good_qty > 0 || (int) $item->damaged_qty > 0;
         });
 
+        $finalizedAt = now();
         if (!$hasQty) {
-            throw ValidationException::withMessages([
-                'items' => "Retur {$customerReturn->code} belum memiliki qty bagus atau rusak untuk difinalisasi.",
+            $customerReturn->update([
+                'status' => CustomerReturn::STATUS_NO_RECEIVED,
+                'finalized_at' => $finalizedAt,
+                'finalized_by' => auth()->id(),
+                'damaged_good_id' => null,
             ]);
+
+            return;
         }
 
-        $finalizedAt = now();
         $displayWarehouseId = WarehouseService::displayWarehouseId();
         foreach ($items as $itemRow) {
             $goodQty = (int) $itemRow->good_qty;

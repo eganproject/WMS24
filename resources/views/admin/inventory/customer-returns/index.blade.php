@@ -297,6 +297,7 @@
                     <option value="">Semua Status</option>
                     <option value="inspected">Belum Finalisasi</option>
                     <option value="completed">Selesai</option>
+                    <option value="no_received">Tidak Diterima</option>
                 </select>
                 @if($canUpdate)
                     <button type="button" class="btn btn-light-primary" id="btn_finalize_selected">Finalisasi Terpilih</button>
@@ -381,6 +382,9 @@
         const statusBadgeHtml = (status) => {
             if (status === 'completed') {
                 return '<span class="badge badge-light-success">Selesai</span>';
+            }
+            if (status === 'no_received') {
+                return '<span class="badge badge-light-secondary">Tidak Diterima</span>';
             }
 
             return '<span class="badge badge-light-warning">Belum Finalisasi</span>';

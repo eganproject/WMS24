@@ -11,6 +11,7 @@ class CustomerReturn extends Model
 
     public const STATUS_INSPECTED = 'inspected';
     public const STATUS_COMPLETED = 'completed';
+    public const STATUS_NO_RECEIVED = 'no_received';
 
     protected $fillable = [
         'code',
@@ -67,6 +68,29 @@ class CustomerReturn extends Model
 
     public function isCompleted(): bool
     {
+        return in_array((string) $this->status, [self::STATUS_COMPLETED, self::STATUS_NO_RECEIVED], true);
+    }
+
+    public function hasStockMutation(): bool
+    {
         return (string) $this->status === self::STATUS_COMPLETED;
+    }
+
+    public function statusLabel(): string
+    {
+        return match ((string) $this->status) {
+            self::STATUS_COMPLETED => 'Selesai',
+            self::STATUS_NO_RECEIVED => 'Tidak Diterima',
+            default => 'Belum Finalisasi',
+        };
+    }
+
+    public function statusBadgeClass(): string
+    {
+        return match ((string) $this->status) {
+            self::STATUS_COMPLETED => 'success',
+            self::STATUS_NO_RECEIVED => 'secondary',
+            default => 'warning',
+        };
     }
 }

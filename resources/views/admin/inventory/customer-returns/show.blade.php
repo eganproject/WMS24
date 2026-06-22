@@ -10,7 +10,8 @@
     $totalGood = (int) $items->sum('good_qty');
     $totalDamaged = (int) $items->sum('damaged_qty');
     $isMatched = (bool) $customerReturn->resi_id;
-    $statusLabel = $customerReturn->isCompleted() ? 'Selesai' : 'Belum Finalisasi';
+    $statusLabel = $customerReturn->statusLabel();
+    $statusBadge = $customerReturn->statusBadgeClass();
     $printedAt = now()->format('Y-m-d H:i');
 @endphp
 
@@ -399,7 +400,7 @@
                             <div class="customer-return-document-subtitle">Dokumen retur customer untuk inspeksi dan finalisasi stok.</div>
                         </div>
                         <div class="customer-return-document-badges">
-                            <span class="badge badge-light-{{ $customerReturn->isCompleted() ? 'success' : 'warning' }}">{{ $statusLabel }}</span>
+                            <span class="badge badge-light-{{ $statusBadge }}">{{ $statusLabel }}</span>
                             <span class="badge badge-light-{{ $isMatched ? 'primary' : 'warning' }}">{{ $isMatched ? 'Resi Ditemukan' : 'Input Manual' }}</span>
                             <span class="badge badge-light-success">Bagus ke {{ $displayWarehouseLabel }}</span>
                             <span class="badge badge-light-danger">Rusak ke {{ $damagedWarehouseLabel }}</span>

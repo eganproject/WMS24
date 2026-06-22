@@ -321,6 +321,12 @@ class InboundController extends Controller
             'showApproveAction' => false,
             'showScanProgressColumn' => true,
             'statusLabels' => $statusLabels,
+            'statusFilterOptions' => [
+                InboundScanStatus::PENDING_SCAN => 'Menunggu Scan',
+                InboundScanStatus::SCANNING => 'Sedang Scan',
+                InboundScanStatus::COMPLETED => 'Scan Selesai',
+                'approved' => 'Selesai / Approved',
+            ],
             'lockedStatuses' => [InboundScanStatus::SCANNING, InboundScanStatus::COMPLETED, 'approved'],
             'showDeliveryNoteFields' => true,
             'deliveryNoteColumnLabel' => match ($type) {
@@ -448,6 +454,11 @@ class InboundController extends Controller
         $warehouseFilter = $request->input('warehouse_id');
         if ($warehouseFilter !== null && $warehouseFilter !== '' && $warehouseFilter !== 'all') {
             $query->where('inbound_transactions.warehouse_id', (int) $warehouseFilter);
+        }
+
+        $statusFilter = $request->input('status');
+        if ($statusFilter !== null && $statusFilter !== '' && $statusFilter !== 'all') {
+            $query->where('inbound_transactions.status', $statusFilter);
         }
 
         $recordsTotalQuery = InboundTransaction::query();

@@ -414,6 +414,12 @@ class OutboundController extends Controller
             'templateLabel' => 'Download Template Retur Outbound',
             'templateNote' => 'Header: sku, qty atau koli, supplier. Opsional: warehouse/gudang, ref_no, surat_jalan_no, surat_jalan_at, note, item_note, transacted_at. Jika warehouse adalah Gudang Besar, koli wajib diisi.',
             'statusLabels' => $type === 'manual' ? OutboundManualQcStatus::labels() : [],
+            'statusFilterOptions' => $type === 'manual'
+                ? OutboundManualQcStatus::labels()
+                : [
+                    'pending' => 'Menunggu Approval',
+                    'approved' => 'Selesai',
+                ],
             'lockedStatuses' => $type === 'manual' ? OutboundManualQcStatus::lockedForEdit() : ['approved'],
             'deleteLockedStatuses' => $type === 'manual' ? OutboundManualQcStatus::lockedForDelete() : ['approved'],
             'deleteWarningText' => $type === 'manual'
@@ -484,6 +490,11 @@ class OutboundController extends Controller
         $warehouseFilter = $request->input('warehouse_id');
         if ($warehouseFilter !== null && $warehouseFilter !== '' && $warehouseFilter !== 'all') {
             $query->where('outbound_transactions.warehouse_id', (int) $warehouseFilter);
+        }
+
+        $statusFilter = $request->input('status');
+        if ($statusFilter !== null && $statusFilter !== '' && $statusFilter !== 'all') {
+            $query->where('outbound_transactions.status', $statusFilter);
         }
 
         $recordsTotalQuery = OutboundTransaction::query();

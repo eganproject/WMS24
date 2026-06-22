@@ -77,6 +77,12 @@
                         @endforeach
                     </select>
                 @endif
+                <select class="form-select form-select-solid w-200px" id="filter_status">
+                    <option value="all">Semua Status</option>
+                    @foreach(($statusFilterOptions ?? []) as $statusValue => $statusLabel)
+                        <option value="{{ $statusValue }}">{{ $statusLabel }}</option>
+                    @endforeach
+                </select>
                 <input type="text" class="form-control form-control-solid w-150px" id="filter_date_from" placeholder="Dari" />
                 <input type="text" class="form-control form-control-solid w-150px" id="filter_date_to" placeholder="Sampai" />
                 <button type="button" class="btn btn-light" id="filter_apply">Filter</button>
@@ -483,6 +489,7 @@
         const dateToEl = document.getElementById('filter_date_to');
         const transactedAtEl = document.getElementById('flow_transacted_at');
         const warehouseFilter = document.getElementById('filter_warehouse');
+        const statusFilter = document.getElementById('filter_status');
         const filterApplyBtn = document.getElementById('filter_apply');
         const filterResetBtn = document.getElementById('filter_reset');
         const importBtn = document.getElementById('btn_import_flow');
@@ -1052,6 +1059,9 @@
         if (warehouseFilter && typeof $ !== 'undefined' && $.fn.select2) {
             $(warehouseFilter).select2({ placeholder: 'Semua Gudang', allowClear: true, width: '200px' });
         }
+        if (statusFilter && typeof $ !== 'undefined' && $.fn.select2) {
+            $(statusFilter).select2({ placeholder: 'Semua Status', allowClear: true, width: '200px' });
+        }
         if (supplierSelect && typeof $ !== 'undefined' && $.fn.select2) {
             $(supplierSelect).select2({
                 placeholder: 'Pilih supplier',
@@ -1353,6 +1363,7 @@
                 data: function(params) {
                     params.q = searchInput?.value || '';
                     if (warehouseFilter?.value) params.warehouse_id = warehouseFilter.value;
+                    if (statusFilter?.value) params.status = statusFilter.value;
                     if (dateFromEl?.value) params.date_from = dateFromEl.value;
                     if (dateToEl?.value) params.date_to = dateToEl.value;
                 }
@@ -1471,12 +1482,19 @@
         const reloadTable = () => dt.ajax.reload();
         searchInput?.addEventListener('keyup', reloadTable);
         warehouseFilter?.addEventListener('change', reloadTable);
+        statusFilter?.addEventListener('change', reloadTable);
         filterApplyBtn?.addEventListener('click', reloadTable);
         filterResetBtn?.addEventListener('click', () => {
             if (warehouseFilter) {
                 warehouseFilter.value = 'all';
                 if (typeof $ !== 'undefined' && $(warehouseFilter).data('select2')) {
                     $(warehouseFilter).val('all').trigger('change.select2');
+                }
+            }
+            if (statusFilter) {
+                statusFilter.value = 'all';
+                if (typeof $ !== 'undefined' && $(statusFilter).data('select2')) {
+                    $(statusFilter).val('all').trigger('change.select2');
                 }
             }
             if (fpFrom) fpFrom.clear(); else if (dateFromEl) dateFromEl.value = '';

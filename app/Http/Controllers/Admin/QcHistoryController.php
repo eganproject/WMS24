@@ -17,6 +17,7 @@ class QcHistoryController extends Controller
             'statusOptions' => [
                 ['value' => QcTransitStatus::DRAFT, 'label' => QcTransitStatus::scanStatusLabel(QcTransitStatus::DRAFT)],
                 ['value' => QcTransitStatus::PASSED, 'label' => QcTransitStatus::scanStatusLabel(QcTransitStatus::PASSED)],
+                ['value' => QcTransitStatus::CANCELED, 'label' => QcTransitStatus::scanStatusLabel(QcTransitStatus::CANCELED)],
             ],
         ]);
     }
@@ -156,8 +157,8 @@ class QcHistoryController extends Controller
             'recordsTotal' => $recordsTotal,
             'recordsFiltered' => $recordsFiltered,
             'summary' => [
-                'draft' => (clone $baseQuery)->where('status', 'draft')->count(),
-                'passed' => (clone $baseQuery)->where('status', 'passed')->count(),
+                'draft' => (clone $baseQuery)->where('status', QcTransitStatus::DRAFT)->count(),
+                'passed' => (clone $baseQuery)->where('status', QcTransitStatus::PASSED)->count(),
                 'substitutions' => (clone $baseQuery)->whereHas('substitutions')->count(),
             ],
             'data' => $data,
@@ -186,7 +187,7 @@ class QcHistoryController extends Controller
     private function applyStatusFilter($query, Request $request): void
     {
         $status = trim((string) $request->input('status', ''));
-        if (!in_array($status, ['draft', 'passed'], true)) {
+        if (!in_array($status, [QcTransitStatus::DRAFT, QcTransitStatus::PASSED, QcTransitStatus::CANCELED], true)) {
             return;
         }
 

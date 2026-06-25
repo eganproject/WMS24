@@ -185,6 +185,7 @@
             <div class="modal-body mx-5 mx-xl-15 my-7">
                 <form id="form_cancel_resi">
                     @csrf
+                    <div class="alert alert-warning d-none" id="cancel_context_note"></div>
                     <div class="fv-row mb-5">
                         <label class="fs-6 fw-bold form-label mb-2">ID Pesanan</label>
                         <input type="text" class="form-control form-control-solid" id="cancel_id_pesanan" name="id_pesanan" readonly />
@@ -311,6 +312,8 @@
     const summaryUrl = '{{ route('admin.inventory.resi-import.summary') }}';
     const buyerNotesUrl = '{{ $buyerNotesUrl ?? '' }}';
     const cancelUrl = '{{ route('admin.inventory.resi-import.cancel') }}';
+    const cancelAfterQcUrl = '{{ route('admin.inventory.resi-import.cancel-after-qc') }}';
+    const cancelAfterShipUrl = '{{ route('admin.inventory.resi-import.cancel-after-ship') }}';
     const uncancelUrl = '{{ route('admin.inventory.resi-import.uncancel') }}';
     const csrfToken = '{{ csrf_token() }}';
     const todayStr = '{{ $today ?? '' }}';
@@ -328,6 +331,8 @@
         const cancelIdInput = document.getElementById('cancel_id_pesanan');
         const cancelNoResiInput = document.getElementById('cancel_no_resi');
         const cancelReasonInput = document.getElementById('cancel_reason');
+        const cancelContextNote = document.getElementById('cancel_context_note');
+        const cancelSubmitBtn = document.getElementById('btn_submit_cancel');
         const loadingOverlay = document.getElementById('import_loading_overlay');
         const filterDateEl = document.getElementById('filter_date');
         const filterSearchEl = document.getElementById('filter_search');
@@ -366,6 +371,7 @@
         const tableEl = $('#resi_table');
         let fpDate = null;
         let dt = null;
+        let currentCancelUrl = cancelUrl;
 
         const escapeHtml = (value) => String(value ?? '')
             .replace(/&/g, '&amp;')
@@ -417,12 +423,23 @@
                         const noResi = row.no_resi || '';
                         const status = row.status || 'active';
                         const hasQcScan = !!row.has_qc_scan;
-                        const hasPackerScan = !!row.has_packer_scan;
                         const hasScanOut = !!row.has_scan_out;
+                        const operationalStatus = row.operational_status || '';
                         if (status === 'canceled') {
+                            if (operationalStatus === 'canceled_ready_to_ship' || operationalStatus === 'canceled_after_ship') {
+                                return '<span class="text-muted">Final</span>';
+                            }
                             return `<button type="button" class="btn btn-sm btn-light-warning btn-uncancel" data-id="${idPesanan}" data-resi="${noResi}">Batal Cancel</button>`;
                         }
-                        if (hasQcScan || hasPackerScan || hasScanOut) {
+                        if (hasScanOut || operationalStatus === 'scan_out_done') {
+                            return `<button type="button" class="btn btn-sm btn-light-danger btn-cancel"
+                                data-id="${idPesanan}" data-resi="${noResi}" data-mode="after_ship">Cancel After Ship</button>`;
+                        }
+                        if (operationalStatus === 'ready_to_ship') {
+                            return `<button type="button" class="btn btn-sm btn-light-danger btn-cancel"
+                                data-id="${idPesanan}" data-resi="${noResi}" data-mode="after_qc">Cancel Ready to Ship</button>`;
+                        }
+                        if (hasQcScan) {
                             return '<span class="text-muted">-</span>';
                         }
                         return `<button type="button" class="btn btn-sm btn-light-danger btn-cancel" data-id="${idPesanan}" data-resi="${noResi}">Cancel</button>`;
@@ -656,21 +673,51 @@
             e.preventDefault();
             const id = this.getAttribute('data-id');
             const resi = this.getAttribute('data-resi');
+            const mode = this.getAttribute('data-mode') || 'normal';
+            const config = {
+                normal: {
+                    url: cancelUrl,
+                    title: 'Batalkan resi ini?',
+                    text: 'Resi yang dibatalkan tidak bisa diproses packing/scan out.',
+                    button: 'Cancel Resi',
+                    note: '',
+                },
+                after_qc: {
+                    url: cancelAfterQcUrl,
+                    title: 'Cancel Ready to Ship?',
+                    text: 'Stok hasil QC akan dikembalikan dan resi ditandai cancel.',
+                    button: 'Cancel Ready to Ship',
+                    note: 'Resi sudah lolos QC. Proses ini mengembalikan stok QC, mengeluarkan resi dari picking aktif, dan menandai resi sebagai cancel.',
+                },
+                after_ship: {
+                    url: cancelAfterShipUrl,
+                    title: 'Cancel After Ship?',
+                    text: 'Scan out akan dibatalkan, stok QC dikembalikan, dan resi ditandai cancel.',
+                    button: 'Cancel After Ship',
+                    note: 'Gunakan hanya bila barang fisik belum benar-benar lepas dari kontrol gudang. Record scan out akan dihapus dari laporan scan out.',
+                },
+            }[mode] || null;
             const openModal = () => {
+                currentCancelUrl = config?.url || cancelUrl;
                 if (cancelIdInput) cancelIdInput.value = id || '';
                 if (cancelNoResiInput) cancelNoResiInput.value = resi || '';
                 if (cancelReasonInput) cancelReasonInput.value = '';
+                if (cancelSubmitBtn) cancelSubmitBtn.textContent = config?.button || 'Cancel Resi';
+                if (cancelContextNote) {
+                    cancelContextNote.textContent = config?.note || '';
+                    cancelContextNote.classList.toggle('d-none', !(config?.note));
+                }
                 clearCancelErrors();
                 cancelModal?.show();
             };
 
             if (typeof Swal !== 'undefined') {
                 Swal.fire({
-                    title: 'Batalkan resi ini?',
-                    text: 'Resi yang dibatalkan tidak bisa diproses packing/scan out.',
+                    title: config?.title || 'Batalkan resi ini?',
+                    text: config?.text || 'Resi yang dibatalkan tidak bisa diproses packing/scan out.',
                     icon: 'warning',
                     showCancelButton: true,
-                    confirmButtonText: 'Ya, cancel',
+                    confirmButtonText: 'Ya, proses',
                     cancelButtonText: 'Batal',
                 }).then((result) => {
                     if (result.isConfirmed) openModal();
@@ -742,7 +789,7 @@
             clearCancelErrors();
             const formData = new FormData(cancelForm);
             try {
-                const res = await fetch(cancelUrl, {
+                const res = await fetch(currentCancelUrl || cancelUrl, {
                     method: 'POST',
                     headers: {
                         'X-CSRF-TOKEN': csrfToken,

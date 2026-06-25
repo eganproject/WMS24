@@ -5,6 +5,8 @@ namespace App\Support;
 class ResiOperationalStatus
 {
     public const CANCELED = 'canceled';
+    public const CANCELED_READY_TO_SHIP = 'canceled_ready_to_ship';
+    public const CANCELED_AFTER_SHIP = 'canceled_after_ship';
     public const PENDING_QC = 'pending_qc';
     public const QC_IN_PROGRESS = 'qc_in_progress';
     public const READY_TO_SHIP = 'ready_to_ship';
@@ -14,9 +16,18 @@ class ResiOperationalStatus
         ?string $businessStatus,
         bool $hasQc,
         bool $qcPassed,
-        bool $hasScanOut
+        bool $hasScanOut,
+        ?string $cancelReason = null
     ): string {
         if (($businessStatus ?? 'active') === 'canceled') {
+            $cancelReason = (string) $cancelReason;
+            if (str_starts_with($cancelReason, 'Cancel Ready to Ship')) {
+                return self::CANCELED_READY_TO_SHIP;
+            }
+            if (str_starts_with($cancelReason, 'Cancel After Ship')) {
+                return self::CANCELED_AFTER_SHIP;
+            }
+
             return self::CANCELED;
         }
 
@@ -39,6 +50,8 @@ class ResiOperationalStatus
     {
         return [
             self::CANCELED => 'Cancel',
+            self::CANCELED_READY_TO_SHIP => 'Cancel Ready to Ship',
+            self::CANCELED_AFTER_SHIP => 'Cancel After Ship',
             self::PENDING_QC => 'Menunggu QC',
             self::QC_IN_PROGRESS => 'QC Berjalan',
             self::READY_TO_SHIP => 'Siap Scan Out',
@@ -49,7 +62,7 @@ class ResiOperationalStatus
     public static function badgeClass(string $status): string
     {
         return match ($status) {
-            self::CANCELED => 'badge-light-danger',
+            self::CANCELED, self::CANCELED_READY_TO_SHIP, self::CANCELED_AFTER_SHIP => 'badge-light-danger',
             self::PENDING_QC => 'badge-light-warning',
             self::QC_IN_PROGRESS => 'badge-light-primary',
             self::READY_TO_SHIP => 'badge-light-success',
@@ -91,6 +104,14 @@ class ResiOperationalStatus
 
         if ($status === self::CANCELED) {
             $query->where($tableAlias.'.status', 'canceled');
+            return;
+        }
+
+        if ($status === self::CANCELED_READY_TO_SHIP || $status === self::CANCELED_AFTER_SHIP) {
+            $query->where($tableAlias.'.status', 'canceled')
+                ->where($tableAlias.'.cancel_reason', 'like', $status === self::CANCELED_READY_TO_SHIP
+                    ? 'Cancel Ready to Ship%'
+                    : 'Cancel After Ship%');
             return;
         }
 

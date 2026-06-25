@@ -77,7 +77,8 @@ class Resi extends Model
             $this->status,
             $qcScan !== null,
             ($qcScan?->status ?? '') === 'passed',
-            $scanOut !== null
+            $scanOut !== null,
+            $this->cancel_reason
         );
     }
 }

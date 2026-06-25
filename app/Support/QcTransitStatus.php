@@ -7,6 +7,7 @@ class QcTransitStatus
     public const DRAFT = 'draft';
     public const HOLD = 'hold';
     public const PASSED = 'passed';
+    public const CANCELED = 'canceled';
 
     public const NEXT_IN_PROGRESS = 'in_progress';
     public const NEXT_ON_HOLD = 'on_hold';
@@ -17,6 +18,7 @@ class QcTransitStatus
         return match ($status) {
             self::PASSED => 'Lolos QC',
             self::HOLD => 'QC Ditunda',
+            self::CANCELED => 'QC Dibatalkan',
             default => 'QC Berjalan',
         };
     }
@@ -26,6 +28,7 @@ class QcTransitStatus
         return match ($status) {
             self::PASSED => 'badge-light-success',
             self::HOLD => 'badge-light-danger',
+            self::CANCELED => 'badge-light-danger',
             default => 'badge-light-warning',
         };
     }

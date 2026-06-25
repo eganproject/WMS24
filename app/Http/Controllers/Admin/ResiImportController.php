@@ -12,8 +12,12 @@ use App\Models\QcResiScan;
 use App\Models\Resi;
 use App\Models\ResiDetail;
 use App\Models\ShipmentScanOut;
+use App\Models\StockMutation;
 use App\Support\BundleService;
+use App\Support\PickingListBalanceService;
+use App\Support\QcTransitStatus;
 use App\Support\ResiOperationalStatus;
+use App\Support\StockService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -78,7 +82,7 @@ class ResiImportController extends Controller
         $summarySkus = ResiDetail::whereIn('resi_id', (clone $filterQuery)->select('id'))->count();
 
         $query = Resi::query()
-            ->select(['id', 'id_pesanan', 'no_resi', 'tanggal_pesanan', 'kurir_id', 'status'])
+            ->select(['id', 'id_pesanan', 'no_resi', 'tanggal_pesanan', 'kurir_id', 'status', 'cancel_reason'])
             ->selectSub(function ($sub) {
                 $sub->from('shipment_scan_outs')
                     ->selectRaw('count(1)')
@@ -127,7 +131,8 @@ class ResiImportController extends Controller
                 $row->status,
                 $hasQcScan,
                 $hasQcPassed,
-                $hasScanOut
+                $hasScanOut,
+                $row->cancel_reason
             );
             return [
                 'id' => $row->id,
@@ -430,6 +435,16 @@ class ResiImportController extends Controller
         ]);
     }
 
+    public function cancelAfterQc(Request $request)
+    {
+        return $this->cancelProcessedResi($request, false);
+    }
+
+    public function cancelAfterShip(Request $request)
+    {
+        return $this->cancelProcessedResi($request, true);
+    }
+
     public function uncancel(Request $request)
     {
         $validated = $this->validateResiActionRequest($request, false);
@@ -447,9 +462,15 @@ class ResiImportController extends Controller
         }
 
         $hasScanOut = ShipmentScanOut::where('resi_id', $resi->id)->exists();
+        $hasQc = QcResiScan::where('resi_id', $resi->id)->exists();
         if ($hasScanOut) {
             return response()->json([
                 'message' => 'Resi sudah memiliki proses scan out, batal cancel tidak diizinkan.',
+            ], 422);
+        }
+        if ($hasQc) {
+            return response()->json([
+                'message' => 'Resi sudah memiliki proses QC, batal cancel tidak diizinkan. Gunakan import resi baru bila order aktif kembali.',
             ], 422);
         }
 
@@ -482,6 +503,124 @@ class ResiImportController extends Controller
         return response()->json([
             'message' => 'Status cancel resi berhasil dibatalkan.',
         ]);
+    }
+
+    private function cancelProcessedResi(Request $request, bool $requiresScanOut)
+    {
+        $validated = $this->validateResiActionRequest($request, true);
+        $resi = $this->findResiForAction($validated);
+        if (!$resi) {
+            return response()->json([
+                'message' => 'Resi tidak ditemukan.',
+            ], 404);
+        }
+
+        if (($resi->status ?? 'active') === 'canceled') {
+            return response()->json([
+                'message' => 'Resi sudah dibatalkan sebelumnya.',
+            ]);
+        }
+
+        DB::beginTransaction();
+        try {
+            $resi = Resi::whereKey($resi->id)->lockForUpdate()->firstOrFail();
+            $qc = QcResiScan::where('resi_id', $resi->id)
+                ->lockForUpdate()
+                ->first();
+            $scanOut = ShipmentScanOut::where('resi_id', $resi->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$qc || ($qc->status ?? '') !== QcTransitStatus::PASSED) {
+                DB::rollBack();
+                return response()->json([
+                    'message' => 'Resi belum lolos QC, gunakan cancel resi biasa.',
+                ], 422);
+            }
+
+            if ($requiresScanOut && !$scanOut) {
+                DB::rollBack();
+                return response()->json([
+                    'message' => 'Resi belum scan out. Gunakan Cancel Ready to Ship.',
+                ], 422);
+            }
+
+            if (!$requiresScanOut && $scanOut) {
+                DB::rollBack();
+                return response()->json([
+                    'message' => 'Resi sudah scan out. Gunakan Cancel After Ship.',
+                ], 422);
+            }
+
+            $details = ResiDetail::where('resi_id', $resi->id)->get(['sku', 'qty']);
+            if ($details->isEmpty()) {
+                DB::rollBack();
+                return response()->json([
+                    'message' => 'Detail resi tidak ditemukan, cancel koreksi tidak dapat diproses.',
+                ], 422);
+            }
+
+            $uploadDate = $resi->tanggal_upload?->format('Y-m-d') ?? now()->toDateString();
+            $syncSkus = $details->pluck('sku');
+            $substitutionSkus = $qc->substitutions()
+                ->get(['original_sku', 'replacement_sku'])
+                ->flatMap(fn ($row) => [$row->original_sku, $row->replacement_sku]);
+
+            if ($scanOut) {
+                $scanOut->delete();
+            }
+
+            StockService::rollbackBySource('qc_shipment', $qc->id);
+            StockMutation::where('source_type', 'qc_shipment')
+                ->where('source_id', $qc->id)
+                ->delete();
+
+            $qc->status = QcTransitStatus::CANCELED;
+            $qc->save();
+
+            $resi->status = 'canceled';
+            $resi->canceled_at = now();
+            $resi->canceled_by = auth()->id();
+            $resi->cancel_reason = $this->buildProcessedCancelReason(
+                $requiresScanOut ? 'Cancel After Ship' : 'Cancel Ready to Ship',
+                $validated['reason'] ?? null
+            );
+            $resi->uncanceled_at = null;
+            $resi->uncanceled_by = null;
+            $resi->save();
+
+            $this->adjustPickingList($uploadDate, $details, -1);
+            PickingListBalanceService::syncForDateSkus(
+                $uploadDate,
+                $syncSkus->merge($substitutionSkus)->filter()->all()
+            );
+
+            DB::commit();
+        } catch (ValidationException $e) {
+            DB::rollBack();
+            throw $e;
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return response()->json([
+                'message' => $requiresScanOut
+                    ? 'Gagal memproses Cancel After Ship.'
+                    : 'Gagal memproses Cancel Ready to Ship.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+
+        return response()->json([
+            'message' => $requiresScanOut
+                ? 'Cancel After Ship berhasil diproses.'
+                : 'Cancel Ready to Ship berhasil diproses.',
+        ]);
+    }
+
+    private function buildProcessedCancelReason(string $label, ?string $reason): string
+    {
+        $reason = trim((string) $reason);
+
+        return substr($reason === '' ? $label : $label.': '.$reason, 0, 255);
     }
 
     private function parseTanggalPesanan($raw): ?string

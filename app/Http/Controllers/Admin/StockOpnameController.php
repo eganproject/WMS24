@@ -234,14 +234,33 @@ class StockOpnameController extends Controller
                 }
 
                 foreach ($opname->items as $row) {
-                    $adjustment = (int) $row->adjustment;
-                    if ($adjustment === 0) {
-                        continue;
-                    }
                     if (!(int) $row->item_id) {
                         throw ValidationException::withMessages([
                             'items' => 'Item opname tidak valid.',
                         ]);
+                    }
+
+                    $stock = ItemStock::where('item_id', $row->item_id)
+                        ->where('warehouse_id', $warehouseId)
+                        ->lockForUpdate()
+                        ->first();
+                    if (!$stock) {
+                        $stock = ItemStock::create([
+                            'item_id' => $row->item_id,
+                            'warehouse_id' => $warehouseId,
+                            'stock' => 0,
+                        ]);
+                    }
+
+                    $systemQty = (int) ($stock?->stock ?? 0);
+                    $adjustment = (int) $row->counted_qty - $systemQty;
+
+                    $row->system_qty = $systemQty;
+                    $row->adjustment = $adjustment;
+                    $row->save();
+
+                    if ($adjustment === 0) {
+                        continue;
                     }
 
                     StockService::mutate([

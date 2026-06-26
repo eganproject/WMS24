@@ -52,7 +52,20 @@ class ItemStockController extends Controller
             'stocks' => function ($q) use ($defaultId, $displayId, $damagedId) {
                 $q->whereIn('warehouse_id', [$defaultId, $displayId, $damagedId]);
             },
-        ])->orderBy('name');
+        ])
+            ->leftJoin('item_stocks as stock_main_sort', function ($join) use ($defaultId) {
+                $join->on('stock_main_sort.item_id', '=', 'items.id')
+                    ->where('stock_main_sort.warehouse_id', '=', $defaultId);
+            })
+            ->leftJoin('item_stocks as stock_display_sort', function ($join) use ($displayId) {
+                $join->on('stock_display_sort.item_id', '=', 'items.id')
+                    ->where('stock_display_sort.warehouse_id', '=', $displayId);
+            })
+            ->leftJoin('item_stocks as stock_damaged_sort', function ($join) use ($damagedId) {
+                $join->on('stock_damaged_sort.item_id', '=', 'items.id')
+                    ->where('stock_damaged_sort.warehouse_id', '=', $damagedId);
+            })
+            ->select('items.*');
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
@@ -61,6 +74,8 @@ class ItemStockController extends Controller
 
         $recordsTotal = Item::count();
         $recordsFiltered = (clone $query)->count();
+
+        $this->applyDataTableOrder($query, $request);
 
         $start = (int) $request->input('start', 0);
         $length = (int) $request->input('length', 10);
@@ -146,42 +161,72 @@ class ItemStockController extends Controller
     public function updateSafety(Request $request)
     {
         $validated = $request->validate([
-            'item_id' => ['required', 'integer', 'exists:items,id'],
+            'item_id' => ['nullable', 'integer', 'exists:items,id'],
+            'item_ids' => ['nullable', 'array', 'min:1'],
+            'item_ids.*' => ['integer', 'distinct', 'exists:items,id'],
             'safety_main' => ['nullable', 'integer', 'min:0'],
             'safety_display' => ['nullable', 'integer', 'min:0'],
         ]);
 
-        $itemId = (int) $validated['item_id'];
-        $item = Item::query()->findOrFail($itemId);
-        if ($item->isBundle()) {
+        $itemIds = collect($validated['item_ids'] ?? [])
+            ->push($validated['item_id'] ?? null)
+            ->filter(fn ($id) => $id !== null && $id !== '')
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($itemIds->isEmpty()) {
             throw ValidationException::withMessages([
-                'item_id' => 'Bundle tidak memiliki safety stock fisik.',
+                'item_id' => 'Pilih minimal satu item.',
             ]);
         }
+
+        $items = Item::query()->whereIn('id', $itemIds)->get(['id', 'item_type']);
+        $bundleCount = $items->filter(fn (Item $item) => $item->isBundle())->count();
+        if ($bundleCount > 0) {
+            throw ValidationException::withMessages([
+                'item_ids' => 'Bundle tidak memiliki safety stock fisik.',
+            ]);
+        }
+
         $defaultId = WarehouseService::defaultWarehouseId();
         $displayId = WarehouseService::displayWarehouseId();
 
-        $mainVal = $validated['safety_main'];
-        $displayVal = $validated['safety_display'];
+        $updateMain = $request->has('safety_main');
+        $updateDisplay = $request->has('safety_display');
+        if (!$updateMain && !$updateDisplay) {
+            throw ValidationException::withMessages([
+                'safety_display' => 'Isi safety stock yang akan diubah.',
+            ]);
+        }
+
+        $mainVal = $validated['safety_main'] ?? null;
+        $displayVal = $validated['safety_display'] ?? null;
 
         $mainVal = ($mainVal === '' || $mainVal === null) ? null : (int) $mainVal;
         $displayVal = ($displayVal === '' || $displayVal === null) ? null : (int) $displayVal;
 
         DB::beginTransaction();
         try {
-            $mainStock = ItemStock::firstOrCreate(
-                ['item_id' => $itemId, 'warehouse_id' => $defaultId],
-                ['stock' => 0]
-            );
-            $mainStock->safety_stock = $mainVal;
-            $mainStock->save();
+            foreach ($itemIds as $itemId) {
+                if ($updateMain) {
+                    $mainStock = ItemStock::firstOrCreate(
+                        ['item_id' => $itemId, 'warehouse_id' => $defaultId],
+                        ['stock' => 0]
+                    );
+                    $mainStock->safety_stock = $mainVal;
+                    $mainStock->save();
+                }
 
-            $displayStock = ItemStock::firstOrCreate(
-                ['item_id' => $itemId, 'warehouse_id' => $displayId],
-                ['stock' => 0]
-            );
-            $displayStock->safety_stock = $displayVal;
-            $displayStock->save();
+                if ($updateDisplay) {
+                    $displayStock = ItemStock::firstOrCreate(
+                        ['item_id' => $itemId, 'warehouse_id' => $displayId],
+                        ['stock' => 0]
+                    );
+                    $displayStock->safety_stock = $displayVal;
+                    $displayStock->save();
+                }
+            }
 
             DB::commit();
         } catch (ValidationException $e) {
@@ -196,7 +241,34 @@ class ItemStockController extends Controller
         }
 
         return response()->json([
-            'message' => 'Safety stock berhasil disimpan',
+            'message' => $itemIds->count() > 1
+                ? 'Safety stock berhasil disimpan untuk '.$itemIds->count().' item'
+                : 'Safety stock berhasil disimpan',
         ]);
+    }
+
+    private function applyDataTableOrder($query, Request $request): void
+    {
+        $columns = [
+            1 => 'items.id',
+            2 => 'items.sku',
+            3 => 'items.name',
+            4 => 'items.item_type',
+            5 => 'COALESCE(stock_main_sort.stock, 0)',
+            6 => 'COALESCE(stock_main_sort.safety_stock, items.safety_stock, 0)',
+            7 => 'COALESCE(stock_display_sort.stock, 0)',
+            8 => 'COALESCE(stock_display_sort.safety_stock, items.safety_stock, 0)',
+            9 => 'COALESCE(stock_damaged_sort.stock, 0)',
+            10 => '(COALESCE(stock_main_sort.stock, 0) + COALESCE(stock_display_sort.stock, 0))',
+            11 => '(COALESCE(stock_main_sort.stock, 0) + COALESCE(stock_display_sort.stock, 0) + COALESCE(stock_damaged_sort.stock, 0))',
+        ];
+
+        $orderColumn = (int) $request->input('order.0.column', 3);
+        $direction = strtolower((string) $request->input('order.0.dir', 'asc')) === 'desc' ? 'desc' : 'asc';
+        $expression = $columns[$orderColumn] ?? 'items.name';
+
+        $query->orderByRaw($expression.' '.$direction)
+            ->orderBy('items.name')
+            ->orderBy('items.id');
     }
 }

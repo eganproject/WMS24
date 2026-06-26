@@ -96,6 +96,7 @@
                     </select>
                 </div>
                 <button type="button" class="btn btn-light-primary" id="btn_export_item_stocks">Export Excel</button>
+                <button type="button" class="btn btn-primary" id="btn_bulk_safety_display" disabled>Ubah Safety Display</button>
             </div>
         </div>
     </div>
@@ -104,6 +105,11 @@
             <table class="table align-middle table-row-dashed fs-6 gy-5" id="item_stocks_table">
                 <thead>
                     <tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0">
+                        <th class="w-30px">
+                            <div class="form-check form-check-sm form-check-custom form-check-solid">
+                                <input class="form-check-input" type="checkbox" id="item_stocks_select_all" aria-label="Pilih semua item di halaman ini" />
+                            </div>
+                        </th>
                         <th>ID</th>
                         <th>SKU</th>
                         <th>Nama</th>
@@ -333,7 +339,7 @@
     <div class="modal-dialog modal-dialog-centered mw-550px">
         <div class="modal-content">
             <div class="modal-header">
-                <h2 class="fw-bolder">Safety Stock per Gudang</h2>
+                <h2 class="fw-bolder" id="safety_modal_title">Safety Stock per Gudang</h2>
                 <div class="btn btn-icon btn-sm btn-active-icon-primary" data-bs-dismiss="modal">
                     <span class="svg-icon svg-icon-1">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
@@ -351,7 +357,7 @@
                         <div class="fw-bold">Item</div>
                         <div id="safety_item_label" class="text-muted">-</div>
                     </div>
-                    <div class="fv-row mb-6">
+                    <div class="fv-row mb-6" id="safety_main_wrap">
                         <label class="fs-6 fw-bold form-label mb-2">Safety {{ $defaultWarehouseLabel ?? 'Gudang Besar' }}</label>
                         <input type="number" min="0" class="form-control form-control-solid" name="safety_main" id="safety_main" />
                         <div class="form-text text-muted">Kosongkan untuk gunakan safety default item.</div>
@@ -359,7 +365,7 @@
                     <div class="fv-row mb-6">
                         <label class="fs-6 fw-bold form-label mb-2">Safety {{ $displayWarehouseLabel ?? 'Gudang Display' }}</label>
                         <input type="number" min="0" class="form-control form-control-solid" name="safety_display" id="safety_display" />
-                        <div class="form-text text-muted">Kosongkan untuk gunakan safety default item.</div>
+                        <div class="form-text text-muted" id="safety_display_hint">Kosongkan untuk gunakan safety default item.</div>
                     </div>
                     <div class="text-end pt-3">
                         <button type="button" class="btn btn-light me-3" data-bs-dismiss="modal">Batal</button>
@@ -395,13 +401,18 @@
         const searchModeSelect = document.getElementById('filter_item_stocks_search_mode');
         const limitSelect = document.getElementById('filter_item_stocks_limit');
         const exportBtn = document.getElementById('btn_export_item_stocks');
+        const bulkSafetyBtn = document.getElementById('btn_bulk_safety_display');
+        const selectAllCheckbox = document.getElementById('item_stocks_select_all');
         const safetyModalEl = document.getElementById('modal_safety_stock');
         const safetyModal = safetyModalEl ? new bootstrap.Modal(safetyModalEl) : null;
         const safetyForm = document.getElementById('safety_stock_form');
+        const safetyModalTitle = document.getElementById('safety_modal_title');
         const safetyItemId = document.getElementById('safety_item_id');
         const safetyItemLabel = document.getElementById('safety_item_label');
+        const safetyMainWrap = document.getElementById('safety_main_wrap');
         const safetyMain = document.getElementById('safety_main');
         const safetyDisplay = document.getElementById('safety_display');
+        const safetyDisplayHint = document.getElementById('safety_display_hint');
         const itemDetailModalEl = document.getElementById('modal_item_detail');
         const itemDetailModal = itemDetailModalEl ? new bootstrap.Modal(itemDetailModalEl) : null;
         const editStockModalEl = document.getElementById('modal_edit_stock');
@@ -417,6 +428,9 @@
             const numeric = Number(value);
             return Number.isFinite(numeric) ? numeric.toLocaleString('id-ID') : '0';
         };
+
+        const selectedItemIds = new Set();
+        let safetyBulkMode = false;
 
         const escapeHtml = (value) => String(value ?? '')
             .replace(/&/g, '&amp;')
@@ -712,7 +726,7 @@
             processing: true,
             serverSide: true,
             dom: 'rtip',
-            order: [[0, 'desc']],
+            order: [[1, 'desc']],
             pageLength: Number(limitSelect?.value || 10),
             ajax: {
                 url: dataUrl,
@@ -723,6 +737,18 @@
                 }
             },
             columns: [
+                { data: 'id', orderable: false, searchable: false, className: 'text-center', render: (data, type, row) => {
+                    if (type !== 'display' || row.item_type === 'bundle') {
+                        return '';
+                    }
+
+                    const checked = selectedItemIds.has(String(data)) ? 'checked' : '';
+                    return `
+                        <div class="form-check form-check-sm form-check-custom form-check-solid justify-content-center">
+                            <input class="form-check-input item-stock-row-check" type="checkbox" value="${data}" ${checked} aria-label="Pilih item ${escapeHtml(row.sku || '')}" />
+                        </div>
+                    `;
+                }},
                 { data: 'id' },
                 { data: 'sku' },
                 { data: 'name' },
@@ -759,7 +785,32 @@
                 }},
             ]
         });
-        const refreshMenus = () => { if (window.KTMenu) KTMenu.createInstances(); };
+        const currentPagePhysicalIds = () => dt.rows({ page: 'current' }).data().toArray()
+            .filter((row) => row.item_type !== 'bundle')
+            .map((row) => String(row.id));
+        const syncBulkSelectionUi = () => {
+            const count = selectedItemIds.size;
+            if (bulkSafetyBtn) {
+                bulkSafetyBtn.disabled = count === 0;
+                bulkSafetyBtn.textContent = count > 0 ? `Ubah Safety Display (${count})` : 'Ubah Safety Display';
+            }
+
+            if (selectAllCheckbox) {
+                const ids = currentPagePhysicalIds();
+                const checkedCount = ids.filter((id) => selectedItemIds.has(id)).length;
+                selectAllCheckbox.checked = ids.length > 0 && checkedCount === ids.length;
+                selectAllCheckbox.indeterminate = checkedCount > 0 && checkedCount < ids.length;
+                selectAllCheckbox.disabled = ids.length === 0;
+            }
+
+            tableEl.find('.item-stock-row-check').each(function () {
+                this.checked = selectedItemIds.has(String(this.value));
+            });
+        };
+        const refreshMenus = () => {
+            if (window.KTMenu) KTMenu.createInstances();
+            syncBulkSelectionUi();
+        };
         refreshMenus();
         dt.on('draw', refreshMenus);
 
@@ -792,6 +843,7 @@
 
         tableEl.on('click', '.btn-safety', function(e) {
             e.preventDefault();
+            safetyBulkMode = false;
             const id = this.getAttribute('data-id');
             const sku = this.getAttribute('data-sku') || '';
             const name = this.getAttribute('data-name') || '';
@@ -799,6 +851,9 @@
             const displayRaw = this.getAttribute('data-safety-display');
             const base = this.getAttribute('data-safety-base') || 0;
 
+            if (safetyModalTitle) safetyModalTitle.textContent = 'Safety Stock per Gudang';
+            if (safetyMainWrap) safetyMainWrap.style.display = '';
+            if (safetyDisplayHint) safetyDisplayHint.textContent = 'Kosongkan untuk gunakan safety default item.';
             if (safetyItemId) safetyItemId.value = id || '';
             if (safetyItemLabel) safetyItemLabel.textContent = `${sku} - ${name}`.trim();
             if (safetyMain) safetyMain.value = mainRaw !== null && mainRaw !== '' ? mainRaw : '';
@@ -806,6 +861,46 @@
             if (safetyMain) safetyMain.placeholder = `Default: ${base}`;
             if (safetyDisplay) safetyDisplay.placeholder = `Default: ${base}`;
             safetyModal?.show();
+        });
+
+        tableEl.on('change', '.item-stock-row-check', function() {
+            const id = String(this.value || '');
+            if (!id) return;
+            if (this.checked) {
+                selectedItemIds.add(id);
+            } else {
+                selectedItemIds.delete(id);
+            }
+            syncBulkSelectionUi();
+        });
+
+        selectAllCheckbox?.addEventListener('change', function() {
+            const ids = currentPagePhysicalIds();
+            ids.forEach((id) => {
+                if (this.checked) {
+                    selectedItemIds.add(id);
+                } else {
+                    selectedItemIds.delete(id);
+                }
+            });
+            syncBulkSelectionUi();
+        });
+
+        bulkSafetyBtn?.addEventListener('click', () => {
+            if (selectedItemIds.size === 0) return;
+            safetyBulkMode = true;
+            if (safetyModalTitle) safetyModalTitle.textContent = 'Ubah Safety Gudang Display';
+            if (safetyMainWrap) safetyMainWrap.style.display = 'none';
+            if (safetyItemId) safetyItemId.value = '';
+            if (safetyItemLabel) safetyItemLabel.textContent = `${selectedItemIds.size} item dipilih`;
+            if (safetyMain) safetyMain.value = '';
+            if (safetyDisplay) {
+                safetyDisplay.value = '';
+                safetyDisplay.placeholder = 'Isi nilai safety display';
+            }
+            if (safetyDisplayHint) safetyDisplayHint.textContent = 'Nilai ini akan diterapkan ke semua item yang dicentang.';
+            safetyModal?.show();
+            setTimeout(() => safetyDisplay?.focus(), 150);
         });
 
         // ── MODAL MUTASI ─────────────────────────────────────────────
@@ -929,7 +1024,15 @@
         safetyForm?.addEventListener('submit', async (e) => {
             e.preventDefault();
             if (!updateSafetyUrl) return;
-            const formData = new FormData(safetyForm);
+            const formData = new FormData();
+            if (safetyBulkMode) {
+                selectedItemIds.forEach((id) => formData.append('item_ids[]', id));
+                formData.append('safety_display', safetyDisplay?.value ?? '');
+            } else {
+                formData.append('item_id', safetyItemId?.value ?? '');
+                formData.append('safety_main', safetyMain?.value ?? '');
+                formData.append('safety_display', safetyDisplay?.value ?? '');
+            }
             try {
                 const res = await fetch(updateSafetyUrl, {
                     method: 'POST',
@@ -951,6 +1054,10 @@
                     return;
                 }
                 if (typeof Swal !== 'undefined') Swal.fire('Berhasil', json.message || 'Berhasil', 'success');
+                if (safetyBulkMode) {
+                    selectedItemIds.clear();
+                    syncBulkSelectionUi();
+                }
                 safetyModal?.hide();
                 reloadTable();
             } catch (err) {

@@ -54,6 +54,7 @@ class CustomerReturnsExport implements FromCollection, WithHeadings, WithTitle, 
                     $row->code,
                     $row->received_at?->format('Y-m-d H:i') ?? '',
                     $row->resi_no,
+                    $row->resi?->kurir?->name ?? '-',
                     $row->order_ref ?? '',
                     $row->resi_id ? 'Resi Ditemukan' : 'Input Manual',
                     $this->statusLabel((string) $row->status),
@@ -83,6 +84,7 @@ class CustomerReturnsExport implements FromCollection, WithHeadings, WithTitle, 
             'Kode Retur',
             'Tanggal Terima',
             'No Resi',
+            'Ekspedisi',
             'Order Ref',
             'Status Resi',
             'Status Retur',
@@ -105,9 +107,9 @@ class CustomerReturnsExport implements FromCollection, WithHeadings, WithTitle, 
     public function styles(Worksheet $sheet): array
     {
         $rowCount = $this->collection()->count();
-        $sheet->mergeCells('A1:S1');
-        $sheet->mergeCells('A2:S2');
-        $sheet->mergeCells('A3:S3');
+        $sheet->mergeCells('A1:T1');
+        $sheet->mergeCells('A2:T2');
+        $sheet->mergeCells('A3:T3');
         $sheet->setCellValue('A1', 'Export Retur Customer');
         $sheet->setCellValue('A2', $this->filterSummary());
         $sheet->setCellValue('A3', 'Total baris item: '.number_format($rowCount, 0, ',', '.'));
@@ -129,18 +131,18 @@ class CustomerReturnsExport implements FromCollection, WithHeadings, WithTitle, 
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
                 $lastRow = max(5, 5 + $this->collection()->count());
-                $range = 'A5:S'.$lastRow;
+                $range = 'A5:T'.$lastRow;
 
                 $sheet->freezePane('A6');
                 $sheet->setAutoFilter($range);
                 $sheet->getStyle($range)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setRGB('E4E6EF');
-                $sheet->getStyle('A1:S'.$lastRow)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
-                $sheet->getStyle('I6:M'.$lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
-                $sheet->getStyle('I6:M'.$lastRow)->getNumberFormat()->setFormatCode('#,##0');
-                $sheet->getStyle('R6:S'.$lastRow)->getAlignment()->setWrapText(true);
-                $sheet->getStyle('A5:S5')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getStyle('A1:T'.$lastRow)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+                $sheet->getStyle('J6:N'.$lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                $sheet->getStyle('J6:N'.$lastRow)->getNumberFormat()->setFormatCode('#,##0');
+                $sheet->getStyle('S6:T'.$lastRow)->getAlignment()->setWrapText(true);
+                $sheet->getStyle('A5:T5')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-                foreach (['A' => 18, 'B' => 18, 'C' => 22, 'D' => 20, 'G' => 18, 'H' => 30, 'R' => 36, 'S' => 36] as $column => $width) {
+                foreach (['A' => 18, 'B' => 18, 'C' => 22, 'D' => 20, 'E' => 20, 'H' => 18, 'I' => 30, 'S' => 36, 'T' => 36] as $column => $width) {
                     $sheet->getColumnDimension($column)->setWidth($width);
                 }
             },
@@ -150,7 +152,7 @@ class CustomerReturnsExport implements FromCollection, WithHeadings, WithTitle, 
     private function query()
     {
         $query = CustomerReturn::query()
-            ->with(['items.item', 'creator', 'inspector', 'finalizer', 'damagedGood'])
+            ->with(['items.item', 'creator', 'inspector', 'finalizer', 'damagedGood', 'resi.kurir'])
             ->orderByDesc('received_at')
             ->orderByDesc('id');
 

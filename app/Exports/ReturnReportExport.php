@@ -10,27 +10,60 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
+use Maatwebsite\Excel\Concerns\WithCustomStartCell;
+use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithHeadings;
+use Maatwebsite\Excel\Concerns\WithStyles;
+use Maatwebsite\Excel\Concerns\WithTitle;
+use Maatwebsite\Excel\Events\AfterSheet;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-class ReturnReportExport implements FromCollection, WithHeadings, ShouldAutoSize
+class ReturnReportExport implements FromCollection, WithHeadings, WithTitle, WithCustomStartCell, ShouldAutoSize, WithStyles, WithEvents
 {
+    private ?Collection $rows = null;
+
     public function __construct(private array $filters = [])
     {
     }
 
+    public function title(): string
+    {
+        return match (trim((string) ($this->filters['source'] ?? ''))) {
+            'customer' => 'Retur Customer',
+            'outbound' => 'Retur Outbound',
+            default => 'Laporan Retur',
+        };
+    }
+
+    public function startCell(): string
+    {
+        return 'A5';
+    }
+
     public function collection(): Collection
     {
+        if ($this->rows !== null) {
+            return $this->rows;
+        }
+
         $source = trim((string) ($this->filters['source'] ?? ''));
 
         if ($source === 'customer') {
-            return $this->withoutSortColumn($this->customerRows());
+            $this->rows = $this->withoutSortColumn($this->customerRows());
+
+            return $this->rows;
         }
 
         if ($source === 'outbound') {
-            return $this->withoutSortColumn($this->outboundRows());
+            $this->rows = $this->withoutSortColumn($this->outboundRows());
+
+            return $this->rows;
         }
 
-        return $this->customerRows()
+        $this->rows = $this->customerRows()
             ->concat($this->outboundRows())
             ->sortByDesc(fn (array $row) => $row['_sort_at'] ?? 0)
             ->map(function (array $row) {
@@ -39,6 +72,8 @@ class ReturnReportExport implements FromCollection, WithHeadings, ShouldAutoSize
                 return $row;
             })
             ->values();
+
+        return $this->rows;
     }
 
     public function headings(): array
@@ -64,6 +99,51 @@ class ReturnReportExport implements FromCollection, WithHeadings, ShouldAutoSize
             'PIC 3',
             'Catatan Dokumen',
             'Catatan Item',
+        ];
+    }
+
+    public function styles(Worksheet $sheet): array
+    {
+        $rowCount = $this->collection()->count();
+        $sheet->mergeCells('A1:T1');
+        $sheet->mergeCells('A2:T2');
+        $sheet->mergeCells('A3:T3');
+        $sheet->setCellValue('A1', $this->title());
+        $sheet->setCellValue('A2', $this->filterSummary());
+        $sheet->setCellValue('A3', 'Total baris item: '.number_format($rowCount, 0, ',', '.'));
+
+        return [
+            1 => ['font' => ['bold' => true, 'size' => 16, 'color' => ['rgb' => '181C32']]],
+            2 => ['font' => ['color' => ['rgb' => '7E8299']]],
+            3 => ['font' => ['bold' => true, 'color' => ['rgb' => '3F4254']]],
+            5 => [
+                'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
+                'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '1B84FF']],
+            ],
+        ];
+    }
+
+    public function registerEvents(): array
+    {
+        return [
+            AfterSheet::class => function (AfterSheet $event) {
+                $sheet = $event->sheet->getDelegate();
+                $lastRow = max(5, 5 + $this->collection()->count());
+                $range = 'A5:T'.$lastRow;
+
+                $sheet->freezePane('A6');
+                $sheet->setAutoFilter($range);
+                $sheet->getStyle($range)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setRGB('E4E6EF');
+                $sheet->getStyle('A1:T'.$lastRow)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+                $sheet->getStyle('J6:O'.$lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                $sheet->getStyle('J6:O'.$lastRow)->getNumberFormat()->setFormatCode('#,##0');
+                $sheet->getStyle('S6:T'.$lastRow)->getAlignment()->setWrapText(true);
+                $sheet->getStyle('A5:T5')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                foreach (['A' => 18, 'B' => 18, 'C' => 20, 'D' => 24, 'E' => 24, 'F' => 24, 'H' => 18, 'I' => 30, 'S' => 36, 'T' => 36] as $column => $width) {
+                    $sheet->getColumnDimension($column)->setWidth($width);
+                }
+            },
         ];
     }
 
@@ -257,6 +337,43 @@ class ReturnReportExport implements FromCollection, WithHeadings, ShouldAutoSize
             CustomerReturn::STATUS_COMPLETED => 'Selesai',
             CustomerReturn::STATUS_NO_RECEIVED => 'Tidak Diterima',
             default => 'Belum Finalisasi',
+        };
+    }
+
+    private function filterSummary(): string
+    {
+        $parts = [];
+        $source = trim((string) ($this->filters['source'] ?? ''));
+        $parts[] = 'Jenis: '.match ($source) {
+            'customer' => 'Retur Customer',
+            'outbound' => 'Retur Outbound',
+            default => 'Gabungan',
+        };
+        if (!empty($this->filters['q'])) {
+            $parts[] = 'Pencarian: '.$this->filters['q'];
+        }
+        if (!empty($this->filters['status'])) {
+            $parts[] = 'Status: '.$this->statusFilterLabel((string) $this->filters['status']);
+        }
+        if ($source === 'customer' && !empty($this->filters['match_state'])) {
+            $parts[] = 'Status Resi: '.($this->filters['match_state'] === 'matched' ? 'Resi Ditemukan' : 'Input Manual');
+        }
+        if (!empty($this->filters['date_from']) || !empty($this->filters['date_to'])) {
+            $parts[] = 'Periode: '.($this->filters['date_from'] ?? '-').' s/d '.($this->filters['date_to'] ?? '-');
+        }
+
+        return implode(' | ', $parts);
+    }
+
+    private function statusFilterLabel(string $status): string
+    {
+        return match ($status) {
+            CustomerReturn::STATUS_COMPLETED => 'Selesai',
+            CustomerReturn::STATUS_NO_RECEIVED => 'Tidak Diterima',
+            CustomerReturn::STATUS_INSPECTED => 'Belum Finalisasi',
+            'approved' => 'Disetujui',
+            'pending' => 'Menunggu Approval',
+            default => $status,
         };
     }
 

@@ -4,22 +4,46 @@ namespace App\Exports;
 
 use App\Models\CustomerReturn;
 use App\Models\CustomerReturnItem;
-use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
+use Maatwebsite\Excel\Concerns\WithCustomStartCell;
+use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithHeadings;
+use Maatwebsite\Excel\Concerns\WithStyles;
+use Maatwebsite\Excel\Concerns\WithTitle;
+use Maatwebsite\Excel\Events\AfterSheet;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-class CustomerReturnsExport implements FromCollection, WithHeadings, ShouldAutoSize
+class CustomerReturnsExport implements FromCollection, WithHeadings, WithTitle, WithCustomStartCell, ShouldAutoSize, WithStyles, WithEvents
 {
+    private ?Collection $rows = null;
+
     public function __construct(private array $filters = [])
     {
     }
 
+    public function title(): string
+    {
+        return 'Retur Customer';
+    }
+
+    public function startCell(): string
+    {
+        return 'A5';
+    }
+
     public function collection(): Collection
     {
-        return $this->query()->get()->flatMap(function (CustomerReturn $row) {
+        if ($this->rows !== null) {
+            return $this->rows;
+        }
+
+        $this->rows = $this->query()->get()->flatMap(function (CustomerReturn $row) {
             $items = $row->items->isNotEmpty() ? $row->items : collect([null]);
 
             return $items->map(function (?CustomerReturnItem $itemRow) use ($row) {
@@ -49,6 +73,8 @@ class CustomerReturnsExport implements FromCollection, WithHeadings, ShouldAutoS
                 ];
             });
         })->values();
+
+        return $this->rows;
     }
 
     public function headings(): array
@@ -73,6 +99,51 @@ class CustomerReturnsExport implements FromCollection, WithHeadings, ShouldAutoS
             'Kode Barang Rusak',
             'Catatan Dokumen',
             'Catatan Item',
+        ];
+    }
+
+    public function styles(Worksheet $sheet): array
+    {
+        $rowCount = $this->collection()->count();
+        $sheet->mergeCells('A1:S1');
+        $sheet->mergeCells('A2:S2');
+        $sheet->mergeCells('A3:S3');
+        $sheet->setCellValue('A1', 'Export Retur Customer');
+        $sheet->setCellValue('A2', $this->filterSummary());
+        $sheet->setCellValue('A3', 'Total baris item: '.number_format($rowCount, 0, ',', '.'));
+
+        return [
+            1 => ['font' => ['bold' => true, 'size' => 16, 'color' => ['rgb' => '181C32']]],
+            2 => ['font' => ['color' => ['rgb' => '7E8299']]],
+            3 => ['font' => ['bold' => true, 'color' => ['rgb' => '3F4254']]],
+            5 => [
+                'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
+                'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '1B84FF']],
+            ],
+        ];
+    }
+
+    public function registerEvents(): array
+    {
+        return [
+            AfterSheet::class => function (AfterSheet $event) {
+                $sheet = $event->sheet->getDelegate();
+                $lastRow = max(5, 5 + $this->collection()->count());
+                $range = 'A5:S'.$lastRow;
+
+                $sheet->freezePane('A6');
+                $sheet->setAutoFilter($range);
+                $sheet->getStyle($range)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setRGB('E4E6EF');
+                $sheet->getStyle('A1:S'.$lastRow)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+                $sheet->getStyle('I6:M'.$lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                $sheet->getStyle('I6:M'.$lastRow)->getNumberFormat()->setFormatCode('#,##0');
+                $sheet->getStyle('R6:S'.$lastRow)->getAlignment()->setWrapText(true);
+                $sheet->getStyle('A5:S5')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                foreach (['A' => 18, 'B' => 18, 'C' => 22, 'D' => 20, 'G' => 18, 'H' => 30, 'R' => 36, 'S' => 36] as $column => $width) {
+                    $sheet->getColumnDimension($column)->setWidth($width);
+                }
+            },
         ];
     }
 
@@ -152,5 +223,24 @@ class CustomerReturnsExport implements FromCollection, WithHeadings, ShouldAutoS
             CustomerReturn::STATUS_NO_RECEIVED => 'Tidak Diterima',
             default => 'Belum Finalisasi',
         };
+    }
+
+    private function filterSummary(): string
+    {
+        $parts = [];
+        if (!empty($this->filters['q'])) {
+            $parts[] = 'Pencarian: '.$this->filters['q'];
+        }
+        if (!empty($this->filters['status'])) {
+            $parts[] = 'Status: '.$this->statusLabel((string) $this->filters['status']);
+        }
+        if (!empty($this->filters['match_state'])) {
+            $parts[] = 'Status Resi: '.($this->filters['match_state'] === 'matched' ? 'Resi Ditemukan' : 'Input Manual');
+        }
+        if (!empty($this->filters['date_from']) || !empty($this->filters['date_to'])) {
+            $parts[] = 'Periode: '.($this->filters['date_from'] ?? '-').' s/d '.($this->filters['date_to'] ?? '-');
+        }
+
+        return $parts ? implode(' | ', $parts) : 'Semua data retur customer';
     }
 }

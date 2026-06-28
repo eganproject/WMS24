@@ -170,6 +170,16 @@ class CustomerReturnFlowTest extends TestCase
             'good_qty' => 1,
             'damaged_qty' => 0,
         ]);
+
+        $dataResponse = $this->withoutMiddleware()->getJson(route('admin.inventory.customer-returns.data'));
+
+        $dataResponse->assertOk()
+            ->assertJsonPath('data.0.total_expected', 3)
+            ->assertJsonPath('data.0.total_received', 3)
+            ->assertJsonPath('data.0.total_lost', 1)
+            ->assertJsonPath('data.0.item_details.0.expected_qty', 3)
+            ->assertJsonPath('data.0.item_details.0.received_qty', 2)
+            ->assertJsonPath('data.0.item_details.0.lost_qty', 1);
     }
 
     public function test_store_and_finalize_allows_resi_item_with_zero_received_qty(): void

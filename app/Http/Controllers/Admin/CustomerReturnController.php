@@ -86,20 +86,42 @@ class CustomerReturnController extends Controller
         $rows = $query->get();
         $data = $rows->map(function (CustomerReturn $row) {
             $items = $row->items ?? collect();
-            $itemSummary = $items->map(function (CustomerReturnItem $itemRow) {
+            $itemDetails = $items->map(function (CustomerReturnItem $itemRow) {
                 $sku = trim((string) ($itemRow->item?->sku ?? ''));
                 if ($sku === '') {
-                    return '';
+                    return null;
                 }
 
+                $expectedQty = (int) $itemRow->expected_qty;
+                $receivedQty = (int) $itemRow->received_qty;
+
+                return [
+                    'sku' => $sku,
+                    'name' => (string) ($itemRow->item?->name ?? ''),
+                    'expected_qty' => $expectedQty,
+                    'received_qty' => $receivedQty,
+                    'good_qty' => (int) $itemRow->good_qty,
+                    'damaged_qty' => (int) $itemRow->damaged_qty,
+                    'lost_qty' => max($expectedQty - $receivedQty, 0),
+                    'note' => (string) ($itemRow->note ?? ''),
+                ];
+            })->filter()->values();
+
+            $itemSummary = $itemDetails->map(function (array $itemRow) {
                 return sprintf(
-                    '%s (%d/%d/%d)',
-                    $sku,
-                    (int) $itemRow->received_qty,
-                    (int) $itemRow->good_qty,
-                    (int) $itemRow->damaged_qty
+                    '%s (Resi %d, Terima %d, Bagus %d, Rusak %d, Hilang %d)',
+                    $itemRow['sku'],
+                    $itemRow['expected_qty'],
+                    $itemRow['received_qty'],
+                    $itemRow['good_qty'],
+                    $itemRow['damaged_qty'],
+                    $itemRow['lost_qty']
                 );
-            })->filter()->values()->implode(', ');
+            })->implode(', ');
+
+            $totalExpected = (int) $items->sum('expected_qty');
+            $totalReceived = (int) $items->sum('received_qty');
+            $totalLost = (int) $itemDetails->sum('lost_qty');
 
             return [
                 'id' => $row->id,
@@ -116,11 +138,13 @@ class CustomerReturnController extends Controller
                 'submit_by' => $row->creator?->name ?? '-',
                 'inspected_by' => $row->inspector?->name ?? '-',
                 'finalized_by' => $row->finalizer?->name ?? '-',
+                'item_details' => $itemDetails,
                 'item_summary' => $itemSummary ?: '-',
-                'total_expected' => (int) $items->sum('expected_qty'),
-                'total_received' => (int) $items->sum('received_qty'),
+                'total_expected' => $totalExpected,
+                'total_received' => $totalReceived,
                 'total_good' => (int) $items->sum('good_qty'),
                 'total_damaged' => (int) $items->sum('damaged_qty'),
+                'total_lost' => $totalLost,
                 'note' => $row->note ?? '',
                 'item_image_url' => $this->itemImageUrl($row),
                 'damaged_good_code' => $row->damagedGood?->code,

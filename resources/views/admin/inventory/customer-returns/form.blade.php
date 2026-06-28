@@ -342,6 +342,7 @@
                                     </div>
                                     <div class="d-flex flex-wrap gap-2">
                                         <span class="badge badge-light-primary" data-role="expected-badge">Qty Resi {{ (int) ($formItem['expected_qty'] ?? 0) }}</span>
+                                        <span class="badge badge-light-warning" data-role="lost-badge">Hilang 0</span>
                                         <span class="badge badge-light-secondary" data-role="variance-badge">Belum diinspeksi</span>
                                     </div>
                                 </div>
@@ -610,18 +611,20 @@
                 const received = Number(row.querySelector('[data-name="received_qty"]')?.value || 0);
                 const variance = buildVarianceState({ expected, received });
                 carry.total += 1;
+                carry.lostQty += Math.max(expected - received, 0);
                 if (variance.badgeText === 'Sesuai resi') carry.match += 1;
                 if (variance.badgeText.startsWith('Kurang')) carry.less += 1;
                 if (variance.badgeText.startsWith('Lebih')) carry.more += 1;
                 if (variance.badgeText === 'SKU tambahan') carry.extra += 1;
                 if (variance.badgeText === 'Ada di resi, tidak ada di paket') carry.missing += 1;
                 return carry;
-            }, { total: 0, match: 0, less: 0, more: 0, extra: 0, missing: 0 });
+            }, { total: 0, match: 0, less: 0, more: 0, extra: 0, missing: 0, lostQty: 0 });
 
             const badges = [
                 `<span class="badge badge-light-dark">Baris ${summary.total}</span>`,
                 `<span class="badge badge-light-success">Sesuai ${summary.match}</span>`,
             ];
+            if (summary.lostQty > 0) badges.push(`<span class="badge badge-light-warning">Total Hilang ${summary.lostQty}</span>`);
             if (summary.less > 0) badges.push(`<span class="badge badge-light-warning">Kurang ${summary.less}</span>`);
             if (summary.more > 0) badges.push(`<span class="badge badge-light-primary">Lebih ${summary.more}</span>`);
             if (summary.extra > 0) badges.push(`<span class="badge badge-light-info">SKU Tambahan ${summary.extra}</span>`);
@@ -640,10 +643,12 @@
             const goodEl = row.querySelector('[data-name="good_qty"]');
             const damagedEl = row.querySelector('[data-name="damaged_qty"]');
             const expectedBadgeEl = row.querySelector('[data-role="expected-badge"]');
+            const lostBadgeEl = row.querySelector('[data-role="lost-badge"]');
             const varianceBadgeEl = row.querySelector('[data-role="variance-badge"]');
             const varianceHintEl = row.querySelector('[data-role="variance-hint"]');
             const invalid = (good + damaged) !== received;
             const variance = buildVarianceState({ expected, received });
+            const lostQty = Math.max(expected - received, 0);
 
             [receivedEl, goodEl, damagedEl].forEach((el) => {
                 if (!el) return;
@@ -660,6 +665,10 @@
 
             if (expectedBadgeEl) {
                 expectedBadgeEl.textContent = `Qty Resi ${expected}`;
+            }
+            if (lostBadgeEl) {
+                lostBadgeEl.className = `badge ${lostQty > 0 ? 'badge-light-warning' : 'badge-light-success'}`;
+                lostBadgeEl.textContent = lostQty > 0 ? `Hilang ${lostQty}` : 'Tidak Hilang';
             }
             if (varianceBadgeEl) {
                 varianceBadgeEl.className = `badge ${variance.badgeClass}`;
@@ -785,6 +794,7 @@
                         </div>
                         <div class="d-flex flex-wrap gap-2">
                             <span class="badge badge-light-primary" data-role="expected-badge">Qty Resi ${Number(data.expected_qty || 0)}</span>
+                            <span class="badge badge-light-warning" data-role="lost-badge">Hilang 0</span>
                             <span class="badge badge-light-secondary" data-role="variance-badge">Belum diinspeksi</span>
                         </div>
                     </div>

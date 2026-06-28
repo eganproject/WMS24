@@ -146,9 +146,9 @@
 
     .customer-return-qty-grid {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 0.55rem;
-        min-width: 250px;
+        min-width: 290px;
     }
 
     .customer-return-qty-pill {
@@ -163,6 +163,11 @@
         border-color: #eef2f7;
     }
 
+    .customer-return-qty-pill.is-received {
+        background: #eef6ff;
+        border-color: #d9eaff;
+    }
+
     .customer-return-qty-pill.is-good {
         background: #e8fff3;
         border-color: #d4f5e3;
@@ -171,6 +176,11 @@
     .customer-return-qty-pill.is-damaged {
         background: #fff5f8;
         border-color: #ffd5e2;
+    }
+
+    .customer-return-qty-pill.is-lost {
+        background: #fff8dd;
+        border-color: #ffe8a3;
     }
 
     .customer-return-qty-label {
@@ -264,6 +274,7 @@
 
         .customer-return-qty-grid {
             min-width: 0;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
         }
 
         .customer-return-action-cell {
@@ -470,12 +481,42 @@
         };
 
         const itemCellHtml = (row) => {
-            const items = String(row.item_summary || '')
+            const details = Array.isArray(row.item_details) ? row.item_details : [];
+            const fallbackItems = String(row.item_summary || '')
                 .split(', ')
                 .map((part) => part.trim())
-                .filter((part) => part && part !== '-');
+                .filter((part) => part && part !== '-')
+                .map((part) => ({ summary: part }));
+            const items = details.length ? details : fallbackItems;
 
-            const visibleItems = items.slice(0, 3).map((part) => `<div class="customer-return-item-chip">${escapeHtml(part)}</div>`).join('');
+            const visibleItems = items.slice(0, 3).map((item) => {
+                if (item.summary) {
+                    return `<div class="customer-return-item-chip">${escapeHtml(item.summary)}</div>`;
+                }
+
+                const lostQty = Number(item.lost_qty || 0);
+                const lostBadge = lostQty > 0
+                    ? `<span class="badge badge-light-warning ms-1">Hilang ${lostQty}</span>`
+                    : '<span class="badge badge-light-success ms-1">Tidak Hilang</span>';
+
+                return `
+                    <div class="customer-return-item-chip">
+                        <div class="w-100">
+                            <div class="d-flex flex-wrap gap-1 align-items-center mb-1">
+                                <span class="fw-bold text-gray-900">${escapeHtml(item.sku || '-')}</span>
+                                ${lostBadge}
+                            </div>
+                            <div class="text-muted fs-8">${escapeHtml(item.name || '-')}</div>
+                            <div class="d-flex flex-wrap gap-2 mt-2 text-gray-700 fs-8">
+                                <span>Resi <strong>${Number(item.expected_qty || 0)}</strong></span>
+                                <span>Diterima <strong>${Number(item.received_qty || 0)}</strong></span>
+                                <span>Bagus <strong>${Number(item.good_qty || 0)}</strong></span>
+                                <span>Rusak <strong>${Number(item.damaged_qty || 0)}</strong></span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
             const moreItems = items.length > 3
                 ? `<div class="text-muted fs-8 mt-2">+${items.length - 3} item lain</div>`
                 : '';
@@ -498,6 +539,10 @@
         const qtyCellHtml = (row) => `
             <div class="customer-return-qty-grid">
                 <div class="customer-return-qty-pill is-total">
+                    <span class="customer-return-qty-label">Qty Resi</span>
+                    <span class="customer-return-qty-value">${Number(row.total_expected || 0)}</span>
+                </div>
+                <div class="customer-return-qty-pill is-received">
                     <span class="customer-return-qty-label">Diterima</span>
                     <span class="customer-return-qty-value">${Number(row.total_received || 0)}</span>
                 </div>
@@ -508,6 +553,10 @@
                 <div class="customer-return-qty-pill is-damaged">
                     <span class="customer-return-qty-label">Rusak</span>
                     <span class="customer-return-qty-value">${Number(row.total_damaged || 0)}</span>
+                </div>
+                <div class="customer-return-qty-pill is-lost">
+                    <span class="customer-return-qty-label">Hilang</span>
+                    <span class="customer-return-qty-value">${Number(row.total_lost || 0)}</span>
                 </div>
             </div>
         `;
@@ -682,7 +731,7 @@
                         searchable: false,
                         render: function (data, type, row) {
                             if (type !== 'display') {
-                                return `${row.total_received || 0} ${row.total_good || 0} ${row.total_damaged || 0}`;
+                                return `${row.total_expected || 0} ${row.total_received || 0} ${row.total_good || 0} ${row.total_damaged || 0} ${row.total_lost || 0}`;
                             }
 
                             return qtyCellHtml(row);

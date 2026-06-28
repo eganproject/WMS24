@@ -562,6 +562,59 @@ class ResiImportController extends Controller
         ]);
     }
 
+    public function destroy(int $id)
+    {
+        DB::beginTransaction();
+        try {
+            $resi = Resi::whereKey($id)->lockForUpdate()->first();
+            if (!$resi) {
+                DB::rollBack();
+                return response()->json([
+                    'message' => 'Resi tidak ditemukan.',
+                ], 404);
+            }
+
+            $scanOut = ShipmentScanOut::where('resi_id', $resi->id)
+                ->lockForUpdate()
+                ->first(['id']);
+            $qc = QcResiScan::where('resi_id', $resi->id)
+                ->lockForUpdate()
+                ->first(['id']);
+
+            if ($qc || $scanOut) {
+                DB::rollBack();
+                return response()->json([
+                    'message' => 'Resi sudah masuk proses QC atau scan out, tidak bisa dihapus.',
+                ], 422);
+            }
+
+            $details = ResiDetail::where('resi_id', $resi->id)->get(['sku', 'qty']);
+            $listDate = $resi->tanggal_upload?->format('Y-m-d') ?? now()->toDateString();
+            if (($resi->status ?? 'active') !== 'canceled' && $details->isNotEmpty()) {
+                $this->adjustPickingList($listDate, $details, -1);
+                PickingList::whereDate('list_date', $listDate)
+                    ->whereIn('sku', $details->pluck('sku')->filter()->unique()->values()->all())
+                    ->where('qty', '<=', 0)
+                    ->where('remaining_qty', '<=', 0)
+                    ->delete();
+            }
+
+            $resi->delete();
+
+            DB::commit();
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return response()->json([
+                'message' => 'Gagal menghapus resi.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+
+        return response()->json([
+            'message' => 'Resi berhasil dihapus.',
+        ]);
+    }
+
     private function cancelProcessedResi(Request $request, bool $requiresScanOut)
     {
         $validated = $this->validateResiActionRequest($request, true);
@@ -715,7 +768,7 @@ class ResiImportController extends Controller
 
         foreach ($grouped as $sku => $qty) {
             $delta = $direction * $qty;
-            $listRow = PickingList::where('list_date', $date)
+            $listRow = PickingList::whereDate('list_date', $date)
                 ->where('sku', $sku)
                 ->lockForUpdate()
                 ->first();
@@ -800,7 +853,7 @@ class ResiImportController extends Controller
 
     private function syncPickingException(string $date, string $sku, int $exceptionQty): void
     {
-        $exception = PickingListException::where('list_date', $date)
+        $exception = PickingListException::whereDate('list_date', $date)
             ->where('sku', $sku)
             ->lockForUpdate()
             ->first();

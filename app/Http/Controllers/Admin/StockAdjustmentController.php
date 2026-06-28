@@ -97,6 +97,20 @@ class StockAdjustmentController extends Controller
 
         $data = $query->get()->map(function ($row) {
             $items = $row->items ?? collect();
+            $itemRows = $items->map(function ($it) {
+                $sku = trim($it->item?->sku ?? '');
+                if ($sku === '') {
+                    return null;
+                }
+
+                return [
+                    'sku' => $sku,
+                    'name' => $it->item?->name ?? '',
+                    'direction' => $it->direction === 'out' ? 'out' : 'in',
+                    'qty' => (int) ($it->qty ?? 0),
+                    'note' => $it->note ?? '',
+                ];
+            })->filter()->values();
             $labels = $items->map(function ($it) {
                 $sku = trim($it->item?->sku ?? '');
                 if ($sku === '') {
@@ -118,6 +132,7 @@ class StockAdjustmentController extends Controller
                 'warehouse' => $row->warehouse?->name ?? '-',
                 'warehouse_id' => $row->warehouse_id,
                 'item' => $itemLabel ?: '-',
+                'item_rows' => $itemRows,
                 'qty_in' => $totalIn,
                 'qty_out' => $totalOut,
                 'note' => $row->note ?? '',

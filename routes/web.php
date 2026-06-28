@@ -277,6 +277,7 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::post('/resi-import/cancel-after-qc', [ResiImportController::class, 'cancelAfterQc'])->name('resi-import.cancel-after-qc');
         Route::post('/resi-import/cancel-after-ship', [ResiImportController::class, 'cancelAfterShip'])->name('resi-import.cancel-after-ship');
         Route::post('/resi-import/uncancel', [ResiImportController::class, 'uncancel'])->name('resi-import.uncancel');
+        Route::delete('/resi-import/{id}', [ResiImportController::class, 'destroy'])->name('resi-import.destroy');
 
         // Customer Returns
         Route::get('/customer-returns', [CustomerReturnController::class, 'index'])->name('customer-returns.index');

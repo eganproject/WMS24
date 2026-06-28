@@ -4,7 +4,9 @@ namespace Tests\Feature\Admin;
 
 use App\Models\Item;
 use App\Models\PickingList;
+use App\Models\QcResiScan;
 use App\Models\Resi;
+use App\Models\ResiDetail;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -95,6 +97,76 @@ class ResiImportStatusTest extends TestCase
             ->assertJsonValidationErrors('file');
 
         $this->assertNull(Resi::where('id_pesanan', 'ORD-NEW-001')->first());
+    }
+
+    public function test_unprocessed_resi_can_be_deleted_and_removed_from_picking_list(): void
+    {
+        Item::create([
+            'sku' => 'SKU-DELETE-RESI-001',
+            'name' => 'Item Delete Resi',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+            'safety_stock' => 0,
+        ]);
+        $user = User::factory()->create();
+        $resi = Resi::create([
+            'id_pesanan' => 'ORD-DELETE-001',
+            'tanggal_pesanan' => '2026-05-15',
+            'tanggal_upload' => '2026-05-15',
+            'no_resi' => 'RESI-DELETE-001',
+            'uploader_id' => $user->id,
+            'status' => 'active',
+        ]);
+        ResiDetail::create([
+            'resi_id' => $resi->id,
+            'sku' => 'SKU-DELETE-RESI-001',
+            'qty' => 2,
+        ]);
+        PickingList::create([
+            'list_date' => '2026-05-15',
+            'sku' => 'SKU-DELETE-RESI-001',
+            'qty' => 2,
+            'remaining_qty' => 2,
+        ]);
+
+        $this->actingAs($user)
+            ->withoutMiddleware()
+            ->deleteJson(route('admin.inventory.resi-import.destroy', $resi->id))
+            ->assertOk()
+            ->assertJsonPath('message', 'Resi berhasil dihapus.');
+
+        $this->assertNull(Resi::find($resi->id));
+        $this->assertSame(0, ResiDetail::where('resi_id', $resi->id)->count());
+        $pickingList = PickingList::where('sku', 'SKU-DELETE-RESI-001')->first();
+        $this->assertTrue($pickingList === null || ((int) $pickingList->qty === 0 && (int) $pickingList->remaining_qty === 0));
+    }
+
+    public function test_processed_resi_cannot_be_deleted_after_qc_scan(): void
+    {
+        $user = User::factory()->create();
+        $resi = Resi::create([
+            'id_pesanan' => 'ORD-DELETE-QC-001',
+            'tanggal_pesanan' => '2026-05-15',
+            'tanggal_upload' => '2026-05-15',
+            'no_resi' => 'RESI-DELETE-QC-001',
+            'uploader_id' => $user->id,
+            'status' => 'active',
+        ]);
+        QcResiScan::create([
+            'resi_id' => $resi->id,
+            'scan_type' => 'resi',
+            'scan_code' => $resi->no_resi,
+            'status' => 'draft',
+            'scanned_by' => $user->id,
+        ]);
+
+        $this->actingAs($user)
+            ->withoutMiddleware()
+            ->deleteJson(route('admin.inventory.resi-import.destroy', $resi->id))
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Resi sudah masuk proses QC atau scan out, tidak bisa dihapus.');
+
+        $this->assertNotNull(Resi::find($resi->id));
     }
 
     /**

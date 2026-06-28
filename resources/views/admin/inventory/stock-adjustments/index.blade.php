@@ -11,21 +11,143 @@
     $canImport = $canCreate && !empty($importUrl ?? null);
 @endphp
 
+@push('styles')
+<style>
+    .stock-adjustment-toolbar {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+        width: 100%;
+    }
+    .stock-adjustment-search {
+        width: min(100%, 320px);
+    }
+    .stock-adjustment-filters {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    .stock-adjustment-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    .status-filter-group {
+        display: inline-flex;
+        border: 1px solid #e4e6ef;
+        border-radius: 8px;
+        padding: 3px;
+        background: #f9fafb;
+        gap: 3px;
+    }
+    .status-filter-group .btn {
+        border-radius: 6px;
+        white-space: nowrap;
+    }
+    .stock-adjustment-date-range {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .stock-adjustments-table {
+        min-width: 1120px;
+    }
+    .adjustment-items-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 260px;
+        max-width: 430px;
+    }
+    .adjustment-item-pill {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 8px;
+        align-items: center;
+        padding: 8px 10px;
+        border: 1px solid #eef0f4;
+        border-radius: 8px;
+        background: #fff;
+    }
+    .adjustment-item-sku {
+        font-weight: 700;
+        color: #181c32;
+        overflow-wrap: anywhere;
+    }
+    .adjustment-item-name {
+        color: #7e8299;
+        font-size: 11px;
+        margin-top: 2px;
+        overflow-wrap: anywhere;
+    }
+    .adjustment-item-note {
+        grid-column: 1 / -1;
+        color: #7e8299;
+        font-size: 11px;
+        border-top: 1px dashed #eef0f4;
+        padding-top: 5px;
+    }
+    .adjustment-more {
+        font-size: 11px;
+        color: #7e8299;
+        padding-left: 2px;
+    }
+    .adjustment-note-cell {
+        max-width: 260px;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+
+    @media (max-width: 991.98px) {
+        .stock-adjustment-toolbar,
+        .stock-adjustment-filters,
+        .stock-adjustment-actions {
+            align-items: stretch;
+            justify-content: flex-start;
+            width: 100%;
+        }
+        .stock-adjustment-search,
+        .stock-adjustment-filters > *,
+        .stock-adjustment-actions > *,
+        .stock-adjustment-date-range,
+        .stock-adjustment-date-range .form-control {
+            width: 100% !important;
+        }
+        .stock-adjustment-date-range {
+            flex-direction: column;
+            align-items: stretch;
+        }
+        .status-filter-group {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+        }
+        .status-filter-group .btn {
+            width: 100%;
+        }
+    }
+</style>
+@endpush
+
 @section('content')
 <div class="card">
-    <div class="card-header border-0 pt-6">
-        <div class="card-title">
-            <div class="d-flex align-items-center position-relative my-1">
+    <div class="card-header border-0 pt-6 stock-adjustment-toolbar">
+        <div class="stock-adjustment-search">
+            <div class="d-flex align-items-center position-relative">
                 <span class="svg-icon svg-icon-1 position-absolute ms-6">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
                         <rect opacity="0.5" x="17.0365" y="15.1223" width="8.15546" height="2" rx="1" transform="rotate(45 17.0365 15.1223)" fill="black" />
                         <path d="M11 19C6.55556 19 3 15.4444 3 11C3 6.55556 6.55556 3 11 3C15.4444 3 19 6.55556 19 11C19 15.4444 15.4444 19 11 19ZM11 5C7.53333 5 5 7.53333 5 11C5 14.4667 7.53333 17 11 17C14.4667 17 17 14.4667 17 11C17 7.53333 14.4667 5 11 5Z" fill="black" />
                     </svg>
                 </span>
-                <input type="text" class="form-control form-control-solid w-250px ps-14" placeholder="Search" data-kt-filter="search" />
+                <input type="text" class="form-control form-control-solid ps-14" placeholder="Cari kode, SKU, catatan, gudang" data-kt-filter="search" />
             </div>
         </div>
-        <div class="card-toolbar">
+        <div class="stock-adjustment-actions">
             @if(!empty($warehouseLabel ?? null))
                 @php
                     $currentWarehouseId = $defaultWarehouseId ?? null;
@@ -38,8 +160,8 @@
                 @endphp
                 <span class="badge {{ $warehouseBadge }} me-4" id="warehouse_badge">Gudang: {{ $warehouseLabel }}</span>
             @endif
-            <div class="d-flex align-items-center gap-2 me-4">
-                <div class="btn-group" role="group" aria-label="Filter status penyesuaian stok" id="filter_status_group">
+            <div class="stock-adjustment-filters">
+                <div class="status-filter-group" role="group" aria-label="Filter status penyesuaian stok" id="filter_status_group">
                     <button type="button" class="btn btn-sm {{ ($filterStatus ?? '') === '' ? 'btn-primary' : 'btn-light' }}" data-status="">Semua</button>
                     <button type="button" class="btn btn-sm {{ ($filterStatus ?? '') === 'pending' ? 'btn-warning' : 'btn-light' }}" data-status="pending">Menunggu</button>
                     <button type="button" class="btn btn-sm {{ ($filterStatus ?? '') === 'approved' ? 'btn-success' : 'btn-light' }}" data-status="approved">Disetujui</button>
@@ -52,13 +174,15 @@
                         @endforeach
                     </select>
                 @endif
-                <input type="text" class="form-control form-control-solid w-150px" id="filter_date_from" placeholder="Dari" />
-                <input type="text" class="form-control form-control-solid w-150px" id="filter_date_to" placeholder="Sampai" />
-                <button type="button" class="btn btn-light" id="filter_apply">Filter</button>
+                <div class="stock-adjustment-date-range">
+                    <input type="text" class="form-control form-control-solid w-140px" id="filter_date_from" placeholder="Dari" />
+                    <input type="text" class="form-control form-control-solid w-140px" id="filter_date_to" placeholder="Sampai" />
+                </div>
+                <button type="button" class="btn btn-light-primary" id="filter_apply">Filter</button>
                 <button type="button" class="btn btn-light" id="filter_reset">Reset</button>
             </div>
             @if($canImport)
-                <button type="button" class="btn btn-light-primary me-3" id="btn_import_adjustment" data-bs-toggle="modal" data-bs-target="#modal_import_adjustment">
+                <button type="button" class="btn btn-light-primary" id="btn_import_adjustment" data-bs-toggle="modal" data-bs-target="#modal_import_adjustment">
                     Import Excel
                 </button>
             @endif
@@ -69,7 +193,7 @@
     </div>
     <div class="card-body py-6">
         <div class="table-responsive">
-            <table class="table align-middle table-row-dashed fs-6 gy-5" id="stock_adjustments_table">
+            <table class="table align-middle table-row-dashed fs-6 gy-4 stock-adjustments-table" id="stock_adjustments_table">
                 <thead>
                     <tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0">
                         <th>ID</th>
@@ -254,6 +378,46 @@
         const statusLabel = (status) => {
             if (status === 'approved') return '<span class="badge badge-light-success">Disetujui</span>';
             return '<span class="badge badge-light-warning">Menunggu</span>';
+        };
+
+        const escapeHtml = (value) => String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+
+        const renderAdjustmentItems = (items, fallback) => {
+            const rows = Array.isArray(items) ? items : [];
+            if (!rows.length) {
+                return `<span class="text-muted">${escapeHtml(fallback || '-')}</span>`;
+            }
+
+            const visibleRows = rows.slice(0, 4);
+            const html = visibleRows.map((item) => {
+                const direction = item.direction === 'out' ? 'out' : 'in';
+                const badgeClass = direction === 'out' ? 'badge-light-danger' : 'badge-light-success';
+                const sign = direction === 'out' ? '-' : '+';
+                const directionLabel = direction === 'out' ? 'Kurang' : 'Tambah';
+                const name = String(item.name || '').trim();
+                const note = String(item.note || '').trim();
+
+                return `
+                    <div class="adjustment-item-pill">
+                        <div>
+                            <div class="adjustment-item-sku">${escapeHtml(item.sku || '-')}</div>
+                            ${name ? `<div class="adjustment-item-name">${escapeHtml(name)}</div>` : ''}
+                        </div>
+                        <span class="badge ${badgeClass}">${directionLabel} ${sign}${Number(item.qty || 0).toLocaleString('id-ID')}</span>
+                        ${note ? `<div class="adjustment-item-note">${escapeHtml(note)}</div>` : ''}
+                    </div>`;
+            }).join('');
+
+            const more = rows.length > visibleRows.length
+                ? `<div class="adjustment-more">+${rows.length - visibleRows.length} item lainnya</div>`
+                : '';
+
+            return `<div class="adjustment-items-list">${html}${more}</div>`;
         };
 
         const syncStatusFilterButtons = () => {
@@ -535,6 +699,7 @@
             processing: true,
             serverSide: true,
             dom: 'rtip',
+            autoWidth: false,
             order: [[0, 'desc']],
             ajax: {
                 url: dataUrl,
@@ -554,10 +719,10 @@
                 { data: 'transacted_at' },
                 { data: 'submit_by' },
                 { data: 'warehouse', render: (data, type, row) => renderWarehouseBadge(data, row?.warehouse_id) },
-                { data: 'item' },
+                { data: 'item_rows', orderable: false, searchable: false, render: (data, type, row) => renderAdjustmentItems(data, row?.item) },
                 { data: 'qty_in' },
                 { data: 'qty_out' },
-                { data: 'note' },
+                { data: 'note', render: (data) => `<div class="adjustment-note-cell">${escapeHtml(data || '-')}</div>` },
                 { data: 'id', orderable: false, searchable: false, className: 'text-end', render: (data, type, row) => {
                     const isApproved = row?.status === 'approved';
                     const detailItem = `<div class="menu-item px-3"><a href="${detailUrlTpl.replace(':id', data)}" class="menu-link px-3">Detail</a></div>`;

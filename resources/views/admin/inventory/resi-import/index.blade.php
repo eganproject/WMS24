@@ -6,6 +6,7 @@
 @php
     use App\Support\Permission as Perm;
     $canCreate = Perm::can(auth()->user(), 'admin.inventory.resi-import.index', 'create');
+    $canDelete = Perm::can(auth()->user(), 'admin.inventory.resi-import.index', 'delete');
 @endphp
 
 @section('content')
@@ -315,7 +316,9 @@
     const cancelAfterQcUrl = '{{ route('admin.inventory.resi-import.cancel-after-qc') }}';
     const cancelAfterShipUrl = '{{ route('admin.inventory.resi-import.cancel-after-ship') }}';
     const uncancelUrl = '{{ route('admin.inventory.resi-import.uncancel') }}';
+    const deleteUrlTpl = '{{ route('admin.inventory.resi-import.destroy', ':id') }}';
     const csrfToken = '{{ csrf_token() }}';
+    const canDeleteResi = {{ $canDelete ? 'true' : 'false' }};
     const todayStr = '{{ $today ?? '' }}';
     let searchMode = '{{ $filterSearchMode ?? '' }}';
 
@@ -421,17 +424,25 @@
                         return `<div class="d-flex flex-column gap-1">${businessBadge}${opBadge}</div>`;
                     }},
                     { data: null, orderable: false, searchable: false, className: 'text-end', render: (data, type, row) => {
+                        const resiId = row.id || '';
                         const idPesanan = row.id_pesanan || '';
                         const noResi = row.no_resi || '';
                         const status = row.status || 'active';
                         const hasQcScan = !!row.has_qc_scan;
                         const hasScanOut = !!row.has_scan_out;
                         const operationalStatus = row.operational_status || '';
+                        const deleteButton = canDeleteResi && resiId && !hasQcScan && !hasScanOut
+                            ? `<button type="button" class="btn btn-sm btn-light-danger btn-delete-resi"
+                                data-id="${resiId}" data-order="${idPesanan}" data-resi="${noResi}">Hapus</button>`
+                            : '';
                         if (status === 'canceled') {
                             if (operationalStatus === 'canceled_ready_to_ship' || operationalStatus === 'canceled_after_ship') {
                                 return '<span class="text-muted">Final</span>';
                             }
-                            return `<button type="button" class="btn btn-sm btn-light-warning btn-uncancel" data-id="${idPesanan}" data-resi="${noResi}">Batal Cancel</button>`;
+                            return `<div class="d-flex justify-content-end flex-wrap gap-2">
+                                <button type="button" class="btn btn-sm btn-light-warning btn-uncancel" data-id="${idPesanan}" data-resi="${noResi}">Batal Cancel</button>
+                                ${deleteButton}
+                            </div>`;
                         }
                         if (hasScanOut || operationalStatus === 'scan_out_done') {
                             return `<button type="button" class="btn btn-sm btn-light-danger btn-cancel"
@@ -444,7 +455,10 @@
                         if (hasQcScan) {
                             return '<span class="text-muted">-</span>';
                         }
-                        return `<button type="button" class="btn btn-sm btn-light-danger btn-cancel" data-id="${idPesanan}" data-resi="${noResi}">Cancel</button>`;
+                        return `<div class="d-flex justify-content-end flex-wrap gap-2">
+                            <button type="button" class="btn btn-sm btn-light-danger btn-cancel" data-id="${idPesanan}" data-resi="${noResi}">Cancel</button>
+                            ${deleteButton}
+                        </div>`;
                     }},
                 ],
                 language: {
@@ -822,6 +836,68 @@
             } catch (err) {
                 if (typeof Swal !== 'undefined') {
                     Swal.fire('Error', 'Gagal cancel resi', 'error');
+                }
+            }
+        });
+
+        tableEl.on('click', '.btn-delete-resi', async function(e) {
+            e.preventDefault();
+            const id = this.getAttribute('data-id') || '';
+            if (!id) return;
+
+            const order = this.getAttribute('data-order') || '-';
+            const resi = this.getAttribute('data-resi') || '-';
+            let confirmed = true;
+
+            if (typeof Swal !== 'undefined') {
+                const result = await Swal.fire({
+                    title: 'Hapus resi?',
+                    text: `ID Pesanan ${order} / No Resi ${resi} akan dihapus permanen.`,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Hapus',
+                    cancelButtonText: 'Batal',
+                    buttonsStyling: false,
+                    customClass: {
+                        confirmButton: 'btn btn-danger',
+                        cancelButton: 'btn btn-light',
+                    },
+                });
+                confirmed = result.isConfirmed;
+            } else {
+                confirmed = confirm(`Hapus resi ${resi}?`);
+            }
+
+            if (!confirmed) return;
+
+            try {
+                const res = await fetch(deleteUrlTpl.replace(':id', id), {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'Accept': 'application/json',
+                    },
+                    body: new URLSearchParams({ _method: 'DELETE' }),
+                });
+                const text = await res.text();
+                let json = null;
+                try { json = JSON.parse(text); } catch (err) { /* ignore */ }
+
+                if (!res.ok) {
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire('Error', json?.message || 'Gagal menghapus resi.', 'error');
+                    }
+                    return;
+                }
+
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire('Berhasil', json?.message || 'Resi berhasil dihapus.', 'success');
+                }
+                reloadTable();
+            } catch (err) {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire('Error', 'Gagal menghapus resi.', 'error');
                 }
             }
         });

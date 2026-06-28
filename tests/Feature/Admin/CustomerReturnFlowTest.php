@@ -121,7 +121,7 @@ class CustomerReturnFlowTest extends TestCase
         ResiDetail::create([
             'resi_id' => $resi->id,
             'sku' => $expectedItem->sku,
-            'qty' => 2,
+            'qty' => 3,
         ]);
 
         $response = $this->withoutMiddleware()->postJson(route('admin.inventory.customer-returns.store'), [
@@ -132,9 +132,9 @@ class CustomerReturnFlowTest extends TestCase
             'items' => [
                 [
                     'item_id' => $expectedItem->id,
-                    'expected_qty' => 2,
-                    'received_qty' => 1,
-                    'good_qty' => 1,
+                    'expected_qty' => 3,
+                    'received_qty' => 2,
+                    'good_qty' => 2,
                     'damaged_qty' => 0,
                     'note' => 'Satu unit expected tidak ditemukan',
                 ],
@@ -157,9 +157,9 @@ class CustomerReturnFlowTest extends TestCase
         $this->assertDatabaseHas('customer_return_items', [
             'customer_return_id' => $customerReturn->id,
             'item_id' => $expectedItem->id,
-            'expected_qty' => 2,
-            'received_qty' => 1,
-            'good_qty' => 1,
+            'expected_qty' => 3,
+            'received_qty' => 2,
+            'good_qty' => 2,
             'damaged_qty' => 0,
         ]);
         $this->assertDatabaseHas('customer_return_items', [
@@ -170,6 +170,75 @@ class CustomerReturnFlowTest extends TestCase
             'good_qty' => 1,
             'damaged_qty' => 0,
         ]);
+    }
+
+    public function test_store_and_finalize_allows_resi_item_with_zero_received_qty(): void
+    {
+        $this->createWarehouseFixtures();
+
+        $item = Item::create([
+            'sku' => 'SKU-RET-ZERO',
+            'name' => 'Item Retur Tidak Diterima',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+        ]);
+        $uploader = User::factory()->create();
+
+        $resi = Resi::create([
+            'id_pesanan' => 'ORD-RET-ZERO',
+            'no_resi' => 'RESI-RET-ZERO',
+            'tanggal_pesanan' => now()->toDateString(),
+            'tanggal_upload' => now()->toDateString(),
+            'uploader_id' => $uploader->id,
+        ]);
+
+        ResiDetail::create([
+            'resi_id' => $resi->id,
+            'sku' => $item->sku,
+            'qty' => 1,
+        ]);
+
+        $storeResponse = $this->withoutMiddleware()->postJson(route('admin.inventory.customer-returns.store'), [
+            'resi_no' => $resi->no_resi,
+            'received_at' => now()->format('Y-m-d H:i'),
+            'note' => 'Barang dari resi tidak ada di paket',
+            'items' => [
+                [
+                    'item_id' => $item->id,
+                    'expected_qty' => 1,
+                    'received_qty' => 0,
+                    'good_qty' => 0,
+                    'damaged_qty' => 0,
+                    'note' => 'Tidak ada fisik diterima',
+                ],
+            ],
+        ]);
+
+        $storeResponse->assertOk();
+
+        $customerReturn = CustomerReturn::with('items')->firstOrFail();
+        $this->assertSame($resi->id, $customerReturn->resi_id);
+        $this->assertDatabaseHas('customer_return_items', [
+            'customer_return_id' => $customerReturn->id,
+            'item_id' => $item->id,
+            'expected_qty' => 1,
+            'received_qty' => 0,
+            'good_qty' => 0,
+            'damaged_qty' => 0,
+        ]);
+
+        $finalizeResponse = $this->withoutMiddleware()->postJson(route('admin.inventory.customer-returns.finalize'), [
+            'ids' => [$customerReturn->id],
+        ]);
+
+        $finalizeResponse->assertOk()
+            ->assertJsonPath('message', '1 retur customer berhasil difinalisasi.');
+
+        $customerReturn->refresh();
+        $this->assertSame(CustomerReturn::STATUS_NO_RECEIVED, $customerReturn->status);
+        $this->assertNull($customerReturn->damaged_good_id);
+        $this->assertDatabaseCount('stock_mutations', 0);
+        $this->assertDatabaseCount('damaged_goods', 0);
     }
 
     public function test_finalize_customer_return_posts_good_stock_and_creates_damaged_intake(): void

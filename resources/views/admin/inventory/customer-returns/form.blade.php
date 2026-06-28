@@ -714,15 +714,48 @@
             });
         };
 
+        const syncInspectionSplit = (row, changedInput) => {
+            const changedName = changedInput?.getAttribute('data-name');
+            const receivedEl = row.querySelector('[data-name="received_qty"]');
+            const goodEl = row.querySelector('[data-name="good_qty"]');
+            const damagedEl = row.querySelector('[data-name="damaged_qty"]');
+
+            if (!receivedEl || !goodEl || !damagedEl) {
+                return;
+            }
+
+            const received = Number(receivedEl.value || 0);
+            const good = Number(goodEl.value || 0);
+            const damaged = Number(damagedEl.value || 0);
+            const previousReceived = Number(receivedEl.dataset.previousReceived || 0);
+
+            if (changedName === 'received_qty' && good + damaged === previousReceived) {
+                const nextDamaged = Math.min(damaged, received);
+                damagedEl.value = nextDamaged;
+                goodEl.value = Math.max(received - nextDamaged, 0);
+            }
+
+            if (changedName === 'damaged_qty' && damaged <= received) {
+                goodEl.value = Math.max(received - damaged, 0);
+            }
+
+            receivedEl.dataset.previousReceived = String(received);
+        };
+
         const bindRow = (row) => {
             const selectEl = row.querySelector('.customer-return-item-select');
             initSelect2(selectEl);
+            const receivedEl = row.querySelector('[data-name="received_qty"]');
+            if (receivedEl) {
+                receivedEl.dataset.previousReceived = String(Number(receivedEl.value || 0));
+            }
 
             row.querySelectorAll('[data-name="expected_qty"], [data-name="received_qty"], [data-name="good_qty"], [data-name="damaged_qty"]').forEach((input) => {
                 input.addEventListener('input', () => {
                     if (input.dataset.serverError) {
                         input.dataset.serverError = '';
                     }
+                    syncInspectionSplit(row, input);
                     updateRowValidation(row);
                 });
             });

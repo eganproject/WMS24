@@ -39,6 +39,11 @@
                 <span class="badge {{ $warehouseBadge }} me-4" id="warehouse_badge">Gudang: {{ $warehouseLabel }}</span>
             @endif
             <div class="d-flex align-items-center gap-2 me-4">
+                <div class="btn-group" role="group" aria-label="Filter status penyesuaian stok" id="filter_status_group">
+                    <button type="button" class="btn btn-sm {{ ($filterStatus ?? '') === '' ? 'btn-primary' : 'btn-light' }}" data-status="">Semua</button>
+                    <button type="button" class="btn btn-sm {{ ($filterStatus ?? '') === 'pending' ? 'btn-warning' : 'btn-light' }}" data-status="pending">Menunggu</button>
+                    <button type="button" class="btn btn-sm {{ ($filterStatus ?? '') === 'approved' ? 'btn-success' : 'btn-light' }}" data-status="approved">Disetujui</button>
+                </div>
                 @if(!empty($warehouses ?? []))
                     <select class="form-select form-select-solid w-200px" id="filter_warehouse">
                         <option value="">Semua Gudang</option>
@@ -204,6 +209,7 @@
     const canDelete = {{ $canDelete ? 'true' : 'false' }};
     const defaultWarehouseId = {{ !empty($defaultWarehouseId) ? (int) $defaultWarehouseId : 'null' }};
     const displayWarehouseId = {{ !empty($displayWarehouseId) ? (int) $displayWarehouseId : 'null' }};
+    let statusFilterValue = '{{ $filterStatus ?? '' }}';
     const itemOptionsHtml = `@foreach($items as $item)<option value="{{ $item->id }}" data-sku="{{ $item->sku }}" data-name="{{ $item->name }}" data-koli-qty="{{ (int) ($item->koli_qty ?? 0) }}">{{ $item->sku }} - {{ $item->name }}</option>@endforeach`;
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -220,6 +226,7 @@
         const transactedAtEl = document.getElementById('adjustment_transacted_at');
         const warehouseSelect = document.getElementById('adjustment_warehouse_id');
         const warehouseFilter = document.getElementById('filter_warehouse');
+        const statusFilterButtons = Array.from(document.querySelectorAll('#filter_status_group [data-status]'));
         const dateFromEl = document.getElementById('filter_date_from');
         const dateToEl = document.getElementById('filter_date_to');
         const filterApplyBtn = document.getElementById('filter_apply');
@@ -247,6 +254,17 @@
         const statusLabel = (status) => {
             if (status === 'approved') return '<span class="badge badge-light-success">Disetujui</span>';
             return '<span class="badge badge-light-warning">Menunggu</span>';
+        };
+
+        const syncStatusFilterButtons = () => {
+            statusFilterButtons.forEach(button => {
+                const value = button.getAttribute('data-status') || '';
+                const isActive = value === statusFilterValue;
+                button.classList.toggle('btn-primary', isActive && value === '');
+                button.classList.toggle('btn-warning', isActive && value === 'pending');
+                button.classList.toggle('btn-success', isActive && value === 'approved');
+                button.classList.toggle('btn-light', !isActive);
+            });
         };
 
         const clearErrors = () => {
@@ -523,6 +541,7 @@
                 dataSrc: 'data',
                 data: function(params) {
                     params.q = searchInput?.value || '';
+                    if (statusFilterValue) params.status = statusFilterValue;
                     if (warehouseFilter?.value) params.warehouse_id = warehouseFilter.value;
                     if (dateFromEl?.value) params.date_from = dateFromEl.value;
                     if (dateToEl?.value) params.date_to = dateToEl.value;
@@ -574,10 +593,19 @@
 
         const reloadTable = () => dt.ajax.reload();
         searchInput?.addEventListener('keyup', reloadTable);
+        statusFilterButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                statusFilterValue = button.getAttribute('data-status') || '';
+                syncStatusFilterButtons();
+                reloadTable();
+            });
+        });
         warehouseFilter?.addEventListener('change', reloadTable);
         warehouseFilter?.addEventListener('change', updateWarehouseBadge);
         filterApplyBtn?.addEventListener('click', reloadTable);
         filterResetBtn?.addEventListener('click', () => {
+            statusFilterValue = '';
+            syncStatusFilterButtons();
             if (warehouseFilter) {
                 warehouseFilter.value = '';
                 if (typeof $ !== 'undefined' && $(warehouseFilter).data('select2')) {
@@ -590,6 +618,7 @@
             reloadTable();
         });
 
+        syncStatusFilterButtons();
         updateWarehouseBadge();
 
         importBtn?.addEventListener('click', () => {

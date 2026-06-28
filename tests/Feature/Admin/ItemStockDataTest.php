@@ -228,4 +228,37 @@ class ItemStockDataTest extends TestCase
         $this->assertSame('in', $mutation->direction);
         $this->assertSame(5, (int) $mutation->qty);
     }
+
+    public function test_stock_adjustment_data_can_be_filtered_by_status(): void
+    {
+        StockAdjustment::create([
+            'code' => 'ADJ-PENDING-001',
+            'transacted_at' => '2026-06-20 09:00:00',
+            'status' => 'pending',
+        ]);
+        StockAdjustment::create([
+            'code' => 'ADJ-APPROVED-001',
+            'transacted_at' => '2026-06-20 10:00:00',
+            'status' => 'approved',
+            'approved_at' => '2026-06-20 10:05:00',
+        ]);
+
+        $pendingResponse = $this->withoutMiddleware()->getJson(route('admin.inventory.stock-adjustments.data', [
+            'status' => 'pending',
+        ]));
+
+        $pendingResponse->assertOk()
+            ->assertJsonPath('recordsFiltered', 1)
+            ->assertJsonPath('data.0.code', 'ADJ-PENDING-001')
+            ->assertJsonPath('data.0.status', 'pending');
+
+        $approvedResponse = $this->withoutMiddleware()->getJson(route('admin.inventory.stock-adjustments.data', [
+            'status' => 'approved',
+        ]));
+
+        $approvedResponse->assertOk()
+            ->assertJsonPath('recordsFiltered', 1)
+            ->assertJsonPath('data.0.code', 'ADJ-APPROVED-001')
+            ->assertJsonPath('data.0.status', 'approved');
+    }
 }

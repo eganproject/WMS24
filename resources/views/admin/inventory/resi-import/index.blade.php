@@ -317,6 +317,7 @@
     const uncancelUrl = '{{ route('admin.inventory.resi-import.uncancel') }}';
     const csrfToken = '{{ csrf_token() }}';
     const todayStr = '{{ $today ?? '' }}';
+    let searchMode = '{{ $filterSearchMode ?? '' }}';
 
     document.addEventListener('DOMContentLoaded', () => {
         const importBtn = document.getElementById('btn_import_resi');
@@ -395,6 +396,7 @@
                     dataSrc: 'data',
                     data: function(params) {
                         params.q = filterSearchEl?.value || '';
+                        if (searchMode) params.search_mode = searchMode;
                         params.date = filterDateEl?.value || '';
                         params.status = filterStatusEl?.value || '';
                         params.flow_status = filterFlowStatusEl?.value || '';
@@ -478,6 +480,7 @@
                 filterDateEl.value = todayStr;
             }
             if (filterSearchEl) filterSearchEl.value = '';
+            searchMode = '';
             if (filterStatusEl) filterStatusEl.value = '';
             if (filterFlowStatusEl) filterFlowStatusEl.value = '';
             reloadTable();

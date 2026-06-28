@@ -35,6 +35,7 @@ class ResiImportController extends Controller
             $filterDate = $today;
         }
         $search = trim((string) $request->input('q', ''));
+        $searchMode = $this->isExactSearch($request) ? 'exact' : '';
         $status = $this->normalizeStatusFilter($request->input('status'));
         $flowStatus = $this->normalizeFlowStatusFilter($request->input('flow_status'));
 
@@ -52,6 +53,7 @@ class ResiImportController extends Controller
             'buyerNotesUrl' => route('admin.inventory.resi-import.buyer-notes'),
             'filterDate' => $filterDate,
             'filterSearch' => $search,
+            'filterSearchMode' => $searchMode,
             'filterStatus' => $status,
             'filterFlowStatus' => $flowStatus,
             'flowStatusOptions' => ResiOperationalStatus::options(),

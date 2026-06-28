@@ -23,7 +23,7 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class StockAdjustmentController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         $items = Item::query()
             ->where('item_type', Item::TYPE_SINGLE)
@@ -32,6 +32,7 @@ class StockAdjustmentController extends Controller
         $warehouseId = WarehouseService::defaultWarehouseId();
         $warehouseLabel = Warehouse::where('id', $warehouseId)->value('name') ?? 'Gudang Besar';
         $warehouses = Warehouse::orderBy('name')->get(['id', 'name', 'code']);
+        $statusFilter = $this->normalizeStatusFilter($request->input('status'));
 
         return view('admin.inventory.stock-adjustments.index', [
             'items' => $items,
@@ -43,6 +44,7 @@ class StockAdjustmentController extends Controller
             'warehouses' => $warehouses,
             'defaultWarehouseId' => $warehouseId,
             'displayWarehouseId' => WarehouseService::displayWarehouseId(),
+            'filterStatus' => $statusFilter,
         ]);
     }
 
@@ -69,6 +71,10 @@ class StockAdjustmentController extends Controller
         }
 
         $this->applyDateFilter($query, $request);
+        $statusFilter = $this->normalizeStatusFilter($request->input('status'));
+        if ($statusFilter !== '') {
+            $query->where('status', $statusFilter);
+        }
 
         $warehouseFilter = $request->input('warehouse_id');
         if ($warehouseFilter !== null && $warehouseFilter !== '') {
@@ -578,5 +584,12 @@ class StockAdjustmentController extends Controller
         } catch (\Throwable) {
             // ignore invalid date filters
         }
+    }
+
+    private function normalizeStatusFilter($status): string
+    {
+        $status = trim((string) $status);
+
+        return in_array($status, ['pending', 'approved'], true) ? $status : '';
     }
 }

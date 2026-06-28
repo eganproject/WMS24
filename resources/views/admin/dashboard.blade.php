@@ -347,6 +347,8 @@
     $totalScanVal = ($totalScanOut ?? 0);
     $overallPct = $totalActive > 0 ? min(100, round($totalScanVal / $totalActive * 100)) : 0;
     $scanDiff = (int) ($scanOutDifference ?? (($totalScanOut ?? 0) - ($totalResi ?? 0)));
+    $duplicateResiGroupCountVal = (int) ($duplicateResiGroupCount ?? 0);
+    $duplicateResiTotalVal = (int) ($duplicateResiTotal ?? 0);
     $emptyStockTotal = (int) ($emptyStockSummary['total_empty'] ?? 0);
     $emptyWarehouseTotal = (int) ($emptyStockSummary['warehouse_total'] ?? 0);
     $pendingApprovalTotal = (int) ($pendingApprovalSummary['total'] ?? 0);
@@ -516,6 +518,29 @@
         <i class="fas fa-search me-1"></i>Lihat Selisih
     </button>
 </div>
+
+@if($duplicateResiGroupCountVal > 0)
+    <div class="dashboard-action-panel mb-6">
+        <div>
+            <div class="dashboard-action-title">Audit Double Resi</div>
+            <div class="dashboard-action-sub">
+                Ditemukan {{ number_format($duplicateResiGroupCountVal) }} no resi ganda
+                dengan total {{ number_format($duplicateResiTotalVal) }} baris pada tanggal {{ $today ?? '-' }}.
+            </div>
+            <div class="d-flex flex-wrap gap-2 mt-3">
+                @foreach(($duplicateResiRows ?? collect()) as $duplicateResi)
+                    <a href="{{ $duplicateResi['url'] }}" class="btn btn-light-warning btn-sm">
+                        <i class="fas fa-search me-1"></i>{{ $duplicateResi['no_resi'] }}
+                        <span class="badge badge-warning ms-1">{{ number_format($duplicateResi['total']) }}</span>
+                    </a>
+                @endforeach
+            </div>
+        </div>
+        <a href="{{ ($duplicateResiRows ?? collect())->first()['url'] ?? '#' }}" class="btn btn-warning btn-sm">
+            <i class="fas fa-list me-1"></i>Lihat Resi
+        </a>
+    </div>
+@endif
 
 <div class="card">
     <div class="card-header border-0 pt-6 pb-2">

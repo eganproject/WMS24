@@ -82,6 +82,29 @@ class DashboardScanOutDiscrepancyTest extends TestCase
             ->assertJsonMissing(['no_resi' => 'RESI-MATCH']);
     }
 
+    public function test_dashboard_shows_duplicate_resi_links_to_import_resi_filter(): void
+    {
+        $this->withoutMiddleware(AuthorizeMenuPermission::class);
+        $this->travelTo(Carbon::parse('2026-06-19 10:00:00'));
+
+        $user = $this->createUserWithRole('admin');
+        $kurir = Kurir::create(['name' => 'JNE']);
+
+        $this->createResi($user->id, $kurir->id, 'ORD-DUP-A', 'RESI-DUP-001', '2026-06-19');
+        $this->createResi($user->id, $kurir->id, 'ORD-DUP-B', 'RESI-DUP-001', '2026-06-19');
+        $this->createResi($user->id, $kurir->id, 'ORD-NORMAL', 'RESI-NORMAL-001', '2026-06-19');
+
+        $this->actingAs($user)
+            ->get(route('admin.dashboard', ['date' => '2026-06-19']))
+            ->assertOk()
+            ->assertSee('Audit Double Resi')
+            ->assertSee('RESI-DUP-001')
+            ->assertSee('/admin/inventory/resi-import?date=2026-06-19', false)
+            ->assertSee('q=RESI-DUP-001', false)
+            ->assertSee('search_mode=exact', false)
+            ->assertDontSee('RESI-NORMAL-001');
+    }
+
     private function createUserWithRole(string $slug): User
     {
         $role = Role::firstOrCreate(

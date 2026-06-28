@@ -65,6 +65,9 @@ class DashboardController extends Controller
         $scanOutOverCount = $this->scanOutOverQuery($selectedDate)->count();
         $scanOutUnderCount = $this->scanOutUnderQuery($selectedDate)->count();
         $scanOutDifference = $totalScanOut - $totalResi;
+        $duplicateResiRows = $this->duplicateResiRows($selectedDate);
+        $duplicateResiGroupCount = $duplicateResiRows->count();
+        $duplicateResiTotal = (int) $duplicateResiRows->sum('total');
 
         $resiCounts = Resi::select('kurir_id', DB::raw('count(*) as total'))
             ->whereDate('tanggal_upload', $selectedDate)
@@ -143,11 +146,52 @@ class DashboardController extends Controller
             'scanOutOverCount' => $scanOutOverCount,
             'scanOutUnderCount' => $scanOutUnderCount,
             'scanOutDifference' => $scanOutDifference,
+            'duplicateResiRows' => $duplicateResiRows,
+            'duplicateResiGroupCount' => $duplicateResiGroupCount,
+            'duplicateResiTotal' => $duplicateResiTotal,
             'kurirs' => $kurirs,
             'emptyStockSummary' => $this->emptyStockSummary(),
             'emptyStockRows' => $this->emptyStockRows(),
             'pendingApprovalSummary' => $this->pendingApprovalSummary(),
         ]);
+    }
+
+    private function duplicateResiRows(string $date)
+    {
+        return Resi::query()
+            ->select([
+                'no_resi',
+                DB::raw('COUNT(*) as total'),
+                DB::raw('MAX(updated_at) as latest_update'),
+            ])
+            ->whereDate('tanggal_upload', $date)
+            ->whereNotNull('no_resi')
+            ->where('no_resi', '<>', '')
+            ->groupBy('no_resi')
+            ->havingRaw('COUNT(*) > 1')
+            ->orderByDesc('total')
+            ->orderByDesc('latest_update')
+            ->limit(10)
+            ->get()
+            ->map(function ($row) use ($date) {
+                $idPesananList = Resi::query()
+                    ->whereDate('tanggal_upload', $date)
+                    ->where('no_resi', $row->no_resi)
+                    ->orderBy('id')
+                    ->pluck('id_pesanan')
+                    ->implode(', ');
+
+                return [
+                    'no_resi' => (string) $row->no_resi,
+                    'total' => (int) $row->total,
+                    'id_pesanan_list' => $idPesananList !== '' ? $idPesananList : '-',
+                    'url' => route('admin.inventory.resi-import.index', [
+                        'date' => $date,
+                        'q' => $row->no_resi,
+                        'search_mode' => 'exact',
+                    ]),
+                ];
+            });
     }
 
     private function emptyStockSummary()

@@ -148,6 +148,7 @@ class ReturnReportTest extends TestCase
             ->assertJsonPath('summary.customer_received_qty', 6)
             ->assertJsonPath('summary.customer_good_qty', 5)
             ->assertJsonPath('summary.customer_damaged_qty', 1)
+            ->assertJsonPath('summary.customer_lost_qty', 1)
             ->assertJsonPath('summary.outbound_qty', 7)
             ->assertJsonPath('summary.unmatched_resi', 1);
 
@@ -156,6 +157,7 @@ class ReturnReportTest extends TestCase
         $this->assertSame('Retur Customer', $rows->get('CRT-001')['source_label']);
         $this->assertSame(4, $rows->get('CRT-001')['qty_received']);
         $this->assertSame(1, $rows->get('CRT-001')['qty_damaged']);
+        $this->assertSame(1, $rows->get('CRT-001')['qty_lost']);
         $this->assertSame('DMG-RET-001', $rows->get('CRT-001')['extra_reference']);
 
         $this->assertSame('Retur Customer', $rows->get('CRT-002')['source_label']);
@@ -164,6 +166,37 @@ class ReturnReportTest extends TestCase
         $this->assertSame('Retur Outbound', $rows->get('OUT-RET-001')['source_label']);
         $this->assertSame(7, $rows->get('OUT-RET-001')['qty_total']);
         $this->assertSame('Supplier Retur', $rows->get('OUT-RET-001')['ref_primary_value']);
+
+        $customerTabResponse = $this->withoutMiddleware()->getJson(route('admin.reports.returns.data', [
+            'draw' => 2,
+            'start' => 0,
+            'length' => 25,
+            'source' => 'customer',
+        ]));
+
+        $customerTabResponse->assertOk()
+            ->assertJsonPath('summary.total_documents', 2)
+            ->assertJsonPath('summary.customer_documents', 2)
+            ->assertJsonPath('summary.outbound_documents', 0)
+            ->assertJsonCount(2, 'data');
+
+        $outboundTabResponse = $this->withoutMiddleware()->getJson(route('admin.reports.returns.data', [
+            'draw' => 3,
+            'start' => 0,
+            'length' => 25,
+            'source' => 'outbound',
+        ]));
+
+        $outboundTabResponse->assertOk()
+            ->assertJsonPath('summary.total_documents', 1)
+            ->assertJsonPath('summary.customer_documents', 0)
+            ->assertJsonPath('summary.outbound_documents', 1)
+            ->assertJsonPath('data.0.code', 'OUT-RET-001');
+
+        $this->withoutMiddleware()
+            ->get(route('admin.reports.returns.export', ['source' => 'customer']))
+            ->assertOk()
+            ->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     }
 
     public function test_return_report_filters_customer_completed_and_matched_rows(): void

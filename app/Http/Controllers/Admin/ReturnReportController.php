@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Exports\ReturnReportExport;
 use App\Http\Controllers\Controller;
 use App\Models\CustomerReturn;
 use App\Models\CustomerReturnItem;
@@ -9,6 +10,7 @@ use App\Models\OutboundTransaction;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Maatwebsite\Excel\Facades\Excel;
 
 class ReturnReportController extends Controller
 {
@@ -16,7 +18,22 @@ class ReturnReportController extends Controller
     {
         return view('admin.reports.returns.index', [
             'dataUrl' => route('admin.reports.returns.data'),
+            'exportUrl' => route('admin.reports.returns.export'),
         ]);
+    }
+
+    public function export(Request $request)
+    {
+        $source = trim((string) $request->input('source', ''));
+        $suffix = match ($source) {
+            'customer' => 'customer',
+            'outbound' => 'outbound',
+            default => 'gabungan',
+        };
+
+        $filename = 'laporan-retur-'.$suffix.'-'.now()->format('Ymd_His').'.xlsx';
+
+        return Excel::download(new ReturnReportExport($request->query()), $filename);
     }
 
     public function data(Request $request)
@@ -46,6 +63,7 @@ class ReturnReportController extends Controller
             'customer_received_qty' => (int) $customerRows->sum('qty_received'),
             'customer_good_qty' => (int) $customerRows->sum('qty_good'),
             'customer_damaged_qty' => (int) $customerRows->sum('qty_damaged'),
+            'customer_lost_qty' => (int) $customerRows->sum('qty_lost'),
             'outbound_qty' => (int) $outboundRows->sum('qty_total'),
             'unmatched_resi' => (int) $customerRows->where('matched', false)->count(),
         ];
@@ -82,8 +100,14 @@ class ReturnReportController extends Controller
             ->orderByDesc('id');
 
         $status = trim((string) $request->input('status', ''));
-        if (in_array($status, [CustomerReturn::STATUS_INSPECTED, CustomerReturn::STATUS_COMPLETED], true)) {
+        if (in_array($status, [
+            CustomerReturn::STATUS_INSPECTED,
+            CustomerReturn::STATUS_COMPLETED,
+            CustomerReturn::STATUS_NO_RECEIVED,
+        ], true)) {
             $query->where('status', $status);
+        } elseif ($status !== '') {
+            $query->whereRaw('1 = 0');
         }
 
         $matchState = trim((string) $request->input('match_state', ''));
@@ -133,6 +157,8 @@ class ReturnReportController extends Controller
         $status = trim((string) $request->input('status', ''));
         if (in_array($status, ['pending', 'approved'], true)) {
             $query->where('status', $status);
+        } elseif ($status !== '') {
+            $query->whereRaw('1 = 0');
         }
 
         $this->applyDateFilter($query, 'outbound_transactions.transacted_at', $request);
@@ -165,6 +191,7 @@ class ReturnReportController extends Controller
         $qtyReceived = (int) $items->sum('received_qty');
         $qtyGood = (int) $items->sum('good_qty');
         $qtyDamaged = (int) $items->sum('damaged_qty');
+        $qtyLost = (int) $items->sum(fn (CustomerReturnItem $item) => max((int) $item->expected_qty - (int) $item->received_qty, 0));
 
         return [
             'row_key' => 'customer-'.$row->id,
@@ -183,14 +210,15 @@ class ReturnReportController extends Controller
             'extra_reference' => $row->damagedGood?->code,
             'extra_reference_label' => $row->damagedGood?->code ? 'Barang Rusak' : null,
             'status' => $row->status,
-            'status_label' => $row->status === CustomerReturn::STATUS_COMPLETED ? 'Selesai' : 'Menunggu Finalisasi',
-            'status_badge' => $row->status === CustomerReturn::STATUS_COMPLETED ? 'badge-light-success' : 'badge-light-warning',
+            'status_label' => $row->statusLabel(),
+            'status_badge' => 'badge-light-'.$row->statusBadgeClass(),
             'matched' => (bool) $row->resi_id,
             'item_summary' => $this->buildCustomerItemSummary($items),
             'qty_expected' => $qtyExpected,
             'qty_received' => $qtyReceived,
             'qty_good' => $qtyGood,
             'qty_damaged' => $qtyDamaged,
+            'qty_lost' => $qtyLost,
             'qty_total' => $qtyReceived,
             'submit_by' => $row->creator?->name ?? '-',
             'secondary_by' => $row->inspector?->name ?? '-',
@@ -254,11 +282,13 @@ class ReturnReportController extends Controller
             }
 
             return sprintf(
-                '%s (%d/%d/%d)',
+                '%s (Resi %d, Terima %d, Bagus %d, Rusak %d, Hilang %d)',
                 $sku,
+                (int) $itemRow->expected_qty,
                 (int) $itemRow->received_qty,
                 (int) $itemRow->good_qty,
-                (int) $itemRow->damaged_qty
+                (int) $itemRow->damaged_qty,
+                max((int) $itemRow->expected_qty - (int) $itemRow->received_qty, 0)
             );
         })->filter()->implode(', ');
     }

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Exports\CustomerReturnsExport;
 use App\Http\Controllers\Controller;
 use App\Models\CustomerReturn;
 use App\Models\CustomerReturnItem;
@@ -20,6 +21,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Maatwebsite\Excel\Facades\Excel;
 
 class CustomerReturnController extends Controller
 {
@@ -28,10 +30,18 @@ class CustomerReturnController extends Controller
         return view('admin.inventory.customer-returns.index', [
             'dataUrl' => route('admin.inventory.customer-returns.data'),
             'finalizeUrl' => route('admin.inventory.customer-returns.finalize'),
+            'exportUrl' => route('admin.inventory.customer-returns.export'),
             'createUrl' => route('admin.inventory.customer-returns.create'),
             'displayWarehouseLabel' => $this->displayWarehouseLabel(),
             'damagedWarehouseLabel' => $this->damagedWarehouseLabel(),
         ]);
+    }
+
+    public function export(Request $request)
+    {
+        $filename = 'retur-customer-'.now()->format('Ymd_His').'.xlsx';
+
+        return Excel::download(new CustomerReturnsExport($request->query()), $filename);
     }
 
     public function create()

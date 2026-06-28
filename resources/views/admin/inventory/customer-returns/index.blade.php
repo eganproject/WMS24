@@ -313,6 +313,7 @@
                 @if($canUpdate)
                     <button type="button" class="btn btn-light-primary" id="btn_finalize_selected">Finalisasi Terpilih</button>
                 @endif
+                <button type="button" class="btn btn-light-success" id="btn_export_customer_returns">Export Excel</button>
                 @if($canCreate)
                     <a href="{{ $createUrl }}" class="btn btn-primary">Tambah</a>
                 @endif
@@ -360,6 +361,7 @@
 <script>
     const customerReturnDataUrl = @json($dataUrl);
     const customerReturnFinalizeUrl = @json($finalizeUrl);
+    const customerReturnExportUrl = @json($exportUrl);
     const customerReturnShowUrlTpl = @json(route('admin.inventory.customer-returns.show', ':id'));
     const customerReturnEditUrlTpl = @json(route('admin.inventory.customer-returns.edit', ':id'));
     const customerReturnDeleteUrlTpl = @json(route('admin.inventory.customer-returns.destroy', ':id'));
@@ -373,6 +375,7 @@
         const statusFilter = document.getElementById('filter_status');
         const checkAllEl = document.getElementById('check_all_customer_returns');
         const finalizeSelectedBtn = document.getElementById('btn_finalize_selected');
+        const exportBtn = document.getElementById('btn_export_customer_returns');
         let dt = null;
 
         const escapeHtml = (value) => String(value ?? '')
@@ -771,6 +774,14 @@
 
         finalizeSelectedBtn?.addEventListener('click', () => {
             submitFinalize(collectSelectedIds());
+        });
+
+        exportBtn?.addEventListener('click', () => {
+            const params = new URLSearchParams();
+            if (searchInput?.value) params.set('q', searchInput.value);
+            if (statusFilter?.value) params.set('status', statusFilter.value);
+            const query = params.toString();
+            window.location.href = query ? `${customerReturnExportUrl}?${query}` : customerReturnExportUrl;
         });
 
         tableEl.on('click', '.btn_finalize_customer_return', function () {

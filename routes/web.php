@@ -283,6 +283,7 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/customer-returns', [CustomerReturnController::class, 'index'])->name('customer-returns.index');
         Route::get('/customer-returns/create', [CustomerReturnController::class, 'create'])->name('customer-returns.create');
         Route::get('/customer-returns/data', [CustomerReturnController::class, 'data'])->name('customer-returns.data');
+        Route::get('/customer-returns/export', [CustomerReturnController::class, 'export'])->name('customer-returns.export');
         Route::get('/customer-returns/lookup', [CustomerReturnController::class, 'lookup'])->name('customer-returns.lookup');
         Route::post('/customer-returns', [CustomerReturnController::class, 'store'])->name('customer-returns.store');
         Route::post('/customer-returns/finalize', [CustomerReturnController::class, 'finalize'])->name('customer-returns.finalize');
@@ -426,6 +427,7 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/low-stock/data', [LowStockReportController::class, 'data'])->name('low-stock.data');
         Route::get('/returns', [ReturnReportController::class, 'index'])->name('returns.index');
         Route::get('/returns/data', [ReturnReportController::class, 'data'])->name('returns.data');
+        Route::get('/returns/export', [ReturnReportController::class, 'export'])->name('returns.export');
         Route::get('/attendance', [AttendanceReportController::class, 'index'])->name('attendance.index');
         Route::get('/attendance/data', [AttendanceReportController::class, 'data'])->name('attendance.data');
         Route::get('/attendance/export', [AttendanceReportController::class, 'export'])->name('attendance.export');

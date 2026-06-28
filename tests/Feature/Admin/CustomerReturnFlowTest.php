@@ -180,6 +180,11 @@ class CustomerReturnFlowTest extends TestCase
             ->assertJsonPath('data.0.item_details.0.expected_qty', 3)
             ->assertJsonPath('data.0.item_details.0.received_qty', 2)
             ->assertJsonPath('data.0.item_details.0.lost_qty', 1);
+
+        $this->withoutMiddleware()
+            ->get(route('admin.inventory.customer-returns.export'))
+            ->assertOk()
+            ->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     }
 
     public function test_store_and_finalize_allows_resi_item_with_zero_received_qty(): void

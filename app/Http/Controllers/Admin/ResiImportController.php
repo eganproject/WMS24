@@ -268,6 +268,7 @@ class ResiImportController extends Controller
                     'file' => 'Tidak ada data valid untuk diimport',
                 ]);
             }
+            $this->validateUniqueNoResi($groups);
 
             $createdResi = 0;
             $createdDetails = 0;
@@ -374,6 +375,60 @@ class ResiImportController extends Controller
                 'message' => 'Gagal import resi',
                 'error' => $e->getMessage(),
             ], 500);
+        }
+    }
+
+    /**
+     * @param array<int|string,array{id_pesanan:string,no_resi:?string}> $groups
+     */
+    private function validateUniqueNoResi(array $groups): void
+    {
+        $seen = [];
+        $lookup = [];
+
+        foreach ($groups as $group) {
+            $idPesanan = trim((string) ($group['id_pesanan'] ?? ''));
+            $noResi = trim((string) ($group['no_resi'] ?? ''));
+            if ($idPesanan === '' || $noResi === '') {
+                continue;
+            }
+
+            $normalizedNoResi = mb_strtoupper($noResi);
+            if (isset($seen[$normalizedNoResi]) && $seen[$normalizedNoResi]['id_pesanan'] !== $idPesanan) {
+                throw ValidationException::withMessages([
+                    'file' => 'No resi '.$noResi.' terduplikasi di file import untuk ID Pesanan '
+                        .$seen[$normalizedNoResi]['id_pesanan'].' dan '.$idPesanan.'.',
+                ]);
+            }
+
+            $seen[$normalizedNoResi] = [
+                'id_pesanan' => $idPesanan,
+                'no_resi' => $noResi,
+            ];
+            $lookup[] = $normalizedNoResi;
+        }
+
+        $lookup = array_values(array_unique($lookup));
+        if (empty($lookup)) {
+            return;
+        }
+
+        $existingRows = Resi::query()
+            ->whereNotNull('no_resi')
+            ->whereIn(DB::raw('UPPER(no_resi)'), $lookup)
+            ->get(['id_pesanan', 'no_resi']);
+
+        foreach ($existingRows as $existing) {
+            $normalizedNoResi = mb_strtoupper(trim((string) $existing->no_resi));
+            $incoming = $seen[$normalizedNoResi] ?? null;
+            if (!$incoming || $incoming['id_pesanan'] === trim((string) $existing->id_pesanan)) {
+                continue;
+            }
+
+            throw ValidationException::withMessages([
+                'file' => 'No resi '.$incoming['no_resi'].' sudah dipakai oleh ID Pesanan '
+                    .$existing->id_pesanan.', import untuk ID Pesanan '.$incoming['id_pesanan'].' diblokir.',
+            ]);
         }
     }
 

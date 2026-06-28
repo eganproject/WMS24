@@ -50,6 +50,53 @@ class ResiImportStatusTest extends TestCase
         $this->assertSame(0, PickingList::where('sku', 'SKU-CANCEL-IMPORT-001')->count());
     }
 
+    public function test_import_resi_rejects_duplicate_no_resi_in_same_file_for_different_orders(): void
+    {
+        $file = $this->makeExcelUpload([
+            ['ID Pesanan', 'AWB No. Tracking', 'SKU', 'Jumlah', 'Tanggal Pembuatan'],
+            ['ORD-DUP-001', 'DUP-RESI-001', 'SKU-DUP-001', 1, '2026-05-15'],
+            ['ORD-DUP-002', 'DUP-RESI-001', 'SKU-DUP-002', 1, '2026-05-15'],
+        ]);
+        $user = User::factory()->create();
+
+        $this->actingAs($user)
+            ->withoutMiddleware()
+            ->post(route('admin.inventory.resi-import.import'), [
+                'file' => $file,
+            ], ['Accept' => 'application/json'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('file');
+
+        $this->assertSame(0, Resi::whereIn('id_pesanan', ['ORD-DUP-001', 'ORD-DUP-002'])->count());
+    }
+
+    public function test_import_resi_rejects_no_resi_already_used_by_another_order(): void
+    {
+        $user = User::factory()->create();
+        Resi::create([
+            'id_pesanan' => 'ORD-EXISTING-001',
+            'tanggal_pesanan' => '2026-05-14',
+            'tanggal_upload' => '2026-05-14',
+            'no_resi' => 'DUP-RESI-DB-001',
+            'uploader_id' => $user->id,
+        ]);
+
+        $file = $this->makeExcelUpload([
+            ['ID Pesanan', 'AWB No. Tracking', 'SKU', 'Jumlah', 'Tanggal Pembuatan'],
+            ['ORD-NEW-001', 'DUP-RESI-DB-001', 'SKU-DUP-DB-001', 1, '2026-05-15'],
+        ]);
+
+        $this->actingAs($user)
+            ->withoutMiddleware()
+            ->post(route('admin.inventory.resi-import.import'), [
+                'file' => $file,
+            ], ['Accept' => 'application/json'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('file');
+
+        $this->assertNull(Resi::where('id_pesanan', 'ORD-NEW-001')->first());
+    }
+
     /**
      * @param array<int,array<int|string|null>> $rows
      */

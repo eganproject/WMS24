@@ -13,6 +13,7 @@
             </div>
         </div>
         <div class="card-toolbar">
+            <a href="{{ $exportUrl }}" class="btn btn-light-primary me-2">Export Excel</a>
             <a href="{{ $backUrl }}" class="btn btn-light">Kembali</a>
         </div>
     </div>

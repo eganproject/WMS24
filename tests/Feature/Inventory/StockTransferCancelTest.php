@@ -10,6 +10,7 @@ use App\Models\InboundItem;
 use App\Models\InboundTransaction;
 use App\Models\StockMutation;
 use App\Models\StockTransfer;
+use App\Models\StockTransferItem;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Support\InboundKoliUnitService;
@@ -641,6 +642,60 @@ class StockTransferCancelTest extends TestCase
             'qty' => 2,
             'reason_code' => DamagedGoodItem::REASON_OTHER,
         ]);
+    }
+
+    public function test_stock_transfer_list_and_detail_can_be_exported(): void
+    {
+        $user = User::factory()->create();
+        $fromWarehouse = Warehouse::firstOrCreate(
+            ['code' => 'GUDANG_BESAR'],
+            ['name' => 'Gudang Besar', 'type' => 'main']
+        );
+        $toWarehouse = Warehouse::firstOrCreate(
+            ['code' => 'GUDANG_DISPLAY'],
+            ['name' => 'Gudang Display', 'type' => 'display']
+        );
+        $item = Item::create([
+            'sku' => 'TRF-EXPORT-001',
+            'name' => 'Transfer Export Item',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+            'koli_qty' => 5,
+        ]);
+        $transfer = StockTransfer::create([
+            'code' => 'TRF-EXPORT-001',
+            'from_warehouse_id' => $fromWarehouse->id,
+            'to_warehouse_id' => $toWarehouse->id,
+            'transacted_at' => now(),
+            'status' => 'completed',
+            'created_by' => $user->id,
+            'qc_at' => now(),
+            'qc_by' => $user->id,
+            'note' => 'Export test',
+        ]);
+        StockTransferItem::create([
+            'stock_transfer_id' => $transfer->id,
+            'item_id' => $item->id,
+            'qty' => 10,
+            'qty_ok' => 8,
+            'qty_reject' => 1,
+            'qty_short' => 1,
+            'note' => 'Catatan item',
+            'qc_note' => 'Catatan QC',
+        ]);
+
+        $this->withoutMiddleware();
+
+        $this->actingAs($user)
+            ->get(route('admin.inventory.stock-transfers.export', [
+                'status' => 'completed',
+                'from_warehouse_id' => $fromWarehouse->id,
+            ]))
+            ->assertOk();
+
+        $this->actingAs($user)
+            ->get(route('admin.inventory.stock-transfers.detail.export', $transfer->id))
+            ->assertOk();
     }
 
     private function createInboundKoliUnits(Item $item, Warehouse $warehouse, int $koli, int $qtyPerKoli)

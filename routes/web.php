@@ -207,8 +207,10 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         // Stock Transfers
         Route::get('/stock-transfers', [\App\Http\Controllers\Admin\StockTransferController::class, 'index'])->name('stock-transfers.index');
         Route::get('/stock-transfers/data', [\App\Http\Controllers\Admin\StockTransferController::class, 'data'])->name('stock-transfers.data');
+        Route::get('/stock-transfers/export', [\App\Http\Controllers\Admin\StockTransferController::class, 'export'])->name('stock-transfers.export');
         Route::post('/stock-transfers', [\App\Http\Controllers\Admin\StockTransferController::class, 'store'])->name('stock-transfers.store');
         Route::get('/stock-transfers/{id}', [\App\Http\Controllers\Admin\StockTransferController::class, 'show'])->name('stock-transfers.show');
+        Route::get('/stock-transfers/{id}/detail/export', [\App\Http\Controllers\Admin\StockTransferController::class, 'exportDetail'])->name('stock-transfers.detail.export');
         Route::get('/stock-transfers/{id}/detail', [\App\Http\Controllers\Admin\StockTransferController::class, 'detail'])->name('stock-transfers.detail');
         Route::post('/stock-transfers/{id}/scan-koli', [\App\Http\Controllers\Admin\StockTransferController::class, 'scanKoli'])->name('stock-transfers.scan-koli');
         Route::post('/stock-transfers/{id}/qc', [\App\Http\Controllers\Admin\StockTransferController::class, 'qc'])->name('stock-transfers.qc');

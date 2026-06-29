@@ -24,11 +24,30 @@
             </div>
         </div>
         <div class="card-toolbar">
-            <div class="d-flex align-items-center gap-2 me-4">
+            <div class="d-flex align-items-center gap-2 me-4 flex-wrap justify-content-end">
                 <input type="text" class="form-control form-control-solid w-150px" id="filter_date_from" placeholder="Dari" />
                 <input type="text" class="form-control form-control-solid w-150px" id="filter_date_to" placeholder="Sampai" />
+                <select class="form-select form-select-solid w-150px" id="filter_status" aria-label="Status transfer">
+                    <option value="">Semua Status</option>
+                    <option value="qc_pending">Menunggu QC</option>
+                    <option value="completed">Selesai</option>
+                    <option value="canceled">Dibatalkan</option>
+                </select>
+                <select class="form-select form-select-solid w-175px" id="filter_from_warehouse" aria-label="Filter dari gudang">
+                    <option value="">Dari Semua Gudang</option>
+                    @foreach($warehouses as $wh)
+                        <option value="{{ $wh->id }}">{{ $wh->name }}</option>
+                    @endforeach
+                </select>
+                <select class="form-select form-select-solid w-175px" id="filter_to_warehouse" aria-label="Filter ke gudang">
+                    <option value="">Ke Semua Gudang</option>
+                    @foreach($warehouses as $wh)
+                        <option value="{{ $wh->id }}">{{ $wh->name }}</option>
+                    @endforeach
+                </select>
                 <button type="button" class="btn btn-light" id="filter_apply">Filter</button>
                 <button type="button" class="btn btn-light" id="filter_reset">Reset</button>
+                <button type="button" class="btn btn-light-primary" id="btn_export_transfers">Export Excel</button>
             </div>
             @if($canCreate)
                 <button type="button" class="btn btn-primary" id="btn_open_transfer" data-bs-toggle="modal" data-bs-target="#modal_stock_transfer">Tambah</button>
@@ -180,6 +199,7 @@
 @push('scripts')
 <script>
     const dataUrl = '{{ $dataUrl }}';
+    const exportUrl = '{{ $exportUrl }}';
     const storeUrl = '{{ $storeUrl }}';
     const showUrlTpl = '{{ $showUrlTpl }}';
     const detailUrlTpl = '{{ $detailUrlTpl }}';
@@ -214,8 +234,12 @@
         const noteEl = document.getElementById('transfer_note');
         const dateFromEl = document.getElementById('filter_date_from');
         const dateToEl = document.getElementById('filter_date_to');
+        const statusFilterEl = document.getElementById('filter_status');
+        const fromWarehouseFilterEl = document.getElementById('filter_from_warehouse');
+        const toWarehouseFilterEl = document.getElementById('filter_to_warehouse');
         const filterApplyBtn = document.getElementById('filter_apply');
         const filterResetBtn = document.getElementById('filter_reset');
+        const exportBtn = document.getElementById('btn_export_transfers');
         const qcModalEl = document.getElementById('modal_qc_transfer');
         const qcModal = qcModalEl ? new bootstrap.Modal(qcModalEl) : null;
         const qcForm = document.getElementById('qc_transfer_form');
@@ -994,6 +1018,9 @@
                     params.q = searchInput?.value || '';
                     if (dateFromEl?.value) params.date_from = dateFromEl.value;
                     if (dateToEl?.value) params.date_to = dateToEl.value;
+                    if (statusFilterEl?.value) params.status = statusFilterEl.value;
+                    if (fromWarehouseFilterEl?.value) params.from_warehouse_id = fromWarehouseFilterEl.value;
+                    if (toWarehouseFilterEl?.value) params.to_warehouse_id = toWarehouseFilterEl.value;
                 }
             },
             columns: [
@@ -1041,10 +1068,27 @@
         const reloadTable = () => dt.ajax.reload();
         searchInput?.addEventListener('keyup', reloadTable);
         filterApplyBtn?.addEventListener('click', reloadTable);
+        statusFilterEl?.addEventListener('change', reloadTable);
+        fromWarehouseFilterEl?.addEventListener('change', reloadTable);
+        toWarehouseFilterEl?.addEventListener('change', reloadTable);
         filterResetBtn?.addEventListener('click', () => {
             if (fpFrom) fpFrom.clear(); else if (dateFromEl) dateFromEl.value = '';
             if (fpTo) fpTo.clear(); else if (dateToEl) dateToEl.value = '';
+            if (statusFilterEl) statusFilterEl.value = '';
+            if (fromWarehouseFilterEl) fromWarehouseFilterEl.value = '';
+            if (toWarehouseFilterEl) toWarehouseFilterEl.value = '';
             reloadTable();
+        });
+        exportBtn?.addEventListener('click', () => {
+            const params = new URLSearchParams();
+            if (searchInput?.value) params.set('q', searchInput.value);
+            if (dateFromEl?.value) params.set('date_from', dateFromEl.value);
+            if (dateToEl?.value) params.set('date_to', dateToEl.value);
+            if (statusFilterEl?.value) params.set('status', statusFilterEl.value);
+            if (fromWarehouseFilterEl?.value) params.set('from_warehouse_id', fromWarehouseFilterEl.value);
+            if (toWarehouseFilterEl?.value) params.set('to_warehouse_id', toWarehouseFilterEl.value);
+            const query = params.toString();
+            window.location.href = query ? `${exportUrl}?${query}` : exportUrl;
         });
 
         form?.addEventListener('submit', async (e) => {

@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Exports\StockTransferDetailExport;
+use App\Exports\StockTransfersExport;
 use App\Http\Controllers\Controller;
 use App\Models\DamagedGood;
 use App\Models\DamagedGoodItem;
@@ -21,6 +23,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Maatwebsite\Excel\Facades\Excel;
 
 class StockTransferController extends Controller
 {
@@ -36,6 +39,7 @@ class StockTransferController extends Controller
             'items' => $items,
             'warehouses' => $warehouses,
             'dataUrl' => route('admin.inventory.stock-transfers.data'),
+            'exportUrl' => route('admin.inventory.stock-transfers.export'),
             'storeUrl' => route('admin.inventory.stock-transfers.store'),
             'showUrlTpl' => route('admin.inventory.stock-transfers.show', ':id'),
             'detailUrlTpl' => route('admin.inventory.stock-transfers.detail', ':id'),
@@ -51,30 +55,7 @@ class StockTransferController extends Controller
 
     public function data(Request $request)
     {
-        $query = StockTransfer::query()
-            ->with(['items.item', 'fromWarehouse', 'toWarehouse', 'creator'])
-            ->orderBy('transacted_at', 'desc');
-
-        $search = trim((string) $request->input('q', ''));
-        if ($search !== '') {
-            $exact = $this->isExactSearch($request);
-            $query->where(function ($q) use ($search, $exact) {
-                $this->applyTextSearch($q, 'code', $search, $exact);
-                $this->applyTextSearch($q, 'note', $search, $exact, 'or');
-                $q->orWhereHas('fromWarehouse', function ($wq) use ($search, $exact) {
-                    $this->applyTextSearch($wq, 'name', $search, $exact);
-                    $this->applyTextSearch($wq, 'code', $search, $exact, 'or');
-                })->orWhereHas('toWarehouse', function ($wq) use ($search, $exact) {
-                    $this->applyTextSearch($wq, 'name', $search, $exact);
-                    $this->applyTextSearch($wq, 'code', $search, $exact, 'or');
-                })->orWhereHas('items.item', function ($itemQ) use ($search, $exact) {
-                    $this->applyTextSearch($itemQ, 'sku', $search, $exact);
-                    $this->applyTextSearch($itemQ, 'name', $search, $exact, 'or');
-                });
-            });
-        }
-
-        $this->applyDateFilter($query, $request);
+        $query = $this->transferListQuery($request);
 
         $recordsTotal = StockTransfer::count();
         $recordsFiltered = (clone $query)->count();
@@ -121,6 +102,16 @@ class StockTransferController extends Controller
             'recordsFiltered' => $recordsFiltered,
             'data' => $data,
         ]);
+    }
+
+    public function export(Request $request)
+    {
+        $rows = $this->transferListQuery($request)
+            ->with(['items.item', 'fromWarehouse', 'toWarehouse', 'creator'])
+            ->get();
+        $filename = 'transfer-gudang-'.now()->format('YmdHis').'.xlsx';
+
+        return Excel::download(new StockTransfersExport($rows, $request->all()), $filename);
     }
 
     public function show(int $id)
@@ -298,7 +289,24 @@ class StockTransferController extends Controller
         return view('admin.inventory.stock-transfers.detail', [
             'transfer' => $transfer,
             'backUrl' => route('admin.inventory.stock-transfers.index'),
+            'exportUrl' => route('admin.inventory.stock-transfers.detail.export', $transfer->id),
         ]);
+    }
+
+    public function exportDetail(int $id)
+    {
+        $transfer = StockTransfer::with([
+            'items.item',
+            'items.koliScans.koliUnit.transaction',
+            'fromWarehouse',
+            'toWarehouse',
+            'creator',
+            'qcBy',
+        ])->findOrFail($id);
+
+        $filename = 'detail-transfer-gudang-'.$transfer->code.'.xlsx';
+
+        return Excel::download(new StockTransferDetailExport($transfer), $filename);
     }
 
     public function store(Request $request)
@@ -883,6 +891,52 @@ class StockTransferController extends Controller
         } catch (\Throwable) {
             // ignore invalid date filters
         }
+    }
+
+    private function transferListQuery(Request $request)
+    {
+        $query = StockTransfer::query()
+            ->with(['items.item', 'fromWarehouse', 'toWarehouse', 'creator'])
+            ->orderBy('transacted_at', 'desc')
+            ->orderByDesc('id');
+
+        $search = trim((string) $request->input('q', ''));
+        if ($search !== '') {
+            $exact = $this->isExactSearch($request);
+            $query->where(function ($q) use ($search, $exact) {
+                $this->applyTextSearch($q, 'code', $search, $exact);
+                $this->applyTextSearch($q, 'note', $search, $exact, 'or');
+                $q->orWhereHas('fromWarehouse', function ($wq) use ($search, $exact) {
+                    $this->applyTextSearch($wq, 'name', $search, $exact);
+                    $this->applyTextSearch($wq, 'code', $search, $exact, 'or');
+                })->orWhereHas('toWarehouse', function ($wq) use ($search, $exact) {
+                    $this->applyTextSearch($wq, 'name', $search, $exact);
+                    $this->applyTextSearch($wq, 'code', $search, $exact, 'or');
+                })->orWhereHas('items.item', function ($itemQ) use ($search, $exact) {
+                    $this->applyTextSearch($itemQ, 'sku', $search, $exact);
+                    $this->applyTextSearch($itemQ, 'name', $search, $exact, 'or');
+                });
+            });
+        }
+
+        $status = trim((string) $request->input('status', ''));
+        if (in_array($status, ['qc_pending', 'completed', 'canceled'], true)) {
+            $query->where('status', $status);
+        }
+
+        $fromWarehouseId = (int) $request->input('from_warehouse_id', 0);
+        if ($fromWarehouseId > 0) {
+            $query->where('from_warehouse_id', $fromWarehouseId);
+        }
+
+        $toWarehouseId = (int) $request->input('to_warehouse_id', 0);
+        if ($toWarehouseId > 0) {
+            $query->where('to_warehouse_id', $toWarehouseId);
+        }
+
+        $this->applyDateFilter($query, $request);
+
+        return $query;
     }
 
     private function generateCode(string $prefix): string

@@ -229,6 +229,46 @@ class ItemStockDataTest extends TestCase
         $this->assertSame(5, (int) $mutation->qty);
     }
 
+    public function test_item_stock_safety_can_be_updated_in_bulk_for_main_warehouse(): void
+    {
+        $mainWarehouse = Warehouse::firstOrCreate([
+            'code' => 'GUDANG_BESAR',
+        ], [
+            'name' => 'Gudang Besar',
+            'type' => 'main',
+        ]);
+
+        $firstItem = Item::create([
+            'sku' => 'SKU-BULK-MAIN-001',
+            'name' => 'Bulk Safety Main Satu',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+            'safety_stock' => 0,
+        ]);
+        $secondItem = Item::create([
+            'sku' => 'SKU-BULK-MAIN-002',
+            'name' => 'Bulk Safety Main Dua',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+            'safety_stock' => 0,
+        ]);
+
+        $response = $this->withoutMiddleware()->postJson(route('admin.inventory.item-stocks.update-safety'), [
+            'item_ids' => [$firstItem->id, $secondItem->id],
+            'safety_main' => 12,
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('message', 'Safety stock berhasil disimpan untuk 2 item');
+
+        $this->assertSame(12, (int) ItemStock::where('item_id', $firstItem->id)
+            ->where('warehouse_id', $mainWarehouse->id)
+            ->value('safety_stock'));
+        $this->assertSame(12, (int) ItemStock::where('item_id', $secondItem->id)
+            ->where('warehouse_id', $mainWarehouse->id)
+            ->value('safety_stock'));
+    }
+
     public function test_stock_adjustment_data_can_be_filtered_by_status(): void
     {
         StockAdjustment::create([

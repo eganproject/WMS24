@@ -96,6 +96,7 @@
                     </select>
                 </div>
                 <button type="button" class="btn btn-light-primary" id="btn_export_item_stocks">Export Excel</button>
+                <button type="button" class="btn btn-primary" id="btn_bulk_safety_main" disabled>Ubah Safety Gudang Besar</button>
                 <button type="button" class="btn btn-primary" id="btn_bulk_safety_display" disabled>Ubah Safety Display</button>
             </div>
         </div>
@@ -360,9 +361,9 @@
                     <div class="fv-row mb-6" id="safety_main_wrap">
                         <label class="fs-6 fw-bold form-label mb-2">Safety {{ $defaultWarehouseLabel ?? 'Gudang Besar' }}</label>
                         <input type="number" min="0" class="form-control form-control-solid" name="safety_main" id="safety_main" />
-                        <div class="form-text text-muted">Kosongkan untuk gunakan safety default item.</div>
+                        <div class="form-text text-muted" id="safety_main_hint">Kosongkan untuk gunakan safety default item.</div>
                     </div>
-                    <div class="fv-row mb-6">
+                    <div class="fv-row mb-6" id="safety_display_wrap">
                         <label class="fs-6 fw-bold form-label mb-2">Safety {{ $displayWarehouseLabel ?? 'Gudang Display' }}</label>
                         <input type="number" min="0" class="form-control form-control-solid" name="safety_display" id="safety_display" />
                         <div class="form-text text-muted" id="safety_display_hint">Kosongkan untuk gunakan safety default item.</div>
@@ -401,7 +402,8 @@
         const searchModeSelect = document.getElementById('filter_item_stocks_search_mode');
         const limitSelect = document.getElementById('filter_item_stocks_limit');
         const exportBtn = document.getElementById('btn_export_item_stocks');
-        const bulkSafetyBtn = document.getElementById('btn_bulk_safety_display');
+        const bulkSafetyMainBtn = document.getElementById('btn_bulk_safety_main');
+        const bulkSafetyDisplayBtn = document.getElementById('btn_bulk_safety_display');
         const selectAllCheckbox = document.getElementById('item_stocks_select_all');
         const safetyModalEl = document.getElementById('modal_safety_stock');
         const safetyModal = safetyModalEl ? new bootstrap.Modal(safetyModalEl) : null;
@@ -410,7 +412,9 @@
         const safetyItemId = document.getElementById('safety_item_id');
         const safetyItemLabel = document.getElementById('safety_item_label');
         const safetyMainWrap = document.getElementById('safety_main_wrap');
+        const safetyMainHint = document.getElementById('safety_main_hint');
         const safetyMain = document.getElementById('safety_main');
+        const safetyDisplayWrap = document.getElementById('safety_display_wrap');
         const safetyDisplay = document.getElementById('safety_display');
         const safetyDisplayHint = document.getElementById('safety_display_hint');
         const itemDetailModalEl = document.getElementById('modal_item_detail');
@@ -431,6 +435,7 @@
 
         const selectedItemIds = new Set();
         let safetyBulkMode = false;
+        let safetyBulkTarget = null;
 
         const escapeHtml = (value) => String(value ?? '')
             .replace(/&/g, '&amp;')
@@ -790,9 +795,13 @@
             .map((row) => String(row.id));
         const syncBulkSelectionUi = () => {
             const count = selectedItemIds.size;
-            if (bulkSafetyBtn) {
-                bulkSafetyBtn.disabled = count === 0;
-                bulkSafetyBtn.textContent = count > 0 ? `Ubah Safety Display (${count})` : 'Ubah Safety Display';
+            if (bulkSafetyMainBtn) {
+                bulkSafetyMainBtn.disabled = count === 0;
+                bulkSafetyMainBtn.textContent = count > 0 ? `Ubah Safety Gudang Besar (${count})` : 'Ubah Safety Gudang Besar';
+            }
+            if (bulkSafetyDisplayBtn) {
+                bulkSafetyDisplayBtn.disabled = count === 0;
+                bulkSafetyDisplayBtn.textContent = count > 0 ? `Ubah Safety Display (${count})` : 'Ubah Safety Display';
             }
 
             if (selectAllCheckbox) {
@@ -844,6 +853,7 @@
         tableEl.on('click', '.btn-safety', function(e) {
             e.preventDefault();
             safetyBulkMode = false;
+            safetyBulkTarget = null;
             const id = this.getAttribute('data-id');
             const sku = this.getAttribute('data-sku') || '';
             const name = this.getAttribute('data-name') || '';
@@ -853,6 +863,8 @@
 
             if (safetyModalTitle) safetyModalTitle.textContent = 'Safety Stock per Gudang';
             if (safetyMainWrap) safetyMainWrap.style.display = '';
+            if (safetyDisplayWrap) safetyDisplayWrap.style.display = '';
+            if (safetyMainHint) safetyMainHint.textContent = 'Kosongkan untuk gunakan safety default item.';
             if (safetyDisplayHint) safetyDisplayHint.textContent = 'Kosongkan untuk gunakan safety default item.';
             if (safetyItemId) safetyItemId.value = id || '';
             if (safetyItemLabel) safetyItemLabel.textContent = `${sku} - ${name}`.trim();
@@ -886,22 +898,34 @@
             syncBulkSelectionUi();
         });
 
-        bulkSafetyBtn?.addEventListener('click', () => {
+        const openBulkSafetyModal = (target) => {
             if (selectedItemIds.size === 0) return;
             safetyBulkMode = true;
-            if (safetyModalTitle) safetyModalTitle.textContent = 'Ubah Safety Gudang Display';
-            if (safetyMainWrap) safetyMainWrap.style.display = 'none';
+            safetyBulkTarget = target;
+            const isMainTarget = target === 'main';
+            const title = isMainTarget ? 'Ubah Safety Gudang Besar' : 'Ubah Safety Gudang Display';
+            const placeholder = isMainTarget ? 'Isi nilai safety gudang besar' : 'Isi nilai safety display';
+            if (safetyModalTitle) safetyModalTitle.textContent = title;
+            if (safetyMainWrap) safetyMainWrap.style.display = isMainTarget ? '' : 'none';
+            if (safetyDisplayWrap) safetyDisplayWrap.style.display = isMainTarget ? 'none' : '';
             if (safetyItemId) safetyItemId.value = '';
             if (safetyItemLabel) safetyItemLabel.textContent = `${selectedItemIds.size} item dipilih`;
-            if (safetyMain) safetyMain.value = '';
+            if (safetyMain) {
+                safetyMain.value = '';
+                safetyMain.placeholder = placeholder;
+            }
             if (safetyDisplay) {
                 safetyDisplay.value = '';
-                safetyDisplay.placeholder = 'Isi nilai safety display';
+                safetyDisplay.placeholder = placeholder;
             }
+            if (safetyMainHint) safetyMainHint.textContent = 'Nilai ini akan diterapkan ke semua item yang dicentang.';
             if (safetyDisplayHint) safetyDisplayHint.textContent = 'Nilai ini akan diterapkan ke semua item yang dicentang.';
             safetyModal?.show();
-            setTimeout(() => safetyDisplay?.focus(), 150);
-        });
+            setTimeout(() => (isMainTarget ? safetyMain : safetyDisplay)?.focus(), 150);
+        };
+
+        bulkSafetyMainBtn?.addEventListener('click', () => openBulkSafetyModal('main'));
+        bulkSafetyDisplayBtn?.addEventListener('click', () => openBulkSafetyModal('display'));
 
         // ── MODAL MUTASI ─────────────────────────────────────────────
         document.getElementById('edit_stock_target_pcs')?.addEventListener('input', syncEditStockPreview);
@@ -1027,7 +1051,11 @@
             const formData = new FormData();
             if (safetyBulkMode) {
                 selectedItemIds.forEach((id) => formData.append('item_ids[]', id));
-                formData.append('safety_display', safetyDisplay?.value ?? '');
+                if (safetyBulkTarget === 'main') {
+                    formData.append('safety_main', safetyMain?.value ?? '');
+                } else {
+                    formData.append('safety_display', safetyDisplay?.value ?? '');
+                }
             } else {
                 formData.append('item_id', safetyItemId?.value ?? '');
                 formData.append('safety_main', safetyMain?.value ?? '');

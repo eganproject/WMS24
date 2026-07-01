@@ -1618,11 +1618,14 @@
                 <div class="alert alert-info border-0 mb-5" style="background:#eff8ff;">
                     <div class="fw-bold mb-2">Format kolom Excel</div>
                     <div class="fs-7 text-muted">
-                        Wajib: <code>employee_code</code>, <code>schedule_date</code>, dan <code>schedule_type</code>.
-                        Untuk <code>schedule_type</code> = <code>work</code>, isi nama shift pada kolom <code>shift</code>.
+                        Template baru memakai format matriks satu sheet: <code>employee_code</code>, <code>employee_name</code>, lalu kolom tanggal.
+                        Isi sel tanggal dengan nama shift untuk jadwal masuk.
                     </div>
                     <div class="fs-8 text-muted mt-2">
-                        <code>schedule_type</code> bisa diisi <code>work</code>, <code>day_off</code>, <code>holiday</code>, atau <code>leave</code>.
+                        Untuk libur isi <code>OFF</code>, cuti/izin isi <code>LEAVE</code>, dan libur perusahaan isi <code>HOLIDAY</code>.
+                        Format lama <code>employee_code</code>, <code>schedule_date</code>, <code>schedule_type</code>, <code>shift</code> tetap bisa diimport.
+                    </div>
+                    <div class="fs-8 text-muted mt-2">
                         Tanggal wajib hari ini atau setelahnya karena jadwal lampau dikunci sistem.
                     </div>
                     <div class="fs-8 text-muted mt-2">Import akan update jadwal jika karyawan dan tanggalnya sudah ada.</div>

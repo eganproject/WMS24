@@ -33,13 +33,14 @@ class EmployeeSchedulesImport implements ToCollection, WithHeadingRow, SkipsEmpt
         $first = $rows->first();
         $headersRaw = array_keys($first?->toArray() ?? []);
         $headers = array_map(fn ($header) => $this->normalizeKey((string) $header), $headersRaw);
-        $missing = array_diff($this->requiredHeaders, $headers);
+        $hasLegacyHeaders = empty(array_diff($this->requiredHeaders, $headers));
         $hasEmployeeIdentifier = array_intersect(['employee_code', 'employee_id', 'employee_name'], $headers);
+        $matrixDateColumns = $this->matrixDateColumns($headers);
 
-        if (!empty($missing) || empty($hasEmployeeIdentifier)) {
+        if (empty($hasEmployeeIdentifier) || (!$hasLegacyHeaders && empty($matrixDateColumns))) {
             $detected = implode(', ', array_filter($headers));
             throw ValidationException::withMessages([
-                'file' => 'Header wajib: employee_code, schedule_date, schedule_type. Header import yang disarankan: employee_code, schedule_date, schedule_type, shift, note. '
+                'file' => 'Header wajib format matriks: employee_code lalu kolom tanggal YYYY-MM-DD. Format lama juga masih didukung: employee_code, schedule_date, schedule_type, shift, note. '
                     .($detected !== '' ? 'Header terdeteksi: '.$detected : ''),
             ]);
         }
@@ -56,56 +57,12 @@ class EmployeeSchedulesImport implements ToCollection, WithHeadingRow, SkipsEmpt
                 continue;
             }
 
-            $employeeCode = trim((string) ($rowData['employee_code'] ?? ''));
-            $employeeName = trim((string) ($rowData['employee_name'] ?? ''));
-            $employeeId = trim((string) ($rowData['employee_id'] ?? ''));
-            if ($employeeCode === '' && $employeeName === '' && $employeeId === '') {
-                $errors[] = "Baris {$rowIndex}: employee_code, employee_id, atau employee_name wajib diisi";
+            if (!$hasLegacyHeaders) {
+                $this->appendMatrixRows($rowData, $rowIndex, $matrixDateColumns, $errors, $seen);
                 continue;
             }
 
-            $scheduleDate = $this->normalizeDate($rowData['schedule_date'] ?? null);
-            if (!$scheduleDate) {
-                $errors[] = "Baris {$rowIndex}: schedule_date harus format YYYY-MM-DD";
-                continue;
-            }
-
-            if (Carbon::parse($scheduleDate)->lt(today())) {
-                $errors[] = "Baris {$rowIndex}: tanggal {$scheduleDate} sudah lewat dan tidak bisa diimport";
-                continue;
-            }
-
-            $scheduleType = $this->normalizeScheduleType($rowData['schedule_type'] ?? null);
-            if (!$scheduleType) {
-                $errors[] = "Baris {$rowIndex}: schedule_type harus work, day_off, holiday, atau leave";
-                continue;
-            }
-
-            $key = strtolower(trim($employeeId.'|'.$employeeCode.'|'.$employeeName)).'|'.$scheduleDate;
-            if (isset($seen[$key])) {
-                $errors[] = "Baris {$rowIndex}: jadwal karyawan pada tanggal {$scheduleDate} duplikat di file";
-                continue;
-            }
-            $seen[$key] = true;
-
-            $workShiftId = trim((string) ($rowData['work_shift_id'] ?? ''));
-            $shift = trim((string) ($rowData['shift'] ?? ''));
-            if ($scheduleType === EmployeeSchedule::TYPE_WORK && $workShiftId === '' && $shift === '') {
-                $errors[] = "Baris {$rowIndex}: jadwal work wajib mengisi shift atau work_shift_id";
-                continue;
-            }
-
-            $this->rows[] = [
-                'row' => $rowIndex,
-                'employee_code' => $employeeCode,
-                'employee_name' => $employeeName,
-                'employee_id' => $employeeId,
-                'schedule_date' => $scheduleDate,
-                'schedule_type' => $scheduleType,
-                'shift' => $shift,
-                'work_shift_id' => $workShiftId,
-                'note' => trim((string) ($rowData['note'] ?? '')),
-            ];
+            $this->appendLegacyRow($rowData, $rowIndex, $errors, $seen);
         }
 
         if (!empty($errors)) {
@@ -118,6 +75,115 @@ class EmployeeSchedulesImport implements ToCollection, WithHeadingRow, SkipsEmpt
             throw ValidationException::withMessages([
                 'file' => 'Tidak ada data valid untuk diimport',
             ]);
+        }
+    }
+
+    private function appendLegacyRow(array $rowData, int $rowIndex, array &$errors, array &$seen): void
+    {
+        $employeeCode = trim((string) ($rowData['employee_code'] ?? ''));
+        $employeeName = trim((string) ($rowData['employee_name'] ?? ''));
+        $employeeId = trim((string) ($rowData['employee_id'] ?? ''));
+        if ($employeeCode === '' && $employeeName === '' && $employeeId === '') {
+            $errors[] = "Baris {$rowIndex}: employee_code, employee_id, atau employee_name wajib diisi";
+            return;
+        }
+
+        $scheduleDate = $this->normalizeDate($rowData['schedule_date'] ?? null);
+        if (!$scheduleDate) {
+            $errors[] = "Baris {$rowIndex}: schedule_date harus format YYYY-MM-DD";
+            return;
+        }
+
+        if (Carbon::parse($scheduleDate)->lt(today())) {
+            $errors[] = "Baris {$rowIndex}: tanggal {$scheduleDate} sudah lewat dan tidak bisa diimport";
+            return;
+        }
+
+        $scheduleType = $this->normalizeScheduleType($rowData['schedule_type'] ?? null);
+        if (!$scheduleType) {
+            $errors[] = "Baris {$rowIndex}: schedule_type harus work, day_off, holiday, atau leave";
+            return;
+        }
+
+        $key = strtolower(trim($employeeId.'|'.$employeeCode.'|'.$employeeName)).'|'.$scheduleDate;
+        if (isset($seen[$key])) {
+            $errors[] = "Baris {$rowIndex}: jadwal karyawan pada tanggal {$scheduleDate} duplikat di file";
+            return;
+        }
+        $seen[$key] = true;
+
+        $workShiftId = trim((string) ($rowData['work_shift_id'] ?? ''));
+        $shift = trim((string) ($rowData['shift'] ?? ''));
+        if ($scheduleType === EmployeeSchedule::TYPE_WORK && $workShiftId === '' && $shift === '') {
+            $errors[] = "Baris {$rowIndex}: jadwal work wajib mengisi shift atau work_shift_id";
+            return;
+        }
+
+        $this->rows[] = [
+            'row' => $rowIndex,
+            'employee_code' => $employeeCode,
+            'employee_name' => $employeeName,
+            'employee_id' => $employeeId,
+            'schedule_date' => $scheduleDate,
+            'schedule_type' => $scheduleType,
+            'shift' => $shift,
+            'work_shift_id' => $workShiftId,
+            'note' => trim((string) ($rowData['note'] ?? '')),
+        ];
+    }
+
+    private function appendMatrixRows(array $rowData, int $rowIndex, array $matrixDateColumns, array &$errors, array &$seen): void
+    {
+        $employeeCode = trim((string) ($rowData['employee_code'] ?? ''));
+        $employeeName = trim((string) ($rowData['employee_name'] ?? ''));
+        $employeeId = trim((string) ($rowData['employee_id'] ?? ''));
+        $hasScheduleValue = false;
+
+        foreach ($matrixDateColumns as $header => $scheduleDate) {
+            $rawValue = trim((string) ($rowData[$header] ?? ''));
+            if ($rawValue === '') {
+                continue;
+            }
+            $hasScheduleValue = true;
+
+            if ($employeeCode === '' && $employeeName === '' && $employeeId === '') {
+                $errors[] = "Baris {$rowIndex}: employee_code, employee_id, atau employee_name wajib diisi";
+                return;
+            }
+
+            if (Carbon::parse($scheduleDate)->lt(today())) {
+                $errors[] = "Baris {$rowIndex}: tanggal {$scheduleDate} sudah lewat dan tidak bisa diimport";
+                continue;
+            }
+
+            $parsedCell = $this->parseMatrixScheduleCell($rawValue);
+            if (!$parsedCell) {
+                $errors[] = "Baris {$rowIndex} tanggal {$scheduleDate}: isi jadwal tidak valid ({$rawValue})";
+                continue;
+            }
+
+            $key = strtolower(trim($employeeId.'|'.$employeeCode.'|'.$employeeName)).'|'.$scheduleDate;
+            if (isset($seen[$key])) {
+                $errors[] = "Baris {$rowIndex}: jadwal karyawan pada tanggal {$scheduleDate} duplikat di file";
+                continue;
+            }
+            $seen[$key] = true;
+
+            $this->rows[] = [
+                'row' => $rowIndex,
+                'employee_code' => $employeeCode,
+                'employee_name' => $employeeName,
+                'employee_id' => $employeeId,
+                'schedule_date' => $scheduleDate,
+                'schedule_type' => $parsedCell['schedule_type'],
+                'shift' => $parsedCell['shift'],
+                'work_shift_id' => '',
+                'note' => $parsedCell['note'],
+            ];
+        }
+
+        if (!$hasScheduleValue && ($employeeCode !== '' || $employeeName !== '' || $employeeId !== '')) {
+            return;
         }
     }
 
@@ -157,13 +223,83 @@ class EmployeeSchedulesImport implements ToCollection, WithHeadingRow, SkipsEmpt
 
     private function isEmptyDataRow(array $rowData): bool
     {
-        foreach (['employee_code', 'employee_id', 'employee_name', 'schedule_date', 'schedule_type', 'shift', 'work_shift_id', 'note'] as $key) {
-            if (trim((string) ($rowData[$key] ?? '')) !== '') {
+        foreach ($rowData as $value) {
+            if (trim((string) $value) !== '') {
                 return false;
             }
         }
 
         return true;
+    }
+
+    private function matrixDateColumns(array $headers): array
+    {
+        $columns = [];
+        foreach ($headers as $header) {
+            if (in_array($header, ['employee_code', 'employee_id', 'employee_name'], true)) {
+                continue;
+            }
+
+            $date = $this->normalizeMatrixDateHeader($header);
+            if ($date) {
+                $columns[$header] = $date;
+            }
+        }
+
+        return $columns;
+    }
+
+    private function normalizeMatrixDateHeader(string $header): ?string
+    {
+        if (!preg_match('/^(\d{4})_(\d{1,2})_(\d{1,2})$/', $header, $matches)) {
+            return null;
+        }
+
+        try {
+            return Carbon::createFromDate((int) $matches[1], (int) $matches[2], (int) $matches[3])->toDateString();
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function parseMatrixScheduleCell(string $value): ?array
+    {
+        [$scheduleValue, $note] = array_pad(array_map('trim', explode('|', $value, 2)), 2, '');
+        if ($scheduleValue === '') {
+            return null;
+        }
+
+        if (str_contains($scheduleValue, ':')) {
+            [$typeRaw, $detail] = array_map('trim', explode(':', $scheduleValue, 2));
+            $scheduleType = $this->normalizeScheduleType($typeRaw);
+            if (!$scheduleType) {
+                return null;
+            }
+            if ($scheduleType === EmployeeSchedule::TYPE_WORK && $detail === '') {
+                return null;
+            }
+
+            return [
+                'schedule_type' => $scheduleType,
+                'shift' => $scheduleType === EmployeeSchedule::TYPE_WORK ? $detail : '',
+                'note' => $note,
+            ];
+        }
+
+        $scheduleType = $this->normalizeScheduleType($scheduleValue);
+        if ($scheduleType && $scheduleType !== EmployeeSchedule::TYPE_WORK) {
+            return [
+                'schedule_type' => $scheduleType,
+                'shift' => '',
+                'note' => $note,
+            ];
+        }
+
+        return [
+            'schedule_type' => EmployeeSchedule::TYPE_WORK,
+            'shift' => $scheduleValue,
+            'note' => $note,
+        ];
     }
 
     private function normalizeDate(mixed $value): ?string

@@ -2,53 +2,63 @@
 
 namespace App\Exports;
 
+use App\Models\Employee;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Events\AfterSheet;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 
 class EmployeeSchedulesTemplateExport implements FromCollection, WithHeadings, ShouldAutoSize, WithEvents
 {
+    private array $dates;
+
+    public function __construct()
+    {
+        $this->dates = collect(range(0, 13))
+            ->map(fn (int $offset) => now()->addDays($offset)->toDateString())
+            ->all();
+    }
+
     public function collection(): Collection
     {
-        return new Collection([
-            [
-                'K0001',
-                now()->toDateString(),
-                'work',
-                'Shift Pagi',
-                'Jadwal masuk normal',
-            ],
-            [
-                'K0002',
-                now()->addDay()->toDateString(),
-                'day_off',
-                '',
-                'Libur mingguan',
-            ],
-            [
-                'K0003',
-                now()->addDays(2)->toDateString(),
-                'leave',
-                '',
-                'Cuti/Izin',
-            ],
-        ]);
+        $employees = Employee::query()
+            ->active()
+            ->orderBy('name')
+            ->get(['employee_code', 'name']);
+
+        if ($employees->isEmpty()) {
+            $employees = collect([
+                (object) ['employee_code' => 'K0001', 'name' => 'Contoh Karyawan 1'],
+                (object) ['employee_code' => 'K0002', 'name' => 'Contoh Karyawan 2'],
+            ]);
+        }
+
+        return $employees->map(function ($employee) {
+            $row = [
+                $employee->employee_code,
+                $employee->name,
+            ];
+
+            foreach ($this->dates as $date) {
+                $row[] = '';
+            }
+
+            return $row;
+        });
     }
 
     public function headings(): array
     {
         return [
             'employee_code',
-            'schedule_date',
-            'schedule_type',
-            'shift',
-            'note',
+            'employee_name',
+            ...$this->dates,
         ];
     }
 
@@ -57,19 +67,25 @@ class EmployeeSchedulesTemplateExport implements FromCollection, WithHeadings, S
         return [
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
-                $lastRow = 4;
-                $range = 'A1:E'.$lastRow;
+                $lastColumn = Coordinate::stringFromColumnIndex(count($this->headings()));
+                $lastRow = max(2, $sheet->getHighestRow());
+                $range = 'A1:'.$lastColumn.$lastRow;
 
-                $sheet->freezePane('A2');
+                $sheet->freezePane('C2');
                 $sheet->setAutoFilter($range);
-                $sheet->getStyle('A1:E1')->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
-                $sheet->getStyle('A1:E1')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('1B84FF');
+                $sheet->getStyle('A1:'.$lastColumn.'1')->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
+                $sheet->getStyle('A1:'.$lastColumn.'1')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('1B84FF');
                 $sheet->getStyle($range)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setRGB('E4E6EF');
                 $sheet->getStyle($range)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
                 $sheet->getComment('A1')->getText()->createTextRun('Isi kode karyawan aktif, contoh K0001.');
-                $sheet->getComment('B1')->getText()->createTextRun('Tanggal wajib format YYYY-MM-DD dan tidak boleh tanggal lampau.');
-                $sheet->getComment('C1')->getText()->createTextRun('Pilihan: work, day_off, holiday, leave.');
-                $sheet->getComment('D1')->getText()->createTextRun('Wajib diisi jika schedule_type = work. Isi nama shift sesuai master shift.');
+                $sheet->getComment('B1')->getText()->createTextRun('Nama hanya untuk bantuan baca. Import tetap memakai employee_code.');
+
+                for ($columnIndex = 3; $columnIndex <= count($this->headings()); $columnIndex++) {
+                    $column = Coordinate::stringFromColumnIndex($columnIndex);
+                    $sheet->getComment($column.'1')->getText()->createTextRun(
+                        'Isi nama shift untuk jadwal masuk. Isi OFF/day_off/libur untuk libur, LEAVE/cuti/izin untuk cuti, atau HOLIDAY untuk libur perusahaan. Kosongkan jika tidak ingin mengubah tanggal ini.'
+                    );
+                }
             },
         ];
     }

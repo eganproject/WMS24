@@ -139,6 +139,7 @@
                 @if(!empty($damagedWarehouseLabel ?? null))
                     <span class="badge badge-light-danger">{{ $damagedWarehouseLabel }}</span>
                 @endif
+                <button type="button" class="btn btn-light-success" id="btn_export_damaged_goods">Export Excel</button>
                 @if($canCreate)
                     <button type="button" class="btn btn-primary" id="btn_open_damage" data-bs-toggle="modal" data-bs-target="#modal_damaged_goods">Tambah</button>
                 @endif
@@ -253,6 +254,7 @@
     const dataUrl    = '{{ $dataUrl }}';
     const summaryUrl = '{{ $summaryUrl }}';
     const agingUrl   = '{{ $agingUrl }}';
+    const exportUrl  = '{{ $exportUrl }}';
     const storeUrl   = '{{ $storeUrl }}';
     const showUrlTpl    = '{{ route('admin.inventory.damaged-goods.show', ':id') }}';
     const updateUrlTpl  = '{{ route('admin.inventory.damaged-goods.update', ':id') }}';
@@ -313,6 +315,7 @@
         const statusFilterEl = document.getElementById('damage_status_filter');
         const dateFromEl     = document.getElementById('filter_date_from');
         const dateToEl       = document.getElementById('filter_date_to');
+        const exportBtn      = document.getElementById('btn_export_damaged_goods');
         const summaryOverviewEl = document.getElementById('damage_summary_overview');
         const form           = document.getElementById('damaged_goods_form');
         const modalEl        = document.getElementById('modal_damaged_goods');
@@ -684,6 +687,23 @@
             summaryDt.ajax.reload();
             fetchAgingSummary();
         };
+
+        const currentFilterParams = () => {
+            const params = new URLSearchParams();
+            if (searchInput?.value) params.set('q', searchInput.value);
+            if (reasonFilterEl?.value) params.set('reason_code', reasonFilterEl.value);
+            if (statusFilterEl?.value) params.set('status', statusFilterEl.value);
+            if (dateFromEl?.value) params.set('date_from', dateFromEl.value);
+            if (dateToEl?.value) params.set('date_to', dateToEl.value);
+
+            return params;
+        };
+
+        exportBtn?.addEventListener('click', () => {
+            const params = currentFilterParams();
+            const query = params.toString();
+            window.location.href = query ? `${exportUrl}?${query}` : exportUrl;
+        });
 
         searchInput?.addEventListener('keyup', () => {
             clearTimeout(searchTimer);

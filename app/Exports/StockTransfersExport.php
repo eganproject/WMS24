@@ -51,7 +51,10 @@ class StockTransfersExport implements FromCollection, WithHeadings, WithTitle, W
                 (int) $items->sum('qty_ok'),
                 (int) $items->sum('qty_reject'),
                 (int) $items->sum('qty_short'),
-                $items->map(fn ($row) => trim(($row->item?->sku ?? '').' - '.($row->item?->name ?? '')))
+                $items->map(fn ($row) => trim((string) ($row->item?->sku ?? '')))
+                    ->filter()
+                    ->implode("\n"),
+                $items->map(fn ($row) => trim((string) ($row->item?->name ?? '')))
                     ->filter()
                     ->implode("\n"),
                 $transfer->note ?? '',
@@ -73,7 +76,8 @@ class StockTransfersExport implements FromCollection, WithHeadings, WithTitle, W
             'Qty OK',
             'Qty Reject',
             'Qty Kurang',
-            'Daftar Item',
+            'SKU',
+            'Nama Barang',
             'Catatan',
         ];
     }
@@ -81,9 +85,9 @@ class StockTransfersExport implements FromCollection, WithHeadings, WithTitle, W
     public function styles(Worksheet $sheet): array
     {
         $rowCount = $this->collection()->count();
-        $sheet->mergeCells('A1:M1');
-        $sheet->mergeCells('A2:M2');
-        $sheet->mergeCells('A3:M3');
+        $sheet->mergeCells('A1:N1');
+        $sheet->mergeCells('A2:N2');
+        $sheet->mergeCells('A3:N3');
         $sheet->setCellValue('A1', 'Daftar Transfer Gudang');
         $sheet->setCellValue('A2', $this->filterSummary());
         $sheet->setCellValue('A3', 'Total transfer: '.number_format($rowCount, 0, ',', '.'));
@@ -105,18 +109,18 @@ class StockTransfersExport implements FromCollection, WithHeadings, WithTitle, W
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
                 $lastRow = max(5, 5 + $this->collection()->count());
-                $range = 'A5:M'.$lastRow;
+                $range = 'A5:N'.$lastRow;
 
                 $sheet->freezePane('A6');
                 $sheet->setAutoFilter($range);
                 $sheet->getStyle($range)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setRGB('E4E6EF');
-                $sheet->getStyle('A1:M'.$lastRow)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+                $sheet->getStyle('A1:N'.$lastRow)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
                 $sheet->getStyle('G6:K'.$lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
                 $sheet->getStyle('G6:K'.$lastRow)->getNumberFormat()->setFormatCode('#,##0');
-                $sheet->getStyle('L6:M'.$lastRow)->getAlignment()->setWrapText(true);
-                $sheet->getStyle('A5:M5')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getStyle('L6:N'.$lastRow)->getAlignment()->setWrapText(true);
+                $sheet->getStyle('A5:N5')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-                foreach (['A' => 24, 'B' => 18, 'C' => 24, 'D' => 24, 'E' => 16, 'F' => 22, 'L' => 42, 'M' => 36] as $column => $width) {
+                foreach (['A' => 24, 'B' => 18, 'C' => 24, 'D' => 24, 'E' => 16, 'F' => 22, 'L' => 20, 'M' => 36, 'N' => 36] as $column => $width) {
                     $sheet->getColumnDimension($column)->setWidth($width);
                 }
             },

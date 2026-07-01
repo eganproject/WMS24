@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Exports\DamagedGoodsExport;
 use App\Http\Controllers\Controller;
 use App\Models\DamagedGood;
 use App\Models\DamagedGoodItem;
@@ -19,6 +20,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Maatwebsite\Excel\Facades\Excel;
 
 class DamagedGoodsController extends Controller
 {
@@ -45,8 +47,16 @@ class DamagedGoodsController extends Controller
             'dataUrl' => route('admin.inventory.damaged-goods.data'),
             'summaryUrl' => route('admin.inventory.damaged-goods.summary-by-sku'),
             'agingUrl' => route('admin.inventory.damaged-goods.aging-summary'),
+            'exportUrl' => route('admin.inventory.damaged-goods.export'),
             'storeUrl' => route('admin.inventory.damaged-goods.store'),
         ]);
+    }
+
+    public function export(Request $request)
+    {
+        $filename = 'barang-rusak-'.now()->format('YmdHis').'.xlsx';
+
+        return Excel::download(new DamagedGoodsExport($request->query()), $filename);
     }
 
     public function data(Request $request)

@@ -3,6 +3,7 @@
 namespace App\Exports;
 
 use App\Models\Employee;
+use App\Models\WeeklyScheduleTemplate;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
@@ -16,23 +17,6 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 
 class EmployeeSchedulesTemplateExport implements FromCollection, WithHeadings, ShouldAutoSize, WithEvents
 {
-    private array $dates;
-    private array $guideHeadings = [
-        'panduan_pengisian',
-        'contoh_masuk',
-        'contoh_libur',
-        'contoh_cuti',
-        'contoh_libur_perusahaan',
-        'contoh_dengan_catatan',
-    ];
-
-    public function __construct()
-    {
-        $this->dates = collect(range(0, 13))
-            ->map(fn (int $offset) => now()->addDays($offset)->toDateString())
-            ->all();
-    }
-
     public function collection(): Collection
     {
         $employees = Employee::query()
@@ -47,24 +31,20 @@ class EmployeeSchedulesTemplateExport implements FromCollection, WithHeadings, S
             ]);
         }
 
-        return $employees->map(function ($employee) {
-            $row = [
+        $templateName = WeeklyScheduleTemplate::query()
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->value('name') ?? 'Nama Template Jadwal';
+
+        return $employees->map(function ($employee) use ($templateName) {
+            return [
                 $employee->employee_code,
                 $employee->name,
+                now()->toDateString(),
+                now()->endOfMonth()->toDateString(),
+                $templateName,
+                '',
             ];
-
-            foreach ($this->dates as $date) {
-                $row[] = '';
-            }
-
-            $row[] = 'Isi hanya kolom tanggal yang ingin dibuat/diubah. Kosongkan tanggal yang tidak diubah.';
-            $row[] = 'Shift Pagi';
-            $row[] = 'OFF';
-            $row[] = 'LEAVE';
-            $row[] = 'HOLIDAY';
-            $row[] = 'Shift Pagi | Catatan jadwal';
-
-            return $row;
         });
     }
 
@@ -72,9 +52,11 @@ class EmployeeSchedulesTemplateExport implements FromCollection, WithHeadings, S
     {
         return [
             'employee_code',
-            'employee_name',
-            ...$this->dates,
-            ...$this->guideHeadings,
+            'nama_karyawan',
+            'berlaku_dari',
+            'berlaku_sampai',
+            'template_jadwal',
+            'note',
         ];
     }
 
@@ -87,7 +69,7 @@ class EmployeeSchedulesTemplateExport implements FromCollection, WithHeadings, S
                 $lastRow = max(2, $sheet->getHighestRow());
                 $range = 'A1:'.$lastColumn.$lastRow;
 
-                $sheet->freezePane('C2');
+                $sheet->freezePane('A2');
                 $sheet->setAutoFilter($range);
                 $sheet->getStyle('A1:'.$lastColumn.'1')->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
                 $sheet->getStyle('A1:'.$lastColumn.'1')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('1B84FF');
@@ -95,22 +77,19 @@ class EmployeeSchedulesTemplateExport implements FromCollection, WithHeadings, S
                 $sheet->getStyle($range)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
                 $sheet->getStyle($range)->getAlignment()->setWrapText(true);
                 $sheet->getComment('A1')->getText()->createTextRun('Isi kode karyawan aktif, contoh K0001.');
-                $sheet->getComment('B1')->getText()->createTextRun('Nama hanya untuk bantuan baca. Import tetap memakai employee_code.');
+                $sheet->getComment('B1')->getText()->createTextRun('Nama hanya untuk bantuan baca. Import tetap memakai employee_code jika diisi.');
+                $sheet->getComment('C1')->getText()->createTextRun('Tanggal mulai berlaku. Format disarankan YYYY-MM-DD atau DD/MM/YYYY. Tidak boleh tanggal lampau.');
+                $sheet->getComment('D1')->getText()->createTextRun('Tanggal akhir berlaku. Maksimal rentang 366 hari dari berlaku_dari.');
+                $sheet->getComment('E1')->getText()->createTextRun('Isi nama template jadwal persis seperti master Template Jadwal, contoh: Libur Jumat (MASUK JAM 10).');
+                $sheet->getComment('F1')->getText()->createTextRun('Opsional. Catatan ini akan ditulis ke jadwal yang dibuat dari import.');
 
-                for ($columnIndex = 3; $columnIndex <= 2 + count($this->dates); $columnIndex++) {
-                    $column = Coordinate::stringFromColumnIndex($columnIndex);
-                    $sheet->getComment($column.'1')->getText()->createTextRun(
-                        'Isi nama shift untuk jadwal masuk. Isi OFF/day_off/libur untuk libur, LEAVE/cuti/izin untuk cuti, atau HOLIDAY untuk libur perusahaan. Kosongkan jika tidak ingin mengubah tanggal ini.'
-                    );
-                }
-
-                $guideStartColumn = Coordinate::stringFromColumnIndex(3 + count($this->dates));
-                $sheet->getStyle($guideStartColumn.'1:'.$lastColumn.$lastRow)
-                    ->getFill()
-                    ->setFillType(Fill::FILL_SOLID)
-                    ->getStartColor()
-                    ->setRGB('FFF8DD');
-                $sheet->getComment($guideStartColumn.'1')->getText()->createTextRun('Kolom panduan ini tidak diproses saat import. Boleh dibiarkan apa adanya.');
+                $sheet->getStyle('C2:D'.$lastRow)->getNumberFormat()->setFormatCode('dd/mm/yyyy');
+                $sheet->getColumnDimension('A')->setWidth(16);
+                $sheet->getColumnDimension('B')->setWidth(28);
+                $sheet->getColumnDimension('C')->setWidth(16);
+                $sheet->getColumnDimension('D')->setWidth(16);
+                $sheet->getColumnDimension('E')->setWidth(36);
+                $sheet->getColumnDimension('F')->setWidth(28);
             },
         ];
     }

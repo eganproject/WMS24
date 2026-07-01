@@ -34,13 +34,14 @@ class EmployeeSchedulesImport implements ToCollection, WithHeadingRow, SkipsEmpt
         $headersRaw = array_keys($first?->toArray() ?? []);
         $headers = array_map(fn ($header) => $this->normalizeKey((string) $header), $headersRaw);
         $hasLegacyHeaders = empty(array_diff($this->requiredHeaders, $headers));
+        $hasTemplateAssignmentHeaders = empty(array_diff(['effective_from', 'effective_until', 'template_name'], $headers));
         $hasEmployeeIdentifier = array_intersect(['employee_code', 'employee_id', 'employee_name'], $headers);
         $matrixDateColumns = $this->matrixDateColumns($headers);
 
-        if (empty($hasEmployeeIdentifier) || (!$hasLegacyHeaders && empty($matrixDateColumns))) {
+        if (empty($hasEmployeeIdentifier) || (!$hasLegacyHeaders && !$hasTemplateAssignmentHeaders && empty($matrixDateColumns))) {
             $detected = implode(', ', array_filter($headers));
             throw ValidationException::withMessages([
-                'file' => 'Header wajib format matriks: employee_code lalu kolom tanggal YYYY-MM-DD. Format lama juga masih didukung: employee_code, schedule_date, schedule_type, shift, note. '
+                'file' => 'Header wajib: employee_code, nama_karyawan, berlaku_dari, berlaku_sampai, template_jadwal, note. Format lama juga masih didukung: employee_code, schedule_date, schedule_type, shift, note. '
                     .($detected !== '' ? 'Header terdeteksi: '.$detected : ''),
             ]);
         }
@@ -54,6 +55,11 @@ class EmployeeSchedulesImport implements ToCollection, WithHeadingRow, SkipsEmpt
             $rowData = $this->normalizeRow($row);
 
             if ($this->isEmptyDataRow($rowData)) {
+                continue;
+            }
+
+            if ($hasTemplateAssignmentHeaders) {
+                $this->appendTemplateAssignmentRow($rowData, $rowIndex, $errors, $seen);
                 continue;
             }
 
@@ -128,6 +134,69 @@ class EmployeeSchedulesImport implements ToCollection, WithHeadingRow, SkipsEmpt
             'schedule_type' => $scheduleType,
             'shift' => $shift,
             'work_shift_id' => $workShiftId,
+            'note' => trim((string) ($rowData['note'] ?? '')),
+        ];
+    }
+
+    private function appendTemplateAssignmentRow(array $rowData, int $rowIndex, array &$errors, array &$seen): void
+    {
+        $employeeCode = trim((string) ($rowData['employee_code'] ?? ''));
+        $employeeName = trim((string) ($rowData['employee_name'] ?? ''));
+        $employeeId = trim((string) ($rowData['employee_id'] ?? ''));
+        if ($employeeCode === '' && $employeeName === '' && $employeeId === '') {
+            $errors[] = "Baris {$rowIndex}: employee_code, employee_id, atau nama_karyawan wajib diisi";
+            return;
+        }
+
+        $effectiveFrom = $this->normalizeDate($rowData['effective_from'] ?? null);
+        if (!$effectiveFrom) {
+            $errors[] = "Baris {$rowIndex}: berlaku_dari harus format tanggal";
+            return;
+        }
+
+        if (Carbon::parse($effectiveFrom)->lt(today())) {
+            $errors[] = "Baris {$rowIndex}: berlaku_dari {$effectiveFrom} sudah lewat dan tidak bisa diimport";
+            return;
+        }
+
+        $effectiveUntil = $this->normalizeDate($rowData['effective_until'] ?? null);
+        if (!$effectiveUntil) {
+            $errors[] = "Baris {$rowIndex}: berlaku_sampai harus format tanggal";
+            return;
+        }
+
+        if (Carbon::parse($effectiveUntil)->lt(Carbon::parse($effectiveFrom))) {
+            $errors[] = "Baris {$rowIndex}: berlaku_sampai tidak boleh sebelum berlaku_dari";
+            return;
+        }
+
+        if (Carbon::parse($effectiveFrom)->diffInDays(Carbon::parse($effectiveUntil)) > 366) {
+            $errors[] = "Baris {$rowIndex}: rentang berlaku maksimal 366 hari";
+            return;
+        }
+
+        $templateName = trim((string) ($rowData['template_name'] ?? ''));
+        if ($templateName === '') {
+            $errors[] = "Baris {$rowIndex}: template_jadwal wajib diisi";
+            return;
+        }
+
+        $key = strtolower(trim($employeeId.'|'.$employeeCode.'|'.$employeeName)).'|'.$effectiveFrom.'|'.$effectiveUntil;
+        if (isset($seen[$key])) {
+            $errors[] = "Baris {$rowIndex}: assignment template untuk karyawan dan periode ini duplikat di file";
+            return;
+        }
+        $seen[$key] = true;
+
+        $this->rows[] = [
+            'row' => $rowIndex,
+            'mode' => 'template_assignment',
+            'employee_code' => $employeeCode,
+            'employee_name' => $employeeName,
+            'employee_id' => $employeeId,
+            'effective_from' => $effectiveFrom,
+            'effective_until' => $effectiveUntil,
+            'template_name' => $templateName,
             'note' => trim((string) ($rowData['note'] ?? '')),
         ];
     }
@@ -212,6 +281,9 @@ class EmployeeSchedulesImport implements ToCollection, WithHeadingRow, SkipsEmpt
             'kode_karyawan', 'employee', 'karyawan_code' => 'employee_code',
             'nama_karyawan', 'karyawan', 'name', 'nama' => 'employee_name',
             'id_karyawan' => 'employee_id',
+            'berlaku_dari', 'mulai_berlaku', 'effective_from', 'date_from', 'dari' => 'effective_from',
+            'berlaku_sampai', 'sampai', 'effective_until', 'date_to', 'hingga' => 'effective_until',
+            'template_jadwal', 'template', 'nama_template', 'jadwal_template' => 'template_name',
             'tanggal', 'tanggal_jadwal', 'date' => 'schedule_date',
             'tipe', 'tipe_jadwal', 'jenis_jadwal' => 'schedule_type',
             'nama_shift', 'shift_name' => 'shift',
@@ -317,7 +389,12 @@ class EmployeeSchedulesImport implements ToCollection, WithHeadingRow, SkipsEmpt
                 return Date::excelToDateTimeObject((float) $value)->format('Y-m-d');
             }
 
-            return Carbon::parse(trim((string) $value))->toDateString();
+            $raw = trim((string) $value);
+            if (preg_match('/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/', $raw, $matches)) {
+                return Carbon::createFromDate((int) $matches[3], (int) $matches[2], (int) $matches[1])->toDateString();
+            }
+
+            return Carbon::parse($raw)->toDateString();
         } catch (\Throwable) {
             return null;
         }

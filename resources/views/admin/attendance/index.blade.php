@@ -1618,17 +1618,16 @@
                 <div class="alert alert-info border-0 mb-5" style="background:#eff8ff;">
                     <div class="fw-bold mb-2">Format kolom Excel</div>
                     <div class="fs-7 text-muted">
-                        Template baru memakai format matriks satu sheet: <code>employee_code</code>, <code>employee_name</code>, lalu kolom tanggal.
-                        Isi sel tanggal dengan nama shift untuk jadwal masuk.
+                        Template utama memakai satu baris per karyawan: <code>employee_code</code>, <code>nama_karyawan</code>, <code>berlaku_dari</code>, <code>berlaku_sampai</code>, <code>template_jadwal</code>, dan <code>note</code>.
                     </div>
                     <div class="fs-8 text-muted mt-2">
-                        Untuk libur isi <code>OFF</code>, cuti/izin isi <code>LEAVE</code>, dan libur perusahaan isi <code>HOLIDAY</code>.
-                        Format lama <code>employee_code</code>, <code>schedule_date</code>, <code>schedule_type</code>, <code>shift</code> tetap bisa diimport.
+                        Isi <code>template_jadwal</code> dengan nama template yang aktif, contoh <code>Libur Jumat (MASUK JAM 10)</code>.
+                        Sistem akan membuat jadwal harian sesuai periode berlaku.
                     </div>
                     <div class="fs-8 text-muted mt-2">
-                        Tanggal wajib hari ini atau setelahnya karena jadwal lampau dikunci sistem.
+                        <code>berlaku_dari</code> wajib hari ini atau setelahnya, dan rentang maksimal 366 hari.
                     </div>
-                    <div class="fs-8 text-muted mt-2">Import akan update jadwal jika karyawan dan tanggalnya sudah ada.</div>
+                    <div class="fs-8 text-muted mt-2">Import akan update jadwal jika karyawan dan tanggalnya sudah ada. Format lama per tanggal tetap bisa diimport.</div>
                 </div>
                 <div class="mb-2">
                     <label class="form-label fw-bold">File Excel</label>

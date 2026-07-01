@@ -870,6 +870,10 @@ class AttendanceController extends Controller
         $shifts = WorkShift::query()->get(['id', 'name']);
         $shiftById = $shifts->keyBy(fn ($shift) => (string) $shift->id);
         $shiftByName = $shifts->keyBy(fn ($shift) => mb_strtolower(trim((string) $shift->name)));
+        $templates = WeeklyScheduleTemplate::query()
+            ->where('is_active', true)
+            ->get(['id', 'name']);
+        $templateByName = $templates->keyBy(fn ($template) => mb_strtolower(trim((string) $template->name)));
 
         $errors = [];
         $prepared = [];
@@ -897,6 +901,26 @@ class AttendanceController extends Controller
             if (!$employee) {
                 $identifier = $employeeIdRaw ?: ($employeeCode ?: $employeeName);
                 $errors[] = "Baris {$rowNo}: karyawan aktif tidak ditemukan ({$identifier})";
+                continue;
+            }
+
+            if (($row['mode'] ?? '') === 'template_assignment') {
+                $templateName = trim((string) ($row['template_name'] ?? ''));
+                $template = $templateByName->get(mb_strtolower($templateName));
+                if (!$template) {
+                    $errors[] = "Baris {$rowNo}: template_jadwal tidak ditemukan atau tidak aktif ({$templateName})";
+                    continue;
+                }
+
+                $prepared[] = [
+                    'mode' => 'template_assignment',
+                    'row' => $rowNo,
+                    'employee' => $employee,
+                    'template' => $template,
+                    'effective_from' => $row['effective_from'],
+                    'effective_until' => $row['effective_until'],
+                    'note' => $row['note'] ?: null,
+                ];
                 continue;
             }
 
@@ -942,9 +966,36 @@ class AttendanceController extends Controller
 
         $created = 0;
         $updated = 0;
+        $assigned = 0;
+        $generated = 0;
+        $skipped = 0;
 
-        DB::transaction(function () use ($prepared, &$created, &$updated) {
+        DB::transaction(function () use ($prepared, &$created, &$updated, &$assigned, &$generated, &$skipped) {
             foreach ($prepared as $row) {
+                if (($row['mode'] ?? '') === 'template_assignment') {
+                    $assignment = EmployeeScheduleAssignment::updateOrCreate(
+                        [
+                            'employee_id' => $row['employee']->id,
+                            'weekly_schedule_template_id' => $row['template']->id,
+                            'effective_from' => $row['effective_from'],
+                            'effective_until' => $row['effective_until'],
+                        ],
+                        []
+                    );
+
+                    $result = $this->materializeTemplateSchedules(
+                        $assignment,
+                        Carbon::parse($row['effective_from'])->startOfDay(),
+                        Carbon::parse($row['effective_until'])->startOfDay(),
+                        'overwrite',
+                        $row['note']
+                    );
+                    $assigned++;
+                    $generated += (int) ($result['generated'] ?? 0);
+                    $skipped += (int) ($result['skipped'] ?? 0);
+                    continue;
+                }
+
                 $existing = EmployeeSchedule::query()
                     ->where($row['attributes'])
                     ->first();
@@ -963,6 +1014,9 @@ class AttendanceController extends Controller
             'message' => 'Import jadwal kerja berhasil',
             'created' => $created,
             'updated' => $updated,
+            'assigned' => $assigned,
+            'generated' => $generated,
+            'skipped' => $skipped,
         ]);
     }
 
@@ -2945,7 +2999,7 @@ class AttendanceController extends Controller
         ];
     }
 
-    private function materializeTemplateSchedules(EmployeeScheduleAssignment $assignment, Carbon $from, Carbon $until, string $strategy = 'overwrite'): array
+    private function materializeTemplateSchedules(EmployeeScheduleAssignment $assignment, Carbon $from, Carbon $until, string $strategy = 'overwrite', ?string $note = null): array
     {
         $templateDays = WeeklyScheduleTemplateDay::query()
             ->where('weekly_schedule_template_id', $assignment->weekly_schedule_template_id)
@@ -2970,7 +3024,7 @@ class AttendanceController extends Controller
                     'employee_schedule_assignment_id' => $assignment->id,
                     'work_shift_id' => $templateDay->schedule_type === EmployeeSchedule::TYPE_WORK ? $templateDay->work_shift_id : null,
                     'schedule_type' => $templateDay->schedule_type,
-                    'note' => 'Dibuat dari template jadwal',
+                    'note' => $note ?: 'Dibuat dari template jadwal',
                     'created_by' => auth()->id(),
                 ];
 

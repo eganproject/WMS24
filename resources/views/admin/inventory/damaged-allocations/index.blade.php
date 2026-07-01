@@ -35,7 +35,18 @@
             </div>
         </div>
         <div class="card-toolbar">
-            <span class="badge badge-light-danger">Gudang Rusak: {{ $damagedWarehouseLabel ?? 'Gudang Rusak' }}</span>
+            <div class="d-flex flex-wrap align-items-center gap-3 justify-content-end">
+                <div class="position-relative" style="width: min(100%, 280px);">
+                    <span class="svg-icon svg-icon-2 position-absolute" style="left:12px;top:50%;transform:translateY(-50%);opacity:.5;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+                            <rect opacity="0.5" x="17.0365" y="15.1223" width="8.15546" height="2" rx="1" transform="rotate(45 17.0365 15.1223)" fill="black"/>
+                            <path d="M11 19C6.55556 19 3 15.4444 3 11C3 6.55556 6.55556 3 11 3C15.4444 3 19 6.55556 19 11C19 15.4444 15.4444 19 11 19ZM11 5C7.53333 5 5 7.53333 5 11C5 14.4667 7.53333 17 11 17C14.4667 17 17 14.4667 17 11C17 7.53333 14.4667 5 11 5Z" fill="black"/>
+                        </svg>
+                    </span>
+                    <input type="text" id="damaged_source_summary_search" class="form-control form-control-solid ps-12" placeholder="Cari SKU, nama, sumber" />
+                </div>
+                <span class="badge badge-light-danger">Gudang Rusak: {{ $damagedWarehouseLabel ?? 'Gudang Rusak' }}</span>
+            </div>
         </div>
     </div>
     <div class="card-body py-6">
@@ -56,6 +67,14 @@
                     <tr><td colspan="7" class="text-muted">Memuat data...</td></tr>
                 </tbody>
             </table>
+        </div>
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 pt-4">
+            <div class="text-muted fs-7" id="damaged_source_summary_info">Menampilkan 0 data</div>
+            <div class="d-flex align-items-center gap-2">
+                <button type="button" class="btn btn-sm btn-light" id="damaged_source_summary_prev">Sebelumnya</button>
+                <span class="text-muted fs-7" id="damaged_source_summary_page">Halaman 1</span>
+                <button type="button" class="btn btn-sm btn-light" id="damaged_source_summary_next">Berikutnya</button>
+            </div>
         </div>
     </div>
 </div>
@@ -348,6 +367,11 @@
     document.addEventListener('DOMContentLoaded', () => {
         const tableEl              = $('#damaged_allocations_table');
         const summaryBody          = document.getElementById('damaged_source_summary_body');
+        const summarySearchInput   = document.getElementById('damaged_source_summary_search');
+        const summaryInfoEl        = document.getElementById('damaged_source_summary_info');
+        const summaryPageEl        = document.getElementById('damaged_source_summary_page');
+        const summaryPrevBtn       = document.getElementById('damaged_source_summary_prev');
+        const summaryNextBtn       = document.getElementById('damaged_source_summary_next');
         const searchInput          = document.getElementById('allocation_search');
         const filterTypeEl         = document.getElementById('filter_type');
         const filterStatusEl       = document.getElementById('filter_status');
@@ -382,6 +406,9 @@
         let fpSuratJalan = null;
         let sourceLineOptions = [];
         let recipeOptions     = [];
+        let summaryPage       = 1;
+        let summarySearchTimer = null;
+        const summaryPageLength = 5;
 
         /* ── select2 init (filters) ──────────────────────── */
         const initS2Global = (el, placeholder) => {
@@ -567,19 +594,57 @@
         const getSourceOption = (id) => sourceLineOptions.find(r => Number(r.item_id || r.id) === Number(id));
 
         /* H: render summary dengan aging + sort FIFO (L) ── */
+        const getFilteredSummaryRows = () => {
+            const keyword = String(summarySearchInput?.value || '').trim().toLowerCase();
+            if (!keyword) return [...sourceLineOptions];
+
+            return sourceLineOptions.filter(row => [
+                row.item_sku,
+                row.item_name,
+                row.source_warehouse_name,
+                row.oldest_damage_code,
+                row.damage_code,
+                row.label,
+            ].some(value => String(value || '').toLowerCase().includes(keyword)));
+        };
+
+        const updateSummaryPagination = (totalRows, totalPages, visibleCount) => {
+            if (summaryInfoEl) {
+                if (!totalRows) {
+                    summaryInfoEl.textContent = 'Menampilkan 0 data';
+                } else {
+                    const start = ((summaryPage - 1) * summaryPageLength) + 1;
+                    const end = start + visibleCount - 1;
+                    summaryInfoEl.textContent = `Menampilkan ${start}-${end} dari ${totalRows} data`;
+                }
+            }
+            if (summaryPageEl) {
+                summaryPageEl.textContent = `Halaman ${totalRows ? summaryPage : 0} dari ${totalRows ? totalPages : 0}`;
+            }
+            if (summaryPrevBtn) summaryPrevBtn.disabled = summaryPage <= 1;
+            if (summaryNextBtn) summaryNextBtn.disabled = summaryPage >= totalPages;
+        };
+
         const renderSummary = () => {
             if (!summaryBody) return;
             /* L: sort tertua di atas */
-            const sorted = [...sourceLineOptions].sort((a, b) => {
+            const sorted = getFilteredSummaryRows().sort((a, b) => {
                 const da = a.damage_transacted_at ? new Date(a.damage_transacted_at) : new Date(0);
                 const db = b.damage_transacted_at ? new Date(b.damage_transacted_at) : new Date(0);
                 return da - db;
             });
             if (!sorted.length) {
-                summaryBody.innerHTML = '<tr><td colspan="7" class="text-muted">Belum ada saldo rusak yang tersedia untuk dialokasikan.</td></tr>';
+                const message = sourceLineOptions.length
+                    ? 'Tidak ada saldo rusak yang cocok dengan pencarian.'
+                    : 'Belum ada saldo rusak yang tersedia untuk dialokasikan.';
+                summaryBody.innerHTML = `<tr><td colspan="7" class="text-muted">${message}</td></tr>`;
+                updateSummaryPagination(0, 1, 0);
                 return;
             }
-            summaryBody.innerHTML = sorted.map(row => {
+            const totalPages = Math.max(1, Math.ceil(sorted.length / summaryPageLength));
+            summaryPage = Math.min(Math.max(summaryPage, 1), totalPages);
+            const visibleRows = sorted.slice((summaryPage - 1) * summaryPageLength, summaryPage * summaryPageLength);
+            summaryBody.innerHTML = visibleRows.map(row => {
                 const { days, bucket } = calcAge(row.damage_transacted_at);
                 const trClass = (bucket !== '0_7') ? ` class="aging-${bucket}"` : '';
                 const dateStr = row.damage_transacted_at
@@ -602,6 +667,7 @@
                     <td class="text-muted fs-7">${dateStr}</td>
                 </tr>`;
             }).join('');
+            updateSummaryPagination(sorted.length, totalPages, visibleRows.length);
         };
 
         const loadSourceLines = async () => {
@@ -610,10 +676,12 @@
                 const json = await res.json();
                 if (!res.ok) throw new Error(json.message || 'Gagal memuat saldo rusak');
                 sourceLineOptions = Array.isArray(json.data) ? json.data : [];
+                summaryPage = 1;
                 renderSummary();
             sourceItemsContainer?.querySelectorAll('.allocation-source-select').forEach(sel => populateSourceSelect(sel, sel.value));
             } catch (err) {
                 if (summaryBody) summaryBody.innerHTML = `<tr><td colspan="7" class="text-danger">${err.message}</td></tr>`;
+                updateSummaryPagination(0, 1, 0);
             }
         };
 
@@ -919,6 +987,22 @@
         addSourceItemBtn?.addEventListener('click', () => createSourceRow());
         addOutputItemBtn?.addEventListener('click', () => createOutputRow());
         openBtn?.addEventListener('click', () => resetForm());
+        summarySearchInput?.addEventListener('input', () => {
+            clearTimeout(summarySearchTimer);
+            summarySearchTimer = setTimeout(() => {
+                summaryPage = 1;
+                renderSummary();
+            }, 250);
+        });
+        summaryPrevBtn?.addEventListener('click', () => {
+            if (summaryPage <= 1) return;
+            summaryPage -= 1;
+            renderSummary();
+        });
+        summaryNextBtn?.addEventListener('click', () => {
+            summaryPage += 1;
+            renderSummary();
+        });
 
         sourceItemsContainer?.addEventListener('change', (e) => {
             if (!e.target.matches('.allocation-source-select')) return;

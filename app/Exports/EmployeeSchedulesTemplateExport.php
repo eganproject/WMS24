@@ -17,6 +17,14 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 class EmployeeSchedulesTemplateExport implements FromCollection, WithHeadings, ShouldAutoSize, WithEvents
 {
     private array $dates;
+    private array $guideHeadings = [
+        'panduan_pengisian',
+        'contoh_masuk',
+        'contoh_libur',
+        'contoh_cuti',
+        'contoh_libur_perusahaan',
+        'contoh_dengan_catatan',
+    ];
 
     public function __construct()
     {
@@ -49,6 +57,13 @@ class EmployeeSchedulesTemplateExport implements FromCollection, WithHeadings, S
                 $row[] = '';
             }
 
+            $row[] = 'Isi hanya kolom tanggal yang ingin dibuat/diubah. Kosongkan tanggal yang tidak diubah.';
+            $row[] = 'Shift Pagi';
+            $row[] = 'OFF';
+            $row[] = 'LEAVE';
+            $row[] = 'HOLIDAY';
+            $row[] = 'Shift Pagi | Catatan jadwal';
+
             return $row;
         });
     }
@@ -59,6 +74,7 @@ class EmployeeSchedulesTemplateExport implements FromCollection, WithHeadings, S
             'employee_code',
             'employee_name',
             ...$this->dates,
+            ...$this->guideHeadings,
         ];
     }
 
@@ -77,15 +93,24 @@ class EmployeeSchedulesTemplateExport implements FromCollection, WithHeadings, S
                 $sheet->getStyle('A1:'.$lastColumn.'1')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('1B84FF');
                 $sheet->getStyle($range)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setRGB('E4E6EF');
                 $sheet->getStyle($range)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+                $sheet->getStyle($range)->getAlignment()->setWrapText(true);
                 $sheet->getComment('A1')->getText()->createTextRun('Isi kode karyawan aktif, contoh K0001.');
                 $sheet->getComment('B1')->getText()->createTextRun('Nama hanya untuk bantuan baca. Import tetap memakai employee_code.');
 
-                for ($columnIndex = 3; $columnIndex <= count($this->headings()); $columnIndex++) {
+                for ($columnIndex = 3; $columnIndex <= 2 + count($this->dates); $columnIndex++) {
                     $column = Coordinate::stringFromColumnIndex($columnIndex);
                     $sheet->getComment($column.'1')->getText()->createTextRun(
                         'Isi nama shift untuk jadwal masuk. Isi OFF/day_off/libur untuk libur, LEAVE/cuti/izin untuk cuti, atau HOLIDAY untuk libur perusahaan. Kosongkan jika tidak ingin mengubah tanggal ini.'
                     );
                 }
+
+                $guideStartColumn = Coordinate::stringFromColumnIndex(3 + count($this->dates));
+                $sheet->getStyle($guideStartColumn.'1:'.$lastColumn.$lastRow)
+                    ->getFill()
+                    ->setFillType(Fill::FILL_SOLID)
+                    ->getStartColor()
+                    ->setRGB('FFF8DD');
+                $sheet->getComment($guideStartColumn.'1')->getText()->createTextRun('Kolom panduan ini tidak diproses saat import. Boleh dibiarkan apa adanya.');
             },
         ];
     }

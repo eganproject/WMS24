@@ -516,6 +516,9 @@
                                 <span>Bagus <strong>${Number(item.good_qty || 0)}</strong></span>
                                 <span>Rusak <strong>${Number(item.damaged_qty || 0)}</strong></span>
                             </div>
+                            <div class="mt-2">
+                                <span class="badge badge-light-dark">${escapeHtml(item.root_cause_label || '-')}</span>
+                            </div>
                         </div>
                     </div>
                 `;

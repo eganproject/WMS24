@@ -12,6 +12,7 @@
                 'received_qty' => (int) $row->received_qty,
                 'good_qty' => (int) $row->good_qty,
                 'damaged_qty' => (int) $row->damaged_qty,
+                'root_cause' => $row->root_cause,
                 'note' => $row->note,
             ];
         })->values()->all()
@@ -383,7 +384,23 @@
                                 <input type="number" min="0" class="form-control form-control-solid @error("items.$index.damaged_qty") is-invalid @enderror" data-name="damaged_qty" name="items[{{ $index }}][damaged_qty]" value="{{ old("items.$index.damaged_qty", $formItem['damaged_qty'] ?? 0) }}" @disabled($readOnlyMode) required />
                                 <div class="invalid-feedback d-block" data-error-for="damaged_qty">{{ $errors->first("items.$index.damaged_qty") }}</div>
                             </div>
-                            <div class="col-xl-10 col-lg-9 col-md-8 col-12">
+                            <div class="col-xl-3 col-lg-4 col-md-5 col-12">
+                                <label class="required fs-6 fw-bold form-label mb-2">Penyebab Retur</label>
+                                <select
+                                    class="form-select form-select-solid @error("items.$index.root_cause") is-invalid @enderror"
+                                    data-name="root_cause"
+                                    name="items[{{ $index }}][root_cause]"
+                                    @disabled($readOnlyMode)
+                                    required
+                                >
+                                    <option value=""></option>
+                                    @foreach($rootCauseLabels as $value => $label)
+                                        <option value="{{ $value }}" @selected(old("items.$index.root_cause", $formItem['root_cause'] ?? '') === $value)>{{ $label }}</option>
+                                    @endforeach
+                                </select>
+                                <div class="invalid-feedback d-block" data-error-for="root_cause">{{ $errors->first("items.$index.root_cause") }}</div>
+                            </div>
+                            <div class="col-xl-7 col-lg-5 col-md-7 col-12">
                                 <label class="fs-6 fw-bold form-label mb-2">Catatan Item</label>
                                 <input type="text" class="form-control form-control-solid @error("items.$index.note") is-invalid @enderror" data-name="note" name="items[{{ $index }}][note]" value="{{ old("items.$index.note", $formItem['note'] ?? '') }}" placeholder="Contoh: box rusak, segel terbuka, atau minus aksesoris" @disabled($readOnlyMode) />
                                 <div class="invalid-feedback d-block" data-error-for="note">{{ $errors->first("items.$index.note") }}</div>
@@ -450,6 +467,7 @@
 <script>
     const customerReturnLookupUrl = @json($lookupUrl);
     const customerReturnItemOptionsHtml = `@foreach($items as $item)<option value="{{ $item->id }}" data-sku="{{ $item->sku }}" data-name="{{ $item->name }}">{{ $item->sku }} - {{ $item->name }}</option>@endforeach`;
+    const customerReturnRootCauseOptionsHtml = `@foreach($rootCauseLabels as $value => $label)<option value="{{ $value }}">{{ $label }}</option>@endforeach`;
     const customerReturnReadOnly = {{ $readOnlyMode ? 'true' : 'false' }};
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -827,7 +845,15 @@
                     <input type="number" min="0" class="form-control form-control-solid" data-name="damaged_qty" value="${Number(data.damaged_qty || 0)}" required />
                     <div class="invalid-feedback d-block" data-error-for="damaged_qty"></div>
                 </div>
-                <div class="col-xl-10 col-lg-9 col-md-8 col-12">
+                <div class="col-xl-3 col-lg-4 col-md-5 col-12">
+                    <label class="required fs-6 fw-bold form-label mb-2">Penyebab Retur</label>
+                    <select class="form-select form-select-solid" data-name="root_cause" required>
+                        <option value=""></option>
+                        ${customerReturnRootCauseOptionsHtml}
+                    </select>
+                    <div class="invalid-feedback d-block" data-error-for="root_cause"></div>
+                </div>
+                <div class="col-xl-7 col-lg-5 col-md-7 col-12">
                     <label class="fs-6 fw-bold form-label mb-2">Catatan Item</label>
                     <input type="text" class="form-control form-control-solid" data-name="note" value="${escapeAttr(data.note || '')}" placeholder="Contoh: box rusak, segel terbuka, atau minus aksesoris" />
                     <div class="invalid-feedback d-block" data-error-for="note"></div>
@@ -842,6 +868,10 @@
             const selectEl = row.querySelector('.customer-return-item-select');
             if (data.item_id) {
                 selectEl.value = String(data.item_id);
+            }
+            const rootCauseEl = row.querySelector('[data-name="root_cause"]');
+            if (rootCauseEl && data.root_cause) {
+                rootCauseEl.value = String(data.root_cause);
             }
             bindRow(row);
             if (data.item_id && typeof $ !== 'undefined' && $.fn.select2) {

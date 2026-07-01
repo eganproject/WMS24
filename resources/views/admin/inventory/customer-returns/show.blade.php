@@ -479,7 +479,7 @@
                     <div class="customer-return-document-section">
                         <div class="customer-return-document-section-title">
                             <h3>Rincian Item Retur</h3>
-                            <div class="text-muted fs-7">Per item ditampilkan qty dari resi, qty fisik diterima, hasil bagus, dan hasil rusak.</div>
+                            <div class="text-muted fs-7">Per item ditampilkan qty dari resi, qty fisik diterima, hasil inspeksi, dan penyebab retur.</div>
                         </div>
 
                         <div class="customer-return-document-table-wrap">
@@ -492,6 +492,7 @@
                                         <th class="text-end">Diterima</th>
                                         <th class="text-end">Bagus</th>
                                         <th class="text-end">Rusak</th>
+                                        <th>Penyebab</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -509,10 +510,11 @@
                                             <td class="text-end">{{ (int) $row->received_qty }}</td>
                                             <td class="text-end">{{ (int) $row->good_qty }}</td>
                                             <td class="text-end">{{ (int) $row->damaged_qty }}</td>
+                                            <td>{{ $row->rootCauseLabel() }}</td>
                                         </tr>
                                     @empty
                                         <tr>
-                                            <td colspan="6">Tidak ada item retur.</td>
+                                            <td colspan="7">Tidak ada item retur.</td>
                                         </tr>
                                     @endforelse
                                 </tbody>

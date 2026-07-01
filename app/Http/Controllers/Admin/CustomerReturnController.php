@@ -20,6 +20,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -72,6 +73,9 @@ class CustomerReturnController extends Controller
                 $this->applyTextSearch($q, 'customer_returns.resi_no', $search, $exact, 'or');
                 $this->applyTextSearch($q, 'customer_returns.order_ref', $search, $exact, 'or');
                 $this->applyTextSearch($q, 'customer_returns.note', $search, $exact, 'or');
+                $q->orWhereHas('items', function ($itemQ) use ($search, $exact) {
+                    $this->applyTextSearch($itemQ, 'root_cause', $search, $exact);
+                });
                 $q->orWhereHas('items.item', function ($itemQ) use ($search, $exact) {
                     $this->applyTextSearch($itemQ, 'sku', $search, $exact);
                     $this->applyTextSearch($itemQ, 'name', $search, $exact, 'or');
@@ -113,19 +117,22 @@ class CustomerReturnController extends Controller
                     'good_qty' => (int) $itemRow->good_qty,
                     'damaged_qty' => (int) $itemRow->damaged_qty,
                     'lost_qty' => max($expectedQty - $receivedQty, 0),
+                    'root_cause' => (string) ($itemRow->root_cause ?? ''),
+                    'root_cause_label' => $itemRow->rootCauseLabel(),
                     'note' => (string) ($itemRow->note ?? ''),
                 ];
             })->filter()->values();
 
             $itemSummary = $itemDetails->map(function (array $itemRow) {
                 return sprintf(
-                    '%s (Resi %d, Terima %d, Bagus %d, Rusak %d, Hilang %d)',
+                    '%s (Resi %d, Terima %d, Bagus %d, Rusak %d, Hilang %d, Penyebab: %s)',
                     $itemRow['sku'],
                     $itemRow['expected_qty'],
                     $itemRow['received_qty'],
                     $itemRow['good_qty'],
                     $itemRow['damaged_qty'],
-                    $itemRow['lost_qty']
+                    $itemRow['lost_qty'],
+                    $itemRow['root_cause_label'] ?? '-'
                 );
             })->implode(', ');
 
@@ -619,7 +626,7 @@ class CustomerReturnController extends Controller
                 'damaged_good_id' => $damagedGood->id,
                 'item_id' => $row->item_id,
                 'qty' => (int) $row->damaged_qty,
-                'reason_code' => DamagedGoodItem::REASON_CUSTOMER_RETURN,
+                'reason_code' => $this->damagedReasonCodeForRootCause($row->root_cause),
                 'note' => $row->note,
             ]);
 
@@ -641,6 +648,18 @@ class CustomerReturnController extends Controller
         return $damagedGood;
     }
 
+    private function damagedReasonCodeForRootCause(?string $rootCause): string
+    {
+        return match ($rootCause) {
+            CustomerReturnItem::ROOT_CAUSE_DAMAGED_PACKING => DamagedGoodItem::REASON_PACKAGING_DAMAGE,
+            CustomerReturnItem::ROOT_CAUSE_DAMAGED_COURIER => DamagedGoodItem::REASON_PHYSICAL_DAMAGE,
+            CustomerReturnItem::ROOT_CAUSE_PRODUCT_DEFECT => DamagedGoodItem::REASON_FUNCTIONAL_DAMAGE,
+            CustomerReturnItem::ROOT_CAUSE_INCOMPLETE_ITEM => DamagedGoodItem::REASON_MISSING_PART,
+            CustomerReturnItem::ROOT_CAUSE_BUYER_ISSUE => DamagedGoodItem::REASON_CUSTOMER_RETURN,
+            default => DamagedGoodItem::REASON_OTHER,
+        };
+    }
+
     private function persistItems(CustomerReturn $customerReturn, Collection $items): void
     {
         foreach ($items as $row) {
@@ -651,6 +670,7 @@ class CustomerReturnController extends Controller
                 'received_qty' => (int) $row['received_qty'],
                 'good_qty' => (int) $row['good_qty'],
                 'damaged_qty' => (int) $row['damaged_qty'],
+                'root_cause' => $row['root_cause'],
                 'note' => $row['note'] ?? null,
             ]);
         }
@@ -672,6 +692,7 @@ class CustomerReturnController extends Controller
             'items.*.received_qty' => ['required', 'integer', 'min:0'],
             'items.*.good_qty' => ['required', 'integer', 'min:0'],
             'items.*.damaged_qty' => ['required', 'integer', 'min:0'],
+            'items.*.root_cause' => ['required', 'string', Rule::in(array_keys(CustomerReturnItem::rootCauseLabels()))],
             'items.*.note' => ['nullable', 'string'],
         ]);
 
@@ -683,6 +704,7 @@ class CustomerReturnController extends Controller
                     'received_qty' => (int) ($row['received_qty'] ?? 0),
                     'good_qty' => (int) ($row['good_qty'] ?? 0),
                     'damaged_qty' => (int) ($row['damaged_qty'] ?? 0),
+                    'root_cause' => (string) ($row['root_cause'] ?? ''),
                     'note' => $row['note'] ?? null,
                 ];
             })
@@ -810,6 +832,7 @@ class CustomerReturnController extends Controller
                 'received_qty' => 0,
                 'good_qty' => 0,
                 'damaged_qty' => 0,
+                'root_cause' => null,
                 'note' => null,
             ];
         }
@@ -841,6 +864,8 @@ class CustomerReturnController extends Controller
                     'received_qty' => (int) $row->received_qty,
                     'good_qty' => (int) $row->good_qty,
                     'damaged_qty' => (int) $row->damaged_qty,
+                    'root_cause' => $row->root_cause,
+                    'root_cause_label' => $row->rootCauseLabel(),
                     'note' => $row->note,
                 ];
             })->values(),
@@ -871,6 +896,7 @@ class CustomerReturnController extends Controller
             'backUrl' => $backUrl,
             'lookupUrl' => route('admin.inventory.customer-returns.lookup'),
             'items' => $items,
+            'rootCauseLabels' => CustomerReturnItem::rootCauseLabels(),
             'displayWarehouseLabel' => $this->displayWarehouseLabel(),
             'damagedWarehouseLabel' => $this->damagedWarehouseLabel(),
             'itemImageUrl' => $customerReturn ? $this->itemImageUrl($customerReturn) : null,

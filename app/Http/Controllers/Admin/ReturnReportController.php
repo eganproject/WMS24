@@ -130,6 +130,8 @@ class ReturnReportController extends Controller
                     $this->applyTextSearch($q, 'customer_returns.note', $search, $exact, 'or');
                     $q->orWhereHas('damagedGood', function ($damagedQ) use ($search, $exact) {
                         $this->applyTextSearch($damagedQ, 'code', $search, $exact);
+                    })->orWhereHas('items', function ($itemQ) use ($search, $exact) {
+                        $this->applyTextSearch($itemQ, 'root_cause', $search, $exact);
                     })->orWhereHas('items.item', function ($itemQ) use ($search, $exact) {
                         $this->applyTextSearch($itemQ, 'sku', $search, $exact);
                         $this->applyTextSearch($itemQ, 'name', $search, $exact, 'or');
@@ -282,13 +284,14 @@ class ReturnReportController extends Controller
             }
 
             return sprintf(
-                '%s (Resi %d, Terima %d, Bagus %d, Rusak %d, Hilang %d)',
+                '%s (Resi %d, Terima %d, Bagus %d, Rusak %d, Hilang %d, Penyebab: %s)',
                 $sku,
                 (int) $itemRow->expected_qty,
                 (int) $itemRow->received_qty,
                 (int) $itemRow->good_qty,
                 (int) $itemRow->damaged_qty,
-                max((int) $itemRow->expected_qty - (int) $itemRow->received_qty, 0)
+                max((int) $itemRow->expected_qty - (int) $itemRow->received_qty, 0),
+                $itemRow->rootCauseLabel()
             );
         })->filter()->implode(', ');
     }

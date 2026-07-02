@@ -18,12 +18,16 @@ class StockOpnameReportController extends Controller
         $warehouseId = WarehouseService::defaultWarehouseId();
         $warehouseLabel = Warehouse::where('id', $warehouseId)->value('name') ?? 'Gudang Besar';
         $warehouses = Warehouse::orderBy('name')->get(['id', 'name', 'code']);
+        $latestStockOpnameDate = $this->latestCompletedStockOpnameDate($warehouseId);
+
         return view('admin.reports.stock-opname.index', [
             'dataUrl' => route('admin.reports.stock-opname.data'),
             'warehouseLabel' => $warehouseLabel,
             'warehouses' => $warehouses,
             'defaultWarehouseId' => $warehouseId,
             'displayWarehouseId' => WarehouseService::displayWarehouseId(),
+            'defaultDateFrom' => $latestStockOpnameDate,
+            'defaultDateTo' => $latestStockOpnameDate,
         ]);
     }
 
@@ -226,5 +230,21 @@ class StockOpnameReportController extends Controller
         } catch (\Throwable) {
             // ignore invalid date filters
         }
+    }
+
+    private function latestCompletedStockOpnameDate(?int $warehouseId): ?string
+    {
+        $latest = DB::table('stock_opnames')
+            ->where('status', 'completed')
+            ->when($warehouseId, fn ($query) => $query->where('warehouse_id', $warehouseId))
+            ->max('transacted_at');
+
+        if (!$latest && $warehouseId) {
+            $latest = DB::table('stock_opnames')
+                ->where('status', 'completed')
+                ->max('transacted_at');
+        }
+
+        return $latest ? Carbon::parse($latest)->format('Y-m-d') : null;
     }
 }

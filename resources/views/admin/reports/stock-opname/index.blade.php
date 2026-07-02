@@ -177,6 +177,8 @@
     const exportUrl = '{{ route('admin.reports.stock-opname.export') }}';
     const defaultWarehouseId = {{ !empty($defaultWarehouseId) ? (int) $defaultWarehouseId : 'null' }};
     const displayWarehouseId = {{ !empty($displayWarehouseId) ? (int) $displayWarehouseId : 'null' }};
+    const defaultDateFrom = @json($defaultDateFrom ?? null);
+    const defaultDateTo = @json($defaultDateTo ?? null);
 
     document.addEventListener('DOMContentLoaded', () => {
         const tableEl = $('#stock_opname_report_table');
@@ -198,14 +200,29 @@
             accuracy: document.getElementById('report_accuracy'),
         };
 
+        const setDefaultDates = () => {
+            if (dateFromEl) dateFromEl.value = defaultDateFrom || '';
+            if (dateToEl) dateToEl.value = defaultDateTo || '';
+        };
+
+        setDefaultDates();
+
         let fpFrom = null;
         let fpTo = null;
         if (typeof flatpickr !== 'undefined') {
             if (dateFromEl) {
-                fpFrom = flatpickr(dateFromEl, { dateFormat: 'Y-m-d', allowInput: true });
+                fpFrom = flatpickr(dateFromEl, {
+                    dateFormat: 'Y-m-d',
+                    allowInput: true,
+                    defaultDate: defaultDateFrom || null,
+                });
             }
             if (dateToEl) {
-                fpTo = flatpickr(dateToEl, { dateFormat: 'Y-m-d', allowInput: true });
+                fpTo = flatpickr(dateToEl, {
+                    dateFormat: 'Y-m-d',
+                    allowInput: true,
+                    defaultDate: defaultDateTo || null,
+                });
             }
         }
 
@@ -330,8 +347,10 @@
                 }
             }
             updateWarehouseBadge();
-            if (fpFrom) fpFrom.clear(); else if (dateFromEl) dateFromEl.value = '';
-            if (fpTo) fpTo.clear(); else if (dateToEl) dateToEl.value = '';
+            if (fpFrom) fpFrom.setDate(defaultDateFrom || null, false);
+            else if (dateFromEl) dateFromEl.value = defaultDateFrom || '';
+            if (fpTo) fpTo.setDate(defaultDateTo || null, false);
+            else if (dateToEl) dateToEl.value = defaultDateTo || '';
             reloadAll();
         });
 

@@ -160,6 +160,30 @@
             return Number.isFinite(number) ? number.toLocaleString('id-ID') : '0';
         };
 
+        const formatDate = (date) => {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
+
+        const getDefaultDateRange = () => {
+            const dateToDefault = new Date();
+            const dateFromDefault = new Date();
+            dateFromDefault.setDate(dateToDefault.getDate() - 6);
+
+            return {
+                from: formatDate(dateFromDefault),
+                to: formatDate(dateToDefault),
+            };
+        };
+
+        const setDefaultDateRange = () => {
+            const defaultRange = getDefaultDateRange();
+            if (dateFrom) dateFrom.value = defaultRange.from;
+            if (dateTo) dateTo.value = defaultRange.to;
+        };
+
         const initSelect2 = (element, placeholder) => {
             if (!element || typeof $ === 'undefined' || !$.fn.select2) return;
 
@@ -174,6 +198,7 @@
         initSelect2(warehouseFilter, 'Semua Scope');
         initSelect2(createWarehouse, 'Pilih scope');
         initSelect2(detailStatus, 'Semua');
+        setDefaultDateRange();
 
         const snapshotsDt = snapshotTableEl.DataTable({
             processing: true,
@@ -241,6 +266,7 @@
                 fpDateFrom = flatpickr(dateFrom, {
                     dateFormat: 'Y-m-d',
                     allowInput: true,
+                    defaultDate: dateFrom.value || null,
                     onChange: reloadSnapshots,
                     onClose: reloadSnapshots,
                 });
@@ -249,6 +275,7 @@
                 fpDateTo = flatpickr(dateTo, {
                     dateFormat: 'Y-m-d',
                     allowInput: true,
+                    defaultDate: dateTo.value || null,
                     onChange: reloadSnapshots,
                     onClose: reloadSnapshots,
                 });
@@ -277,10 +304,11 @@
                     $(warehouseFilter).val('').trigger('change.select2');
                 }
             }
-            if (fpDateFrom) fpDateFrom.clear(false);
-            else if (dateFrom) dateFrom.value = '';
-            if (fpDateTo) fpDateTo.clear(false);
-            else if (dateTo) dateTo.value = '';
+            const defaultRange = getDefaultDateRange();
+            if (fpDateFrom) fpDateFrom.setDate(defaultRange.from, false);
+            else if (dateFrom) dateFrom.value = defaultRange.from;
+            if (fpDateTo) fpDateTo.setDate(defaultRange.to, false);
+            else if (dateTo) dateTo.value = defaultRange.to;
             reloadSnapshots();
         });
 

@@ -35,35 +35,78 @@
         </div>
     </div>
     <div class="card-body py-6">
-        <div class="d-flex flex-wrap align-items-center gap-6 mb-4">
-            <div class="fw-bold">QC Berjalan: <span id="summary_draft">0</span></div>
-            <div class="fw-bold">Lolos QC: <span id="summary_passed">0</span></div>
-            <div class="fw-bold">Ada Substitusi: <span id="summary_substitutions">0</span></div>
-        </div>
-        <div class="table-responsive">
-            <table class="table align-middle table-row-dashed fs-6 gy-5" id="qc_history_table">
-                <thead>
-                    <tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0">
-                        <th>ID</th>
-                        <th>Mulai</th>
-                        <th>Selesai</th>
-                        <th>Mulai Oleh</th>
-                        <th>Status</th>
-                        <th>Audit</th>
-                        <th>Jenis Scan</th>
-                        <th>Kode Scan</th>
-                        <th>ID Pesanan</th>
-                        <th>No Resi</th>
-                        <th>Catatan Pembeli</th>
-                        <th>SKU</th>
-                        <th>Substitusi</th>
-                        <th>Total SKU</th>
-                        <th>Expected Qty</th>
-                        <th>Scanned Qty</th>
-                    </tr>
-                </thead>
-                <tbody></tbody>
-            </table>
+        <ul class="nav nav-tabs nav-line-tabs mb-6 fs-6">
+            <li class="nav-item">
+                <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#qc_history_tab" type="button">History QC</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#qc_duplicate_tab" type="button">Scan Resi Double</button>
+            </li>
+        </ul>
+
+        <div class="tab-content">
+            <div class="tab-pane fade show active" id="qc_history_tab" role="tabpanel">
+                <div class="d-flex flex-wrap align-items-center gap-6 mb-4">
+                    <div class="fw-bold">QC Berjalan: <span id="summary_draft">0</span></div>
+                    <div class="fw-bold">Lolos QC: <span id="summary_passed">0</span></div>
+                    <div class="fw-bold">Ada Substitusi: <span id="summary_substitutions">0</span></div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table align-middle table-row-dashed fs-6 gy-5" id="qc_history_table">
+                        <thead>
+                            <tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0">
+                                <th>ID</th>
+                                <th>Mulai</th>
+                                <th>Selesai</th>
+                                <th>Mulai Oleh</th>
+                                <th>Status</th>
+                                <th>Audit</th>
+                                <th>Jenis Scan</th>
+                                <th>Kode Scan</th>
+                                <th>ID Pesanan</th>
+                                <th>No Resi</th>
+                                <th>Catatan Pembeli</th>
+                                <th>SKU</th>
+                                <th>Substitusi</th>
+                                <th>Total SKU</th>
+                                <th>Expected Qty</th>
+                                <th>Scanned Qty</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="qc_duplicate_tab" role="tabpanel">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-4 mb-4">
+                    <div class="d-flex flex-wrap align-items-center gap-6">
+                        <div class="fw-bold">Scan Resi Double: <span id="summary_double_scans">0</span></div>
+                        <div class="fw-bold">User Terlibat: <span id="summary_double_users">0</span></div>
+                    </div>
+                    <input type="text" class="form-control form-control-solid w-200px" id="filter_duplicate_scanned_by" placeholder="Scan ulang oleh" />
+                </div>
+                <div class="table-responsive">
+                    <table class="table align-middle table-row-dashed fs-6 gy-5" id="qc_duplicate_table">
+                        <thead>
+                            <tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0">
+                                <th>ID</th>
+                                <th>Waktu Scan Ulang</th>
+                                <th>Scan Ulang Oleh</th>
+                                <th>Jenis Scan</th>
+                                <th>Kode Scan</th>
+                                <th>ID Pesanan</th>
+                                <th>No Resi</th>
+                                <th>Status QC</th>
+                                <th>QC Selesai</th>
+                                <th>QC Oleh</th>
+                                <th>IP</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -72,6 +115,7 @@
 @push('scripts')
 <script>
     const dataUrl = '{{ $dataUrl }}';
+    const duplicateDataUrl = '{{ $duplicateDataUrl }}';
     const todayStr = '{{ $today ?? '' }}';
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -84,9 +128,12 @@
         const dateToEl = document.getElementById('filter_date_to');
         const dateApplyBtn = document.getElementById('filter_date_apply');
         const dateResetBtn = document.getElementById('filter_date_reset');
+        const duplicateScannedByEl = document.getElementById('filter_duplicate_scanned_by');
         const summaryDraftEl = document.getElementById('summary_draft');
         const summaryPassedEl = document.getElementById('summary_passed');
         const summarySubstitutionsEl = document.getElementById('summary_substitutions');
+        const summaryDoubleScansEl = document.getElementById('summary_double_scans');
+        const summaryDoubleUsersEl = document.getElementById('summary_double_users');
         let fpFrom = null;
         let fpTo = null;
 
@@ -179,6 +226,42 @@
             ]
         });
 
+        const duplicateDt = $('#qc_duplicate_table').DataTable({
+            processing: true,
+            serverSide: true,
+            dom: 'rtip',
+            order: [[1, 'desc']],
+            ajax: {
+                url: duplicateDataUrl,
+                dataSrc: 'data',
+                data: function(params) {
+                    params.q = searchInput?.value || '';
+                    params.scanned_by = duplicateScannedByEl?.value || '';
+                    if (dateFromEl?.value) params.date_from = dateFromEl.value;
+                    if (dateToEl?.value) params.date_to = dateToEl.value;
+                }
+            },
+            columns: [
+                { data: 'id' },
+                { data: 'scanned_at' },
+                { data: 'scanned_by' },
+                { data: 'scan_type', render: (data) => {
+                    if (data === 'id_pesanan') return 'ID Pesanan';
+                    if (data === 'no_resi') return 'No Resi';
+                    return data || '-';
+                }},
+                { data: 'scan_code' },
+                { data: 'id_pesanan' },
+                { data: 'no_resi' },
+                { data: 'existing_status', render: (data) => {
+                    return `<span class="badge badge-light-danger">${escapeHtml(data || '-')}</span>`;
+                }},
+                { data: 'qc_completed_at' },
+                { data: 'qc_completed_by' },
+                { data: 'ip_address' },
+            ]
+        });
+
         tableEl.on('xhr.dt', function () {
             const json = dt?.ajax?.json?.();
             if (json?.summary) {
@@ -188,8 +271,31 @@
             }
         });
 
-        const reloadTable = () => dt.ajax.reload();
+        $('#qc_duplicate_table').on('xhr.dt', function () {
+            const json = duplicateDt?.ajax?.json?.();
+            if (json?.summary) {
+                if (summaryDoubleScansEl) summaryDoubleScansEl.textContent = json.summary.double_scans ?? '0';
+                if (summaryDoubleUsersEl) summaryDoubleUsersEl.textContent = json.summary.users ?? '0';
+            }
+        });
+
+        document.querySelectorAll('[data-bs-toggle="tab"]').forEach((tabEl) => {
+            tabEl.addEventListener('shown.bs.tab', () => {
+                setTimeout(() => {
+                    dt.columns.adjust();
+                    duplicateDt.columns.adjust();
+                }, 50);
+            });
+        });
+
+        const reloadTable = () => {
+            dt.ajax.reload();
+            duplicateDt.ajax.reload();
+        };
         searchInput?.addEventListener('keyup', reloadTable);
+        duplicateScannedByEl?.addEventListener('keyup', (e) => {
+            if (e.key === 'Enter') duplicateDt.ajax.reload();
+        });
         completedByEl?.addEventListener('keyup', (e) => {
             if (e.key === 'Enter') reloadTable();
         });
@@ -202,6 +308,7 @@
             if (statusEl) statusEl.value = '';
             if (completedByEl) completedByEl.value = '';
             if (resetByEl) resetByEl.value = '';
+            if (duplicateScannedByEl) duplicateScannedByEl.value = '';
             if (fpFrom && todayStr) fpFrom.setDate(todayStr, true);
             if (fpTo && todayStr) fpTo.setDate(todayStr, true);
             if (!fpFrom && dateFromEl) dateFromEl.value = todayStr;

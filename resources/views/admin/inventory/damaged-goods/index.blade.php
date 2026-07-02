@@ -21,6 +21,17 @@
 @endpush
 
 @section('content')
+<ul class="nav nav-tabs nav-line-tabs mb-6 fs-6">
+    <li class="nav-item">
+        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#damaged_goods_balance_tab" type="button">Saldo Rusak</button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#damaged_goods_documents_tab" type="button">Dokumen Barang Rusak</button>
+    </li>
+</ul>
+
+<div class="tab-content">
+    <div class="tab-pane fade show active" id="damaged_goods_balance_tab" role="tabpanel">
 {{-- Aging Summary Cards --}}
 <div class="row g-5 g-xl-8 mb-6" id="damage_aging_cards">
     <div class="col-6 col-md-3">
@@ -101,6 +112,8 @@
     </div>
 </div>
 
+    </div>
+    <div class="tab-pane fade" id="damaged_goods_documents_tab" role="tabpanel">
 {{-- Tabel Utama --}}
 <div class="card">
     <div class="card-header border-0 pt-6 table-search-card-header">
@@ -166,6 +179,8 @@
                 <tbody></tbody>
             </table>
         </div>
+    </div>
+</div>
     </div>
 </div>
 
@@ -687,6 +702,15 @@
             summaryDt.ajax.reload();
             fetchAgingSummary();
         };
+
+        document.querySelectorAll('[data-bs-toggle="tab"]').forEach((tabEl) => {
+            tabEl.addEventListener('shown.bs.tab', () => {
+                setTimeout(() => {
+                    dt.columns.adjust();
+                    summaryDt.columns.adjust();
+                }, 50);
+            });
+        });
 
         const currentFilterParams = () => {
             const params = new URLSearchParams();

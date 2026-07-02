@@ -63,6 +63,11 @@ class Resi extends Model
         return $this->hasOne(QcResiScan::class, 'resi_id');
     }
 
+    public function qcDuplicateAttempts()
+    {
+        return $this->hasMany(QcResiScanDuplicateAttempt::class, 'resi_id');
+    }
+
     public function scanOut()
     {
         return $this->hasOne(ShipmentScanOut::class, 'resi_id');

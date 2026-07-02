@@ -410,6 +410,7 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/scan-out/recent', [ScanOutWorkbenchController::class, 'recent'])->name('scan-out.recent');
         Route::get('/qc-history', [QcHistoryController::class, 'index'])->name('qc-history.index');
         Route::get('/qc-history/data', [QcHistoryController::class, 'data'])->name('qc-history.data');
+        Route::get('/qc-history/duplicates/data', [QcHistoryController::class, 'duplicateData'])->name('qc-history.duplicates.data');
         Route::get('/transit-qc', [TransitQcController::class, 'index'])->name('transit-qc.index');
         Route::get('/transit-qc/data', [TransitQcController::class, 'data'])->name('transit-qc.data');
         Route::get('/scan-out-history', [ScanOutHistoryController::class, 'index'])->name('scan-out-history.index');

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Mobile;
 use App\Http\Controllers\Controller;
 use App\Models\Item;
 use App\Models\QcResiScan;
+use App\Models\QcResiScanDuplicateAttempt;
 use App\Models\QcResiScanItem;
 use App\Models\QcResiScanSubstitution;
 use App\Models\Resi;
@@ -75,6 +76,13 @@ class QcScanController extends Controller
             ], 422);
         }
         if (ShipmentScanOut::where('resi_id', $resi->id)->exists()) {
+            $completedQc = QcResiScan::where('resi_id', $resi->id)
+                ->whereNotIn('status', [QcTransitStatus::DRAFT, QcTransitStatus::HOLD])
+                ->first();
+            if ($completedQc) {
+                $this->recordDuplicateResiScanAttempt($request, $completedQc, $type, $code);
+            }
+
             return response()->json([
                 'message' => 'Resi sudah scan out.',
             ], 422);
@@ -112,7 +120,9 @@ class QcScanController extends Controller
                 ->first();
 
             if ($qc && !in_array($qc->status, [QcTransitStatus::DRAFT, QcTransitStatus::HOLD], true)) {
-                DB::rollBack();
+                $this->recordDuplicateResiScanAttempt($request, $qc, $type, $code);
+
+                DB::commit();
                 return response()->json([
                     'message' => 'Resi sudah QC selesai.',
                 ], 422);
@@ -715,6 +725,23 @@ class QcScanController extends Controller
             'lastScanner:id,name',
             'resetter:id,name',
             'holder:id,name',
+        ]);
+    }
+
+    private function recordDuplicateResiScanAttempt(Request $request, QcResiScan $qc, string $type, string $code): void
+    {
+        QcResiScanDuplicateAttempt::create([
+            'qc_resi_scan_id' => $qc->id,
+            'resi_id' => $qc->resi_id,
+            'scan_type' => $type,
+            'scan_code' => $code,
+            'existing_status' => $qc->status,
+            'qc_completed_at' => $qc->completed_at,
+            'qc_completed_by' => $qc->completed_by,
+            'scanned_by' => auth()->id(),
+            'scanned_at' => now(),
+            'ip_address' => $request->ip(),
+            'user_agent' => substr((string) $request->userAgent(), 0, 1000),
         ]);
     }
 

@@ -25,6 +25,17 @@
 @endpush
 
 @section('content')
+<ul class="nav nav-tabs nav-line-tabs mb-6 fs-6">
+    <li class="nav-item">
+        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#damaged_allocation_balance_tab" type="button">Saldo Tersedia</button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#damaged_allocation_list_tab" type="button">Daftar Alokasi</button>
+    </li>
+</ul>
+
+<div class="tab-content">
+    <div class="tab-pane fade show active" id="damaged_allocation_balance_tab" role="tabpanel">
 {{-- Saldo Rusak Tersedia --}}
 <div class="card mb-6">
     <div class="card-header border-0 pt-6">
@@ -79,6 +90,8 @@
     </div>
 </div>
 
+    </div>
+    <div class="tab-pane fade" id="damaged_allocation_list_tab" role="tabpanel">
 {{-- Tabel Alokasi --}}
 <div class="card">
     <div class="card-header border-0 pt-6">
@@ -148,6 +161,8 @@
                 <tbody></tbody>
             </table>
         </div>
+    </div>
+</div>
     </div>
 </div>
 
@@ -1185,6 +1200,11 @@
         refreshMenus();
 
         const reloadTable = () => dt.ajax.reload();
+        document.querySelectorAll('[data-bs-toggle="tab"]').forEach((tabEl) => {
+            tabEl.addEventListener('shown.bs.tab', () => {
+                setTimeout(() => dt.columns.adjust(), 50);
+            });
+        });
         searchInput?.addEventListener('keyup', reloadTable);
 
         /* ── edit ────────────────────────────────────────── */

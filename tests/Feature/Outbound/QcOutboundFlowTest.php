@@ -8,6 +8,7 @@ use App\Models\ItemStock;
 use App\Models\Kurir;
 use App\Models\PickingList;
 use App\Models\QcResiScan;
+use App\Models\QcResiScanDuplicateAttempt;
 use App\Models\Resi;
 use App\Models\ResiDetail;
 use App\Models\Role;
@@ -111,6 +112,22 @@ class QcOutboundFlowTest extends TestCase
             'scanned_by' => $scanOutUser->id,
             'kurir_id' => $kurir->id,
         ]);
+
+        $this->actingAs($qcUser)
+            ->postJson(route('mobile.qc.scan'), [
+                'type' => 'no_resi',
+                'code' => 'RESI-001',
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Resi sudah scan out.');
+
+        $this->assertDatabaseHas('qc_resi_scan_duplicate_attempts', [
+            'qc_resi_scan_id' => $qc->id,
+            'resi_id' => $resi->id,
+            'scan_code' => 'RESI-001',
+            'existing_status' => 'passed',
+            'scanned_by' => $qcUser->id,
+        ]);
     }
 
     public function test_qc_scan_sku_accepts_external_barcode_alias(): void
@@ -164,6 +181,76 @@ class QcOutboundFlowTest extends TestCase
             ->assertOk()
             ->assertJsonPath('qc.items.0.sku', 'SKU-ALIAS-QC-001')
             ->assertJsonPath('qc.summary.total_scanned', 1);
+    }
+
+    public function test_duplicate_resi_scan_after_qc_completed_is_recorded_for_kpi(): void
+    {
+        [$displayWarehouse] = $this->createWarehouseFixtures();
+        $qcUser = $this->createUserWithRole('qc');
+        $uploader = User::factory()->create();
+        $kurir = Kurir::create(['name' => 'JNE']);
+        $item = Item::create([
+            'sku' => 'SKU-DOUBLE-QC-001',
+            'name' => 'Item Double QC',
+            'category_id' => 0,
+        ]);
+
+        ItemStock::create([
+            'item_id' => $item->id,
+            'warehouse_id' => $displayWarehouse->id,
+            'stock' => 1,
+        ]);
+
+        $resi = $this->createResi($uploader->id, $kurir->id, 'ORD-DOUBLE-QC-001', 'RESI-DOUBLE-QC-001');
+        ResiDetail::create([
+            'resi_id' => $resi->id,
+            'sku' => $item->sku,
+            'qty' => 1,
+        ]);
+
+        $this->actingAs($qcUser)
+            ->postJson(route('mobile.qc.scan'), [
+                'type' => 'no_resi',
+                'code' => $resi->no_resi,
+            ])
+            ->assertOk();
+
+        $qc = QcResiScan::where('resi_id', $resi->id)->firstOrFail();
+
+        $this->actingAs($qcUser)
+            ->postJson(route('mobile.qc.scan-sku'), [
+                'qc_id' => $qc->id,
+                'code' => $item->sku,
+                'qty' => 1,
+            ])
+            ->assertOk();
+
+        $this->actingAs($qcUser)
+            ->postJson(route('mobile.qc.complete'), [
+                'qc_id' => $qc->id,
+            ])
+            ->assertOk()
+            ->assertJsonPath('qc.status', 'passed');
+
+        $this->actingAs($qcUser)
+            ->postJson(route('mobile.qc.scan'), [
+                'type' => 'no_resi',
+                'code' => $resi->no_resi,
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Resi sudah QC selesai.');
+
+        $qc->refresh();
+        $this->assertSame(1, QcResiScanDuplicateAttempt::count());
+        $this->assertDatabaseHas('qc_resi_scan_duplicate_attempts', [
+            'qc_resi_scan_id' => $qc->id,
+            'resi_id' => $resi->id,
+            'scan_type' => 'no_resi',
+            'scan_code' => $resi->no_resi,
+            'existing_status' => 'passed',
+            'qc_completed_by' => $qcUser->id,
+            'scanned_by' => $qcUser->id,
+        ]);
     }
 
     public function test_scan_out_before_qc_fails_and_qc_after_pass_allows_scan_out(): void

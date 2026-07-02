@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\QcResiScan;
+use App\Models\QcResiScanDuplicateAttempt;
 use App\Support\QcTransitStatus;
 use Illuminate\Http\Request;
 
@@ -13,12 +14,82 @@ class QcHistoryController extends Controller
     {
         return view('admin.outbound.qc-history.index', [
             'dataUrl' => route('admin.outbound.qc-history.data'),
+            'duplicateDataUrl' => route('admin.outbound.qc-history.duplicates.data'),
             'today' => now()->toDateString(),
             'statusOptions' => [
                 ['value' => QcTransitStatus::DRAFT, 'label' => QcTransitStatus::scanStatusLabel(QcTransitStatus::DRAFT)],
                 ['value' => QcTransitStatus::PASSED, 'label' => QcTransitStatus::scanStatusLabel(QcTransitStatus::PASSED)],
                 ['value' => QcTransitStatus::CANCELED, 'label' => QcTransitStatus::scanStatusLabel(QcTransitStatus::CANCELED)],
             ],
+        ]);
+    }
+
+    public function duplicateData(Request $request)
+    {
+        $baseQuery = QcResiScanDuplicateAttempt::query()
+            ->with(['resi', 'qcScan', 'scanner', 'completer'])
+            ->orderByDesc('scanned_at')
+            ->orderByDesc('id');
+
+        $this->applyDuplicateDateFilter($baseQuery, $request);
+        $this->applyDuplicateUserFilter($baseQuery, $request);
+
+        $query = clone $baseQuery;
+
+        $search = trim((string) $request->input('q', ''));
+        if ($search !== '') {
+            $exact = $this->isExactSearch($request);
+            $query->where(function ($q) use ($search, $exact) {
+                $this->applyTextSearch($q, 'scan_code', $search, $exact);
+                $this->applyTextSearch($q, 'scan_type', $search, $exact, 'or');
+                $this->applyTextSearch($q, 'existing_status', $search, $exact, 'or');
+                $q->orWhereHas('resi', function ($resiQ) use ($search, $exact) {
+                    $this->applyTextSearch($resiQ, 'id_pesanan', $search, $exact);
+                    $this->applyTextSearch($resiQ, 'no_resi', $search, $exact, 'or');
+                })->orWhereHas('scanner', function ($userQ) use ($search, $exact) {
+                    $this->applyTextSearch($userQ, 'name', $search, $exact);
+                    $this->applyTextSearch($userQ, 'email', $search, $exact, 'or');
+                })->orWhereHas('completer', function ($userQ) use ($search, $exact) {
+                    $this->applyTextSearch($userQ, 'name', $search, $exact);
+                    $this->applyTextSearch($userQ, 'email', $search, $exact, 'or');
+                });
+            });
+        }
+
+        $recordsTotal = (clone $baseQuery)->count();
+        $recordsFiltered = (clone $query)->count();
+
+        $start = (int) $request->input('start', 0);
+        $length = (int) $request->input('length', 10);
+        if ($length > 0) {
+            $query->skip($start)->take($length);
+        }
+
+        $data = $query->get()->map(function ($row) {
+            return [
+                'id' => $row->id,
+                'scanned_at' => $row->scanned_at?->format('Y-m-d H:i') ?? '-',
+                'scanned_by' => $row->scanner?->name ?? '-',
+                'scan_type' => $row->scan_type ?? '-',
+                'scan_code' => $row->scan_code ?? '-',
+                'id_pesanan' => $row->resi?->id_pesanan ?? '-',
+                'no_resi' => $row->resi?->no_resi ?? '-',
+                'existing_status' => $row->existing_status ?? '-',
+                'qc_completed_at' => $row->qc_completed_at?->format('Y-m-d H:i') ?? '-',
+                'qc_completed_by' => $row->completer?->name ?? '-',
+                'ip_address' => $row->ip_address ?? '-',
+            ];
+        });
+
+        return response()->json([
+            'draw' => (int) $request->input('draw'),
+            'recordsTotal' => $recordsTotal,
+            'recordsFiltered' => $recordsFiltered,
+            'summary' => [
+                'double_scans' => (clone $baseQuery)->count(),
+                'users' => (clone $baseQuery)->whereNotNull('scanned_by')->distinct('scanned_by')->count('scanned_by'),
+            ],
+            'data' => $data,
         ]);
     }
 
@@ -211,5 +282,36 @@ class QcHistoryController extends Controller
                     ->orWhere('email', 'like', "%{$resetBy}%");
             });
         }
+    }
+
+    private function applyDuplicateDateFilter($query, Request $request): void
+    {
+        $dateFrom = $request->input('date_from');
+        $dateTo = $request->input('date_to');
+
+        if (!$dateFrom && !$dateTo) {
+            $query->whereDate('scanned_at', now()->toDateString());
+            return;
+        }
+
+        if ($dateFrom) {
+            $query->whereDate('scanned_at', '>=', $dateFrom);
+        }
+        if ($dateTo) {
+            $query->whereDate('scanned_at', '<=', $dateTo);
+        }
+    }
+
+    private function applyDuplicateUserFilter($query, Request $request): void
+    {
+        $scannedBy = trim((string) $request->input('scanned_by', ''));
+        if ($scannedBy === '') {
+            return;
+        }
+
+        $query->whereHas('scanner', function ($userQ) use ($scannedBy) {
+            $userQ->where('name', 'like', "%{$scannedBy}%")
+                ->orWhere('email', 'like', "%{$scannedBy}%");
+        });
     }
 }

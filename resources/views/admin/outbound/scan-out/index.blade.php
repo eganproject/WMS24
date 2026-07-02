@@ -548,6 +548,7 @@ const el = {
 
 let isSubmitting = false;
 let scannerFocusPaused = false;
+let scannerFocusResumeTimer = null;
 let pasteSubmitTimer = null;
 
 const selectedType = () => document.querySelector('input[name="scan_type"]:checked')?.value || 'no_resi';
@@ -568,6 +569,19 @@ const focusScanner = () => {
         el.code.classList.add('is-priority');
         setScannerState('Scanner siap');
     }, 30);
+};
+const pauseScannerFocus = (message = 'Memilih packer') => {
+    window.clearTimeout(scannerFocusResumeTimer);
+    scannerFocusPaused = true;
+    setScannerState(message, 'pending');
+};
+const resumeScannerFocus = (shouldFocus = false) => {
+    window.clearTimeout(scannerFocusResumeTimer);
+    scannerFocusResumeTimer = window.setTimeout(() => {
+        scannerFocusPaused = false;
+        setScannerState('Scanner siap');
+        if (shouldFocus) focusScanner();
+    }, 250);
 };
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
     '&': '&amp;',
@@ -774,6 +788,11 @@ el.btnClear.addEventListener('click', () => {
 });
 el.btnRefocus.addEventListener('click', focusScanner);
 el.btnRefreshRecent.addEventListener('click', refreshRecent);
+['pointerdown', 'mousedown', 'focus', 'click'].forEach((eventName) => {
+    el.packedEmployee?.addEventListener(eventName, () => pauseScannerFocus());
+});
+el.packedEmployee?.addEventListener('change', () => resumeScannerFocus(true));
+el.packedEmployee?.addEventListener('blur', () => resumeScannerFocus(false));
 document.addEventListener('keydown', (event) => {
     if (isScannerFocusPaused()) return;
     if (event.key === 'F1') {

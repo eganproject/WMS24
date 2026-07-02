@@ -4,7 +4,18 @@
 @section('page_title', 'Snapshot Low Stock')
 
 @section('content')
-<div class="card mb-6">
+<ul class="nav nav-tabs nav-line-tabs mb-6 fs-6" role="tablist">
+    <li class="nav-item">
+        <button class="nav-link active" id="snapshot_history_tab_btn" data-bs-toggle="tab" data-bs-target="#snapshot_history_tab" type="button" role="tab">Riwayat Snapshot</button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" id="snapshot_detail_tab_btn" data-bs-toggle="tab" data-bs-target="#snapshot_detail_tab" type="button" role="tab">Detail Snapshot</button>
+    </li>
+</ul>
+
+<div class="tab-content">
+<div class="tab-pane fade show active" id="snapshot_history_tab" role="tabpanel">
+<div class="card">
     <div class="card-header border-0 pt-6">
         <div class="card-title">
             <h3 class="card-label fw-bolder">Riwayat Snapshot</h3>
@@ -13,7 +24,7 @@
             <div class="d-flex align-items-end gap-3 flex-wrap">
                 <div class="w-200px">
                     <label class="text-muted fs-7 mb-1">Gudang</label>
-                    <select id="snapshot_warehouse" class="form-select form-select-solid">
+                    <select id="snapshot_warehouse" class="form-select form-select-solid" data-control="select2" data-placeholder="Semua Scope">
                         <option value="">Semua Scope</option>
                         <option value="all">Snapshot Semua Gudang</option>
                         @foreach($warehouses as $warehouse)
@@ -23,15 +34,15 @@
                 </div>
                 <div class="w-150px">
                     <label class="text-muted fs-7 mb-1">Dari</label>
-                    <input type="date" id="snapshot_date_from" class="form-control form-control-solid" />
+                    <input type="text" id="snapshot_date_from" class="form-control form-control-solid" placeholder="YYYY-MM-DD" />
                 </div>
                 <div class="w-150px">
                     <label class="text-muted fs-7 mb-1">Sampai</label>
-                    <input type="date" id="snapshot_date_to" class="form-control form-control-solid" />
+                    <input type="text" id="snapshot_date_to" class="form-control form-control-solid" placeholder="YYYY-MM-DD" />
                 </div>
                 <div class="w-200px">
                     <label class="text-muted fs-7 mb-1">Buat Snapshot</label>
-                    <select id="create_warehouse" class="form-select form-select-solid">
+                    <select id="create_warehouse" class="form-select form-select-solid" data-control="select2" data-placeholder="Pilih scope">
                         <option value="all">Semua Gudang</option>
                         @foreach($warehouses as $warehouse)
                             <option value="{{ $warehouse->id }}">{{ $warehouse->name }}</option>
@@ -62,7 +73,9 @@
         </div>
     </div>
 </div>
+</div>
 
+<div class="tab-pane fade" id="snapshot_detail_tab" role="tabpanel">
 <div class="card">
     <div class="card-header border-0 pt-6">
         <div class="card-title flex-column align-items-start">
@@ -77,7 +90,7 @@
                 </div>
                 <div class="w-175px">
                     <label class="text-muted fs-7 mb-1">Status</label>
-                    <select id="detail_status" class="form-select form-select-solid">
+                    <select id="detail_status" class="form-select form-select-solid" data-control="select2" data-placeholder="Semua">
                         <option value="">Semua</option>
                         <option value="out">Out of Stock</option>
                         <option value="low">Low Stock</option>
@@ -107,6 +120,8 @@
         </div>
     </div>
 </div>
+</div>
+</div>
 @endsection
 
 @push('scripts')
@@ -125,10 +140,13 @@
         const createWarehouse = document.getElementById('create_warehouse');
         const createBtn = document.getElementById('btn_create_snapshot');
         const resetBtn = document.getElementById('btn_reset_snapshot');
+        const detailTabBtn = document.getElementById('snapshot_detail_tab_btn');
         const detailTitle = document.getElementById('detail_title');
         const detailSearch = document.getElementById('detail_search');
         const detailStatus = document.getElementById('detail_status');
         let selectedSnapshotId = null;
+        let fpDateFrom = null;
+        let fpDateTo = null;
 
         const escapeHtml = (value) => String(value ?? '')
             .replace(/&/g, '&amp;')
@@ -141,6 +159,21 @@
             const number = Number(value);
             return Number.isFinite(number) ? number.toLocaleString('id-ID') : '0';
         };
+
+        const initSelect2 = (element, placeholder) => {
+            if (!element || typeof $ === 'undefined' || !$.fn.select2) return;
+
+            $(element).select2({
+                placeholder,
+                allowClear: element.querySelector('option[value=""]') !== null,
+                width: '100%',
+                minimumResultsForSearch: 8,
+            });
+        };
+
+        initSelect2(warehouseFilter, 'Semua Scope');
+        initSelect2(createWarehouse, 'Pilih scope');
+        initSelect2(detailStatus, 'Semua');
 
         const snapshotsDt = snapshotTableEl.DataTable({
             processing: true,
@@ -197,17 +230,58 @@
             ],
         });
 
-        warehouseFilter?.addEventListener('change', () => snapshotsDt.ajax.reload());
-        dateFrom?.addEventListener('change', () => snapshotsDt.ajax.reload());
-        dateTo?.addEventListener('change', () => snapshotsDt.ajax.reload());
+        let snapshotsReloadTimer = null;
+        const reloadSnapshots = () => {
+            window.clearTimeout(snapshotsReloadTimer);
+            snapshotsReloadTimer = window.setTimeout(() => snapshotsDt.ajax.reload(), 80);
+        };
+
+        if (typeof flatpickr !== 'undefined') {
+            if (dateFrom) {
+                fpDateFrom = flatpickr(dateFrom, {
+                    dateFormat: 'Y-m-d',
+                    allowInput: true,
+                    onChange: reloadSnapshots,
+                    onClose: reloadSnapshots,
+                });
+            }
+            if (dateTo) {
+                fpDateTo = flatpickr(dateTo, {
+                    dateFormat: 'Y-m-d',
+                    allowInput: true,
+                    onChange: reloadSnapshots,
+                    onClose: reloadSnapshots,
+                });
+            }
+        }
+
+        $(warehouseFilter).on('change', reloadSnapshots);
+        dateFrom?.addEventListener('change', reloadSnapshots);
+        dateTo?.addEventListener('change', reloadSnapshots);
         detailSearch?.addEventListener('input', () => selectedSnapshotId && detailDt.ajax.reload());
-        detailStatus?.addEventListener('change', () => selectedSnapshotId && detailDt.ajax.reload());
+        $(detailStatus).on('change', () => selectedSnapshotId && detailDt.ajax.reload());
+
+        document.querySelectorAll('[data-bs-toggle="tab"]').forEach((tabEl) => {
+            tabEl.addEventListener('shown.bs.tab', () => {
+                setTimeout(() => {
+                    snapshotsDt.columns.adjust();
+                    detailDt.columns.adjust();
+                }, 50);
+            });
+        });
 
         resetBtn?.addEventListener('click', () => {
-            if (warehouseFilter) warehouseFilter.value = '';
-            if (dateFrom) dateFrom.value = '';
-            if (dateTo) dateTo.value = '';
-            snapshotsDt.ajax.reload();
+            if (warehouseFilter) {
+                warehouseFilter.value = '';
+                if (typeof $ !== 'undefined' && $(warehouseFilter).data('select2')) {
+                    $(warehouseFilter).val('').trigger('change.select2');
+                }
+            }
+            if (fpDateFrom) fpDateFrom.clear(false);
+            else if (dateFrom) dateFrom.value = '';
+            if (fpDateTo) fpDateTo.clear(false);
+            else if (dateTo) dateTo.value = '';
+            reloadSnapshots();
         });
 
         snapshotTableEl.on('click', '.btn-detail-snapshot', function () {
@@ -215,6 +289,9 @@
             const row = snapshotsDt.row($(this).closest('tr')).data();
             if (detailTitle) detailTitle.textContent = `${row.snapshot_at} - ${row.warehouse}`;
             detailDt.ajax.url(detailDataUrlTpl.replace(':id', selectedSnapshotId)).load();
+            if (detailTabBtn && window.bootstrap?.Tab) {
+                bootstrap.Tab.getOrCreateInstance(detailTabBtn).show();
+            }
         });
 
         createBtn?.addEventListener('click', async () => {

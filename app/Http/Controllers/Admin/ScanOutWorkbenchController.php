@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Employee;
 use App\Models\Kurir;
 use App\Models\QcResiScan;
 use App\Models\Resi;
@@ -10,6 +11,7 @@ use App\Models\ShipmentScanOut;
 use App\Support\QcTransitStatus;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class ScanOutWorkbenchController extends Controller
 {
@@ -23,6 +25,7 @@ class ScanOutWorkbenchController extends Controller
                 'transitQc' => route('admin.outbound.transit-qc.index'),
             ],
             'today' => now()->toDateString(),
+            'packers' => $this->packerOptions(),
         ]);
     }
 
@@ -31,7 +34,7 @@ class ScanOutWorkbenchController extends Controller
         $limit = min(max((int) $request->input('limit', 12), 1), 50);
 
         $rows = ShipmentScanOut::query()
-            ->with(['resi.kurir', 'scanner:id,name'])
+            ->with(['resi.kurir', 'scanner:id,name', 'packedEmployee:id,employee_code,name'])
             ->whereDate('scan_date', now()->toDateString())
             ->orderByDesc('scanned_at')
             ->orderByDesc('id')
@@ -52,6 +55,7 @@ class ScanOutWorkbenchController extends Controller
         $validated = $request->validate([
             'type' => ['required', 'in:id_pesanan,no_resi'],
             'code' => ['required', 'string'],
+            'packed_employee_id' => ['nullable', 'integer'],
         ]);
 
         $type = $validated['type'];
@@ -59,6 +63,15 @@ class ScanOutWorkbenchController extends Controller
 
         if ($code === '') {
             return response()->json(['message' => 'Kode tidak boleh kosong.'], 422);
+        }
+
+        try {
+            $packedEmployeeId = $this->validatePackerEmployeeId($validated['packed_employee_id'] ?? null);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'errors' => $e->errors(),
+            ], 422);
         }
 
         $resi = Resi::query()
@@ -115,7 +128,7 @@ class ScanOutWorkbenchController extends Controller
 
                 return response()->json([
                     'message' => 'Resi sudah discan keluar.',
-                    'scan_out' => $this->formatScanOut($existingScan->loadMissing(['resi.kurir', 'scanner:id,name'])),
+                    'scan_out' => $this->formatScanOut($existingScan->loadMissing(['resi.kurir', 'scanner:id,name', 'packedEmployee:id,employee_code,name'])),
                 ], 422);
             }
 
@@ -128,6 +141,9 @@ class ScanOutWorkbenchController extends Controller
                 'scan_date' => now()->toDateString(),
                 'scanned_at' => now(),
                 'scanned_by' => auth()->id(),
+                'packed_employee_id' => $packedEmployeeId,
+                'packed_at' => $packedEmployeeId ? now() : null,
+                'packing_confirmed_by' => $packedEmployeeId ? auth()->id() : null,
             ]);
 
             DB::commit();
@@ -144,7 +160,7 @@ class ScanOutWorkbenchController extends Controller
             ], 500);
         }
 
-        $scanOut->loadMissing(['resi.kurir', 'scanner:id,name']);
+        $scanOut->loadMissing(['resi.kurir', 'scanner:id,name', 'packedEmployee:id,employee_code,name']);
 
         return response()->json([
             'message' => 'Scan out berhasil.',
@@ -170,7 +186,49 @@ class ScanOutWorkbenchController extends Controller
             'scanned_at' => $scan->scanned_at?->format('Y-m-d H:i:s') ?? '-',
             'scanned_time' => $scan->scanned_at?->format('H:i:s') ?? '-',
             'scanner' => $scan->scanner?->name ?? '-',
+            'packed_by' => $scan->packedEmployee?->name ?? '-',
+            'packed_employee_code' => $scan->packedEmployee?->employee_code ?? '-',
+            'packed_at' => $scan->packed_at?->format('Y-m-d H:i:s') ?? '-',
         ];
+    }
+
+    private function packerOptions()
+    {
+        return Employee::query()
+            ->active()
+            ->with('positionRelation:id,name')
+            ->where(function ($query) {
+                $query->whereHas('positionRelation', function ($positionQuery) {
+                    $positionQuery->whereRaw('LOWER(name) LIKE ?', ['%packer%']);
+                })->orWhereRaw('LOWER(COALESCE(position, "")) LIKE ?', ['%packer%']);
+            })
+            ->orderBy('name')
+            ->get(['id', 'employee_code', 'name', 'position', 'position_id']);
+    }
+
+    private function validatePackerEmployeeId(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $exists = Employee::query()
+            ->active()
+            ->whereKey((int) $value)
+            ->where(function ($query) {
+                $query->whereHas('positionRelation', function ($positionQuery) {
+                    $positionQuery->whereRaw('LOWER(name) LIKE ?', ['%packer%']);
+                })->orWhereRaw('LOWER(COALESCE(position, "")) LIKE ?', ['%packer%']);
+            })
+            ->exists();
+
+        if (!$exists) {
+            throw ValidationException::withMessages([
+                'packed_employee_id' => 'Packer tidak valid atau jabatan karyawan bukan packer.',
+            ]);
+        }
+
+        return (int) $value;
     }
 
     private function formatResi(Resi $resi): array

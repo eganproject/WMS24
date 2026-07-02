@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Mobile;
 
 use App\Http\Controllers\Controller;
+use App\Models\Employee;
 use App\Models\Kurir;
 use App\Models\QcResiScan;
 use App\Models\Resi;
@@ -10,6 +11,7 @@ use App\Models\ShipmentScanOut;
 use App\Support\QcTransitStatus;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class ScanOutController extends Controller
 {
@@ -23,6 +25,7 @@ class ScanOutController extends Controller
                 'desktop' => route('admin.outbound.scan-out.index'),
                 'logout' => route('logout'),
             ],
+            'packers' => $this->packerOptions(),
         ]);
     }
 
@@ -42,7 +45,7 @@ class ScanOutController extends Controller
     public function historyData(Request $request)
     {
         $query = ShipmentScanOut::query()
-            ->with('resi')
+            ->with(['resi', 'packedEmployee'])
             ->orderByDesc('scanned_at')
             ->orderByDesc('id');
 
@@ -71,6 +74,7 @@ class ScanOutController extends Controller
                 'scan_type' => $row->scan_type ?? '-',
                 'scan_code' => $row->scan_code ?? '-',
                 'scanned_at' => $row->scanned_at?->format('Y-m-d H:i') ?? '-',
+                'packed_by' => $row->packedEmployee?->name ?? '-',
             ];
         });
 
@@ -84,6 +88,7 @@ class ScanOutController extends Controller
         $validated = $request->validate([
             'type' => ['required', 'in:id_pesanan,no_resi'],
             'code' => ['required', 'string'],
+            'packed_employee_id' => ['nullable', 'integer'],
         ]);
 
         $type = $validated['type'];
@@ -91,6 +96,15 @@ class ScanOutController extends Controller
         if ($code === '') {
             return response()->json([
                 'message' => 'Kode tidak boleh kosong.',
+            ], 422);
+        }
+
+        try {
+            $packedEmployeeId = $this->validatePackerEmployeeId($validated['packed_employee_id'] ?? null);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'errors' => $e->errors(),
             ], 422);
         }
 
@@ -154,6 +168,9 @@ class ScanOutController extends Controller
                 'scan_date' => now()->toDateString(),
                 'scanned_at' => now(),
                 'scanned_by' => auth()->id(),
+                'packed_employee_id' => $packedEmployeeId,
+                'packed_at' => $packedEmployeeId ? now() : null,
+                'packing_confirmed_by' => $packedEmployeeId ? auth()->id() : null,
             ]);
 
             DB::commit();
@@ -172,10 +189,52 @@ class ScanOutController extends Controller
 
         return response()->json([
             'message' => 'Scan out berhasil.',
+            'scan_out' => [
+                'packed_by' => $packedEmployeeId ? Employee::query()->whereKey($packedEmployeeId)->value('name') : '-',
+            ],
             'resi' => [
                 'id_pesanan' => $resi->id_pesanan,
                 'no_resi' => $resi->no_resi,
             ],
         ]);
+    }
+
+    private function packerOptions()
+    {
+        return Employee::query()
+            ->active()
+            ->with('positionRelation:id,name')
+            ->where(function ($query) {
+                $query->whereHas('positionRelation', function ($positionQuery) {
+                    $positionQuery->whereRaw('LOWER(name) LIKE ?', ['%packer%']);
+                })->orWhereRaw('LOWER(COALESCE(position, "")) LIKE ?', ['%packer%']);
+            })
+            ->orderBy('name')
+            ->get(['id', 'employee_code', 'name', 'position', 'position_id']);
+    }
+
+    private function validatePackerEmployeeId(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $exists = Employee::query()
+            ->active()
+            ->whereKey((int) $value)
+            ->where(function ($query) {
+                $query->whereHas('positionRelation', function ($positionQuery) {
+                    $positionQuery->whereRaw('LOWER(name) LIKE ?', ['%packer%']);
+                })->orWhereRaw('LOWER(COALESCE(position, "")) LIKE ?', ['%packer%']);
+            })
+            ->exists();
+
+        if (!$exists) {
+            throw ValidationException::withMessages([
+                'packed_employee_id' => 'Packer tidak valid atau jabatan karyawan bukan packer.',
+            ]);
+        }
+
+        return (int) $value;
     }
 }

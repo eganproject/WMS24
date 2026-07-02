@@ -19,7 +19,7 @@ class ScanOutHistoryController extends Controller
     public function data(Request $request)
     {
         $baseQuery = ShipmentScanOut::query()
-            ->with(['resi', 'scanner'])
+            ->with(['resi', 'scanner', 'packedEmployee'])
             ->orderByDesc('scanned_at');
 
         $this->applyDateFilter($baseQuery, $request);
@@ -38,6 +38,9 @@ class ScanOutHistoryController extends Controller
                 })->orWhereHas('scanner', function ($userQ) use ($search, $exact) {
                     $this->applyTextSearch($userQ, 'name', $search, $exact);
                     $this->applyTextSearch($userQ, 'email', $search, $exact, 'or');
+                })->orWhereHas('packedEmployee', function ($employeeQ) use ($search, $exact) {
+                    $this->applyTextSearch($employeeQ, 'name', $search, $exact);
+                    $this->applyTextSearch($employeeQ, 'employee_code', $search, $exact, 'or');
                 });
             });
         }
@@ -57,6 +60,8 @@ class ScanOutHistoryController extends Controller
                 'scan_date' => $row->scan_date?->format('Y-m-d') ?? '-',
                 'scanned_at' => $row->scanned_at?->format('Y-m-d H:i') ?? '-',
                 'scanner' => $row->scanner?->name ?? '-',
+                'packed_by' => $row->packedEmployee?->name ?? '-',
+                'packed_at' => $row->packed_at?->format('Y-m-d H:i') ?? '-',
                 'scan_type' => $row->scan_type ?? '-',
                 'scan_code' => $row->scan_code ?? '-',
                 'id_pesanan' => $row->resi?->id_pesanan ?? '-',

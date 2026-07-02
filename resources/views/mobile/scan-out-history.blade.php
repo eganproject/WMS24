@@ -121,11 +121,12 @@
             const noResi = row.no_resi || '-';
             const scanType = row.scan_type === 'id_pesanan' ? 'ID Pesanan' : 'No Resi';
             const scannedAt = row.scanned_at || '-';
+            const packedBy = row.packed_by || '-';
             return `
                 <div class="list-row">
                     <div>
                         <strong>ID Pesanan: ${idPesanan}</strong>
-                        <small>No Resi: ${noResi} • ${scannedAt}</small>
+                        <small>No Resi: ${noResi} • ${scannedAt} • Packed: ${packedBy}</small>
                     </div>
                     <div class="type-badge">${scanType}</div>
                 </div>

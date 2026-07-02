@@ -35,6 +35,8 @@
                         <th>Tanggal</th>
                         <th>Jam Scan</th>
                         <th>Operator</th>
+                        <th>Packed By</th>
+                        <th>Packed At</th>
                         <th>Jenis Scan</th>
                         <th>Kode Scan</th>
                         <th>ID Pesanan</th>
@@ -98,6 +100,8 @@
                 { data: 'scan_date' },
                 { data: 'scanned_at' },
                 { data: 'scanner' },
+                { data: 'packed_by' },
+                { data: 'packed_at' },
                 { data: 'scan_type', render: (data) => {
                     if (data === 'id_pesanan') return 'ID Pesanan';
                     if (data === 'no_resi') return 'No Resi';

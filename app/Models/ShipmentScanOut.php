@@ -19,11 +19,15 @@ class ShipmentScanOut extends Model
         'scan_date',
         'scanned_at',
         'scanned_by',
+        'packed_employee_id',
+        'packed_at',
+        'packing_confirmed_by',
     ];
 
     protected $casts = [
         'scan_date' => 'date',
         'scanned_at' => 'datetime',
+        'packed_at' => 'datetime',
     ];
 
     public function resi()
@@ -34,6 +38,16 @@ class ShipmentScanOut extends Model
     public function scanner()
     {
         return $this->belongsTo(User::class, 'scanned_by');
+    }
+
+    public function packedEmployee()
+    {
+        return $this->belongsTo(Employee::class, 'packed_employee_id');
+    }
+
+    public function packingConfirmer()
+    {
+        return $this->belongsTo(User::class, 'packing_confirmed_by');
     }
 
     public function kurir()

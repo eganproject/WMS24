@@ -3,6 +3,8 @@
 namespace Tests\Feature\Admin;
 
 use App\Http\Middleware\AuthorizeMenuPermission;
+use App\Models\Employee;
+use App\Models\EmployeePosition;
 use App\Models\Kurir;
 use App\Models\QcResiScan;
 use App\Models\Resi;
@@ -20,6 +22,13 @@ class ScanOutWorkbenchTest extends TestCase
         $this->withoutMiddleware(AuthorizeMenuPermission::class);
 
         $user = $this->createUserWithRole('admin');
+        $packerPosition = EmployeePosition::create(['name' => 'Packer', 'is_active' => true]);
+        $packer = Employee::create([
+            'employee_code' => 'PKR-001',
+            'name' => 'Packer Test',
+            'employment_status' => 'active',
+            'position_id' => $packerPosition->id,
+        ]);
         $kurir = Kurir::create(['name' => 'JNE']);
         $notStarted = $this->createResi($user->id, $kurir->id, 'ORD-SO-001', 'RESI-SO-001');
         $inProgress = $this->createResi($user->id, $kurir->id, 'ORD-SO-002', 'RESI-SO-002');
@@ -67,13 +76,17 @@ class ScanOutWorkbenchTest extends TestCase
             ->postJson(route('admin.outbound.scan-out.scan'), [
                 'type' => 'no_resi',
                 'code' => $passed->no_resi,
+                'packed_employee_id' => $packer->id,
             ])
             ->assertOk()
-            ->assertJsonPath('scan_out.no_resi', $passed->no_resi);
+            ->assertJsonPath('scan_out.no_resi', $passed->no_resi)
+            ->assertJsonPath('scan_out.packed_by', 'Packer Test');
 
         $this->assertDatabaseHas('shipment_scan_outs', [
             'resi_id' => $passed->id,
             'scanned_by' => $user->id,
+            'packed_employee_id' => $packer->id,
+            'packing_confirmed_by' => $user->id,
         ]);
     }
 

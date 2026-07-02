@@ -193,9 +193,27 @@
     }
     .feedback-meta {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: .75rem;
         margin-top: 1rem;
+    }
+    .packing-box {
+        border: 1px solid #e4e6ef;
+        border-radius: .75rem;
+        padding: 1rem;
+        background: #f9fafc;
+        margin-bottom: 1rem;
+    }
+    .packing-label {
+        color: #3f4254;
+        font-size: .82rem;
+        font-weight: 800;
+        margin-bottom: .45rem;
+    }
+    .packing-help {
+        color: #7e8299;
+        font-size: .76rem;
+        margin-top: .4rem;
     }
     .meta-box {
         border: 1px solid #eef0f8;
@@ -390,6 +408,23 @@
 
 <div class="scanout-shell">
     <div class="scanout-panel scan-card">
+        <div class="packing-box">
+            <div class="packing-label">Packing Confirmation</div>
+            <select class="form-select form-select-solid" id="packed_employee_id">
+                <option value="">Pilih packer</option>
+                @foreach(($packers ?? []) as $packer)
+                    <option value="{{ $packer->id }}">{{ $packer->employee_code ? $packer->employee_code.' - ' : '' }}{{ $packer->name }}</option>
+                @endforeach
+            </select>
+            <div class="packing-help">
+                @if(($packers ?? collect())->isEmpty())
+                    Belum ada karyawan aktif dengan jabatan packer. Scan out tetap bisa berjalan tanpa pilihan packer.
+                @else
+                    Pilihan ini akan disimpan sebagai packed by saat scan out berhasil.
+                @endif
+            </div>
+        </div>
+
         <div class="scan-mode" role="radiogroup" aria-label="Jenis scan">
             <label class="mode-option">
                 <input type="radio" name="scan_type" value="no_resi" checked>
@@ -440,6 +475,10 @@
                         <div class="meta-box">
                             <div class="meta-label">Kurir</div>
                             <div class="meta-value" id="meta_kurir">-</div>
+                        </div>
+                        <div class="meta-box">
+                            <div class="meta-label">Packed By</div>
+                            <div class="meta-value" id="meta_packer">-</div>
                         </div>
                     </div>
                 </div>
@@ -492,6 +531,7 @@ const el = {
     btnClear: document.getElementById('btn_clear'),
     btnRefocus: document.getElementById('btn_refocus'),
     btnRefreshRecent: document.getElementById('btn_refresh_recent'),
+    packedEmployee: document.getElementById('packed_employee_id'),
     scannerState: document.getElementById('scanner_state'),
     feedback: document.getElementById('scan_feedback'),
     feedbackIcon: document.getElementById('feedback_icon'),
@@ -500,6 +540,7 @@ const el = {
     metaOrder: document.getElementById('meta_order'),
     metaResi: document.getElementById('meta_resi'),
     metaKurir: document.getElementById('meta_kurir'),
+    metaPacker: document.getElementById('meta_packer'),
     statToday: document.getElementById('stat_today'),
     statLast: document.getElementById('stat_last'),
     recentList: document.getElementById('recent_list'),
@@ -547,6 +588,7 @@ const setFeedback = (state, title, message, scanOut = null) => {
     el.metaOrder.textContent = scanOut?.id_pesanan || '-';
     el.metaResi.textContent = scanOut?.no_resi || '-';
     el.metaKurir.textContent = scanOut?.kurir || '-';
+    el.metaPacker.textContent = scanOut?.packed_by || '-';
 };
 const scanContextFromPayload = (payload = {}) => {
     const resi = payload?.resi || {};
@@ -557,6 +599,7 @@ const scanContextFromPayload = (payload = {}) => {
         id_pesanan: scanOut.id_pesanan || resi.id_pesanan || '-',
         no_resi: scanOut.no_resi || resi.no_resi || '-',
         kurir: scanOut.kurir || resi.kurir || qc.status_label || '-',
+        packed_by: scanOut.packed_by || '-',
     };
 };
 const rejectionTitle = (payload = {}) => {
@@ -621,7 +664,7 @@ const renderRecent = (items = []) => {
                 <span class="badge badge-light-success">${escapeHtml(item.scanned_time || '-')}</span>
             </div>
             <div class="recent-meta">ID: ${escapeHtml(item.id_pesanan || '-')} | ${escapeHtml(item.kurir || '-')}</div>
-            <div class="recent-meta">Oleh: ${escapeHtml(item.scanner || '-')}</div>
+            <div class="recent-meta">Scan: ${escapeHtml(item.scanner || '-')} | Packed: ${escapeHtml(item.packed_by || '-')}</div>
         </div>
     `).join('');
 };
@@ -654,7 +697,12 @@ const submitScan = async () => {
         const data = await fetchJson(routes.scan, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type: selectedType(), code, _token: csrfToken }),
+            body: JSON.stringify({
+                type: selectedType(),
+                code,
+                packed_employee_id: el.packedEmployee?.value || null,
+                _token: csrfToken,
+            }),
         });
         playScanSuccess();
         setFeedback('success', 'Scan Out Berhasil', data?.message || 'Resi berhasil discan keluar.', data?.scan_out);
@@ -681,7 +729,8 @@ const submitScan = async () => {
                         <div class="text-muted small">
                             ID Pesanan: ${escapeHtml(context.id_pesanan)}<br>
                             No Resi: ${escapeHtml(context.no_resi)}<br>
-                            Kurir/Status: ${escapeHtml(context.kurir)}
+                            Kurir/Status: ${escapeHtml(context.kurir)}<br>
+                            Packed By: ${escapeHtml(context.packed_by)}
                         </div>
                     </div>
                 `,

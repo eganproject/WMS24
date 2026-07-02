@@ -156,6 +156,12 @@
         <div class="section-title">Scan Out</div>
         <div class="muted">Scan resi atau ID pesanan untuk mengeluarkan barang dari gudang.</div>
         <div class="scan-actions">
+            <select class="input" id="packed_employee_id">
+                <option value="">Pilih packer</option>
+                @foreach(($packers ?? []) as $packer)
+                    <option value="{{ $packer->id }}">{{ $packer->employee_code ? $packer->employee_code.' - ' : '' }}{{ $packer->name }}</option>
+                @endforeach
+            </select>
             <select class="input" id="scan_type">
                 <option value="no_resi">No Resi</option>
                 <option value="id_pesanan">ID Pesanan</option>
@@ -210,6 +216,7 @@
 
     const el = {
         scanType: document.getElementById('scan_type'),
+        packedEmployee: document.getElementById('packed_employee_id'),
         scanCode: document.getElementById('scan_code'),
         btnScan: document.getElementById('btn_scan'),
         btnOpenScanner: document.getElementById('btn_open_scanner'),
@@ -365,6 +372,7 @@
 
     const renderResult = (data) => {
         const resi = data?.resi || {};
+        const scanOut = data?.scan_out || {};
         const items = Array.isArray(data?.items) ? data.items : [];
         const resiLine = [
             resi.id_pesanan ? `ID Pesanan: ${resi.id_pesanan}` : null,
@@ -373,7 +381,10 @@
         ].filter(Boolean).join(' • ');
 
         el.resultMeta.textContent = resiLine || '-';
-        el.resultItems.innerHTML = items.map((row) => {
+        const packingItem = scanOut.packed_by
+            ? `<div class="result-item"><strong>Packed By</strong><span>${scanOut.packed_by}</span></div>`
+            : '';
+        el.resultItems.innerHTML = packingItem + items.map((row) => {
             const qty = row.qty ?? 0;
             return `<div class="result-item"><strong>${row.sku || '-'}</strong><span>${qty} qty</span></div>`;
         }).join('');
@@ -401,7 +412,12 @@
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ code, type, _token: csrfToken }),
+                body: JSON.stringify({
+                    code,
+                    type,
+                    packed_employee_id: el.packedEmployee?.value || null,
+                    _token: csrfToken,
+                }),
             });
 
             setStatus(data?.message || 'Resi berhasil diproses.', 'success');

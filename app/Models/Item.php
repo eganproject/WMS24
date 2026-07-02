@@ -11,11 +11,14 @@ class Item extends Model
 
     public const TYPE_SINGLE = 'single';
     public const TYPE_BUNDLE = 'bundle';
+    public const STATUS_ACTIVE = 'active';
+    public const STATUS_INACTIVE = 'inactive';
 
     protected $fillable = [
         'sku',
         'name',
         'item_type',
+        'status',
         'category_id',
         'area_id',
         'location_id',
@@ -89,5 +92,10 @@ class Item extends Model
     public function isSingle(): bool
     {
         return !$this->isBundle();
+    }
+
+    public function isActive(): bool
+    {
+        return ($this->status ?: self::STATUS_ACTIVE) === self::STATUS_ACTIVE;
     }
 }

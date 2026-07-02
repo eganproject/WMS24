@@ -19,6 +19,7 @@ class ItemsTemplateExport implements FromCollection, WithHeadings
             'sku',
             'name',
             'item_type',
+            'status',
             'parent_category',
             'category',
             'stock_gudang_besar',

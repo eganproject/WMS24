@@ -15,7 +15,7 @@ use Maatwebsite\Excel\Concerns\WithMapping;
 
 class ItemStocksExport implements FromCollection, WithHeadings, WithMapping, ShouldAutoSize
 {
-    public function __construct(private string $search = '', private bool $exact = false)
+    public function __construct(private string $search = '', private bool $exact = false, private string $status = 'active')
     {
     }
 
@@ -31,6 +31,11 @@ class ItemStocksExport implements FromCollection, WithHeadings, WithMapping, Sho
         if ($search !== '') {
             ItemTextSearch::apply($query, $search, $this->exact);
         }
+        if ($this->status === Item::STATUS_INACTIVE) {
+            $query->where('status', Item::STATUS_INACTIVE);
+        } elseif ($this->status !== 'all') {
+            $query->where('status', Item::STATUS_ACTIVE);
+        }
         return $query->get();
     }
 
@@ -45,6 +50,7 @@ class ItemStocksExport implements FromCollection, WithHeadings, WithMapping, Sho
             'SKU',
             'Nama',
             'Tipe',
+            'Status',
             "Stok {$defaultLabel}",
             "Koli {$defaultLabel}",
             "Sisa Pcs {$defaultLabel}",
@@ -83,6 +89,7 @@ class ItemStocksExport implements FromCollection, WithHeadings, WithMapping, Sho
             $row->sku,
             $row->name,
             $isBundle ? 'bundle (virtual)' : 'single',
+            ($row->status ?: Item::STATUS_ACTIVE) === Item::STATUS_ACTIVE ? 'Aktif' : 'Nonaktif',
             $stockMain,
             $mainKoli ?? '-',
             $mainKoliRemainder ?? '-',

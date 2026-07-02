@@ -11,3 +11,7 @@ Artisan::command('inspire', function () {
 Schedule::command('attendance:webhook-logs:purge')
     ->dailyAt('02:15')
     ->withoutOverlapping();
+
+Schedule::command('inventory:low-stock-snapshot --warehouse=all')
+    ->dailyAt('07:00')
+    ->withoutOverlapping();

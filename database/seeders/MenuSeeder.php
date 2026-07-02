@@ -53,6 +53,7 @@ class MenuSeeder extends Seeder
             ['name' => 'SKU Exception QC', 'slug' => 'outbound-qc-scan-exceptions', 'route' => 'admin.outbound.qc-scan-exceptions.index', 'icon' => 'fas fa-ban', 'parent_slug' => 'outbound', 'sort_order' => 13.8],
             ['name' => 'Laporan Scan Out', 'slug' => 'outbound-scan-out-report', 'route' => 'admin.reports.scan-out-reports.index', 'icon' => 'fas fa-truck-loading', 'parent_slug' => 'reports', 'sort_order' => 1.2],
             ['name' => 'Laporan Stok Pengaman', 'slug' => 'report-low-stock', 'route' => 'admin.reports.low-stock.index', 'icon' => 'fas fa-exclamation-triangle', 'parent_slug' => 'reports', 'sort_order' => 1.25],
+            ['name' => 'Snapshot Low Stock', 'slug' => 'report-low-stock-snapshots', 'route' => 'admin.reports.low-stock-snapshots.index', 'icon' => 'fas fa-camera', 'parent_slug' => 'reports', 'sort_order' => 1.255],
             ['name' => 'Laporan Retur', 'slug' => 'report-returns', 'route' => 'admin.reports.returns.index', 'icon' => 'fas fa-undo', 'parent_slug' => 'reports', 'sort_order' => 1.26],
             ['name' => 'Laporan Absensi', 'slug' => 'report-attendance', 'route' => 'admin.reports.attendance.index', 'icon' => 'fas fa-user-clock', 'parent_slug' => 'reports', 'sort_order' => 1.265],
             ['name' => 'Replenishment Display', 'slug' => 'report-replenishment', 'route' => 'admin.reports.replenishment.index', 'icon' => 'fas fa-sync-alt', 'parent_slug' => 'reports', 'sort_order' => 1.27],

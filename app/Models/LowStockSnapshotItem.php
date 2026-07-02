@@ -5,31 +5,34 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class ItemStock extends Model
+class LowStockSnapshotItem extends Model
 {
     use HasFactory;
 
     protected $fillable = [
+        'low_stock_snapshot_id',
         'item_id',
         'warehouse_id',
+        'sku',
+        'name',
+        'warehouse',
+        'category',
+        'address',
         'stock',
         'safety_stock',
-        'is_stock_monitored',
+        'gap',
+        'status',
+        'safety_source',
     ];
 
     protected $casts = [
         'stock' => 'integer',
         'safety_stock' => 'integer',
-        'is_stock_monitored' => 'boolean',
+        'gap' => 'integer',
     ];
 
-    public function item()
+    public function snapshot()
     {
-        return $this->belongsTo(Item::class, 'item_id');
-    }
-
-    public function warehouse()
-    {
-        return $this->belongsTo(Warehouse::class, 'warehouse_id');
+        return $this->belongsTo(LowStockSnapshot::class, 'low_stock_snapshot_id');
     }
 }

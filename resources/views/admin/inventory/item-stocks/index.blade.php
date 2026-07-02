@@ -95,6 +95,14 @@
                         <option value="100">100 data</option>
                     </select>
                 </div>
+                <div class="w-150px">
+                    <label class="form-label fs-7 text-muted">Status SKU</label>
+                    <select class="form-select form-select-solid" id="filter_item_stocks_status" aria-label="Status SKU">
+                        <option value="active" selected>Aktif</option>
+                        <option value="inactive">Nonaktif</option>
+                        <option value="all">Semua</option>
+                    </select>
+                </div>
                 <button type="button" class="btn btn-light-primary" id="btn_export_item_stocks">Export Excel</button>
                 <button type="button" class="btn btn-primary" id="btn_bulk_safety_main" disabled>Ubah Safety Gudang Besar</button>
                 <button type="button" class="btn btn-primary" id="btn_bulk_safety_display" disabled>Ubah Safety Display</button>
@@ -362,11 +370,19 @@
                         <label class="fs-6 fw-bold form-label mb-2">Safety {{ $defaultWarehouseLabel ?? 'Gudang Besar' }}</label>
                         <input type="number" min="0" class="form-control form-control-solid" name="safety_main" id="safety_main" />
                         <div class="form-text text-muted" id="safety_main_hint">Kosongkan untuk gunakan safety default item.</div>
+                        <div class="form-check form-switch form-check-custom form-check-solid mt-4">
+                            <input class="form-check-input" type="checkbox" value="1" id="monitor_main" checked />
+                            <label class="form-check-label" for="monitor_main">Monitoring {{ $defaultWarehouseLabel ?? 'Gudang Besar' }}</label>
+                        </div>
                     </div>
                     <div class="fv-row mb-6" id="safety_display_wrap">
                         <label class="fs-6 fw-bold form-label mb-2">Safety {{ $displayWarehouseLabel ?? 'Gudang Display' }}</label>
                         <input type="number" min="0" class="form-control form-control-solid" name="safety_display" id="safety_display" />
                         <div class="form-text text-muted" id="safety_display_hint">Kosongkan untuk gunakan safety default item.</div>
+                        <div class="form-check form-switch form-check-custom form-check-solid mt-4">
+                            <input class="form-check-input" type="checkbox" value="1" id="monitor_display" checked />
+                            <label class="form-check-label" for="monitor_display">Monitoring {{ $displayWarehouseLabel ?? 'Gudang Display' }}</label>
+                        </div>
                     </div>
                     <div class="text-end pt-3">
                         <button type="button" class="btn btn-light me-3" data-bs-dismiss="modal">Batal</button>
@@ -401,6 +417,7 @@
         const searchInput = document.querySelector('[data-kt-filter="search"]');
         const searchModeSelect = document.getElementById('filter_item_stocks_search_mode');
         const limitSelect = document.getElementById('filter_item_stocks_limit');
+        const statusSelect = document.getElementById('filter_item_stocks_status');
         const exportBtn = document.getElementById('btn_export_item_stocks');
         const bulkSafetyMainBtn = document.getElementById('btn_bulk_safety_main');
         const bulkSafetyDisplayBtn = document.getElementById('btn_bulk_safety_display');
@@ -414,9 +431,11 @@
         const safetyMainWrap = document.getElementById('safety_main_wrap');
         const safetyMainHint = document.getElementById('safety_main_hint');
         const safetyMain = document.getElementById('safety_main');
+        const monitorMain = document.getElementById('monitor_main');
         const safetyDisplayWrap = document.getElementById('safety_display_wrap');
         const safetyDisplay = document.getElementById('safety_display');
         const safetyDisplayHint = document.getElementById('safety_display_hint');
+        const monitorDisplay = document.getElementById('monitor_display');
         const itemDetailModalEl = document.getElementById('modal_item_detail');
         const itemDetailModal = itemDetailModalEl ? new bootstrap.Modal(itemDetailModalEl) : null;
         const editStockModalEl = document.getElementById('modal_edit_stock');
@@ -508,6 +527,16 @@
         const renderItemTypeBadge = (type) => type === 'bundle'
             ? '<span class="badge badge-light-primary">Bundle</span>'
             : '<span class="badge badge-light-success">Single</span>';
+
+        const renderSafetyValue = (data, row, monitorKey) => {
+            if (row.item_type === 'bundle') return '-';
+            const value = data ?? 0;
+            const monitor = row[monitorKey] !== false;
+            const badge = monitor
+                ? '<div class="badge badge-light-success mt-1">Dimonitor</div>'
+                : '<div class="badge badge-light-secondary mt-1">Tidak dimonitor</div>';
+            return `<span>${formatStockNumber(value)}</span>${badge}`;
+        };
 
         const detailText = (id, value) => {
             const el = document.getElementById(id);
@@ -739,6 +768,7 @@
                 data: function(params) {
                     params.q = searchInput?.value || '';
                     params.search_mode = searchModeSelect?.value || 'contains';
+                    params.status = statusSelect?.value || 'active';
                 }
             },
             columns: [
@@ -759,9 +789,9 @@
                 { data: 'name' },
                 { data: 'item_type', render: (data) => renderItemTypeBadge(data) },
                 { data: 'stock_main', className: 'text-end', render: (data, type, row) => renderWarehouseStock(data, type, row, 'virtual_main', 'is_main_below_safety', { showKoli: true, warehouseId: defaultWarehouseId, warehouseLabel: @json($defaultWarehouseLabel ?? 'Gudang Besar'), stockKey: 'stock_main', mode: 'koli' }) },
-                { data: 'safety_main', className: 'text-end', render: (data, type, row) => row.item_type === 'bundle' ? '-' : (data ?? 0) },
+                { data: 'safety_main', className: 'text-end', render: (data, type, row) => renderSafetyValue(data, row, 'monitor_main') },
                 { data: 'stock_display', className: 'text-end', render: (data, type, row) => renderWarehouseStock(data, type, row, 'virtual_display', 'is_display_below_safety', { warehouseId: displayWarehouseId, warehouseLabel: @json($displayWarehouseLabel ?? 'Gudang Display'), stockKey: 'stock_display', mode: 'pcs' }) },
-                { data: 'safety_display', className: 'text-end', render: (data, type, row) => row.item_type === 'bundle' ? '-' : (data ?? 0) },
+                { data: 'safety_display', className: 'text-end', render: (data, type, row) => renderSafetyValue(data, row, 'monitor_display') },
                 { data: 'stock_damaged', className: 'text-end', render: (data, type, row) => row.item_type === 'bundle' ? '-' : (data ?? 0) },
                 { data: 'stock_good_total', className: 'text-end', render: (data, type, row) => row.item_type === 'bundle' ? `<span class="fw-bold text-primary">${row.virtual_total ?? 0}</span><div class="text-muted fs-8">virtual total</div>` : (data ?? 0) },
                 { data: 'stock_total', className: 'text-end', render: (data, type, row) => row.item_type === 'bundle' ? '-' : (data ?? 0) },
@@ -770,7 +800,7 @@
                     const safeName = escapeHtml(row.name || '');
                     const detailItem = `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-item-detail" data-id="${data}">Detail Item</a></div>`;
                     const mutItem = `<div class="menu-item px-3"><a href="${mutationIndexUrl}?item_id=${encodeURIComponent(data)}&warehouse_id=all" class="menu-link px-3">Mutasi</a></div>`;
-                    const safetyItem = row.item_type === 'bundle' ? '' : `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-safety" data-id="${data}" data-sku="${safeSku}" data-name="${safeName}" data-safety-main="${row.safety_main_raw ?? ''}" data-safety-display="${row.safety_display_raw ?? ''}" data-safety-base="${row.safety_base ?? 0}">Set Safety</a></div>`;
+                    const safetyItem = row.item_type === 'bundle' ? '' : `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-safety" data-id="${data}" data-sku="${safeSku}" data-name="${safeName}" data-safety-main="${row.safety_main_raw ?? ''}" data-safety-display="${row.safety_display_raw ?? ''}" data-safety-base="${row.safety_base ?? 0}" data-monitor-main="${row.monitor_main ? '1' : '0'}" data-monitor-display="${row.monitor_display ? '1' : '0'}">Set Safety & Monitoring</a></div>`;
                     const actions = `${detailItem}${mutItem}${safetyItem}`;
                     return `
                         <div class="text-end">
@@ -826,6 +856,7 @@
         const reloadTable = () => dt.ajax.reload();
         searchInput?.addEventListener('input', reloadTable);
         searchModeSelect?.addEventListener('change', reloadTable);
+        statusSelect?.addEventListener('change', reloadTable);
         limitSelect?.addEventListener('change', () => {
             const val = Number(limitSelect.value || 10);
             dt.page.len(val).draw();
@@ -836,6 +867,7 @@
             const params = new URLSearchParams();
             if (q) params.set('q', q);
             params.set('search_mode', mode);
+            params.set('status', statusSelect?.value || 'active');
             const query = params.toString();
             window.location.href = query ? `${exportUrl}?${query}` : exportUrl;
         });
@@ -860,6 +892,8 @@
             const mainRaw = this.getAttribute('data-safety-main');
             const displayRaw = this.getAttribute('data-safety-display');
             const base = this.getAttribute('data-safety-base') || 0;
+            const monitorMainValue = this.getAttribute('data-monitor-main') !== '0';
+            const monitorDisplayValue = this.getAttribute('data-monitor-display') !== '0';
 
             if (safetyModalTitle) safetyModalTitle.textContent = 'Safety Stock per Gudang';
             if (safetyMainWrap) safetyMainWrap.style.display = '';
@@ -872,6 +906,8 @@
             if (safetyDisplay) safetyDisplay.value = displayRaw !== null && displayRaw !== '' ? displayRaw : '';
             if (safetyMain) safetyMain.placeholder = `Default: ${base}`;
             if (safetyDisplay) safetyDisplay.placeholder = `Default: ${base}`;
+            if (monitorMain) monitorMain.checked = monitorMainValue;
+            if (monitorDisplay) monitorDisplay.checked = monitorDisplayValue;
             safetyModal?.show();
         });
 
@@ -918,6 +954,8 @@
                 safetyDisplay.value = '';
                 safetyDisplay.placeholder = placeholder;
             }
+            if (monitorMain) monitorMain.checked = true;
+            if (monitorDisplay) monitorDisplay.checked = true;
             if (safetyMainHint) safetyMainHint.textContent = 'Nilai ini akan diterapkan ke semua item yang dicentang.';
             if (safetyDisplayHint) safetyDisplayHint.textContent = 'Nilai ini akan diterapkan ke semua item yang dicentang.';
             safetyModal?.show();
@@ -1053,13 +1091,17 @@
                 selectedItemIds.forEach((id) => formData.append('item_ids[]', id));
                 if (safetyBulkTarget === 'main') {
                     formData.append('safety_main', safetyMain?.value ?? '');
+                    formData.append('monitor_main', monitorMain?.checked ? '1' : '0');
                 } else {
                     formData.append('safety_display', safetyDisplay?.value ?? '');
+                    formData.append('monitor_display', monitorDisplay?.checked ? '1' : '0');
                 }
             } else {
                 formData.append('item_id', safetyItemId?.value ?? '');
                 formData.append('safety_main', safetyMain?.value ?? '');
                 formData.append('safety_display', safetyDisplay?.value ?? '');
+                formData.append('monitor_main', monitorMain?.checked ? '1' : '0');
+                formData.append('monitor_display', monitorDisplay?.checked ? '1' : '0');
             }
             try {
                 const res = await fetch(updateSafetyUrl, {

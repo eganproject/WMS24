@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Category;
+use App\Models\Item;
 use App\Models\Warehouse;
 use App\Support\WarehouseService;
 use Illuminate\Http\Request;
@@ -73,8 +74,11 @@ class ReplenishmentReportController extends Controller
             ->leftJoin('categories as c', 'c.id', '=', 'i.category_id')
             ->where(function ($query) {
                 $query->whereNull('i.item_type')
-                    ->orWhere('i.item_type', '!=', 'bundle');
+                    ->orWhere('i.item_type', '!=', Item::TYPE_BUNDLE);
             })
+            ->where('i.status', Item::STATUS_ACTIVE)
+            ->whereRaw('COALESCE(sd.is_stock_monitored, 1) = 1')
+            ->whereRaw('COALESCE(sm.is_stock_monitored, 1) = 1')
             ->whereRaw("{$displaySafetyExpr} > 0")
             ->whereRaw("{$displayStockExpr} < {$displaySafetyExpr}");
 

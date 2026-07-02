@@ -54,6 +54,7 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             $sku = trim((string) ($row['sku'] ?? ''));
             $name = trim((string) ($row['name'] ?? ''));
             $itemType = trim((string) ($row['item_type'] ?? ''));
+            $status = $this->parseStatus($row);
             $parentCategoryName = trim((string) ($row['parent_category'] ?? ''));
             $categoryName = trim((string) ($row['category'] ?? ''));
             $description = trim((string) ($row['description'] ?? ''));
@@ -147,6 +148,7 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             $payload = [
                 'name' => $name,
                 'item_type' => Item::TYPE_SINGLE,
+                'status' => $status,
                 'category_id' => $catId,
                 'description' => $description,
             ];
@@ -289,6 +291,20 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
         }
         $value = is_numeric($raw) ? (int) $raw : (int) preg_replace('/[^0-9\-]/', '', (string) $raw);
         return $value > 0 ? $value : 0;
+    }
+
+    protected function parseStatus($row): string
+    {
+        $raw = $this->getValue($row, ['status', 'item_status', 'sku_status', 'aktif', 'active']);
+        if ($raw === null || $raw === '') {
+            return Item::STATUS_ACTIVE;
+        }
+
+        $value = mb_strtolower(trim((string) $raw));
+        return match ($value) {
+            '0', 'false', 'no', 'nonaktif', 'non_aktif', 'inactive', 'tidak aktif', 'discontinued' => Item::STATUS_INACTIVE,
+            default => Item::STATUS_ACTIVE,
+        };
     }
 
     protected function parseSafetyStockByWarehouse($row): array

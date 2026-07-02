@@ -67,12 +67,25 @@ class ItemStockController extends Controller
             })
             ->select('items.*');
 
+        $statusFilter = (string) $request->input('status', 'active');
+        if ($statusFilter === 'inactive') {
+            $query->where('items.status', Item::STATUS_INACTIVE);
+        } elseif ($statusFilter !== 'all') {
+            $query->where('items.status', Item::STATUS_ACTIVE);
+        }
+
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
             ItemTextSearch::apply($query, $search, $this->isExactSearch($request));
         }
 
-        $recordsTotal = Item::count();
+        $recordsTotalQuery = Item::query();
+        if ($statusFilter === 'inactive') {
+            $recordsTotalQuery->where('status', Item::STATUS_INACTIVE);
+        } elseif ($statusFilter !== 'all') {
+            $recordsTotalQuery->where('status', Item::STATUS_ACTIVE);
+        }
+        $recordsTotal = $recordsTotalQuery->count();
         $recordsFiltered = (clone $query)->count();
 
         $this->applyDataTableOrder($query, $request);
@@ -92,6 +105,8 @@ class ItemStockController extends Controller
             $stockDamaged = $isBundle ? null : (int) ($stocks->get($damagedId)?->stock ?? 0);
             $safetyMainRaw = $stocks->get($defaultId)?->safety_stock;
             $safetyDisplayRaw = $stocks->get($displayId)?->safety_stock;
+            $monitorMain = (bool) ($stocks->get($defaultId)?->is_stock_monitored ?? true);
+            $monitorDisplay = (bool) ($stocks->get($displayId)?->is_stock_monitored ?? true);
             $safetyMain = $safetyMainRaw !== null ? (int) $safetyMainRaw : $baseSafety;
             $safetyDisplay = $safetyDisplayRaw !== null ? (int) $safetyDisplayRaw : $baseSafety;
             $virtualMain = $isBundle ? BundleService::virtualAvailableQty($i, $defaultId) : null;
@@ -108,6 +123,8 @@ class ItemStockController extends Controller
                 'sku' => $i->sku,
                 'name' => $i->name,
                 'item_type' => $i->item_type,
+                'status' => $i->status ?: Item::STATUS_ACTIVE,
+                'status_label' => ($i->status ?: Item::STATUS_ACTIVE) === Item::STATUS_ACTIVE ? 'Aktif' : 'Nonaktif',
                 'category' => $i->category?->name ?? '-',
                 'address' => $i->resolvedAddress(),
                 'area_code' => $area?->code ?? '',
@@ -137,8 +154,10 @@ class ItemStockController extends Controller
                 'safety_base' => $baseSafety,
                 'safety_main_raw' => $safetyMainRaw,
                 'safety_display_raw' => $safetyDisplayRaw,
-                'is_main_below_safety' => !$isBundle && $safetyMain > 0 && $stockMain < $safetyMain,
-                'is_display_below_safety' => !$isBundle && $safetyDisplay > 0 && $stockDisplay < $safetyDisplay,
+                'monitor_main' => $monitorMain,
+                'monitor_display' => $monitorDisplay,
+                'is_main_below_safety' => !$isBundle && $monitorMain && $safetyMain > 0 && $stockMain < $safetyMain,
+                'is_display_below_safety' => !$isBundle && $monitorDisplay && $safetyDisplay > 0 && $stockDisplay < $safetyDisplay,
             ];
         });
 
@@ -153,9 +172,10 @@ class ItemStockController extends Controller
     public function export(Request $request)
     {
         $search = trim((string) $request->input('q', ''));
+        $status = (string) $request->input('status', 'active');
         $filename = 'item-stocks-'.now()->format('YmdHis').'.xlsx';
 
-        return Excel::download(new ItemStocksExport($search, $this->isExactSearch($request)), $filename);
+        return Excel::download(new ItemStocksExport($search, $this->isExactSearch($request), $status), $filename);
     }
 
     public function updateSafety(Request $request)
@@ -166,6 +186,8 @@ class ItemStockController extends Controller
             'item_ids.*' => ['integer', 'distinct', 'exists:items,id'],
             'safety_main' => ['nullable', 'integer', 'min:0'],
             'safety_display' => ['nullable', 'integer', 'min:0'],
+            'monitor_main' => ['nullable', 'boolean'],
+            'monitor_display' => ['nullable', 'boolean'],
         ]);
 
         $itemIds = collect($validated['item_ids'] ?? [])
@@ -194,9 +216,11 @@ class ItemStockController extends Controller
 
         $updateMain = $request->has('safety_main');
         $updateDisplay = $request->has('safety_display');
-        if (!$updateMain && !$updateDisplay) {
+        $updateMonitorMain = $request->has('monitor_main');
+        $updateMonitorDisplay = $request->has('monitor_display');
+        if (!$updateMain && !$updateDisplay && !$updateMonitorMain && !$updateMonitorDisplay) {
             throw ValidationException::withMessages([
-                'safety_display' => 'Isi safety stock yang akan diubah.',
+                'safety_display' => 'Isi safety stock atau monitoring yang akan diubah.',
             ]);
         }
 
@@ -215,6 +239,16 @@ class ItemStockController extends Controller
                         ['stock' => 0]
                     );
                     $mainStock->safety_stock = $mainVal;
+                    if ($updateMonitorMain) {
+                        $mainStock->is_stock_monitored = (bool) $validated['monitor_main'];
+                    }
+                    $mainStock->save();
+                } elseif ($updateMonitorMain) {
+                    $mainStock = ItemStock::firstOrCreate(
+                        ['item_id' => $itemId, 'warehouse_id' => $defaultId],
+                        ['stock' => 0]
+                    );
+                    $mainStock->is_stock_monitored = (bool) $validated['monitor_main'];
                     $mainStock->save();
                 }
 
@@ -224,6 +258,16 @@ class ItemStockController extends Controller
                         ['stock' => 0]
                     );
                     $displayStock->safety_stock = $displayVal;
+                    if ($updateMonitorDisplay) {
+                        $displayStock->is_stock_monitored = (bool) $validated['monitor_display'];
+                    }
+                    $displayStock->save();
+                } elseif ($updateMonitorDisplay) {
+                    $displayStock = ItemStock::firstOrCreate(
+                        ['item_id' => $itemId, 'warehouse_id' => $displayId],
+                        ['stock' => 0]
+                    );
+                    $displayStock->is_stock_monitored = (bool) $validated['monitor_display'];
                     $displayStock->save();
                 }
             }

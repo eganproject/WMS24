@@ -52,6 +52,13 @@ class ItemController extends Controller
     {
         $query = Item::with(['category', 'location.area', 'area', 'barcodes', 'bundleComponents.component'])->orderBy('name');
 
+        $statusFilter = (string) $request->input('status', 'active');
+        if ($statusFilter === Item::STATUS_INACTIVE) {
+            $query->where('status', Item::STATUS_INACTIVE);
+        } elseif ($statusFilter !== 'all') {
+            $query->where('status', Item::STATUS_ACTIVE);
+        }
+
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
             $exact = $this->isExactSearch($request);
@@ -86,7 +93,13 @@ class ItemController extends Controller
             }
         }
 
-        $recordsTotal = Item::count();
+        $recordsTotalQuery = Item::query();
+        if ($statusFilter === Item::STATUS_INACTIVE) {
+            $recordsTotalQuery->where('status', Item::STATUS_INACTIVE);
+        } elseif ($statusFilter !== 'all') {
+            $recordsTotalQuery->where('status', Item::STATUS_ACTIVE);
+        }
+        $recordsTotal = $recordsTotalQuery->count();
         $recordsFiltered = (clone $query)->count();
 
         $start = (int) $request->input('start', 0);
@@ -105,6 +118,8 @@ class ItemController extends Controller
                 'name' => $i->name,
                 'item_type' => $i->item_type ?: Item::TYPE_SINGLE,
                 'type_label' => $i->isBundle() ? 'Bundle' : 'Single',
+                'status' => $i->status ?: Item::STATUS_ACTIVE,
+                'status_label' => ($i->status ?: Item::STATUS_ACTIVE) === Item::STATUS_ACTIVE ? 'Aktif' : 'Nonaktif',
                 'category' => $i->category?->name ?? '-',
                 'category_id' => $i->category_id,
                 'address' => $address,
@@ -145,6 +160,7 @@ class ItemController extends Controller
             'sku' => ['required', 'string', 'max:100', 'unique:items,sku'],
             'name' => ['required', 'string', 'max:150'],
             'item_type' => ['required', Rule::in([Item::TYPE_SINGLE, Item::TYPE_BUNDLE])],
+            'status' => ['nullable', Rule::in([Item::STATUS_ACTIVE, Item::STATUS_INACTIVE])],
             'category_id' => ['nullable', 'integer', 'min:0', function($attr, $value, $fail) {
                 if ((int)$value === 0) return;
                 if (!Category::where('id', $value)->exists()) {
@@ -171,6 +187,7 @@ class ItemController extends Controller
 
         $catId = $request->input('category_id');
         $validated['category_id'] = ($catId === null || (int)$catId === 0) ? 0 : $catId;
+        $validated['status'] = $validated['status'] ?? Item::STATUS_ACTIVE;
         if (array_key_exists('safety_stock', $validated)) {
             $validated['safety_stock'] = max(0, (int) $validated['safety_stock']);
         }
@@ -235,6 +252,7 @@ class ItemController extends Controller
             'sku' => ['required', 'string', 'max:100', Rule::unique('items', 'sku')->ignore($item->id)],
             'name' => ['required', 'string', 'max:150'],
             'item_type' => ['required', Rule::in([Item::TYPE_SINGLE, Item::TYPE_BUNDLE])],
+            'status' => ['nullable', Rule::in([Item::STATUS_ACTIVE, Item::STATUS_INACTIVE])],
             'category_id' => ['nullable', 'integer', 'min:0', function($attr, $value, $fail) {
                 if ((int)$value === 0) return;
                 if (!Category::where('id', $value)->exists()) {
@@ -261,6 +279,7 @@ class ItemController extends Controller
 
         $catId = $request->input('category_id');
         $validated['category_id'] = ($catId === null || (int)$catId === 0) ? 0 : $catId;
+        $validated['status'] = $validated['status'] ?? Item::STATUS_ACTIVE;
         if (array_key_exists('safety_stock', $validated)) {
             $validated['safety_stock'] = max(0, (int) $validated['safety_stock']);
         }

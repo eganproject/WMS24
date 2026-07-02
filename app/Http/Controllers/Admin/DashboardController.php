@@ -208,6 +208,8 @@ class DashboardController extends Controller
                 $query->whereNull('i.item_type')
                     ->orWhere('i.item_type', '!=', 'bundle');
             })
+            ->where('i.status', 'active')
+            ->whereRaw('COALESCE(s.is_stock_monitored, 1) = 1')
             ->where(function ($query) {
                 $query->whereNull('w.type')
                     ->orWhere('w.type', '!=', 'damaged');
@@ -263,6 +265,8 @@ class DashboardController extends Controller
                 $query->whereNull('i.item_type')
                     ->orWhere('i.item_type', '!=', 'bundle');
             })
+            ->where('i.status', 'active')
+            ->whereRaw('COALESCE(s.is_stock_monitored, 1) = 1')
             ->where(function ($query) {
                 $query->whereNull('w.type')
                     ->orWhere('w.type', '!=', 'damaged');

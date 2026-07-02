@@ -420,6 +420,8 @@ class TelegramBotService
             ->whereHas('item')
             ->join('items', 'items.id', '=', 'item_stocks.item_id')
             ->select('item_stocks.*')
+            ->where('items.status', Item::STATUS_ACTIVE)
+            ->where('item_stocks.is_stock_monitored', true)
             ->whereRaw('item_stocks.stock < COALESCE(item_stocks.safety_stock, items.safety_stock, 0)')
             ->whereRaw('COALESCE(item_stocks.safety_stock, items.safety_stock, 0) > 0');
 

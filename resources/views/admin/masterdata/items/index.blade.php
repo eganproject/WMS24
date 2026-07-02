@@ -56,6 +56,14 @@
                                 @endforeach
                             </select>
                         </div>
+                        <div class="mb-10">
+                            <label class="form-label fs-6 fw-bold">Status:</label>
+                            <select id="filter_item_status" class="form-select form-select-solid fw-bolder">
+                                <option value="active" selected>Aktif</option>
+                                <option value="inactive">Nonaktif</option>
+                                <option value="all">Semua</option>
+                            </select>
+                        </div>
                         <div class="d-flex justify-content-end">
                             <button type="button" class="btn btn-light btn-active-light-primary me-2" id="filter_items_reset">Reset</button>
                             <button type="button" class="btn btn-primary" id="filter_items_apply">Apply</button>
@@ -83,6 +91,7 @@
                         <th>SKU</th>
                         <th>Nama</th>
                         <th>Tipe</th>
+                        <th>Status</th>
                         <th>Kategori</th>
                         <th>Alamat</th>
                         <th>Deskripsi</th>
@@ -135,6 +144,15 @@
                         </select>
                         <div class="form-text">Bundle tidak memiliki stok fisik. Stoknya dihitung dari komponen.</div>
                         <div class="invalid-feedback" id="error_item_type"></div>
+                    </div>
+                    <div class="fv-row mb-7">
+                        <label class="required fs-6 fw-bold form-label mb-2">Status SKU</label>
+                        <select name="status" id="item_status" class="form-select form-select-solid">
+                            <option value="active">Aktif</option>
+                            <option value="inactive">Nonaktif</option>
+                        </select>
+                        <div class="form-text">SKU nonaktif tidak tampil default di Item Stocks, low stock, snapshot, dan replenishment.</div>
+                        <div class="invalid-feedback" id="error_status"></div>
                     </div>
                     <div class="fv-row mb-7">
                         <label class="fs-6 fw-bold form-label mb-2">Kategori</label>
@@ -263,6 +281,7 @@
                     <ul class="ms-5 mb-4">
                         <li><strong>sku</strong> (wajib, unik)</li>
                         <li><strong>name</strong> (wajib)</li>
+                        <li><strong>status</strong> (opsional: <code>active</code>/<code>inactive</code>, default <code>active</code>)</li>
                         <li><strong>parent_category</strong> (opsional, parent kategori; akan dibuat jika belum ada)</li>
                         <li><strong>category</strong> (opsional, anak kategori; jika kosong akan dimasukkan ke kategori default "Tanpa Kategori")</li>
                         <li><strong>stock_gudang_besar</strong> / <strong>stok_gudang_besar</strong> (opsional, stok awal gudang besar)</li>
@@ -279,7 +298,7 @@
                     </ul>
                     <p class="text-muted small mb-1">Jika Anda menambahkan kolom <code>item_type</code>, nilainya hanya boleh <code>single</code>. Nilai <code>bundle</code> akan ditolak.</p>
                     <p class="text-muted small mb-1">Tambahkan kolom <code>external_barcodes</code> atau <code>barcode</code> jika ingin mengisi alias barcode/QR eksternal. Pisahkan banyak barcode dengan koma, titik koma, atau baris baru.</p>
-                    <p class="text-muted small mb-1">Contoh header: <code>sku,name,item_type,parent_category,category,stock_gudang_besar,stock_gudang_display,stock,safety_stock_gudang_besar,safety_stock_gudang_display,safety_stock,koli_qty,external_barcodes,area,rack,column,row,description</code></p>
+                    <p class="text-muted small mb-1">Contoh header: <code>sku,name,item_type,status,parent_category,category,stock_gudang_besar,stock_gudang_display,stock,safety_stock_gudang_besar,safety_stock_gudang_display,safety_stock,koli_qty,external_barcodes,area,rack,column,row,description</code></p>
                     <p class="text-muted small mb-1">Gunakan format Excel (.xlsx/.xls) dengan header di baris pertama.</p>
                     <p class="text-muted small mb-1">Jika kolom category dikosongkan, item otomatis dimasukkan ke kategori "Tanpa Kategori".</p>
                     <p class="text-muted small mb-0">Catatan: gunakan <code>area</code> saja jika baru tahu area umum. Jika ingin alamat detail, lengkapi <code>area</code>, <code>rack</code>, <code>column</code>, dan <code>row</code>.</p>
@@ -523,6 +542,7 @@
         const formSku = document.getElementById('item_sku');
         const formName = document.getElementById('item_name');
         const formType = document.getElementById('item_type');
+        const formStatus = document.getElementById('item_status');
         const formCategory = document.getElementById('item_category_id');
         const formArea = document.getElementById('item_area_id');
         const formRack = document.getElementById('item_rack_code');
@@ -794,6 +814,11 @@
                 allowClear: true,
                 width: '100%'
             }).on('select2:opening select2:closing select2:close', function(e){ e.stopPropagation(); });
+            $('#filter_item_status').select2({
+                placeholder: 'Status',
+                allowClear: false,
+                width: '100%'
+            }).on('select2:opening select2:closing select2:close', function(e){ e.stopPropagation(); });
             $(formCategory).select2({
                 placeholder: 'Pilih kategori',
                 allowClear: true,
@@ -839,6 +864,7 @@
                 data: function(params) {
                     params.q = searchInput?.value || '';
                     params.category_id = categoryFilter?.value || '';
+                    params.status = document.getElementById('filter_item_status')?.value || 'active';
                 }
             },
             columns: [
@@ -846,6 +872,7 @@
                 { data: 'sku' },
                 { data: 'name' },
                 { data: 'type_label', render: (data, type, row) => row.item_type === 'bundle' ? '<span class="badge badge-light-primary">Bundle</span>' : '<span class="badge badge-light-success">Single</span>' },
+                { data: 'status_label', render: (data, type, row) => row.status === 'inactive' ? '<span class="badge badge-light-secondary">Nonaktif</span>' : '<span class="badge badge-light-success">Aktif</span>' },
                 { data: 'category' },
                 { data: 'address' },
                 { data: 'description' },
@@ -856,7 +883,7 @@
                     const components = encodeURIComponent(JSON.stringify(row.bundle_components || []));
                     const externalBarcodes = encodeURIComponent(JSON.stringify(row.external_barcodes || []));
                     const qrItem = `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-qr" data-id="${data}" data-sku="${row.sku}" data-name="${row.name}">QR Code</a></div>`;
-                    const editItem = canUpdate ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-edit" data-id="${data}" data-sku="${row.sku}" data-name="${row.name}" data-item-type="${row.item_type}" data-category="${row.category_id}" data-address="${row.address ?? ''}" data-area-id="${row.area_id ?? ''}" data-rack-code="${row.rack_code ?? ''}" data-column-no="${row.column_no ?? ''}" data-row-no="${row.row_no ?? ''}" data-description="${row.description}" data-koli-qty="${row.koli_qty ?? ''}" data-safety-stock="${row.safety_stock ?? 0}" data-external-barcodes="${externalBarcodes}" data-bundle-components="${components}">Edit</a></div>` : '';
+                    const editItem = canUpdate ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-edit" data-id="${data}" data-sku="${row.sku}" data-name="${row.name}" data-item-type="${row.item_type}" data-status="${row.status || 'active'}" data-category="${row.category_id}" data-address="${row.address ?? ''}" data-area-id="${row.area_id ?? ''}" data-rack-code="${row.rack_code ?? ''}" data-column-no="${row.column_no ?? ''}" data-row-no="${row.row_no ?? ''}" data-description="${row.description}" data-koli-qty="${row.koli_qty ?? ''}" data-safety-stock="${row.safety_stock ?? 0}" data-external-barcodes="${externalBarcodes}" data-bundle-components="${components}">Edit</a></div>` : '';
                     const delItem = canDelete ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 text-danger btn-delete" data-id="${data}">Hapus</a></div>` : '';
                     const actions = `${qrItem}${editItem}${delItem}`;
                     if (!actions) return '';
@@ -886,6 +913,7 @@
         searchInput?.addEventListener('keyup', reloadTable);
         applyBtn?.addEventListener('click', reloadTable);
         categoryFilter?.addEventListener('change', reloadTable);
+        document.getElementById('filter_item_status')?.addEventListener('change', reloadTable);
         limitSelect?.addEventListener('change', () => {
             const val = Number(limitSelect.value || 10);
             dt.page.len(val).draw();
@@ -897,6 +925,13 @@
                     $(categoryFilter).val('').trigger('change.select2');
                 }
             }
+            const statusFilter = document.getElementById('filter_item_status');
+            if (statusFilter) {
+                statusFilter.value = 'active';
+                if (typeof $ !== 'undefined' && $(statusFilter).data('select2')) {
+                    $(statusFilter).val('active').trigger('change.select2');
+                }
+            }
             if (limitSelect) {
                 limitSelect.value = '10';
                 dt.page.len(10).draw();
@@ -905,7 +940,7 @@
         });
 
         const clearErrors = () => {
-            ['error_sku','error_name','error_item_type','error_category_id','error_area_id','error_rack_code','error_column_no','error_row_no','error_address','error_description','error_koli_qty','error_safety_stock','error_external_barcodes','error_bundle_components'].forEach(id => {
+            ['error_sku','error_name','error_item_type','error_status','error_category_id','error_area_id','error_rack_code','error_column_no','error_row_no','error_address','error_description','error_koli_qty','error_safety_stock','error_external_barcodes','error_bundle_components'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.textContent = '';
             });
@@ -942,6 +977,7 @@
             formId.value = '';
             if (formSku) formSku.value = '';
             if (formType) formType.value = 'single';
+            if (formStatus) formStatus.value = 'active';
             if (formKoliQty) formKoliQty.value = '';
             if (formSafetyStock) formSafetyStock.value = 0;
             setCategoryValue('0');
@@ -1267,6 +1303,7 @@
             const sku = this.getAttribute('data-sku');
             const name = this.getAttribute('data-name');
             const itemType = this.getAttribute('data-item-type') || 'single';
+            const status = this.getAttribute('data-status') || 'active';
             const categoryId = this.getAttribute('data-category');
             const address = this.getAttribute('data-address') || '';
             const areaId = this.getAttribute('data-area-id') || '';
@@ -1283,6 +1320,7 @@
             if (formSku) formSku.value = sku || '';
             formName.value = name;
             if (formType) formType.value = itemType;
+            if (formStatus) formStatus.value = status;
             if (formAddress) formAddress.value = address;
             setAreaValue(areaId);
             if (formRack) formRack.value = rackCode;

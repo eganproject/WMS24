@@ -410,7 +410,7 @@
     <div class="scanout-panel scan-card">
         <div class="packing-box">
             <div class="packing-label">Packing Confirmation</div>
-            <select class="form-select form-select-solid" id="packed_employee_id">
+            <select class="form-select form-select-solid" id="packed_employee_id" data-control="select2" data-placeholder="Pilih packer" data-allow-clear="true">
                 <option value="">Pilih packer</option>
                 @foreach(($packers ?? []) as $packer)
                     <option value="{{ $packer->id }}">{{ $packer->employee_code ? $packer->employee_code.' - ' : '' }}{{ $packer->name }}</option>
@@ -582,6 +582,19 @@ const resumeScannerFocus = (shouldFocus = false) => {
         setScannerState('Scanner siap');
         if (shouldFocus) focusScanner();
     }, 250);
+};
+const initPackedEmployeeSelect = () => {
+    if (!el.packedEmployee || typeof $ === 'undefined' || !$.fn.select2) return;
+
+    $(el.packedEmployee)
+        .select2({
+            placeholder: 'Pilih packer',
+            allowClear: true,
+            width: '100%',
+            dropdownParent: $('.packing-box'),
+        })
+        .on('select2:opening select2:open', () => pauseScannerFocus())
+        .on('select2:select select2:clear select2:close', () => resumeScannerFocus(false));
 };
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
     '&': '&amp;',
@@ -791,7 +804,7 @@ el.btnRefreshRecent.addEventListener('click', refreshRecent);
 ['pointerdown', 'mousedown', 'focus', 'click'].forEach((eventName) => {
     el.packedEmployee?.addEventListener(eventName, () => pauseScannerFocus());
 });
-el.packedEmployee?.addEventListener('change', () => resumeScannerFocus(true));
+el.packedEmployee?.addEventListener('change', () => resumeScannerFocus(false));
 el.packedEmployee?.addEventListener('blur', () => resumeScannerFocus(false));
 document.addEventListener('keydown', (event) => {
     if (isScannerFocusPaused()) return;
@@ -842,6 +855,7 @@ el.code.addEventListener('blur', () => {
     focusScanner();
 });
 document.addEventListener('DOMContentLoaded', () => {
+    initPackedEmployeeSelect();
     refreshRecent();
     setTimeout(focusScanner, 250);
 });

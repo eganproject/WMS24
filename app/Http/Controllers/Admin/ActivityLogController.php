@@ -13,9 +13,17 @@ class ActivityLogController extends Controller
     public function index()
     {
         $users = User::orderBy('name')->get(['id', 'name']);
+        $pages = ActivityLog::query()
+            ->whereNotNull('route_name')
+            ->where('route_name', '!=', '')
+            ->select('route_name')
+            ->distinct()
+            ->orderBy('route_name')
+            ->pluck('route_name');
 
         return view('admin.reports.activity-logs.index', [
             'users' => $users,
+            'pages' => $pages,
             'dataUrl' => route('admin.reports.activity-logs.data'),
             'detailUrl' => route('admin.reports.activity-logs.show', ':id'),
         ]);
@@ -49,6 +57,10 @@ class ActivityLogController extends Controller
 
         if ($request->filled('method')) {
             $query->where('method', strtoupper((string) $request->input('method')));
+        }
+
+        if ($request->filled('route_name')) {
+            $query->where('route_name', (string) $request->input('route_name'));
         }
 
         $this->applyDateFilter($query, $request);

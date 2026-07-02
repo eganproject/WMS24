@@ -38,6 +38,12 @@
                     <option value="PATCH">PATCH</option>
                     <option value="DELETE">DELETE</option>
                 </select>
+                <select id="filter_page" class="form-select form-select-solid fw-bolder" data-control="select2" data-placeholder="Halaman" data-allow-clear="true">
+                    <option value="">Semua Halaman</option>
+                    @foreach(($pages ?? []) as $page)
+                        <option value="{{ $page }}">{{ $page }}</option>
+                    @endforeach
+                </select>
                 <button type="button" class="btn btn-light" id="filter_apply">Apply</button>
                 <button type="button" class="btn btn-light" id="filter_reset">Reset</button>
             </div>
@@ -206,6 +212,7 @@
         const searchInput = document.querySelector('[data-kt-filter="search"]');
         const userSelect = document.getElementById('filter_user');
         const methodSelect = document.getElementById('filter_method');
+        const pageSelect = document.getElementById('filter_page');
         const applyBtn = document.getElementById('filter_apply');
         const resetBtn = document.getElementById('filter_reset');
         const dateFromEl = document.getElementById('filter_date_from');
@@ -224,6 +231,7 @@
 
         select2Safe(userSelect, 'Semua User');
         select2Safe(methodSelect, 'Semua Method');
+        select2Safe(pageSelect, 'Semua Halaman');
 
         if (!tableEl.length || !$.fn.DataTable) {
             console.error('DataTables unavailable');
@@ -247,6 +255,7 @@
                     params.q        = searchInput?.value || '';
                     params.user_id  = userSelect?.value || '';
                     params.method   = methodSelect?.value || '';
+                    params.route_name = pageSelect?.value || '';
                     if (dateFromEl?.value) params.date_from = dateFromEl.value;
                     if (dateToEl?.value)   params.date_to   = dateToEl.value;
                 }
@@ -296,9 +305,11 @@
         resetBtn?.addEventListener('click', () => {
             if (userSelect) userSelect.value = '';
             if (methodSelect) methodSelect.value = '';
+            if (pageSelect) pageSelect.value = '';
             if (typeof $ !== 'undefined') {
                 if ($(userSelect).data('select2'))   $(userSelect).val('').trigger('change.select2');
                 if ($(methodSelect).data('select2')) $(methodSelect).val('').trigger('change.select2');
+                if ($(pageSelect).data('select2'))   $(pageSelect).val('').trigger('change.select2');
             }
             reloadTable();
         });

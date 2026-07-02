@@ -22,9 +22,9 @@ return new class extends Migration {
             $table->text('user_agent')->nullable();
             $table->timestamps();
 
-            $table->index('scanned_at');
-            $table->index(['scanned_by', 'scanned_at']);
-            $table->index(['resi_id', 'scanned_at']);
+            $table->index('scanned_at', 'qcrsda_scanned_at_idx');
+            $table->index(['scanned_by', 'scanned_at'], 'qcrsda_scanned_by_at_idx');
+            $table->index(['resi_id', 'scanned_at'], 'qcrsda_resi_at_idx');
         });
     }
 

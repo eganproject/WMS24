@@ -11,6 +11,7 @@
                 'expected_qty' => (int) $row->expected_qty,
                 'received_qty' => (int) $row->received_qty,
                 'good_qty' => (int) $row->good_qty,
+                'packaging_damaged_qty' => (int) ($row->packaging_damaged_qty ?? 0),
                 'damaged_qty' => (int) $row->damaged_qty,
                 'root_cause' => $row->root_cause,
                 'note' => $row->note,
@@ -310,7 +311,7 @@
                 <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
                     <div>
                         <h3 class="mb-1">Inspeksi Item</h3>
-                        <div class="text-muted fs-7">Setiap barang dihitung per pcs. Jumlah barang bagus ditambah barang rusak harus sama dengan jumlah yang benar-benar diterima.</div>
+                        <div class="text-muted fs-7">Setiap barang dihitung per pcs. Qty bagus + kemasan rusak + barang rusak harus sama dengan jumlah yang benar-benar diterima.</div>
                     </div>
                     @unless($readOnlyMode)
                         <button type="button" class="btn btn-light" id="btn_add_customer_return_item">Tambah Item Manual</button>
@@ -328,7 +329,7 @@
                         </div>
                     </div>
                     <div class="text-muted fs-7 mt-3">
-                        SKU dari data resi yang tidak ada di paket: biarkan <strong>Qty Diterima = 0</strong>. Jika ada SKU tambahan di paket: klik <strong>Tambah Item Manual</strong>. Jika jumlah fisik kurang atau lebih: isi <strong>Qty Diterima</strong> sesuai barang nyata.
+                        SKU dari data resi yang tidak ada di paket: biarkan <strong>Qty Diterima = 0</strong>. Jika ada SKU tambahan di paket: klik <strong>Tambah Item Manual</strong>. Isi <strong>Kemasan Rusak</strong> untuk barang yang perlu rework/repack sebelum bisa dijual.
                     </div>
                 </div>
 
@@ -374,10 +375,16 @@
                                 <input type="number" min="0" class="form-control form-control-solid @error("items.$index.received_qty") is-invalid @enderror" data-name="received_qty" name="items[{{ $index }}][received_qty]" value="{{ old("items.$index.received_qty", $formItem['received_qty'] ?? 0) }}" @disabled($readOnlyMode) required />
                                 <div class="invalid-feedback d-block" data-error-for="received_qty">{{ $errors->first("items.$index.received_qty") }}</div>
                             </div>
-                            <div class="col-xl-2 col-lg-1 col-md-4 col-sm-6 col-6">
+                            <div class="col-xl-2 col-lg-2 col-md-4 col-sm-6 col-6">
                                 <label class="required fs-6 fw-bold form-label mb-2">Bagus</label>
                                 <input type="number" min="0" class="form-control form-control-solid @error("items.$index.good_qty") is-invalid @enderror" data-name="good_qty" name="items[{{ $index }}][good_qty]" value="{{ old("items.$index.good_qty", $formItem['good_qty'] ?? 0) }}" @disabled($readOnlyMode) required />
                                 <div class="invalid-feedback d-block" data-error-for="good_qty">{{ $errors->first("items.$index.good_qty") }}</div>
+                            </div>
+                            <div class="col-xl-2 col-lg-2 col-md-4 col-sm-6 col-6">
+                                <label class="required fs-6 fw-bold form-label mb-2">Kemasan Rusak</label>
+                                <input type="number" min="0" class="form-control form-control-solid @error("items.$index.packaging_damaged_qty") is-invalid @enderror" data-name="packaging_damaged_qty" name="items[{{ $index }}][packaging_damaged_qty]" value="{{ old("items.$index.packaging_damaged_qty", $formItem['packaging_damaged_qty'] ?? 0) }}" @disabled($readOnlyMode) required />
+                                <div class="form-text fs-8">Masuk Barang Rusak untuk rework.</div>
+                                <div class="invalid-feedback d-block" data-error-for="packaging_damaged_qty">{{ $errors->first("items.$index.packaging_damaged_qty") }}</div>
                             </div>
                             <div class="col-xl-2 col-lg-2 col-md-4 col-sm-6 col-6">
                                 <label class="required fs-6 fw-bold form-label mb-2">Rusak</label>
@@ -654,21 +661,23 @@
         const updateRowValidation = (row) => {
             const received = Number(row.querySelector('[data-name="received_qty"]')?.value || 0);
             const good = Number(row.querySelector('[data-name="good_qty"]')?.value || 0);
+            const packagingDamaged = Number(row.querySelector('[data-name="packaging_damaged_qty"]')?.value || 0);
             const damaged = Number(row.querySelector('[data-name="damaged_qty"]')?.value || 0);
             const expected = Number(row.querySelector('[data-name="expected_qty"]')?.value || 0);
             const errorEl = row.querySelector('[data-error-for="received_qty"]');
             const receivedEl = row.querySelector('[data-name="received_qty"]');
             const goodEl = row.querySelector('[data-name="good_qty"]');
+            const packagingDamagedEl = row.querySelector('[data-name="packaging_damaged_qty"]');
             const damagedEl = row.querySelector('[data-name="damaged_qty"]');
             const expectedBadgeEl = row.querySelector('[data-role="expected-badge"]');
             const lostBadgeEl = row.querySelector('[data-role="lost-badge"]');
             const varianceBadgeEl = row.querySelector('[data-role="variance-badge"]');
             const varianceHintEl = row.querySelector('[data-role="variance-hint"]');
-            const invalid = (good + damaged) !== received;
+            const invalid = (good + packagingDamaged + damaged) !== received;
             const variance = buildVarianceState({ expected, received });
             const lostQty = Math.max(expected - received, 0);
 
-            [receivedEl, goodEl, damagedEl].forEach((el) => {
+            [receivedEl, goodEl, packagingDamagedEl, damagedEl].forEach((el) => {
                 if (!el) return;
                 if (invalid) {
                     el.classList.add('is-invalid');
@@ -678,7 +687,7 @@
             });
 
             if (errorEl && !errorEl.dataset.serverError) {
-                errorEl.textContent = invalid ? 'Jumlah bagus + jumlah rusak harus sama dengan jumlah diterima.' : '';
+                errorEl.textContent = invalid ? 'Jumlah bagus + kemasan rusak + rusak harus sama dengan jumlah diterima.' : '';
             }
 
             if (expectedBadgeEl) {
@@ -745,25 +754,33 @@
             const changedName = changedInput?.getAttribute('data-name');
             const receivedEl = row.querySelector('[data-name="received_qty"]');
             const goodEl = row.querySelector('[data-name="good_qty"]');
+            const packagingDamagedEl = row.querySelector('[data-name="packaging_damaged_qty"]');
             const damagedEl = row.querySelector('[data-name="damaged_qty"]');
 
-            if (!receivedEl || !goodEl || !damagedEl) {
+            if (!receivedEl || !goodEl || !packagingDamagedEl || !damagedEl) {
                 return;
             }
 
             const received = Number(receivedEl.value || 0);
             const good = Number(goodEl.value || 0);
+            const packagingDamaged = Number(packagingDamagedEl.value || 0);
             const damaged = Number(damagedEl.value || 0);
             const previousReceived = Number(receivedEl.dataset.previousReceived || 0);
 
-            if (changedName === 'received_qty' && good + damaged === previousReceived) {
+            if (changedName === 'received_qty' && good + packagingDamaged + damaged === previousReceived) {
                 const nextDamaged = Math.min(damaged, received);
+                const nextPackagingDamaged = Math.min(packagingDamaged, Math.max(received - nextDamaged, 0));
                 damagedEl.value = nextDamaged;
-                goodEl.value = Math.max(received - nextDamaged, 0);
+                packagingDamagedEl.value = nextPackagingDamaged;
+                goodEl.value = Math.max(received - nextDamaged - nextPackagingDamaged, 0);
             }
 
             if (changedName === 'damaged_qty' && damaged <= received) {
-                goodEl.value = Math.max(received - damaged, 0);
+                goodEl.value = Math.max(received - packagingDamaged - damaged, 0);
+            }
+
+            if (changedName === 'packaging_damaged_qty' && packagingDamaged + damaged <= received) {
+                goodEl.value = Math.max(received - packagingDamaged - damaged, 0);
             }
 
             receivedEl.dataset.previousReceived = String(received);
@@ -777,7 +794,7 @@
                 receivedEl.dataset.previousReceived = String(Number(receivedEl.value || 0));
             }
 
-            row.querySelectorAll('[data-name="expected_qty"], [data-name="received_qty"], [data-name="good_qty"], [data-name="damaged_qty"]').forEach((input) => {
+            row.querySelectorAll('[data-name="expected_qty"], [data-name="received_qty"], [data-name="good_qty"], [data-name="packaging_damaged_qty"], [data-name="damaged_qty"]').forEach((input) => {
                 input.addEventListener('input', () => {
                     if (input.dataset.serverError) {
                         input.dataset.serverError = '';
@@ -839,6 +856,12 @@
                     <label class="required fs-6 fw-bold form-label mb-2">Bagus</label>
                     <input type="number" min="0" class="form-control form-control-solid" data-name="good_qty" value="${Number(data.good_qty || 0)}" required />
                     <div class="invalid-feedback d-block" data-error-for="good_qty"></div>
+                </div>
+                <div class="col-xl-2 col-lg-2 col-md-4 col-sm-6 col-6">
+                    <label class="required fs-6 fw-bold form-label mb-2">Kemasan Rusak</label>
+                    <input type="number" min="0" class="form-control form-control-solid" data-name="packaging_damaged_qty" value="${Number(data.packaging_damaged_qty || 0)}" required />
+                    <div class="form-text fs-8">Masuk Barang Rusak untuk rework.</div>
+                    <div class="invalid-feedback d-block" data-error-for="packaging_damaged_qty"></div>
                 </div>
                 <div class="col-xl-2 col-lg-2 col-md-4 col-sm-6 col-6">
                     <label class="required fs-6 fw-bold form-label mb-2">Rusak</label>

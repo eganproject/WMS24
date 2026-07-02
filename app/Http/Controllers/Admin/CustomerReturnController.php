@@ -115,6 +115,7 @@ class CustomerReturnController extends Controller
                     'expected_qty' => $expectedQty,
                     'received_qty' => $receivedQty,
                     'good_qty' => (int) $itemRow->good_qty,
+                    'packaging_damaged_qty' => (int) ($itemRow->packaging_damaged_qty ?? 0),
                     'damaged_qty' => (int) $itemRow->damaged_qty,
                     'lost_qty' => max($expectedQty - $receivedQty, 0),
                     'root_cause' => (string) ($itemRow->root_cause ?? ''),
@@ -125,11 +126,12 @@ class CustomerReturnController extends Controller
 
             $itemSummary = $itemDetails->map(function (array $itemRow) {
                 return sprintf(
-                    '%s (Resi %d, Terima %d, Bagus %d, Rusak %d, Hilang %d, Penyebab: %s)',
+                    '%s (Resi %d, Terima %d, Bagus %d, Kemasan Rusak %d, Rusak %d, Hilang %d, Penyebab: %s)',
                     $itemRow['sku'],
                     $itemRow['expected_qty'],
                     $itemRow['received_qty'],
                     $itemRow['good_qty'],
+                    $itemRow['packaging_damaged_qty'],
                     $itemRow['damaged_qty'],
                     $itemRow['lost_qty'],
                     $itemRow['root_cause_label'] ?? '-'
@@ -160,6 +162,7 @@ class CustomerReturnController extends Controller
                 'total_expected' => $totalExpected,
                 'total_received' => $totalReceived,
                 'total_good' => (int) $items->sum('good_qty'),
+                'total_packaging_damaged' => (int) $items->sum('packaging_damaged_qty'),
                 'total_damaged' => (int) $items->sum('damaged_qty'),
                 'total_lost' => $totalLost,
                 'note' => $row->note ?? '',
@@ -542,7 +545,9 @@ class CustomerReturnController extends Controller
         }
 
         $hasQty = $items->contains(function (CustomerReturnItem $item) {
-            return (int) $item->good_qty > 0 || (int) $item->damaged_qty > 0;
+            return (int) $item->good_qty > 0
+                || (int) ($item->packaging_damaged_qty ?? 0) > 0
+                || (int) $item->damaged_qty > 0;
         });
 
         $finalizedAt = now();
@@ -579,7 +584,7 @@ class CustomerReturnController extends Controller
             ]);
         }
 
-        $damagedRows = $items->filter(fn (CustomerReturnItem $item) => (int) $item->damaged_qty > 0)->values();
+        $damagedRows = $items->filter(fn (CustomerReturnItem $item) => (int) ($item->packaging_damaged_qty ?? 0) > 0 || (int) $item->damaged_qty > 0)->values();
         $damagedGood = null;
         if ($damagedRows->isNotEmpty()) {
             $damagedGood = $this->createApprovedDamagedGood($customerReturn, $damagedRows, $finalizedAt);
@@ -622,30 +627,64 @@ class CustomerReturnController extends Controller
         ]);
 
         foreach ($damagedRows as $row) {
-            $damageItem = DamagedGoodItem::create([
-                'damaged_good_id' => $damagedGood->id,
-                'item_id' => $row->item_id,
-                'qty' => (int) $row->damaged_qty,
-                'reason_code' => $this->damagedReasonCodeForRootCause($row->root_cause),
-                'note' => $row->note,
-            ]);
+            $this->createDamagedGoodItemMutation(
+                $damagedGood,
+                $row,
+                (int) ($row->packaging_damaged_qty ?? 0),
+                DamagedGoodItem::REASON_PACKAGING_DAMAGE,
+                trim('Kemasan rusak perlu rework. '.($row->note ?? '')),
+                $damagedWarehouseId,
+                $finalizedAt
+            );
 
-            StockService::mutate([
-                'item_id' => $damageItem->item_id,
-                'warehouse_id' => $damagedWarehouseId,
-                'direction' => 'in',
-                'qty' => (int) $damageItem->qty,
-                'source_type' => 'damaged',
-                'source_subtype' => 'customer_return',
-                'source_id' => $damagedGood->id,
-                'source_code' => $damagedGood->code,
-                'note' => $damageItem->note,
-                'occurred_at' => $finalizedAt,
-                'created_by' => auth()->id(),
-            ]);
+            $this->createDamagedGoodItemMutation(
+                $damagedGood,
+                $row,
+                (int) $row->damaged_qty,
+                $this->damagedReasonCodeForRootCause($row->root_cause),
+                $row->note,
+                $damagedWarehouseId,
+                $finalizedAt
+            );
         }
 
         return $damagedGood;
+    }
+
+    private function createDamagedGoodItemMutation(
+        DamagedGood $damagedGood,
+        CustomerReturnItem $row,
+        int $qty,
+        string $reasonCode,
+        ?string $note,
+        int $damagedWarehouseId,
+        Carbon $finalizedAt
+    ): void {
+        if ($qty <= 0) {
+            return;
+        }
+
+        $damageItem = DamagedGoodItem::create([
+            'damaged_good_id' => $damagedGood->id,
+            'item_id' => $row->item_id,
+            'qty' => $qty,
+            'reason_code' => $reasonCode,
+            'note' => $note,
+        ]);
+
+        StockService::mutate([
+            'item_id' => $damageItem->item_id,
+            'warehouse_id' => $damagedWarehouseId,
+            'direction' => 'in',
+            'qty' => (int) $damageItem->qty,
+            'source_type' => 'damaged',
+            'source_subtype' => 'customer_return',
+            'source_id' => $damagedGood->id,
+            'source_code' => $damagedGood->code,
+            'note' => $damageItem->note,
+            'occurred_at' => $finalizedAt,
+            'created_by' => auth()->id(),
+        ]);
     }
 
     private function damagedReasonCodeForRootCause(?string $rootCause): string
@@ -656,7 +695,7 @@ class CustomerReturnController extends Controller
             CustomerReturnItem::ROOT_CAUSE_PRODUCT_DEFECT => DamagedGoodItem::REASON_FUNCTIONAL_DAMAGE,
             CustomerReturnItem::ROOT_CAUSE_INCOMPLETE_ITEM => DamagedGoodItem::REASON_MISSING_PART,
             CustomerReturnItem::ROOT_CAUSE_BUYER_ISSUE => DamagedGoodItem::REASON_CUSTOMER_RETURN,
-            default => DamagedGoodItem::REASON_OTHER,
+            default => DamagedGoodItem::REASON_CUSTOMER_RETURN,
         };
     }
 
@@ -669,6 +708,7 @@ class CustomerReturnController extends Controller
                 'expected_qty' => (int) $row['expected_qty'],
                 'received_qty' => (int) $row['received_qty'],
                 'good_qty' => (int) $row['good_qty'],
+                'packaging_damaged_qty' => (int) ($row['packaging_damaged_qty'] ?? 0),
                 'damaged_qty' => (int) $row['damaged_qty'],
                 'root_cause' => $row['root_cause'],
                 'note' => $row['note'] ?? null,
@@ -691,8 +731,9 @@ class CustomerReturnController extends Controller
             'items.*.expected_qty' => ['nullable', 'integer', 'min:0'],
             'items.*.received_qty' => ['required', 'integer', 'min:0'],
             'items.*.good_qty' => ['required', 'integer', 'min:0'],
+            'items.*.packaging_damaged_qty' => ['nullable', 'integer', 'min:0'],
             'items.*.damaged_qty' => ['required', 'integer', 'min:0'],
-            'items.*.root_cause' => ['required', 'string', Rule::in(array_keys(CustomerReturnItem::rootCauseLabels()))],
+            'items.*.root_cause' => ['nullable', 'string', Rule::in(array_keys(CustomerReturnItem::rootCauseLabels()))],
             'items.*.note' => ['nullable', 'string'],
         ]);
 
@@ -703,8 +744,9 @@ class CustomerReturnController extends Controller
                     'expected_qty' => (int) ($row['expected_qty'] ?? 0),
                     'received_qty' => (int) ($row['received_qty'] ?? 0),
                     'good_qty' => (int) ($row['good_qty'] ?? 0),
+                    'packaging_damaged_qty' => (int) ($row['packaging_damaged_qty'] ?? 0),
                     'damaged_qty' => (int) ($row['damaged_qty'] ?? 0),
-                    'root_cause' => (string) ($row['root_cause'] ?? ''),
+                    'root_cause' => isset($row['root_cause']) && $row['root_cause'] !== '' ? (string) $row['root_cause'] : null,
                     'note' => $row['note'] ?? null,
                 ];
             })
@@ -725,9 +767,9 @@ class CustomerReturnController extends Controller
         }
 
         foreach ($rows as $index => $row) {
-            if (((int) $row['good_qty'] + (int) $row['damaged_qty']) !== (int) $row['received_qty']) {
+            if (((int) $row['good_qty'] + (int) $row['packaging_damaged_qty'] + (int) $row['damaged_qty']) !== (int) $row['received_qty']) {
                 throw ValidationException::withMessages([
-                    "items.{$index}.received_qty" => 'Qty bagus + qty rusak harus sama dengan qty diterima.',
+                    "items.{$index}.received_qty" => 'Qty bagus + qty kemasan rusak + qty rusak harus sama dengan qty diterima.',
                 ]);
             }
         }
@@ -831,6 +873,7 @@ class CustomerReturnController extends Controller
                 'expected_qty' => (int) $qty,
                 'received_qty' => 0,
                 'good_qty' => 0,
+                'packaging_damaged_qty' => 0,
                 'damaged_qty' => 0,
                 'root_cause' => null,
                 'note' => null,
@@ -863,6 +906,7 @@ class CustomerReturnController extends Controller
                     'expected_qty' => (int) $row->expected_qty,
                     'received_qty' => (int) $row->received_qty,
                     'good_qty' => (int) $row->good_qty,
+                    'packaging_damaged_qty' => (int) ($row->packaging_damaged_qty ?? 0),
                     'damaged_qty' => (int) $row->damaged_qty,
                     'root_cause' => $row->root_cause,
                     'root_cause_label' => $row->rootCauseLabel(),

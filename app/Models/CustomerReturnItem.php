@@ -23,6 +23,7 @@ class CustomerReturnItem extends Model
         'expected_qty',
         'received_qty',
         'good_qty',
+        'packaging_damaged_qty',
         'damaged_qty',
         'root_cause',
         'note',
@@ -32,6 +33,7 @@ class CustomerReturnItem extends Model
         'expected_qty' => 'integer',
         'received_qty' => 'integer',
         'good_qty' => 'integer',
+        'packaging_damaged_qty' => 'integer',
         'damaged_qty' => 'integer',
     ];
 

@@ -90,9 +90,9 @@ class DamagedStockService
             ->values();
     }
 
-    public static function availableSkuBalances(?string $search = null, ?int $excludeAllocationId = null, bool $exact = false): Collection
+    public static function availableSkuBalances(?string $search = null, ?int $excludeAllocationId = null, bool $exact = false, ?string $reasonCode = null): Collection
     {
-        return self::remainingSourceLines($search, $excludeAllocationId, $exact)
+        return self::remainingSourceLines($search, $excludeAllocationId, $exact, $reasonCode)
             ->groupBy('item_id')
             ->map(function (Collection $rows) {
                 $first = $rows->sortBy([
@@ -104,6 +104,12 @@ class DamagedStockService
                 $receivedQty = (int) $rows->sum('received_qty');
                 $allocatedQty = (int) $rows->sum('allocated_qty');
                 $sourceCount = $rows->count();
+                $reasonLabels = $rows
+                    ->pluck('reason_label')
+                    ->filter()
+                    ->unique()
+                    ->values()
+                    ->implode(', ');
 
                 return [
                     'id' => (int) ($first['item_id'] ?? 0),
@@ -112,6 +118,7 @@ class DamagedStockService
                     'allocated_qty' => $allocatedQty,
                     'remaining_qty' => $remainingQty,
                     'source_count' => $sourceCount,
+                    'reason_labels' => $reasonLabels,
                     'oldest_damage_code' => (string) ($first['damage_code'] ?? ''),
                     'damage_code' => (string) ($first['damage_code'] ?? ''),
                     'damage_transacted_at' => $first['damage_transacted_at'] ?? null,
@@ -121,9 +128,10 @@ class DamagedStockService
                         ? $sourceCount.' sumber'
                         : (string) ($first['source_warehouse_name'] ?? '-'),
                     'label' => sprintf(
-                        '%s - %s | Total sisa %d | %d sumber',
+                        '%s - %s | %s | Total sisa %d | %d sumber',
                         (string) ($first['item_sku'] ?? ''),
                         (string) ($first['item_name'] ?? ''),
+                        $reasonLabels ?: 'Alasan tidak diketahui',
                         $remainingQty,
                         $sourceCount
                     ),

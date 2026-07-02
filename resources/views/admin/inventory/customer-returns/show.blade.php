@@ -8,6 +8,7 @@
     $totalExpected = (int) $items->sum('expected_qty');
     $totalReceived = (int) $items->sum('received_qty');
     $totalGood = (int) $items->sum('good_qty');
+    $totalPackagingDamaged = (int) $items->sum('packaging_damaged_qty');
     $totalDamaged = (int) $items->sum('damaged_qty');
     $isMatched = (bool) $customerReturn->resi_id;
     $statusLabel = $customerReturn->statusLabel();
@@ -471,6 +472,10 @@
                             <div class="customer-return-document-summary-value">{{ $totalGood }}</div>
                         </div>
                         <div class="customer-return-document-summary-card is-damaged">
+                            <div class="customer-return-document-summary-label">Kemasan Rusak</div>
+                            <div class="customer-return-document-summary-value">{{ $totalPackagingDamaged }}</div>
+                        </div>
+                        <div class="customer-return-document-summary-card is-damaged">
                             <div class="customer-return-document-summary-label">Qty Rusak</div>
                             <div class="customer-return-document-summary-value">{{ $totalDamaged }}</div>
                         </div>
@@ -491,6 +496,7 @@
                                         <th class="text-end">Qty Resi</th>
                                         <th class="text-end">Diterima</th>
                                         <th class="text-end">Bagus</th>
+                                        <th class="text-end">Kemasan Rusak</th>
                                         <th class="text-end">Rusak</th>
                                         <th>Penyebab</th>
                                     </tr>
@@ -509,12 +515,13 @@
                                             <td class="text-end">{{ (int) $row->expected_qty }}</td>
                                             <td class="text-end">{{ (int) $row->received_qty }}</td>
                                             <td class="text-end">{{ (int) $row->good_qty }}</td>
+                                            <td class="text-end">{{ (int) ($row->packaging_damaged_qty ?? 0) }}</td>
                                             <td class="text-end">{{ (int) $row->damaged_qty }}</td>
                                             <td>{{ $row->rootCauseLabel() }}</td>
                                         </tr>
                                     @empty
                                         <tr>
-                                            <td colspan="7">Tidak ada item retur.</td>
+                                            <td colspan="8">Tidak ada item retur.</td>
                                         </tr>
                                     @endforelse
                                 </tbody>

@@ -3,6 +3,7 @@
 namespace Tests\Feature\Admin;
 
 use App\Models\CustomerReturn;
+use App\Models\CustomerReturnItem;
 use App\Models\DamagedGood;
 use App\Models\DamagedGoodItem;
 use App\Models\Item;
@@ -359,6 +360,68 @@ class CustomerReturnFlowTest extends TestCase
             'source_type' => 'damaged',
             'source_subtype' => 'customer_return',
             'source_id' => $customerReturn->damaged_good_id,
+        ]);
+    }
+
+    public function test_finalize_customer_return_sends_packaging_damaged_qty_to_damaged_goods_for_rework(): void
+    {
+        [, $displayWarehouse, $damagedWarehouse] = $this->createWarehouseFixtures();
+
+        $item = Item::create([
+            'sku' => 'SKU-RET-PACK',
+            'name' => 'Item Kemasan Rusak',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+        ]);
+
+        $storeResponse = $this->withoutMiddleware()->postJson(route('admin.inventory.customer-returns.store'), [
+            'resi_no' => 'RESI-RET-PACK',
+            'received_at' => now()->format('Y-m-d H:i'),
+            'items' => [
+                [
+                    'item_id' => $item->id,
+                    'expected_qty' => 3,
+                    'received_qty' => 3,
+                    'good_qty' => 1,
+                    'packaging_damaged_qty' => 2,
+                    'damaged_qty' => 0,
+                    'root_cause' => CustomerReturnItem::ROOT_CAUSE_DAMAGED_PACKING,
+                    'note' => 'Box penyok, barang perlu repack',
+                ],
+            ],
+        ]);
+
+        $storeResponse->assertOk();
+
+        $customerReturn = CustomerReturn::firstOrFail();
+        $this->withoutMiddleware()
+            ->postJson(route('admin.inventory.customer-returns.finalize'), ['ids' => [$customerReturn->id]])
+            ->assertOk();
+
+        $customerReturn->refresh();
+        $this->assertSame(CustomerReturn::STATUS_COMPLETED, $customerReturn->status);
+
+        $this->assertDatabaseHas('item_stocks', [
+            'item_id' => $item->id,
+            'warehouse_id' => $displayWarehouse->id,
+            'stock' => 1,
+        ]);
+        $this->assertDatabaseHas('item_stocks', [
+            'item_id' => $item->id,
+            'warehouse_id' => $damagedWarehouse->id,
+            'stock' => 2,
+        ]);
+        $this->assertDatabaseHas('damaged_good_items', [
+            'damaged_good_id' => $customerReturn->damaged_good_id,
+            'item_id' => $item->id,
+            'qty' => 2,
+            'reason_code' => DamagedGoodItem::REASON_PACKAGING_DAMAGE,
+        ]);
+        $this->assertDatabaseMissing('damaged_good_items', [
+            'damaged_good_id' => $customerReturn->damaged_good_id,
+            'item_id' => $item->id,
+            'qty' => 2,
+            'reason_code' => DamagedGoodItem::REASON_CUSTOMER_RETURN,
         ]);
     }
 

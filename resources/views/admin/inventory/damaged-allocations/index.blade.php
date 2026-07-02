@@ -5,9 +5,11 @@
 
 @php
     use App\Support\Permission as Perm;
+    use App\Models\DamagedGoodItem;
     $canCreate = Perm::can(auth()->user(), 'admin.inventory.damaged-allocations.index', 'create');
     $canUpdate = Perm::can(auth()->user(), 'admin.inventory.damaged-allocations.index', 'update');
     $canDelete = Perm::can(auth()->user(), 'admin.inventory.damaged-allocations.index', 'delete');
+    $reasonOptions = DamagedGoodItem::reasonLabels();
 @endphp
 
 @push('styles')
@@ -56,6 +58,12 @@
                     </span>
                     <input type="text" id="damaged_source_summary_search" class="form-control form-control-solid ps-12" placeholder="Cari SKU, nama, sumber" />
                 </div>
+                <select id="damaged_source_reason_filter" class="form-select form-select-solid w-200px" data-control="select2" data-hide-search="true" data-placeholder="Semua Alasan">
+                    <option value="">Semua Alasan</option>
+                    @foreach($reasonOptions as $value => $label)
+                        <option value="{{ $value }}">{{ $label }}</option>
+                    @endforeach
+                </select>
                 <span class="badge badge-light-danger">Gudang Rusak: {{ $damagedWarehouseLabel ?? 'Gudang Rusak' }}</span>
             </div>
         </div>
@@ -383,6 +391,7 @@
         const tableEl              = $('#damaged_allocations_table');
         const summaryBody          = document.getElementById('damaged_source_summary_body');
         const summarySearchInput   = document.getElementById('damaged_source_summary_search');
+        const summaryReasonFilter  = document.getElementById('damaged_source_reason_filter');
         const summaryInfoEl        = document.getElementById('damaged_source_summary_info');
         const summaryPageEl        = document.getElementById('damaged_source_summary_page');
         const summaryPrevBtn       = document.getElementById('damaged_source_summary_prev');
@@ -434,6 +443,7 @@
         };
         initS2Global(filterTypeEl,   'Semua Tipe');
         initS2Global(filterStatusEl, 'Semua Status');
+        initS2Global(summaryReasonFilter, 'Semua Alasan');
         $(filterTypeEl)?.on('change', () => reloadTable());
         $(filterStatusEl)?.on('change', () => reloadTable());
 
@@ -675,6 +685,7 @@
                     <td>
                         <div class="fw-semibold">${esc(row.oldest_damage_code || row.damage_code || '-')}</div>
                         <div class="text-muted fs-8">${row.source_count || 1} sumber FIFO</div>
+                        <div class="text-muted fs-8">${esc(row.reason_labels || '-')}</div>
                     </td>
                     <td class="text-end">${row.received_qty ?? 0}</td>
                     <td class="text-end text-muted">${row.allocated_qty ?? 0}</td>
@@ -687,7 +698,10 @@
 
         const loadSourceLines = async () => {
             try {
-                const res  = await fetch(sourceItemsUrl, { headers: { 'Accept': 'application/json' } });
+                const params = new URLSearchParams();
+                if (summaryReasonFilter?.value) params.set('reason_code', summaryReasonFilter.value);
+                const url = params.toString() ? `${sourceItemsUrl}?${params.toString()}` : sourceItemsUrl;
+                const res  = await fetch(url, { headers: { 'Accept': 'application/json' } });
                 const json = await res.json();
                 if (!res.ok) throw new Error(json.message || 'Gagal memuat saldo rusak');
                 sourceLineOptions = Array.isArray(json.data) ? json.data : [];
@@ -727,6 +741,7 @@
             const { days, bucket } = calcAge(option.damage_transacted_at);
             infoEl.innerHTML = `
                 <span class="badge badge-light-primary me-1">FIFO ${esc(option.oldest_damage_code || option.damage_code || '-')}</span>
+                <span class="badge badge-light-warning me-1">${esc(option.reason_labels || 'Alasan -')}</span>
                 <span class="badge badge-light-secondary me-1">${option.source_count || 1} sumber</span>
                 <span class="badge badge-light-${(option.remaining_qty ?? 0) > 0 ? 'danger' : 'success'} me-1">Sisa ${option.remaining_qty ?? 0}</span>
                 ${agingChip(days, bucket)}`;
@@ -1008,6 +1023,10 @@
                 summaryPage = 1;
                 renderSummary();
             }, 250);
+        });
+        $(summaryReasonFilter)?.on('change', async () => {
+            summaryPage = 1;
+            await loadSourceLines();
         });
         summaryPrevBtn?.addEventListener('click', () => {
             if (summaryPage <= 1) return;

@@ -63,6 +63,7 @@ class CustomerReturnsExport implements FromCollection, WithHeadings, WithTitle, 
                     $expectedQty,
                     $receivedQty,
                     (int) ($itemRow?->good_qty ?? 0),
+                    (int) ($itemRow?->packaging_damaged_qty ?? 0),
                     (int) ($itemRow?->damaged_qty ?? 0),
                     max($expectedQty - $receivedQty, 0),
                     $row->creator?->name ?? '',
@@ -94,6 +95,7 @@ class CustomerReturnsExport implements FromCollection, WithHeadings, WithTitle, 
             'Qty Resi',
             'Qty Diterima',
             'Qty Bagus',
+            'Qty Kemasan Rusak',
             'Qty Rusak',
             'Qty Hilang',
             'Dibuat Oleh',
@@ -109,9 +111,9 @@ class CustomerReturnsExport implements FromCollection, WithHeadings, WithTitle, 
     public function styles(Worksheet $sheet): array
     {
         $rowCount = $this->collection()->count();
-        $sheet->mergeCells('A1:U1');
-        $sheet->mergeCells('A2:U2');
-        $sheet->mergeCells('A3:U3');
+        $sheet->mergeCells('A1:V1');
+        $sheet->mergeCells('A2:V2');
+        $sheet->mergeCells('A3:V3');
         $sheet->setCellValue('A1', 'Export Retur Customer');
         $sheet->setCellValue('A2', $this->filterSummary());
         $sheet->setCellValue('A3', 'Total baris item: '.number_format($rowCount, 0, ',', '.'));
@@ -133,18 +135,18 @@ class CustomerReturnsExport implements FromCollection, WithHeadings, WithTitle, 
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
                 $lastRow = max(5, 5 + $this->collection()->count());
-                $range = 'A5:U'.$lastRow;
+                $range = 'A5:V'.$lastRow;
 
                 $sheet->freezePane('A6');
                 $sheet->setAutoFilter($range);
                 $sheet->getStyle($range)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setRGB('E4E6EF');
-                $sheet->getStyle('A1:U'.$lastRow)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
-                $sheet->getStyle('J6:N'.$lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
-                $sheet->getStyle('J6:N'.$lastRow)->getNumberFormat()->setFormatCode('#,##0');
-                $sheet->getStyle('S6:U'.$lastRow)->getAlignment()->setWrapText(true);
-                $sheet->getStyle('A5:U5')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getStyle('A1:V'.$lastRow)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+                $sheet->getStyle('J6:O'.$lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                $sheet->getStyle('J6:O'.$lastRow)->getNumberFormat()->setFormatCode('#,##0');
+                $sheet->getStyle('T6:V'.$lastRow)->getAlignment()->setWrapText(true);
+                $sheet->getStyle('A5:V5')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-                foreach (['A' => 18, 'B' => 18, 'C' => 22, 'D' => 20, 'E' => 20, 'H' => 18, 'I' => 30, 'S' => 36, 'T' => 22, 'U' => 36] as $column => $width) {
+                foreach (['A' => 18, 'B' => 18, 'C' => 22, 'D' => 20, 'E' => 20, 'H' => 18, 'I' => 30, 'T' => 36, 'U' => 22, 'V' => 36] as $column => $width) {
                     $sheet->getColumnDimension($column)->setWidth($width);
                 }
             },

@@ -58,7 +58,16 @@ class DamagedAllocationController extends Controller
     public function sourceItems(Request $request)
     {
         $search = trim((string) $request->input('q', ''));
-        $items = DamagedStockService::availableSkuBalances($search, null, $this->isExactSearch($request));
+        $reasonCode = trim((string) $request->input('reason_code', ''));
+        if ($reasonCode !== '' && !array_key_exists($reasonCode, DamagedGoodItem::reasonLabels())) {
+            $reasonCode = '';
+        }
+        $items = DamagedStockService::availableSkuBalances(
+            $search,
+            null,
+            $this->isExactSearch($request),
+            $reasonCode !== '' ? $reasonCode : null
+        );
 
         return response()->json([
             'data' => $items->all(),

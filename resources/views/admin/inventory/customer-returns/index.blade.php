@@ -514,6 +514,7 @@
                                 <span>Resi <strong>${Number(item.expected_qty || 0)}</strong></span>
                                 <span>Diterima <strong>${Number(item.received_qty || 0)}</strong></span>
                                 <span>Bagus <strong>${Number(item.good_qty || 0)}</strong></span>
+                                <span>Kemasan Rusak <strong>${Number(item.packaging_damaged_qty || 0)}</strong></span>
                                 <span>Rusak <strong>${Number(item.damaged_qty || 0)}</strong></span>
                             </div>
                             <div class="mt-2">

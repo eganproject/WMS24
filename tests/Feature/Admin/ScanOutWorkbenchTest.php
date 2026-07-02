@@ -29,10 +29,18 @@ class ScanOutWorkbenchTest extends TestCase
             'employment_status' => 'active',
             'position_id' => $packerPosition->id,
         ]);
+        $packingPosition = EmployeePosition::create(['name' => 'Packing', 'is_active' => true]);
+        $packingEmployee = Employee::create([
+            'employee_code' => 'PKG-001',
+            'name' => 'Packing Test',
+            'employment_status' => 'active',
+            'position_id' => $packingPosition->id,
+        ]);
         $kurir = Kurir::create(['name' => 'JNE']);
         $notStarted = $this->createResi($user->id, $kurir->id, 'ORD-SO-001', 'RESI-SO-001');
         $inProgress = $this->createResi($user->id, $kurir->id, 'ORD-SO-002', 'RESI-SO-002');
         $passed = $this->createResi($user->id, $kurir->id, 'ORD-SO-003', 'RESI-SO-003');
+        $passedPacking = $this->createResi($user->id, $kurir->id, 'ORD-SO-004', 'RESI-SO-004');
 
         QcResiScan::create([
             'resi_id' => $inProgress->id,
@@ -47,6 +55,17 @@ class ScanOutWorkbenchTest extends TestCase
             'resi_id' => $passed->id,
             'scan_type' => 'no_resi',
             'scan_code' => $passed->no_resi,
+            'status' => 'passed',
+            'started_at' => now(),
+            'completed_at' => now(),
+            'scanned_by' => $user->id,
+            'completed_by' => $user->id,
+        ]);
+
+        QcResiScan::create([
+            'resi_id' => $passedPacking->id,
+            'scan_type' => 'no_resi',
+            'scan_code' => $passedPacking->no_resi,
             'status' => 'passed',
             'started_at' => now(),
             'completed_at' => now(),
@@ -88,6 +107,15 @@ class ScanOutWorkbenchTest extends TestCase
             'packed_employee_id' => $packer->id,
             'packing_confirmed_by' => $user->id,
         ]);
+
+        $this->actingAs($user)
+            ->postJson(route('admin.outbound.scan-out.scan'), [
+                'type' => 'no_resi',
+                'code' => $passedPacking->no_resi,
+                'packed_employee_id' => $packingEmployee->id,
+            ])
+            ->assertOk()
+            ->assertJsonPath('scan_out.packed_by', 'Packing Test');
     }
 
     private function createUserWithRole(string $slug): User

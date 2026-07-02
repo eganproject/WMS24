@@ -206,8 +206,10 @@ class ScanOutController extends Controller
             ->with('positionRelation:id,name')
             ->where(function ($query) {
                 $query->whereHas('positionRelation', function ($positionQuery) {
-                    $positionQuery->whereRaw('LOWER(name) LIKE ?', ['%packer%']);
-                })->orWhereRaw('LOWER(COALESCE(position, "")) LIKE ?', ['%packer%']);
+                    $positionQuery->whereRaw('LOWER(name) LIKE ?', ['%packer%'])
+                        ->orWhereRaw('LOWER(name) LIKE ?', ['%packing%']);
+                })->orWhereRaw('LOWER(COALESCE(position, "")) LIKE ?', ['%packer%'])
+                    ->orWhereRaw('LOWER(COALESCE(position, "")) LIKE ?', ['%packing%']);
             })
             ->orderBy('name')
             ->get(['id', 'employee_code', 'name', 'position', 'position_id']);
@@ -224,14 +226,16 @@ class ScanOutController extends Controller
             ->whereKey((int) $value)
             ->where(function ($query) {
                 $query->whereHas('positionRelation', function ($positionQuery) {
-                    $positionQuery->whereRaw('LOWER(name) LIKE ?', ['%packer%']);
-                })->orWhereRaw('LOWER(COALESCE(position, "")) LIKE ?', ['%packer%']);
+                    $positionQuery->whereRaw('LOWER(name) LIKE ?', ['%packer%'])
+                        ->orWhereRaw('LOWER(name) LIKE ?', ['%packing%']);
+                })->orWhereRaw('LOWER(COALESCE(position, "")) LIKE ?', ['%packer%'])
+                    ->orWhereRaw('LOWER(COALESCE(position, "")) LIKE ?', ['%packing%']);
             })
             ->exists();
 
         if (!$exists) {
             throw ValidationException::withMessages([
-                'packed_employee_id' => 'Packer tidak valid atau jabatan karyawan bukan packer.',
+                'packed_employee_id' => 'Packer tidak valid atau jabatan karyawan bukan packer/packing.',
             ]);
         }
 

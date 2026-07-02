@@ -418,7 +418,7 @@
             </select>
             <div class="packing-help">
                 @if(($packers ?? collect())->isEmpty())
-                    Belum ada karyawan aktif dengan jabatan packer. Scan out tetap bisa berjalan tanpa pilihan packer.
+                    Belum ada karyawan aktif dengan jabatan packer/packing. Scan out tetap bisa berjalan tanpa pilihan packer.
                 @else
                     Pilihan ini akan disimpan sebagai packed by saat scan out berhasil.
                 @endif

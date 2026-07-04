@@ -79,8 +79,6 @@ class ItemStockController extends Controller
             ItemTextSearch::apply($query, $search, $this->isExactSearch($request));
         }
 
-        $this->applySafetyFilter($query, (string) $request->input('safety_filter', 'all'));
-
         $recordsTotalQuery = Item::query();
         if ($statusFilter === 'inactive') {
             $recordsTotalQuery->where('status', Item::STATUS_INACTIVE);
@@ -175,10 +173,9 @@ class ItemStockController extends Controller
     {
         $search = trim((string) $request->input('q', ''));
         $status = (string) $request->input('status', 'active');
-        $safetyFilter = (string) $request->input('safety_filter', 'all');
         $filename = 'item-stocks-'.now()->format('YmdHis').'.xlsx';
 
-        return Excel::download(new ItemStocksExport($search, $this->isExactSearch($request), $status, $safetyFilter), $filename);
+        return Excel::download(new ItemStocksExport($search, $this->isExactSearch($request), $status), $filename);
     }
 
     public function updateSafety(Request $request)
@@ -317,54 +314,5 @@ class ItemStockController extends Controller
         $query->orderByRaw($expression.' '.$direction)
             ->orderBy('items.name')
             ->orderBy('items.id');
-    }
-
-    private function applySafetyFilter($query, string $filter): void
-    {
-        if ($filter === '' || $filter === 'all') {
-            return;
-        }
-
-        $mainStock = 'COALESCE(stock_main_sort.stock, 0)';
-        $mainSafety = 'COALESCE(stock_main_sort.safety_stock, items.safety_stock, 0)';
-        $mainMonitored = 'COALESCE(stock_main_sort.is_stock_monitored, 1)';
-        $displayStock = 'COALESCE(stock_display_sort.stock, 0)';
-        $displaySafety = 'COALESCE(stock_display_sort.safety_stock, items.safety_stock, 0)';
-        $displayMonitored = 'COALESCE(stock_display_sort.is_stock_monitored, 1)';
-
-        $query->where(function ($q) {
-            $q->whereNull('items.item_type')
-                ->orWhere('items.item_type', '!=', Item::TYPE_BUNDLE);
-        });
-
-        match ($filter) {
-            'below_main' => $query
-                ->whereRaw("{$mainMonitored} = 1")
-                ->whereRaw("{$mainSafety} > 0")
-                ->whereRaw("{$mainStock} < {$mainSafety}"),
-            'below_display' => $query
-                ->whereRaw("{$displayMonitored} = 1")
-                ->whereRaw("{$displaySafety} > 0")
-                ->whereRaw("{$displayStock} < {$displaySafety}"),
-            'below_any' => $query->where(function ($q) use ($mainStock, $mainSafety, $mainMonitored, $displayStock, $displaySafety, $displayMonitored) {
-                $q->where(function ($sub) use ($mainStock, $mainSafety, $mainMonitored) {
-                    $sub->whereRaw("{$mainMonitored} = 1")
-                        ->whereRaw("{$mainSafety} > 0")
-                        ->whereRaw("{$mainStock} < {$mainSafety}");
-                })->orWhere(function ($sub) use ($displayStock, $displaySafety, $displayMonitored) {
-                    $sub->whereRaw("{$displayMonitored} = 1")
-                        ->whereRaw("{$displaySafety} > 0")
-                        ->whereRaw("{$displayStock} < {$displaySafety}");
-                });
-            }),
-            'normal' => $query
-                ->whereRaw("({$mainMonitored} = 0 OR {$mainSafety} <= 0 OR {$mainStock} >= {$mainSafety})")
-                ->whereRaw("({$displayMonitored} = 0 OR {$displaySafety} <= 0 OR {$displayStock} >= {$displaySafety})"),
-            'unmonitored' => $query->where(function ($q) use ($mainMonitored, $displayMonitored) {
-                $q->whereRaw("{$mainMonitored} = 0")
-                    ->orWhereRaw("{$displayMonitored} = 0");
-            }),
-            default => null,
-        };
     }
 }

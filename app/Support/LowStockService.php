@@ -48,8 +48,7 @@ class LowStockService
             })
             ->where('i.status', Item::STATUS_ACTIVE)
             ->whereRaw('COALESCE(s.is_stock_monitored, 1) = 1')
-            ->whereRaw("{$safetyExpr} > 0")
-            ->whereRaw("{$stockExpr} < {$safetyExpr}");
+            ->whereRaw("{$safetyExpr} > 0");
     }
 
     public function rows(string|int|null $warehouseFilter = null, array $filters = []): Collection
@@ -88,7 +87,7 @@ class LowStockService
             'total_low' => (clone $query)->count(),
             'out_of_stock' => (clone $query)->whereRaw("{$stockExpr} <= 0")->count(),
             'total_gap' => (int) ((clone $query)
-                ->selectRaw("COALESCE(SUM({$safetyExpr} - {$stockExpr}), 0) as gap")
+                ->selectRaw("COALESCE(SUM(CASE WHEN {$stockExpr} < {$safetyExpr} THEN {$safetyExpr} - {$stockExpr} ELSE 0 END), 0) as gap")
                 ->value('gap') ?? 0),
         ];
     }
@@ -154,11 +153,18 @@ class LowStockService
         }
 
         $stockExpr = $this->stockExpr();
-        $statusFilter = $filters['status'] ?? null;
+        $safetyExpr = $this->safetyExpr();
+        $statusFilter = $filters['status'] ?? 'below';
+        $statusFilter = $statusFilter === null || $statusFilter === '' ? 'below' : $statusFilter;
         if ($statusFilter === 'out') {
             $query->whereRaw("{$stockExpr} <= 0");
         } elseif ($statusFilter === 'low') {
-            $query->whereRaw("{$stockExpr} > 0");
+            $query->whereRaw("{$stockExpr} > 0")
+                ->whereRaw("{$stockExpr} < {$safetyExpr}");
+        } elseif ($statusFilter === 'normal') {
+            $query->whereRaw("{$stockExpr} >= {$safetyExpr}");
+        } elseif ($statusFilter === 'below') {
+            $query->whereRaw("{$stockExpr} < {$safetyExpr}");
         }
 
         $search = trim((string) ($filters['q'] ?? ''));
@@ -208,7 +214,7 @@ class LowStockService
             'safety_stock' => $safety,
             'safety_source' => $row->safety_source ?? 'Default item',
             'gap' => max(0, $safety - $stock),
-            'status' => $stock <= 0 ? 'Out of Stock' : 'Low Stock',
+            'status' => $stock <= 0 ? 'Out of Stock' : ($stock < $safety ? 'Low Stock' : 'Normal'),
         ];
     }
 

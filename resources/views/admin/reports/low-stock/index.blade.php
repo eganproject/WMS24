@@ -44,11 +44,13 @@
                     </select>
                 </div>
                 <div class="min-w-200px">
-                    <label class="text-muted fs-7 mb-1">Status</label>
+                    <label class="text-muted fs-7 mb-1">Kondisi Stok</label>
                     <select id="filter_status" class="form-select form-select-solid w-200px">
-                        <option value="">Semua Status</option>
+                        <option value="below" selected>Di bawah pengaman</option>
                         <option value="out">Out of Stock</option>
                         <option value="low">Low Stock</option>
+                        <option value="normal">Normal</option>
+                        <option value="all">Semua Kondisi</option>
                     </select>
                 </div>
                 <div class="min-w-100px">
@@ -71,7 +73,7 @@
             <div class="col-md-4">
                 <div class="card bg-light border-0 h-100">
                     <div class="card-body">
-                        <div class="text-muted small">Total SKU di Bawah Pengaman</div>
+                        <div class="text-muted small">Total Data</div>
                         <div class="fs-2 fw-bolder text-danger" id="summary_total_low">0</div>
                     </div>
                 </div>
@@ -177,7 +179,7 @@
                     params.q = searchInput?.value || '';
                     if (warehouseFilter?.value) params.warehouse_id = warehouseFilter.value;
                     params.category_id = categoryFilter?.value || '';
-                    params.status = statusFilter?.value || '';
+                    params.status = statusFilter?.value || 'below';
                 }
             },
             columns: [
@@ -200,14 +202,15 @@
                 }},
                 { data: 'gap', className: 'text-end', render: (data) => data ?? 0 },
                 { data: 'status', render: (data, type, row) => {
-                    const isOut = row.stock <= 0;
-                    const badge = isOut ? 'badge-light-danger' : 'badge-light-warning';
+                    const badge = data === 'Normal'
+                        ? 'badge-light-success'
+                        : (row.stock <= 0 ? 'badge-light-danger' : 'badge-light-warning');
                     return `<span class="badge ${badge}">${data || '-'}</span>`;
                 }},
                 { data: 'address' },
             ],
             language: {
-                emptyTable: 'Tidak ada item di bawah stok pengaman',
+                emptyTable: 'Tidak ada data stok pengaman',
                 processing: 'Memuat...',
             }
         });
@@ -254,9 +257,9 @@
                 }
             }
             if (statusFilter) {
-                statusFilter.value = '';
+                statusFilter.value = 'below';
                 if (typeof $ !== 'undefined' && $(statusFilter).data('select2')) {
-                    $(statusFilter).val('').trigger('change.select2');
+                    $(statusFilter).val('below').trigger('change.select2');
                 }
             }
             if (warehouseFilter) {

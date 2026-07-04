@@ -103,17 +103,6 @@
                         <option value="all">Semua</option>
                     </select>
                 </div>
-                <div class="w-200px">
-                    <label class="form-label fs-7 text-muted">Stok Pengaman</label>
-                    <select class="form-select form-select-solid" id="filter_item_stocks_safety" aria-label="Filter stok pengaman">
-                        <option value="all" selected>Semua</option>
-                        <option value="below_any">Di bawah pengaman</option>
-                        <option value="below_main">Di bawah {{ $defaultWarehouseLabel ?? 'Gudang Besar' }}</option>
-                        <option value="below_display">Di bawah {{ $displayWarehouseLabel ?? 'Gudang Display' }}</option>
-                        <option value="normal">Normal</option>
-                        <option value="unmonitored">Tidak dimonitor</option>
-                    </select>
-                </div>
                 <button type="button" class="btn btn-light-primary" id="btn_export_item_stocks">Export Excel</button>
                 <button type="button" class="btn btn-primary" id="btn_bulk_safety_main" disabled>Ubah Safety Gudang Besar</button>
                 <button type="button" class="btn btn-primary" id="btn_bulk_safety_display" disabled>Ubah Safety Display</button>
@@ -429,7 +418,6 @@
         const searchModeSelect = document.getElementById('filter_item_stocks_search_mode');
         const limitSelect = document.getElementById('filter_item_stocks_limit');
         const statusSelect = document.getElementById('filter_item_stocks_status');
-        const safetySelect = document.getElementById('filter_item_stocks_safety');
         const exportBtn = document.getElementById('btn_export_item_stocks');
         const bulkSafetyMainBtn = document.getElementById('btn_bulk_safety_main');
         const bulkSafetyDisplayBtn = document.getElementById('btn_bulk_safety_display');
@@ -781,7 +769,6 @@
                     params.q = searchInput?.value || '';
                     params.search_mode = searchModeSelect?.value || 'contains';
                     params.status = statusSelect?.value || 'active';
-                    params.safety_filter = safetySelect?.value || 'all';
                 }
             },
             columns: [
@@ -870,7 +857,6 @@
         searchInput?.addEventListener('input', reloadTable);
         searchModeSelect?.addEventListener('change', reloadTable);
         statusSelect?.addEventListener('change', reloadTable);
-        safetySelect?.addEventListener('change', reloadTable);
         limitSelect?.addEventListener('change', () => {
             const val = Number(limitSelect.value || 10);
             dt.page.len(val).draw();
@@ -882,7 +868,6 @@
             if (q) params.set('q', q);
             params.set('search_mode', mode);
             params.set('status', statusSelect?.value || 'active');
-            params.set('safety_filter', safetySelect?.value || 'all');
             const query = params.toString();
             window.location.href = query ? `${exportUrl}?${query}` : exportUrl;
         });

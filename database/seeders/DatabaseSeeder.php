@@ -17,6 +17,7 @@ class DatabaseSeeder extends Seeder
             RoleSeeder::class,
             MenuSeeder::class,
             KpiMenuSeeder::class,
+            KpiDefinitionSeeder::class,
             HrSeeder::class,
             KurirSeeder::class,
             UserSeeder::class,

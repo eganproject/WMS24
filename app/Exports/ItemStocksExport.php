@@ -15,7 +15,12 @@ use Maatwebsite\Excel\Concerns\WithMapping;
 
 class ItemStocksExport implements FromCollection, WithHeadings, WithMapping, ShouldAutoSize
 {
-    public function __construct(private string $search = '', private bool $exact = false, private string $status = 'active')
+    public function __construct(
+        private string $search = '',
+        private bool $exact = false,
+        private string $status = 'active',
+        private string $safetyFilter = 'all'
+    )
     {
     }
 
@@ -26,7 +31,17 @@ class ItemStocksExport implements FromCollection, WithHeadings, WithMapping, Sho
         $damagedId = WarehouseService::damagedWarehouseId();
         $query = Item::with(['stocks' => function ($q) use ($defaultId, $displayId, $damagedId) {
             $q->whereIn('warehouse_id', [$defaultId, $displayId, $damagedId]);
-        }])->orderBy('name');
+        }])
+            ->leftJoin('item_stocks as stock_main_sort', function ($join) use ($defaultId) {
+                $join->on('stock_main_sort.item_id', '=', 'items.id')
+                    ->where('stock_main_sort.warehouse_id', '=', $defaultId);
+            })
+            ->leftJoin('item_stocks as stock_display_sort', function ($join) use ($displayId) {
+                $join->on('stock_display_sort.item_id', '=', 'items.id')
+                    ->where('stock_display_sort.warehouse_id', '=', $displayId);
+            })
+            ->select('items.*')
+            ->orderBy('name');
         $search = trim($this->search);
         if ($search !== '') {
             ItemTextSearch::apply($query, $search, $this->exact);
@@ -36,6 +51,7 @@ class ItemStocksExport implements FromCollection, WithHeadings, WithMapping, Sho
         } elseif ($this->status !== 'all') {
             $query->where('status', Item::STATUS_ACTIVE);
         }
+        $this->applySafetyFilter($query);
         return $query->get();
     }
 
@@ -101,5 +117,54 @@ class ItemStocksExport implements FromCollection, WithHeadings, WithMapping, Sho
             $stockGoodTotal,
             $isBundle ? $stockGoodTotal : ($stockGoodTotal + $stockDamaged),
         ];
+    }
+
+    private function applySafetyFilter($query): void
+    {
+        if ($this->safetyFilter === '' || $this->safetyFilter === 'all') {
+            return;
+        }
+
+        $mainStock = 'COALESCE(stock_main_sort.stock, 0)';
+        $mainSafety = 'COALESCE(stock_main_sort.safety_stock, items.safety_stock, 0)';
+        $mainMonitored = 'COALESCE(stock_main_sort.is_stock_monitored, 1)';
+        $displayStock = 'COALESCE(stock_display_sort.stock, 0)';
+        $displaySafety = 'COALESCE(stock_display_sort.safety_stock, items.safety_stock, 0)';
+        $displayMonitored = 'COALESCE(stock_display_sort.is_stock_monitored, 1)';
+
+        $query->where(function ($q) {
+            $q->whereNull('items.item_type')
+                ->orWhere('items.item_type', '!=', Item::TYPE_BUNDLE);
+        });
+
+        match ($this->safetyFilter) {
+            'below_main' => $query
+                ->whereRaw("{$mainMonitored} = 1")
+                ->whereRaw("{$mainSafety} > 0")
+                ->whereRaw("{$mainStock} < {$mainSafety}"),
+            'below_display' => $query
+                ->whereRaw("{$displayMonitored} = 1")
+                ->whereRaw("{$displaySafety} > 0")
+                ->whereRaw("{$displayStock} < {$displaySafety}"),
+            'below_any' => $query->where(function ($q) use ($mainStock, $mainSafety, $mainMonitored, $displayStock, $displaySafety, $displayMonitored) {
+                $q->where(function ($sub) use ($mainStock, $mainSafety, $mainMonitored) {
+                    $sub->whereRaw("{$mainMonitored} = 1")
+                        ->whereRaw("{$mainSafety} > 0")
+                        ->whereRaw("{$mainStock} < {$mainSafety}");
+                })->orWhere(function ($sub) use ($displayStock, $displaySafety, $displayMonitored) {
+                    $sub->whereRaw("{$displayMonitored} = 1")
+                        ->whereRaw("{$displaySafety} > 0")
+                        ->whereRaw("{$displayStock} < {$displaySafety}");
+                });
+            }),
+            'normal' => $query
+                ->whereRaw("({$mainMonitored} = 0 OR {$mainSafety} <= 0 OR {$mainStock} >= {$mainSafety})")
+                ->whereRaw("({$displayMonitored} = 0 OR {$displaySafety} <= 0 OR {$displayStock} >= {$displaySafety})"),
+            'unmonitored' => $query->where(function ($q) use ($mainMonitored, $displayMonitored) {
+                $q->whereRaw("{$mainMonitored} = 0")
+                    ->orWhereRaw("{$displayMonitored} = 0");
+            }),
+            default => null,
+        };
     }
 }

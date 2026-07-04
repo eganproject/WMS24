@@ -62,7 +62,8 @@
                         <option value="100">100</option>
                     </select>
                 </div>
-                <div>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-primary" id="filter_apply">Terapkan Filter</button>
                     <button type="button" class="btn btn-light" id="filter_reset">Reset</button>
                 </div>
             </div>
@@ -142,6 +143,7 @@
         const categoryFilter = document.getElementById('filter_category');
         const statusFilter = document.getElementById('filter_status');
         const limitFilter = document.getElementById('filter_limit');
+        const applyBtn = document.getElementById('filter_apply');
         const resetBtn = document.getElementById('filter_reset');
         const summaryTotalEl = document.getElementById('summary_total_low');
         const summaryOutEl = document.getElementById('summary_out_stock');
@@ -215,7 +217,6 @@
             }
         });
 
-        const reloadTable = () => dt.ajax.reload();
         const warehouseBadgeEl = document.getElementById('warehouse_badge');
         const warehouseBadgeClass = (warehouseId) => {
             const id = Number(warehouseId || 0);
@@ -236,18 +237,20 @@
             warehouseBadgeEl.className = `badge ${badgeClass} me-4`;
             warehouseBadgeEl.textContent = `Gudang: ${label}`;
         };
+        const applyFilters = () => {
+            const limit = Number(limitFilter?.value || 10);
+            if (Number.isFinite(limit) && limit > 0) {
+                dt.page.len(limit);
+            }
+            updateWarehouseBadge();
+            dt.ajax.reload(null, true);
+        };
 
         searchInput?.addEventListener('keyup', (e) => {
-            if (e.key === 'Enter') reloadTable();
+            if (e.key === 'Enter') applyFilters();
         });
-        warehouseFilter?.addEventListener('change', reloadTable);
         warehouseFilter?.addEventListener('change', updateWarehouseBadge);
-        categoryFilter?.addEventListener('change', reloadTable);
-        statusFilter?.addEventListener('change', reloadTable);
-        limitFilter?.addEventListener('change', () => {
-            const val = Number(limitFilter.value || 10);
-            dt.page.len(val).draw();
-        });
+        applyBtn?.addEventListener('click', applyFilters);
         resetBtn?.addEventListener('click', () => {
             if (searchInput) searchInput.value = '';
             if (categoryFilter) {
@@ -270,10 +273,8 @@
             }
             if (limitFilter) {
                 limitFilter.value = '10';
-                dt.page.len(10).draw();
             }
-            reloadTable();
-            updateWarehouseBadge();
+            applyFilters();
         });
         updateWarehouseBadge();
     });

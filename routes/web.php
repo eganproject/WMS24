@@ -441,6 +441,7 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::post('/kpi/snapshots', [KpiController::class, 'storeSnapshot'])->name('kpi.snapshots.store');
         Route::get('/kpi/snapshots/{snapshot}/items', [KpiController::class, 'scoreItemsData'])->name('kpi.snapshots.items');
         Route::post('/kpi/snapshots/{snapshot}/lock', [KpiController::class, 'lockSnapshot'])->name('kpi.snapshots.lock');
+        Route::post('/kpi/snapshots/{snapshot}/recalculate', [KpiController::class, 'recalculateSnapshot'])->name('kpi.snapshots.recalculate');
         Route::put('/kpi/score-items/{item}', [KpiController::class, 'updateScoreItem'])->name('kpi.score-items.update');
         Route::get('/scan-out-reports', [ScanOutReportController::class, 'index'])->name('scan-out-reports.index');
         Route::get('/scan-out-reports/data', [ScanOutReportController::class, 'data'])->name('scan-out-reports.data');

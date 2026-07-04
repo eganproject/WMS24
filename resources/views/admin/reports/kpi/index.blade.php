@@ -323,6 +323,7 @@
         snapshotStore: @json($snapshotStoreUrl),
         snapshotItems: @json($snapshotItemsUrlTpl),
         snapshotLock: @json($snapshotLockUrlTpl),
+        snapshotRecalculate: @json($snapshotRecalculateUrlTpl),
         scoreItemUpdate: @json($scoreItemUpdateUrlTpl),
     };
     const csrfToken = @json(csrf_token());
@@ -430,7 +431,7 @@
                 { data: 'note', render: escapeHtml },
                 { data: null, orderable: false, className: 'text-end', render: (row) => `
                     <button type="button" class="btn btn-sm btn-light-primary btn-view-snapshot" data-id="${row.id}" data-code="${escapeHtml(row.code)}" data-status="${escapeHtml(row.status)}">Detail</button>
-                    ${row.status === 'locked' ? '' : `<button type="button" class="btn btn-sm btn-light-success btn-lock-snapshot" data-id="${row.id}">Lock</button>`}
+                    ${row.status === 'locked' ? '' : `<button type="button" class="btn btn-sm btn-light-info btn-recalculate-snapshot" data-id="${row.id}">Hitung Ulang</button> <button type="button" class="btn btn-sm btn-light-success btn-lock-snapshot" data-id="${row.id}">Lock</button>`}
                 ` },
             ],
         });
@@ -579,7 +580,7 @@
                     period_end: document.getElementById('snapshot_period_end').value,
                 });
                 snapshotsTable.ajax.reload(null, false);
-                notify(`${data.message} Total item: ${data.items_count}`);
+                notify(`${data.message} Total item: ${data.items_count}. Auto: ${data.auto_updated}, manual/skip: ${data.auto_skipped}.`);
             } catch (error) {
                 notify(error.message, 'error');
             }
@@ -599,6 +600,17 @@
                 snapshotsTable.ajax.reload(null, false);
                 scoreItemsTable.ajax.reload(null, false);
                 notify('Snapshot berhasil dikunci.');
+            } catch (error) {
+                notify(error.message, 'error');
+            }
+        });
+
+        $('#kpi_snapshots_table').on('click', '.btn-recalculate-snapshot', async function () {
+            try {
+                const data = await request(route(kpiUrls.snapshotRecalculate, this.dataset.id), 'POST');
+                snapshotsTable.ajax.reload(null, false);
+                scoreItemsTable.ajax.reload(null, false);
+                notify(`${data.message} Auto: ${data.updated}, manual/skip: ${data.skipped}.`);
             } catch (error) {
                 notify(error.message, 'error');
             }

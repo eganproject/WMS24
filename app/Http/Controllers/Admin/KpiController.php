@@ -8,6 +8,7 @@ use App\Models\KpiDefinition;
 use App\Models\KpiEmployeeAssignment;
 use App\Models\KpiScoreItem;
 use App\Models\KpiScoreSnapshot;
+use App\Support\KpiAutoCalculator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -42,6 +43,7 @@ class KpiController extends Controller
             'snapshotStoreUrl' => route('admin.reports.kpi.snapshots.store'),
             'snapshotItemsUrlTpl' => route('admin.reports.kpi.snapshots.items', ':id'),
             'snapshotLockUrlTpl' => route('admin.reports.kpi.snapshots.lock', ':id'),
+            'snapshotRecalculateUrlTpl' => route('admin.reports.kpi.snapshots.recalculate', ':id'),
             'scoreItemUpdateUrlTpl' => route('admin.reports.kpi.score-items.update', ':id'),
         ]);
     }
@@ -277,10 +279,15 @@ class KpiController extends Controller
             return $snapshot->loadCount('items');
         });
 
+        $autoResult = app(KpiAutoCalculator::class)->recalculateSnapshot($snapshot->refresh());
+        $snapshot->loadCount('items');
+
         return response()->json([
             'message' => 'Snapshot KPI berhasil dibuat.',
             'snapshot_id' => $snapshot->id,
             'items_count' => $snapshot->items_count,
+            'auto_updated' => $autoResult['updated'],
+            'auto_skipped' => $autoResult['skipped'],
         ]);
     }
 
@@ -368,6 +375,21 @@ class KpiController extends Controller
         ]);
 
         return response()->json(['message' => 'Snapshot KPI berhasil dikunci.']);
+    }
+
+    public function recalculateSnapshot(KpiScoreSnapshot $snapshot)
+    {
+        if ($snapshot->status === 'locked') {
+            return response()->json(['message' => 'Snapshot sudah dikunci.'], 422);
+        }
+
+        $result = app(KpiAutoCalculator::class)->recalculateSnapshot($snapshot);
+
+        return response()->json([
+            'message' => 'Kalkulasi otomatis KPI selesai.',
+            'updated' => $result['updated'],
+            'skipped' => $result['skipped'],
+        ]);
     }
 
     private function validateDefinition(Request $request, ?KpiDefinition $definition = null): array

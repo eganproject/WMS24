@@ -64,6 +64,7 @@ class KpiAutoCalculator
             'attendance_data_completeness' => $this->attendanceDataCompleteness($snapshot),
             'barcode_miss_resolution_rate' => $this->barcodeMissResolutionRate($snapshot),
             'resi_cancel_control' => $this->resiCancelControl($snapshot),
+            'return_finalization_lead_time' => $this->returnFinalizationLeadTime($snapshot),
             default => null,
         };
     }
@@ -363,6 +364,26 @@ class KpiAutoCalculator
         }
 
         return $this->percentage((clone $base)->where('status', 'canceled')->count(), $total);
+    }
+
+    private function returnFinalizationLeadTime(KpiScoreSnapshot $snapshot): ?float
+    {
+        if (
+            !$this->hasTable('customer_returns')
+            || !$this->hasColumn('customer_returns', 'received_at')
+            || !$this->hasColumn('customer_returns', 'finalized_at')
+        ) {
+            return null;
+        }
+
+        $averageMinutes = DB::table('customer_returns')
+            ->whereNotNull('received_at')
+            ->whereNotNull('finalized_at')
+            ->whereBetween('finalized_at', $this->dateTimeRange($snapshot))
+            ->selectRaw('AVG(TIMESTAMPDIFF(MINUTE, received_at, finalized_at)) as avg_minutes')
+            ->value('avg_minutes');
+
+        return $averageMinutes === null ? 0.0 : round(((float) $averageMinutes) / 60, 4);
     }
 
     private function scanOutDateQuery(KpiScoreSnapshot $snapshot)

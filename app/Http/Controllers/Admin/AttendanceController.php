@@ -1705,9 +1705,34 @@ class AttendanceController extends Controller
     {
         $query = AttendanceRawLog::query()
             ->with(['employee:id,employee_code,name', 'device:id,name'])
+            ->when($request->input('attendance_device_id'), fn ($q, $id) => $q->where('attendance_device_id', $id))
+            ->when($request->input('employee_id'), function ($q, $id) {
+                if ($id === 'unlinked') {
+                    $q->whereNull('employee_id');
+                    return;
+                }
+
+                $q->where('employee_id', $id);
+            })
+            ->when($request->filled('state'), fn ($q) => $q->where('state', $request->input('state')))
             ->when($request->input('date_from'), fn ($q, $date) => $q->whereDate('scan_at', '>=', $date))
             ->when($request->input('date_to'), fn ($q, $date) => $q->whereDate('scan_at', '<=', $date))
             ->latest('scan_at');
+
+        $search = trim((string) $request->input('q', ''));
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->where('device_user_id', 'like', "%{$search}%")
+                    ->orWhere('scan_at', 'like', "%{$search}%")
+                    ->orWhere('verify_type', 'like', "%{$search}%")
+                    ->orWhere('state', 'like', "%{$search}%")
+                    ->orWhereHas('employee', fn ($employeeQuery) => $employeeQuery
+                        ->where('employee_code', 'like', "%{$search}%")
+                        ->orWhere('name', 'like', "%{$search}%"))
+                    ->orWhereHas('device', fn ($deviceQuery) => $deviceQuery
+                        ->where('name', 'like', "%{$search}%"));
+            });
+        }
 
         return $this->datatable($query, $request, fn (AttendanceRawLog $log) => [
             'id' => $log->id,

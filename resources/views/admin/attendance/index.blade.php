@@ -1422,6 +1422,52 @@
                         </div>
                     </form>
                 </div>
+                <div class="attendance-form-section mb-4" id="raw_log_filters">
+                    <div class="attendance-form-section-title">Filter Raw Log</div>
+                    <div class="row g-3 align-items-end">
+                        <div class="col-12 col-md-6 col-lg-2">
+                            <label class="form-label fw-bold">Dari Tanggal</label>
+                            <input type="text" class="form-control form-control-solid js-date" id="raw_log_filter_date_from" placeholder="YYYY-MM-DD">
+                        </div>
+                        <div class="col-12 col-md-6 col-lg-2">
+                            <label class="form-label fw-bold">Sampai Tanggal</label>
+                            <input type="text" class="form-control form-control-solid js-date" id="raw_log_filter_date_to" placeholder="YYYY-MM-DD">
+                        </div>
+                        <div class="col-12 col-md-6 col-lg-3">
+                            <label class="form-label fw-bold">Device</label>
+                            <select class="form-select form-select-solid" id="raw_log_filter_device">
+                                <option value="">Semua device</option>
+                                @foreach($devices as $device)
+                                    <option value="{{ $device->id }}">{{ $device->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-6 col-lg-3">
+                            <label class="form-label fw-bold">Karyawan</label>
+                            <select class="form-select form-select-solid" id="raw_log_filter_employee">
+                                <option value="">Semua karyawan</option>
+                                <option value="unlinked">Belum terhubung</option>
+                                @foreach($recapEmployees as $employee)
+                                    <option value="{{ $employee->id }}">
+                                        {{ $employee->employee_code }} - {{ $employee->name }}{{ $employee->employment_status === \App\Models\Employee::STATUS_INACTIVE ? ' (Nonaktif)' : '' }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-6 col-lg-1">
+                            <label class="form-label fw-bold">State</label>
+                            <input type="text" class="form-control form-control-solid" id="raw_log_filter_state" placeholder="0">
+                        </div>
+                        <div class="col-12 col-md-6 col-lg-1 d-grid gap-2">
+                            <button type="button" class="btn btn-light-primary" id="raw_log_apply_filters">
+                                <i class="fas fa-filter"></i>
+                            </button>
+                            <button type="button" class="btn btn-light" id="raw_log_reset_filters">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
                 <x-attendance-table id="raw_logs_table" :headers="['Device','Karyawan','Device User ID','Waktu Scan','Verify','State','Aksi']" />
             </div>
 
@@ -2232,6 +2278,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const recapFilterEmploymentStatus = document.getElementById('recap_filter_employment_status');
     const recapFilterStatus = document.getElementById('recap_filter_status');
     const recapFilterOvertimeStatus = document.getElementById('recap_filter_overtime_status');
+    const rawLogFilterDateFrom = document.getElementById('raw_log_filter_date_from');
+    const rawLogFilterDateTo = document.getElementById('raw_log_filter_date_to');
+    const rawLogFilterDevice = document.getElementById('raw_log_filter_device');
+    const rawLogFilterEmployee = document.getElementById('raw_log_filter_employee');
+    const rawLogFilterState = document.getElementById('raw_log_filter_state');
     const exportAttendancesButton = document.getElementById('attendance_export_attendances');
     const scheduleListEmployee = document.getElementById('schedule_list_employee');
     const scheduleListDateFrom = document.getElementById('schedule_list_date_from');
@@ -2426,7 +2477,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     if (typeof $ !== 'undefined' && $.fn.select2) {
-        document.querySelectorAll('#attendance_form_bank select, #attendance_form_modal select, #modal_positions select, #template_assignment_panel select, #attendance_recap_filters select, #schedule_filter_modal select').forEach((select) => {
+        document.querySelectorAll('#attendance_form_bank select, #attendance_form_modal select, #modal_positions select, #template_assignment_panel select, #attendance_recap_filters select, #raw_log_filters select, #schedule_filter_modal select').forEach((select) => {
             const allowClear = select.querySelector('option[value=""]') !== null;
             const parentModal = select.closest('.modal') || (select.closest('#attendance_form_bank') ? formModalEl : null);
             $(select).select2({
@@ -2568,6 +2619,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         params.status = recapFilterStatus?.value || '';
                         params.overtime_status = recapFilterOvertimeStatus?.value || '';
                     }
+                    if (id === 'raw_logs_table') {
+                        params.date_from = rawLogFilterDateFrom?.value || '';
+                        params.date_to = rawLogFilterDateTo?.value || '';
+                        params.attendance_device_id = rawLogFilterDevice?.value || '';
+                        params.employee_id = rawLogFilterEmployee?.value || '';
+                        params.state = rawLogFilterState?.value || '';
+                    }
                     if (id === 'schedules_table') {
                         params.employee_id = appliedScheduleFilters.employee_id;
                         params.date_from = appliedScheduleFilters.date_from;
@@ -2655,6 +2713,32 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     [recapFilterEmployee, recapFilterEmploymentStatus, recapFilterStatus, recapFilterOvertimeStatus].forEach((field) => {
         field?.addEventListener('change', reloadRecapTable);
+    });
+    const reloadRawLogsTable = () => initAttendanceTable('raw_logs_table')?.ajax.reload();
+    document.getElementById('raw_log_apply_filters')?.addEventListener('click', reloadRawLogsTable);
+    document.getElementById('raw_log_reset_filters')?.addEventListener('click', () => {
+        [rawLogFilterDateFrom, rawLogFilterDateTo].forEach((field) => {
+            if (!field) return;
+            if (field._flatpickr) {
+                field._flatpickr.clear();
+            } else {
+                field.value = '';
+            }
+        });
+        [rawLogFilterDevice, rawLogFilterEmployee].forEach((field) => {
+            if (field) field.value = '';
+        });
+        if (rawLogFilterState) rawLogFilterState.value = '';
+        if (typeof $ !== 'undefined') {
+            $('#raw_log_filters select').val('').trigger('change.select2');
+        }
+        reloadRawLogsTable();
+    });
+    [rawLogFilterDateFrom, rawLogFilterDateTo, rawLogFilterState].forEach((field) => {
+        field?.addEventListener('change', reloadRawLogsTable);
+    });
+    [rawLogFilterDevice, rawLogFilterEmployee].forEach((field) => {
+        field?.addEventListener('change', reloadRawLogsTable);
     });
 
     let scheduleCardPage = 1;

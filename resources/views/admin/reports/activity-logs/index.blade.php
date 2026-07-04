@@ -41,7 +41,7 @@
                 <select id="filter_page" class="form-select form-select-solid fw-bolder" data-control="select2" data-placeholder="Halaman" data-allow-clear="true">
                     <option value="">Semua Halaman</option>
                     @foreach(($pages ?? []) as $page)
-                        <option value="{{ $page }}">{{ $page }}</option>
+                        <option value="{{ $page['value'] }}">{{ $page['label'] }}</option>
                     @endforeach
                 </select>
                 <button type="button" class="btn btn-light" id="filter_apply">Apply</button>

@@ -7,6 +7,7 @@ use App\Models\ActivityLog;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 
 class ActivityLogController extends Controller
 {
@@ -19,7 +20,11 @@ class ActivityLogController extends Controller
             ->select('route_name')
             ->distinct()
             ->orderBy('route_name')
-            ->pluck('route_name');
+            ->pluck('route_name')
+            ->map(fn (string $routeName) => [
+                'value' => $routeName,
+                'label' => $this->routeFilterLabel($routeName),
+            ]);
 
         return view('admin.reports.activity-logs.index', [
             'users' => $users,
@@ -140,5 +145,45 @@ class ActivityLogController extends Controller
         } catch (\Throwable) {
             // ignore invalid date filters
         }
+    }
+
+    private function routeFilterLabel(string $routeName): string
+    {
+        $routeName = trim($routeName);
+        if ($routeName === '') {
+            return '-';
+        }
+
+        $actionMap = [
+            'index' => 'View',
+            'data' => 'Data',
+            'store' => 'Create',
+            'create' => 'Create',
+            'update' => 'Update',
+            'destroy' => 'Delete',
+            'delete' => 'Delete',
+            'show' => 'Detail',
+            'import' => 'Import',
+            'export' => 'Export',
+            'approve' => 'Approve',
+            'reject' => 'Reject',
+        ];
+
+        $segments = explode('.', $routeName);
+        $action = array_pop($segments) ?: '';
+        $moduleSegments = array_values(array_filter($segments, fn ($segment) => !in_array($segment, ['admin'], true)));
+
+        if (count($moduleSegments) > 1 && in_array($moduleSegments[0], ['attendance', 'reports', 'masterdata', 'inventory', 'inbound', 'outbound'], true)) {
+            array_shift($moduleSegments);
+        }
+
+        $module = implode(' ', $moduleSegments);
+        $module = str_replace(['raw-logs', 'raw_logs'], 'raw-log', $module);
+        $module = Str::headline(str_replace(['.', '-', '_'], ' ', $module));
+        $module = str_replace('Raw Logs', 'Raw Log', $module);
+
+        $actionLabel = $actionMap[$action] ?? Str::headline(str_replace(['-', '_'], ' ', $action));
+
+        return trim($module.' '.$actionLabel) ?: $routeName;
     }
 }

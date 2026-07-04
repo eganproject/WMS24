@@ -22,6 +22,11 @@ class LowStockSnapshotItem extends Model
         'safety_stock',
         'gap',
         'status',
+        'resolution_status',
+        'resolved_at',
+        'resolved_snapshot_id',
+        'resolved_stock',
+        'resolved_safety_stock',
         'safety_source',
     ];
 
@@ -29,10 +34,18 @@ class LowStockSnapshotItem extends Model
         'stock' => 'integer',
         'safety_stock' => 'integer',
         'gap' => 'integer',
+        'resolved_at' => 'datetime',
+        'resolved_stock' => 'integer',
+        'resolved_safety_stock' => 'integer',
     ];
 
     public function snapshot()
     {
         return $this->belongsTo(LowStockSnapshot::class, 'low_stock_snapshot_id');
+    }
+
+    public function resolvedSnapshot()
+    {
+        return $this->belongsTo(LowStockSnapshot::class, 'resolved_snapshot_id');
     }
 }

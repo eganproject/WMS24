@@ -64,6 +64,8 @@ class LowStockSnapshotController extends Controller
             'total_low' => $snapshot->total_low,
             'total_out_of_stock' => $snapshot->total_out_of_stock,
             'total_gap' => $snapshot->total_gap,
+            'resolved_count' => $snapshot->items()->where('resolution_status', 'resolved')->count(),
+            'open_count' => $snapshot->items()->where('resolution_status', 'open')->count(),
             'source' => $snapshot->source,
         ]);
 
@@ -106,6 +108,11 @@ class LowStockSnapshotController extends Controller
             $query->where('status', 'Low Stock');
         }
 
+        $resolutionStatus = $request->input('resolution_status');
+        if (in_array($resolutionStatus, ['open', 'resolved'], true)) {
+            $query->where('resolution_status', $resolutionStatus);
+        }
+
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
             $query->where(function ($q) use ($search) {
@@ -128,7 +135,24 @@ class LowStockSnapshotController extends Controller
             'draw' => (int) $request->input('draw'),
             'recordsTotal' => $recordsTotal,
             'recordsFiltered' => $recordsFiltered,
-            'data' => $query->get(),
+            'data' => $query->get()->map(function (LowStockSnapshotItem $row) {
+                return [
+                    'id' => $row->id,
+                    'sku' => $row->sku,
+                    'name' => $row->name,
+                    'warehouse' => $row->warehouse,
+                    'category' => $row->category,
+                    'address' => $row->address,
+                    'stock' => (int) $row->stock,
+                    'safety_stock' => (int) $row->safety_stock,
+                    'gap' => (int) $row->gap,
+                    'status' => $row->status,
+                    'resolution_status' => $row->resolution_status ?? 'open',
+                    'resolved_at' => $row->resolved_at?->format('Y-m-d H:i') ?? '-',
+                    'resolved_stock' => $row->resolved_stock,
+                    'resolved_safety_stock' => $row->resolved_safety_stock,
+                ];
+            }),
         ]);
     }
 }

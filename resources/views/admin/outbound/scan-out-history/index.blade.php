@@ -4,6 +4,15 @@
 @section('page_title', 'Riwayat Scan Out')
 
 @section('content')
+<ul class="nav nav-tabs nav-line-tabs mb-6 fs-6" role="tablist">
+    <li class="nav-item">
+        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#scan_out_success_tab" type="button" role="tab">Scan Berhasil</button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#scan_out_failed_tab" type="button" role="tab">Scan Ditolak</button>
+    </li>
+</ul>
+
 <div class="card">
     <div class="card-header border-0 pt-6">
         <div class="card-title">
@@ -27,6 +36,8 @@
         </div>
     </div>
     <div class="card-body py-6">
+        <div class="tab-content">
+            <div class="tab-pane fade show active" id="scan_out_success_tab" role="tabpanel">
         <div class="table-responsive">
             <table class="table align-middle table-row-dashed fs-6 gy-5" id="scan_out_history_table">
                 <thead>
@@ -46,6 +57,57 @@
                 <tbody></tbody>
             </table>
         </div>
+            </div>
+            <div class="tab-pane fade" id="scan_out_failed_tab" role="tabpanel">
+                <div class="row g-4 mb-5" id="failed_attempt_summary">
+                    <div class="col-6 col-md-3">
+                        <div class="border rounded p-4">
+                            <div class="text-muted fs-8 text-uppercase">Total Ditolak</div>
+                            <div class="fs-3 fw-bolder" data-failed-summary="total">0</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="border rounded p-4">
+                            <div class="text-muted fs-8 text-uppercase">Duplikat</div>
+                            <div class="fs-3 fw-bolder text-warning" data-failed-summary="duplicate">0</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="border rounded p-4">
+                            <div class="text-muted fs-8 text-uppercase">QC Belum Siap</div>
+                            <div class="fs-3 fw-bolder text-danger" data-failed-summary="qc_not_ready">0</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="border rounded p-4">
+                            <div class="text-muted fs-8 text-uppercase">Invalid</div>
+                            <div class="fs-3 fw-bolder text-muted" data-failed-summary="invalid">0</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table align-middle table-row-dashed fs-6 gy-5" id="scan_out_failed_table">
+                        <thead>
+                            <tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0">
+                                <th>No</th>
+                                <th>Waktu</th>
+                                <th>Operator</th>
+                                <th>Alasan</th>
+                                <th>Pesan</th>
+                                <th>Jenis Scan</th>
+                                <th>Kode Scan</th>
+                                <th>ID Pesanan</th>
+                                <th>No Resi</th>
+                                <th>Status Resi</th>
+                                <th>Status QC</th>
+                                <th>Scan Out Existing</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 @endsection
@@ -53,10 +115,12 @@
 @push('scripts')
 <script>
     const dataUrl = '{{ $dataUrl }}';
+    const failedDataUrl = '{{ $failedDataUrl }}';
     const todayStr = '{{ $today ?? '' }}';
 
     document.addEventListener('DOMContentLoaded', () => {
         const tableEl = $('#scan_out_history_table');
+        const failedTableEl = $('#scan_out_failed_table');
         const searchInput = document.querySelector('[data-kt-filter="search"]');
         const dateFromEl = document.getElementById('filter_date_from');
         const dateToEl = document.getElementById('filter_date_to');
@@ -65,7 +129,7 @@
         let fpFrom = null;
         let fpTo = null;
 
-        if (!tableEl.length || !$.fn.DataTable) {
+        if ((!tableEl.length && !failedTableEl.length) || !$.fn.DataTable) {
             console.error('DataTables unavailable');
             return;
         }
@@ -113,7 +177,51 @@
             ]
         });
 
-        const reloadTable = () => dt.ajax.reload();
+        const failedDt = failedTableEl.DataTable({
+            processing: true,
+            serverSide: true,
+            dom: 'rtip',
+            order: [[1, 'desc']],
+            ajax: {
+                url: failedDataUrl,
+                dataSrc: function(json) {
+                    const summary = json.summary || {};
+                    document.querySelectorAll('[data-failed-summary]').forEach((el) => {
+                        const key = el.getAttribute('data-failed-summary');
+                        el.textContent = Number(summary[key] || 0).toLocaleString('id-ID');
+                    });
+                    return json.data || [];
+                },
+                data: function(params) {
+                    params.q = searchInput?.value || '';
+                    if (dateFromEl?.value) params.date_from = dateFromEl.value;
+                    if (dateToEl?.value) params.date_to = dateToEl.value;
+                }
+            },
+            columns: [
+                { data: null, orderable: false, searchable: false, render: (data, type, row, meta) => meta.row + meta.settings._iDisplayStart + 1 },
+                { data: 'attempted_at' },
+                { data: 'operator' },
+                { data: 'reason_label', render: (data, type, row) => `<span class="badge badge-light-danger">${data || row.reason_code || '-'}</span>` },
+                { data: 'message' },
+                { data: 'scan_type', render: (data) => {
+                    if (data === 'id_pesanan') return 'ID Pesanan';
+                    if (data === 'no_resi') return 'No Resi';
+                    return data || '-';
+                }},
+                { data: 'scan_code' },
+                { data: 'id_pesanan' },
+                { data: 'no_resi' },
+                { data: 'resi_status' },
+                { data: 'qc_status' },
+                { data: 'existing_scanned_at' },
+            ]
+        });
+
+        const reloadTable = () => {
+            dt.ajax.reload();
+            failedDt.ajax.reload();
+        };
         searchInput?.addEventListener('keyup', reloadTable);
         dateApplyBtn?.addEventListener('click', reloadTable);
         dateResetBtn?.addEventListener('click', () => {
@@ -122,6 +230,15 @@
             if (!fpFrom && dateFromEl) dateFromEl.value = todayStr;
             if (!fpTo && dateToEl) dateToEl.value = todayStr;
             reloadTable();
+        });
+
+        document.querySelectorAll('[data-bs-toggle="tab"]').forEach((tabEl) => {
+            tabEl.addEventListener('shown.bs.tab', () => {
+                setTimeout(() => {
+                    dt.columns.adjust();
+                    failedDt.columns.adjust();
+                }, 50);
+            });
         });
     });
 </script>

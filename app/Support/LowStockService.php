@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\Item;
 use App\Models\LowStockSnapshot;
+use App\Models\LowStockSnapshotItem;
 use App\Models\Warehouse;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
@@ -133,9 +134,12 @@ class LowStockService
                     'safety_stock' => $row['safety_stock'],
                     'gap' => $row['gap'],
                     'status' => $row['status'],
+                    'resolution_status' => 'open',
                     'safety_source' => $row['safety_source'],
                 ])->all());
             }
+
+            $this->markResolvedItems($snapshot, $rows, $isAllWarehouses, $warehouseId);
 
             return $snapshot;
         });
@@ -227,5 +231,57 @@ class LowStockService
         }
 
         $query->{$method}($column, 'like', '%'.$term.'%');
+    }
+
+    private function markResolvedItems(LowStockSnapshot $snapshot, Collection $currentRows, bool $isAllWarehouses, ?int $warehouseId): void
+    {
+        $currentKeys = $currentRows
+            ->mapWithKeys(fn (array $row) => [$this->resolutionKey((int) $row['id'], (int) $row['warehouse_id']) => $row])
+            ->all();
+
+        $query = LowStockSnapshotItem::query()
+            ->where('resolution_status', 'open')
+            ->whereNull('resolved_at')
+            ->whereHas('snapshot', function ($snapshotQuery) use ($snapshot, $isAllWarehouses, $warehouseId) {
+                $snapshotQuery->where('id', '!=', $snapshot->id);
+                if ($isAllWarehouses) {
+                    $snapshotQuery->where('scope', 'all');
+                } else {
+                    $snapshotQuery->where('scope', 'warehouse')
+                        ->where('warehouse_id', $warehouseId);
+                }
+            });
+
+        $query->chunkById(500, function ($items) use ($currentKeys, $snapshot) {
+            foreach ($items as $item) {
+                $key = $this->resolutionKey((int) $item->item_id, (int) $item->warehouse_id);
+                if (isset($currentKeys[$key])) {
+                    continue;
+                }
+
+                $item->update([
+                    'resolution_status' => 'resolved',
+                    'resolved_at' => $snapshot->snapshot_at ?? now(),
+                    'resolved_snapshot_id' => $snapshot->id,
+                    'resolved_stock' => $this->currentStock((int) $item->item_id, (int) $item->warehouse_id),
+                    'resolved_safety_stock' => (int) $item->safety_stock,
+                ]);
+            }
+        });
+    }
+
+    private function resolutionKey(int $itemId, int $warehouseId): string
+    {
+        return $itemId.':'.$warehouseId;
+    }
+
+    private function currentStock(int $itemId, int $warehouseId): ?int
+    {
+        $value = DB::table('item_stocks')
+            ->where('item_id', $itemId)
+            ->where('warehouse_id', $warehouseId)
+            ->value('stock');
+
+        return $value === null ? null : (int) $value;
     }
 }

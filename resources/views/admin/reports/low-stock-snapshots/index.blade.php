@@ -62,6 +62,8 @@
                         <th>Waktu</th>
                         <th>Gudang</th>
                         <th class="text-end">Total Low</th>
+                        <th class="text-end">Open</th>
+                        <th class="text-end">Resolved</th>
                         <th class="text-end">Out</th>
                         <th class="text-end">Gap</th>
                         <th>Sumber</th>
@@ -96,6 +98,14 @@
                         <option value="low">Low Stock</option>
                     </select>
                 </div>
+                <div class="w-175px">
+                    <label class="text-muted fs-7 mb-1">Resolusi</label>
+                    <select id="detail_resolution_status" class="form-select form-select-solid" data-control="select2" data-placeholder="Semua">
+                        <option value="">Semua</option>
+                        <option value="open">Open</option>
+                        <option value="resolved">Resolved</option>
+                    </select>
+                </div>
             </div>
         </div>
     </div>
@@ -112,6 +122,8 @@
                         <th class="text-end">Safety</th>
                         <th class="text-end">Gap</th>
                         <th>Status</th>
+                        <th>Resolusi</th>
+                        <th>Resolved At</th>
                         <th>Alamat</th>
                     </tr>
                 </thead>
@@ -144,6 +156,7 @@
         const detailTitle = document.getElementById('detail_title');
         const detailSearch = document.getElementById('detail_search');
         const detailStatus = document.getElementById('detail_status');
+        const detailResolutionStatus = document.getElementById('detail_resolution_status');
         let selectedSnapshotId = null;
         let fpDateFrom = null;
         let fpDateTo = null;
@@ -198,6 +211,7 @@
         initSelect2(warehouseFilter, 'Semua Scope');
         initSelect2(createWarehouse, 'Pilih scope');
         initSelect2(detailStatus, 'Semua');
+        initSelect2(detailResolutionStatus, 'Semua');
         setDefaultDateRange();
 
         const snapshotsDt = snapshotTableEl.DataTable({
@@ -218,6 +232,8 @@
                 { data: 'snapshot_at' },
                 { data: 'warehouse' },
                 { data: 'total_low', className: 'text-end', render: (data) => formatNumber(data) },
+                { data: 'open_count', className: 'text-end', render: (data) => formatNumber(data) },
+                { data: 'resolved_count', className: 'text-end', render: (data) => formatNumber(data) },
                 { data: 'total_out_of_stock', className: 'text-end', render: (data) => formatNumber(data) },
                 { data: 'total_gap', className: 'text-end', render: (data) => formatNumber(data) },
                 { data: 'source', render: (data) => data === 'scheduled' ? 'Terjadwal' : 'Manual' },
@@ -238,6 +254,7 @@
                 data: (params) => {
                     params.q = detailSearch?.value || '';
                     params.status = detailStatus?.value || '';
+                    params.resolution_status = detailResolutionStatus?.value || '';
                 },
             },
             columns: [
@@ -251,6 +268,10 @@
                 { data: 'status', render: (data) => data === 'Out of Stock'
                     ? '<span class="badge badge-light-danger">Out of Stock</span>'
                     : '<span class="badge badge-light-warning">Low Stock</span>' },
+                { data: 'resolution_status', render: (data) => data === 'resolved'
+                    ? '<span class="badge badge-light-success">Resolved</span>'
+                    : '<span class="badge badge-light-danger">Open</span>' },
+                { data: 'resolved_at' },
                 { data: 'address', render: (data) => escapeHtml(data || '-') },
             ],
         });
@@ -287,6 +308,7 @@
         dateTo?.addEventListener('change', reloadSnapshots);
         detailSearch?.addEventListener('input', () => selectedSnapshotId && detailDt.ajax.reload());
         $(detailStatus).on('change', () => selectedSnapshotId && detailDt.ajax.reload());
+        $(detailResolutionStatus).on('change', () => selectedSnapshotId && detailDt.ajax.reload());
 
         document.querySelectorAll('[data-bs-toggle="tab"]').forEach((tabEl) => {
             tabEl.addEventListener('shown.bs.tab', () => {

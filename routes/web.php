@@ -415,6 +415,7 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/transit-qc/data', [TransitQcController::class, 'data'])->name('transit-qc.data');
         Route::get('/scan-out-history', [ScanOutHistoryController::class, 'index'])->name('scan-out-history.index');
         Route::get('/scan-out-history/data', [ScanOutHistoryController::class, 'data'])->name('scan-out-history.data');
+        Route::get('/scan-out-history/failed-attempts/data', [ScanOutHistoryController::class, 'failedAttemptsData'])->name('scan-out-history.failed-attempts.data');
         Route::get('/qc-scan-exceptions', [QcScanExceptionController::class, 'index'])->name('qc-scan-exceptions.index');
         Route::get('/qc-scan-exceptions/data', [QcScanExceptionController::class, 'data'])->name('qc-scan-exceptions.data');
         Route::post('/qc-scan-exceptions', [QcScanExceptionController::class, 'store'])->name('qc-scan-exceptions.store');

@@ -35,6 +35,7 @@ use App\Http\Controllers\Admin\ActivityLogController;
 use App\Http\Controllers\Admin\AttendanceController;
 use App\Http\Controllers\Admin\AttendanceReportController;
 use App\Http\Controllers\Admin\KpiController;
+use App\Http\Controllers\Admin\KpiScoreReportController;
 use App\Http\Controllers\Admin\StockOpnameReportController;
 use App\Http\Controllers\Admin\ReplenishmentReportController;
 use App\Http\Controllers\Admin\StockTransferReportController;
@@ -443,6 +444,10 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::post('/kpi/snapshots/{snapshot}/lock', [KpiController::class, 'lockSnapshot'])->name('kpi.snapshots.lock');
         Route::post('/kpi/snapshots/{snapshot}/recalculate', [KpiController::class, 'recalculateSnapshot'])->name('kpi.snapshots.recalculate');
         Route::put('/kpi/score-items/{item}', [KpiController::class, 'updateScoreItem'])->name('kpi.score-items.update');
+        Route::get('/kpi-score', [KpiScoreReportController::class, 'index'])->name('kpi-score.index');
+        Route::get('/kpi-score/data', [KpiScoreReportController::class, 'data'])->name('kpi-score.data');
+        Route::get('/kpi-score/summary', [KpiScoreReportController::class, 'summary'])->name('kpi-score.summary');
+        Route::get('/kpi-score/export', [KpiScoreReportController::class, 'export'])->name('kpi-score.export');
         Route::get('/scan-out-reports', [ScanOutReportController::class, 'index'])->name('scan-out-reports.index');
         Route::get('/scan-out-reports/data', [ScanOutReportController::class, 'data'])->name('scan-out-reports.data');
         Route::get('/low-stock', [LowStockReportController::class, 'index'])->name('low-stock.index');

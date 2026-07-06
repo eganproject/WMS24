@@ -3737,7 +3737,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const result = typeof Swal !== 'undefined'
                 ? await Swal.fire({
                     title: 'Approve lembur?',
-                    html: '<div class="text-start"><label class="form-label fw-bold">Menit disetujui</label><input id="swal_overtime_minutes" type="number" min="1" class="swal2-input" value="'+minutes+'"><label class="form-label fw-bold mt-3">Catatan</label><input id="swal_overtime_note" class="swal2-input" value="'+escapeAttr(overtimeApproveButton.dataset.note || '')+'"></div>',
+                    html: '<div class="text-start"><label class="form-label fw-bold">Menit disetujui</label><input id="swal_overtime_minutes" type="number" min="1" max="'+minutes+'" class="swal2-input" value="'+minutes+'"><div class="text-muted fs-8">Maksimal '+minutes+' menit sesuai lembur terhitung.</div><label class="form-label fw-bold mt-3">Catatan</label><input id="swal_overtime_note" class="swal2-input" value="'+escapeAttr(overtimeApproveButton.dataset.note || '')+'"></div>',
                     icon: 'question',
                     showCancelButton: true,
                     confirmButtonText: 'Approve',
@@ -3746,6 +3746,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         const approved = parseInt(document.getElementById('swal_overtime_minutes')?.value || '0', 10);
                         if (!approved || approved <= 0) {
                             Swal.showValidationMessage('Menit disetujui wajib lebih dari 0.');
+                            return false;
+                        }
+                        if (approved > minutes) {
+                            Swal.showValidationMessage('Menit disetujui tidak boleh lebih besar dari lembur terhitung.');
                             return false;
                         }
                         return {
@@ -3780,9 +3784,21 @@ document.addEventListener('DOMContentLoaded', () => {
                     showCancelButton: true,
                     confirmButtonText: 'Reject',
                     cancelButtonText: 'Batal',
+                    inputValidator: (value) => {
+                        if (!String(value || '').trim()) {
+                            return 'Catatan reject lembur wajib diisi.';
+                        }
+                    },
                 })
-                : { isConfirmed: confirm('Reject lembur ini?'), value: '' };
+                : (() => {
+                    if (!confirm('Reject lembur ini?')) return { isConfirmed: false };
+                    return { isConfirmed: true, value: prompt('Catatan reject lembur') || '' };
+                })();
             if (!result.isConfirmed) return;
+            if (!String(result.value || '').trim()) {
+                Swal?.fire('Error', 'Catatan reject lembur wajib diisi.', 'error');
+                return;
+            }
 
             try {
                 const json = await postAction(crudUrl('attendances_table', 'rejectOvertime', overtimeRejectButton.dataset.id), {

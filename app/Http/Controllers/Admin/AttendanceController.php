@@ -2301,7 +2301,12 @@ class AttendanceController extends Controller
     public function approveOvertime(Request $request, Attendance $attendance)
     {
         $validated = $request->validate([
-            'approved_overtime_minutes' => ['required', 'integer', 'min:1'],
+            'approved_overtime_minutes' => [
+                'required',
+                'integer',
+                'min:1',
+                'max:'.max(1, (int) $attendance->calculated_overtime_minutes),
+            ],
             'overtime_note' => ['nullable', 'string'],
         ]);
 
@@ -2330,7 +2335,7 @@ class AttendanceController extends Controller
     public function rejectOvertime(Request $request, Attendance $attendance)
     {
         $validated = $request->validate([
-            'overtime_note' => ['nullable', 'string'],
+            'overtime_note' => ['required', 'string'],
         ]);
 
         $before = $this->auditSnapshot($attendance);

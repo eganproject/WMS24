@@ -57,6 +57,16 @@
                         <div class="form-text">Kosongkan jika user boleh melihat semua data picking list.</div>
                     </div>
                     <div class="mb-10">
+                        <label class="form-label">Status Akun</label>
+                        <div class="form-check form-switch form-check-custom form-check-solid">
+                            <input type="hidden" name="is_active" value="0">
+                            <input class="form-check-input" type="checkbox" name="is_active" id="is_active" value="1" @checked(old('is_active', $user->is_active ? '1' : '0'))>
+                            <label class="form-check-label" for="is_active">Aktif dan boleh login</label>
+                        </div>
+                        @error('is_active')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
+                        <div class="form-text">Jika dinonaktifkan, user tetap tersimpan tetapi tidak bisa login.</div>
+                    </div>
+                    <div class="mb-10">
                         <label class="form-label">Avatar</label>
                         <div class="d-flex align-items-center gap-4 mb-3">
                             <img src="{{ $user->avatar_url }}" alt="Avatar" class="w-60px h-60px rounded-circle object-cover">

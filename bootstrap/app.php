@@ -21,6 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'activity.log' => \App\Http\Middleware\LogUserActivity::class,
+            'user.active' => \App\Http\Middleware\EnsureUserIsActive::class,
             'menu.permission' => \App\Http\Middleware\AuthorizeMenuPermission::class,
             'restrict.mobile' => \App\Http\Middleware\RestrictMobileAccess::class,
         ]);
@@ -30,6 +31,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $middleware->appendToGroup('web', 'restrict.mobile');
+        $middleware->appendToGroup('web', 'user.active');
         $middleware->appendToGroup('web', 'activity.log');
     })
     ->withExceptions(function (Exceptions $exceptions): void {

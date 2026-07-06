@@ -42,6 +42,14 @@
                                 @endforeach
                             </select>
                         </div>
+                        <div class="mb-10">
+                            <label class="form-label fs-6 fw-bold">Status:</label>
+                            <select id="filter_user_status" class="form-select form-select-solid fw-bolder" data-placeholder="Select option" data-allow-clear="true">
+                                <option value="">Semua</option>
+                                <option value="1">Aktif</option>
+                                <option value="0">Nonaktif</option>
+                            </select>
+                        </div>
                         <div class="d-flex justify-content-end">
                             <button type="button" class="btn btn-light btn-active-light-primary me-2" id="filter_users_reset">Reset</button>
                             <button type="button" class="btn btn-primary" id="filter_users_apply">Apply</button>
@@ -70,6 +78,7 @@
                         <th>Email</th>
                         <th>Area</th>
                         <th>Roles</th>
+                        <th>Status</th>
                         <th class="text-end">Aksi</th>
                     </tr>
                 </thead>
@@ -155,6 +164,7 @@
         const applyBtn = document.getElementById('filter_users_apply');
         const resetBtn = document.getElementById('filter_users_reset');
         const roleSelect = document.getElementById('filter_user_role');
+        const statusSelect = document.getElementById('filter_user_status');
         const importBtn = document.getElementById('btn_import_users');
         const importInput = document.getElementById('import_users_file');
         const importError = document.getElementById('error_import_users_file');
@@ -172,6 +182,7 @@
                 data: function(params) {
                     params.q = searchInput?.value || '';
                     params.role_id = roleSelect?.value || '';
+                    params.status = statusSelect?.value || '';
                 }
             },
             columns: [
@@ -181,6 +192,7 @@
                 { data: 'email' },
                 { data: 'area' },
                 { data: 'roles' },
+                { data: 'is_active', render: (value)=> value ? '<span class="badge badge-light-success">Aktif</span>' : '<span class="badge badge-light-danger">Nonaktif</span>' },
                 { data: 'id', orderable:false, searchable:false, className:'text-end', render: (data)=>{
                     const editUrl = editTpl.replace(':id', data);
                     const delUrl  = delTpl.replace(':id', data);
@@ -205,6 +217,7 @@
         applyBtn?.addEventListener('click', () => dt.ajax.reload());
         resetBtn?.addEventListener('click', () => {
             if (roleSelect) roleSelect.value = '';
+            if (statusSelect) statusSelect.value = '';
             dt.ajax.reload();
         });
 

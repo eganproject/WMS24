@@ -31,6 +31,10 @@ class UserController extends Controller
             $query->whereHas('roles', fn ($q) => $q->where('roles.id', $roleId));
         }
 
+        if (($status = $request->input('status')) !== null && $status !== '') {
+            $query->where('is_active', (bool) ((int) $status));
+        }
+
         if ($search = trim((string) $request->input('q', ''))) {
             $exact = $this->isExactSearch($request);
             $query->where(function ($q) use ($search, $exact) {
@@ -51,6 +55,8 @@ class UserController extends Controller
                 'avatar_url' => $u->avatar_url,
                 'area' => $u->area ? "{$u->area->code} - {$u->area->name}" : 'Semua picking list',
                 'roles' => $u->roles->pluck('name')->implode(', '),
+                'is_active' => (bool) $u->is_active,
+                'status_label' => $u->is_active ? 'Aktif' : 'Nonaktif',
             ];
         });
 
@@ -74,6 +80,7 @@ class UserController extends Controller
             'roles.*' => ['integer','exists:roles,id'],
             'avatar' => ['nullable','image','mimes:jpg,jpeg,png','max:2048'],
             'area_id' => ['nullable','integer','exists:areas,id'],
+            'is_active' => ['nullable','boolean'],
         ]);
         $avatarPath = null;
         $storedAvatar = null;
@@ -92,6 +99,7 @@ class UserController extends Controller
                 'avatar' => $avatarPath ?: User::defaultAvatar(),
                 'email_verified_at' => now(),
                 'area_id' => $validated['area_id'] ?? null,
+                'is_active' => $request->boolean('is_active', true),
             ]);
             if (!empty($validated['roles'])) {
                 $user->roles()->sync($validated['roles']);
@@ -126,11 +134,13 @@ class UserController extends Controller
             'roles.*' => ['integer','exists:roles,id'],
             'avatar' => ['nullable','image','mimes:jpg,jpeg,png','max:2048'],
             'area_id' => ['nullable','integer','exists:areas,id'],
+            'is_active' => ['nullable','boolean'],
         ]);
         $update = [
             'name' => $validated['name'],
             'email' => $validated['email'],
             'area_id' => $validated['area_id'] ?? null,
+            'is_active' => $request->boolean('is_active'),
         ];
         if (!empty($validated['password'])) {
             $update['password'] = Hash::make($validated['password']);
@@ -293,6 +303,7 @@ class UserController extends Controller
                     'avatar' => User::defaultAvatar(),
                     'email_verified_at' => now(),
                     'area_id' => $payload['area_id'],
+                    'is_active' => true,
                 ]);
                 if (!empty($payload['roles'])) {
                     $user->roles()->sync($payload['roles']);

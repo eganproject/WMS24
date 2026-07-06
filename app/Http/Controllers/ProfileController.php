@@ -16,8 +16,16 @@ class ProfileController extends Controller
      */
     public function edit(Request $request): View
     {
+        $user = $request->user()->loadMissing([
+            'area:id,code,name',
+            'roles:id,name,slug',
+            'employee.area:id,code,name',
+            'employee.positionRelation:id,name',
+        ]);
+
         return view('profile.edit', [
-            'user' => $request->user(),
+            'user' => $user,
+            'employee' => $user->employee,
         ]);
     }
 

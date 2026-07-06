@@ -25,6 +25,7 @@ class MobileDashboardController extends Controller
 
         return view('mobile.dashboard', [
             'routes' => [
+                'profile' => route('profile.edit'),
                 'opname' => route('opname.index'),
                 'attendancePerformance' => route('employee.attendance-performance'),
                 'leaveRequests' => route('employee.leave-requests.index'),

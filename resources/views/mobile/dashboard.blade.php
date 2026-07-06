@@ -51,6 +51,10 @@
         background: linear-gradient(135deg, rgba(30,64,175,0.18), rgba(59,130,246,0.2));
         border-color: rgba(59,130,246,0.25);
     }
+    .menu-icon.profile {
+        background: linear-gradient(135deg, rgba(100,116,139,0.18), rgba(148,163,184,0.2));
+        border-color: rgba(100,116,139,0.25);
+    }
     .menu-icon.leave-request {
         background: linear-gradient(135deg, rgba(249,115,22,0.18), rgba(251,191,36,0.2));
         border-color: rgba(249,115,22,0.25);
@@ -102,6 +106,14 @@
     </div>
 
     <div class="menu-list">
+        <a class="menu-card" href="{{ $routes['profile'] }}">
+            <div class="menu-icon profile">MP</div>
+            <div>
+                <div class="menu-title">My Profile</div>
+                <div class="menu-desc">Lihat data akun, data karyawan, dan akses cepat personal.</div>
+            </div>
+        </a>
+
         @if(!empty($showAttendancePerformance))
             <a class="menu-card" href="{{ $routes['attendancePerformance'] }}">
                 <div class="menu-icon inbound-scan">AB</div>

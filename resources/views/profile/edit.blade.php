@@ -1,131 +1,135 @@
-<x-app-layout>
-    <x-slot name="header">
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-            My Profile
-        </h2>
-    </x-slot>
+@extends('layouts.admin')
 
-    <div class="py-12">
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
-            @php
-                $employeePosition = $employee?->positionRelation?->name ?? $employee?->position ?? '-';
-                $employeeArea = $employee?->area?->name ?? $employee?->area?->code ?? '-';
-                $userArea = $user->area?->name ?? $user->area?->code ?? '-';
-                $roleNames = $user->roles->pluck('name')->filter()->values();
-            @endphp
+@section('title', 'My Profile')
 
-            <div class="bg-white shadow sm:rounded-lg overflow-hidden">
-                <div class="p-6 sm:p-8 border-b border-gray-100">
-                    <div class="flex flex-col sm:flex-row sm:items-center gap-5">
-                        <img
-                            src="{{ $user->avatar_url }}"
-                            alt="Avatar {{ $user->name }}"
-                            class="h-20 w-20 rounded-full object-cover border border-gray-200"
-                        >
-                        <div class="flex-1 min-w-0">
-                            <div class="text-2xl font-semibold text-gray-900">{{ $user->name }}</div>
-                            <div class="mt-1 text-sm text-gray-500">{{ $user->email }}</div>
-                            <div class="mt-3 flex flex-wrap gap-2">
-                                @forelse($roleNames as $roleName)
-                                    <span class="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
-                                        {{ $roleName }}
-                                    </span>
-                                @empty
-                                    <span class="inline-flex items-center rounded-full bg-yellow-50 px-3 py-1 text-xs font-medium text-yellow-700">
-                                        Role belum diatur
-                                    </span>
-                                @endforelse
+@section('content')
+@php
+    $employeePosition = $employee?->positionRelation?->name ?? $employee?->position ?? '-';
+    $employeeArea = $employee?->area?->name ?? $employee?->area?->code ?? '-';
+    $userArea = $user->area?->name ?? $user->area?->code ?? '-';
+    $roleNames = $user->roles->pluck('name')->filter()->values();
+@endphp
 
-                                @if($employee)
-                                    <span class="inline-flex items-center rounded-full bg-green-50 px-3 py-1 text-xs font-medium text-green-700">
-                                        Terhubung ke karyawan
-                                    </span>
-                                @else
-                                    <span class="inline-flex items-center rounded-full bg-red-50 px-3 py-1 text-xs font-medium text-red-700">
-                                        Belum terhubung ke karyawan
-                                    </span>
-                                @endif
-                            </div>
-                        </div>
+<div class="card mb-6">
+    <div class="card-body p-8">
+        <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center gap-6">
+            <div class="symbol symbol-90px">
+                <img src="{{ $user->avatar_url }}" alt="Avatar {{ $user->name }}">
+            </div>
+            <div class="flex-grow-1">
+                <div class="d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-4">
+                    <div>
+                        <h1 class="fs-2 fw-bolder text-dark mb-1">{{ $user->name }}</h1>
+                        <div class="text-muted fw-semibold">{{ $user->email }}</div>
                     </div>
-                </div>
-
-                <div class="grid gap-0 lg:grid-cols-2">
-                    <div class="p-6 sm:p-8 border-b lg:border-b-0 lg:border-r border-gray-100">
-                        <h3 class="text-base font-semibold text-gray-900">Informasi Akun</h3>
-                        <dl class="mt-5 grid grid-cols-1 gap-4 text-sm">
-                            <div>
-                                <dt class="text-gray-500">Nama Login</dt>
-                                <dd class="mt-1 font-medium text-gray-900">{{ $user->name }}</dd>
-                            </div>
-                            <div>
-                                <dt class="text-gray-500">Email</dt>
-                                <dd class="mt-1 font-medium text-gray-900">{{ $user->email }}</dd>
-                            </div>
-                            <div>
-                                <dt class="text-gray-500">Area User</dt>
-                                <dd class="mt-1 font-medium text-gray-900">{{ $userArea }}</dd>
-                            </div>
-                        </dl>
-                    </div>
-
-                    <div class="p-6 sm:p-8">
-                        <h3 class="text-base font-semibold text-gray-900">Informasi Karyawan</h3>
+                    <div class="d-flex flex-wrap gap-2">
+                        @forelse($roleNames as $roleName)
+                            <span class="badge badge-light-primary">{{ $roleName }}</span>
+                        @empty
+                            <span class="badge badge-light-warning">Role belum diatur</span>
+                        @endforelse
 
                         @if($employee)
-                            <dl class="mt-5 grid grid-cols-1 gap-4 text-sm">
-                                <div>
-                                    <dt class="text-gray-500">Kode Karyawan</dt>
-                                    <dd class="mt-1 font-medium text-gray-900">{{ $employee->employee_code ?? '-' }}</dd>
-                                </div>
-                                <div>
-                                    <dt class="text-gray-500">Nama Karyawan</dt>
-                                    <dd class="mt-1 font-medium text-gray-900">{{ $employee->name }}</dd>
-                                </div>
-                                <div>
-                                    <dt class="text-gray-500">Jabatan</dt>
-                                    <dd class="mt-1 font-medium text-gray-900">{{ $employeePosition }}</dd>
-                                </div>
-                                <div>
-                                    <dt class="text-gray-500">Area Karyawan</dt>
-                                    <dd class="mt-1 font-medium text-gray-900">{{ $employeeArea }}</dd>
-                                </div>
-                                <div>
-                                    <dt class="text-gray-500">Status</dt>
-                                    <dd class="mt-1 font-medium text-gray-900">{{ ucfirst($employee->employment_status ?? '-') }}</dd>
-                                </div>
-                            </dl>
-
-                            <div class="mt-6 flex flex-col sm:flex-row gap-3">
-                                <a href="{{ route('employee.attendance-performance') }}" class="inline-flex justify-center rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-gray-800">
-                                    Performa Absensi
-                                </a>
-                                <a href="{{ route('employee.leave-requests.index') }}" class="inline-flex justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50">
-                                    Ajukan Cuti/Izin
-                                </a>
-                            </div>
+                            <span class="badge badge-light-success">Terhubung ke karyawan</span>
                         @else
-                            <div class="mt-5 rounded-lg border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800">
-                                Akun ini belum terhubung ke master karyawan. Fitur Performa Absensi dan Ajukan Cuti/Izin hanya bisa digunakan setelah user dikaitkan dengan data karyawan.
-                            </div>
+                            <span class="badge badge-light-danger">Belum terhubung ke karyawan</span>
                         @endif
-                    </div>
-                </div>
-            </div>
-
-            <div class="grid gap-6 lg:grid-cols-2">
-                <div class="p-4 sm:p-8 bg-white shadow sm:rounded-lg">
-                    <div class="max-w-xl">
-                        @include('profile.partials.update-profile-information-form')
-                    </div>
-                </div>
-
-                <div class="p-4 sm:p-8 bg-white shadow sm:rounded-lg">
-                    <div class="max-w-xl">
-                        @include('profile.partials.update-password-form')
                     </div>
                 </div>
             </div>
         </div>
     </div>
-</x-app-layout>
+</div>
+
+<div class="row g-6 mb-6">
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <div class="card-title">
+                    <h3 class="fw-bolder mb-0">Informasi Akun</h3>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="mb-5">
+                    <div class="text-muted fs-7 mb-1">Nama Login</div>
+                    <div class="fw-bold text-dark">{{ $user->name }}</div>
+                </div>
+                <div class="mb-5">
+                    <div class="text-muted fs-7 mb-1">Email</div>
+                    <div class="fw-bold text-dark">{{ $user->email }}</div>
+                </div>
+                <div>
+                    <div class="text-muted fs-7 mb-1">Area User</div>
+                    <div class="fw-bold text-dark">{{ $userArea }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <div class="card-title">
+                    <h3 class="fw-bolder mb-0">Informasi Karyawan</h3>
+                </div>
+            </div>
+            <div class="card-body">
+                @if($employee)
+                    <div class="row g-4">
+                        <div class="col-sm-6">
+                            <div class="text-muted fs-7 mb-1">Kode Karyawan</div>
+                            <div class="fw-bold text-dark">{{ $employee->employee_code ?? '-' }}</div>
+                        </div>
+                        <div class="col-sm-6">
+                            <div class="text-muted fs-7 mb-1">Nama Karyawan</div>
+                            <div class="fw-bold text-dark">{{ $employee->name }}</div>
+                        </div>
+                        <div class="col-sm-6">
+                            <div class="text-muted fs-7 mb-1">Jabatan</div>
+                            <div class="fw-bold text-dark">{{ $employeePosition }}</div>
+                        </div>
+                        <div class="col-sm-6">
+                            <div class="text-muted fs-7 mb-1">Area Karyawan</div>
+                            <div class="fw-bold text-dark">{{ $employeeArea }}</div>
+                        </div>
+                        <div class="col-sm-6">
+                            <div class="text-muted fs-7 mb-1">Status</div>
+                            <div class="fw-bold text-dark">{{ ucfirst($employee->employment_status ?? '-') }}</div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex flex-wrap gap-3 mt-8">
+                        <a href="{{ route('employee.attendance-performance') }}" class="btn btn-primary">
+                            Performa Absensi
+                        </a>
+                        <a href="{{ route('employee.leave-requests.index') }}" class="btn btn-light-primary">
+                            Ajukan Cuti/Izin
+                        </a>
+                    </div>
+                @else
+                    <div class="alert alert-warning mb-0">
+                        Akun ini belum terhubung ke master karyawan. Fitur Performa Absensi dan Ajukan Cuti/Izin hanya bisa digunakan setelah user dikaitkan dengan data karyawan.
+                    </div>
+                @endif
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-6">
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-body p-8">
+                @include('profile.partials.update-profile-information-form')
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-body p-8">
+                @include('profile.partials.update-password-form')
+            </div>
+        </div>
+    </div>
+</div>
+@endsection

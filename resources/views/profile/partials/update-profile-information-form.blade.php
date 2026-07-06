@@ -1,63 +1,71 @@
 <section>
-    <header>
-        <h2 class="text-lg font-medium text-gray-900">
-            Informasi Akun
-        </h2>
-
-        <p class="mt-1 text-sm text-gray-600">
-            Perbarui nama login dan email akun Anda.
-        </p>
-    </header>
+    <div class="mb-6">
+        <h3 class="fw-bolder text-dark mb-1">Informasi Akun</h3>
+        <div class="text-muted">Perbarui nama login dan email akun Anda.</div>
+    </div>
 
     <form id="send-verification" method="post" action="{{ route('verification.send') }}">
         @csrf
     </form>
 
-    <form method="post" action="{{ route('profile.update') }}" class="mt-6 space-y-6">
+    <form method="post" action="{{ route('profile.update') }}">
         @csrf
         @method('patch')
 
-        <div>
-            <x-input-label for="name" value="Nama Login" />
-            <x-text-input id="name" name="name" type="text" class="mt-1 block w-full" :value="old('name', $user->name)" required autofocus autocomplete="name" />
-            <x-input-error class="mt-2" :messages="$errors->get('name')" />
+        <div class="mb-5">
+            <label for="name" class="form-label required">Nama Login</label>
+            <input
+                id="name"
+                name="name"
+                type="text"
+                class="form-control form-control-solid @error('name') is-invalid @enderror"
+                value="{{ old('name', $user->name) }}"
+                required
+                autocomplete="name"
+            >
+            @error('name')
+                <div class="invalid-feedback">{{ $message }}</div>
+            @enderror
         </div>
 
-        <div>
-            <x-input-label for="email" :value="__('Email')" />
-            <x-text-input id="email" name="email" type="email" class="mt-1 block w-full" :value="old('email', $user->email)" required autocomplete="username" />
-            <x-input-error class="mt-2" :messages="$errors->get('email')" />
+        <div class="mb-5">
+            <label for="email" class="form-label required">Email</label>
+            <input
+                id="email"
+                name="email"
+                type="email"
+                class="form-control form-control-solid @error('email') is-invalid @enderror"
+                value="{{ old('email', $user->email) }}"
+                required
+                autocomplete="username"
+            >
+            @error('email')
+                <div class="invalid-feedback">{{ $message }}</div>
+            @enderror
 
             @if ($user instanceof \Illuminate\Contracts\Auth\MustVerifyEmail && ! $user->hasVerifiedEmail())
-                <div>
-                    <p class="text-sm mt-2 text-gray-800">
+                <div class="notice d-flex bg-light-warning rounded border-warning border border-dashed p-4 mt-4">
+                    <div class="text-warning">
                         Email Anda belum diverifikasi.
-
-                        <button form="send-verification" class="underline text-sm text-gray-600 hover:text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                        <button form="send-verification" class="btn btn-link p-0 align-baseline">
                             Kirim ulang email verifikasi.
                         </button>
-                    </p>
-
-                    @if (session('status') === 'verification-link-sent')
-                        <p class="mt-2 font-medium text-sm text-green-600">
-                            Link verifikasi baru sudah dikirim ke email Anda.
-                        </p>
-                    @endif
+                    </div>
                 </div>
+
+                @if (session('status') === 'verification-link-sent')
+                    <div class="text-success fw-semibold mt-3">
+                        Link verifikasi baru sudah dikirim ke email Anda.
+                    </div>
+                @endif
             @endif
         </div>
 
-        <div class="flex items-center gap-4">
-            <x-primary-button>Simpan</x-primary-button>
+        <div class="d-flex align-items-center gap-4">
+            <button type="submit" class="btn btn-primary">Simpan</button>
 
             @if (session('status') === 'profile-updated')
-                <p
-                    x-data="{ show: true }"
-                    x-show="show"
-                    x-transition
-                    x-init="setTimeout(() => show = false, 2000)"
-                    class="text-sm text-gray-600"
-                >Tersimpan.</p>
+                <span class="text-muted">Tersimpan.</span>
             @endif
         </div>
     </form>

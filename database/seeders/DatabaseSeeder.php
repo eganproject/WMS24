@@ -16,6 +16,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             RoleSeeder::class,
             MenuSeeder::class,
+            EmployeeUserAuditMenuSeeder::class,
             KpiMenuSeeder::class,
             KpiScoreReportMenuSeeder::class,
             KpiDefinitionSeeder::class,

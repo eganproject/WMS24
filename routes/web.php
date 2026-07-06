@@ -46,6 +46,7 @@ use App\Http\Controllers\Admin\AreaController;
 use App\Http\Controllers\Admin\LocationController;
 use App\Http\Controllers\Admin\KurirController;
 use App\Http\Controllers\Admin\SupplierController;
+use App\Http\Controllers\Admin\EmployeeUserAuditController;
 use App\Http\Controllers\Mobile\StockOpnameMobileController;
 use App\Http\Controllers\Mobile\MobileDashboardController;
 use App\Http\Controllers\Mobile\InboundScanController;
@@ -145,6 +146,10 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::post('/users/import', [AdminUserController::class, 'import'])->name('users.import');
         // Users CRUD
         Route::resource('users', AdminUserController::class)->except(['show'])->names('users');
+
+        // User & employee relation audit
+        Route::get('/employee-user-audit', [EmployeeUserAuditController::class, 'index'])->name('employee-user-audit.index');
+        Route::get('/employee-user-audit/data', [EmployeeUserAuditController::class, 'data'])->name('employee-user-audit.data');
 
         // Roles DataTables
         Route::get('/roles/data', [RoleController::class, 'data'])->name('roles.data');

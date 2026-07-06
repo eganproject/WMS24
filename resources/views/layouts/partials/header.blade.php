@@ -58,7 +58,10 @@
                         <div class="menu-item px-3">
                             <div class="menu-content d-flex align-items-center px-3">
                                 <!--begin::Avatar-->
-                                @php $authUser = auth()->user(); @endphp
+                                @php
+                                    $authUser = auth()->user();
+                                    $authEmployee = $authUser?->employee;
+                                @endphp
                                 <div class="symbol symbol-50px me-5">
                                     <img alt="Avatar" src="{{ $authUser?->avatar_url ?? asset('metronic/media/avatars/blank.png') }}" />
                                 </div>
@@ -87,6 +90,13 @@
                             <a href="{{ route('employee.attendance-performance') }}" class="menu-link px-5">Performa Absensi</a>
                         </div>
                         <!--end::Menu item-->
+                        @if($authEmployee)
+                            <!--begin::Menu item-->
+                            <div class="menu-item px-5">
+                                <a href="{{ route('employee.leave-requests.index') }}" class="menu-link px-5">Ajukan Cuti/Izin</a>
+                            </div>
+                            <!--end::Menu item-->
+                        @endif
                         <!--begin::Menu separator-->
                         <div class="separator my-2"></div>
                         <!--end::Menu separator-->

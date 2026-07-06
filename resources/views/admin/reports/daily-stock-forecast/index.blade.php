@@ -12,24 +12,6 @@
     .forecast-metric {
         min-height: 112px;
     }
-    .forecast-daily-wrap {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.35rem;
-        max-width: 320px;
-    }
-    .forecast-daily-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.35rem;
-        border-radius: 0.5rem;
-        padding: 0.28rem 0.5rem;
-        background: #f5f8fa;
-        color: #3f4254;
-        font-size: 11px;
-        font-weight: 600;
-        white-space: nowrap;
-    }
     .forecast-stock-number {
         font-variant-numeric: tabular-nums;
     }
@@ -48,12 +30,8 @@
             </div>
             <div class="d-flex align-items-end gap-3 flex-wrap">
                 <div>
-                    <label class="text-muted fs-7 mb-1">Tanggal Dari</label>
-                    <input type="date" id="filter_date_from" class="form-control form-control-solid w-160px" value="{{ $dateFrom }}">
-                </div>
-                <div>
-                    <label class="text-muted fs-7 mb-1">Tanggal Sampai</label>
-                    <input type="date" id="filter_date_to" class="form-control form-control-solid w-160px" value="{{ $dateTo }}">
+                    <label class="text-muted fs-7 mb-1">Tanggal Forecast</label>
+                    <input type="date" id="filter_date" class="form-control form-control-solid w-160px" value="{{ $forecastDate }}">
                 </div>
                 <div>
                     <label class="text-muted fs-7 mb-1">Kategori</label>
@@ -162,7 +140,6 @@
                         <th class="text-end">Forecast</th>
                         <th class="text-end">Safety</th>
                         <th class="text-end">Stok Gudang Besar</th>
-                        <th>Remaining per Hari</th>
                         <th>Status</th>
                     </tr>
                 </thead>
@@ -179,14 +156,12 @@
         const dataUrl = '{{ $dataUrl }}';
         const tableEl = $('#daily_stock_forecast_table');
         const searchInput = document.getElementById('forecast_search');
-        const dateFrom = document.getElementById('filter_date_from');
-        const dateTo = document.getElementById('filter_date_to');
+        const forecastDate = document.getElementById('filter_date');
         const categoryFilter = document.getElementById('filter_category');
         const statusFilter = document.getElementById('filter_status');
         const applyBtn = document.getElementById('filter_apply');
         const resetBtn = document.getElementById('filter_reset');
-        const defaultDateFrom = '{{ $dateFrom }}';
-        const defaultDateTo = '{{ $dateTo }}';
+        const defaultForecastDate = '{{ $forecastDate }}';
 
         const formatNumber = (value) => Number(value || 0).toLocaleString('id-ID');
         const escapeHtml = (value) => $('<div>').text(value ?? '').html();
@@ -203,17 +178,6 @@
         const statusBadge = (row) => {
             const cls = row.status_class || 'secondary';
             return `<span class="badge badge-light-${cls}">${escapeHtml(row.status_label)}</span>`;
-        };
-
-        const dailyBadges = (rows) => {
-            if (!Array.isArray(rows) || rows.length === 0) {
-                return '<span class="text-muted">Tidak ada remaining</span>';
-            }
-
-            return `<div class="forecast-daily-wrap">${rows.map((row) => {
-                const date = String(row.date || '').slice(5);
-                return `<span class="forecast-daily-badge">${escapeHtml(date)}<strong>${formatNumber(row.qty)}</strong></span>`;
-            }).join('')}</div>`;
         };
 
         if (typeof $ !== 'undefined' && $.fn.select2) {
@@ -240,8 +204,7 @@
                 },
                 data: function(params) {
                     params.q = searchInput?.value || '';
-                    params.date_from = dateFrom?.value || '';
-                    params.date_to = dateTo?.value || '';
+                    params.date = forecastDate?.value || '';
                     params.category_id = categoryFilter?.value || '';
                     params.status = statusFilter?.value || 'all';
                     params.limit = 300;
@@ -275,7 +238,6 @@
                 },
                 { data: 'safety_stock', className: 'text-end forecast-stock-number', render: formatNumber },
                 { data: 'default_stock', className: 'text-end forecast-stock-number', render: formatNumber },
-                { data: 'daily_remaining', orderable: false, render: dailyBadges },
                 { data: null, render: statusBadge },
             ],
         });
@@ -288,8 +250,7 @@
         applyBtn?.addEventListener('click', () => dt.ajax.reload());
         resetBtn?.addEventListener('click', () => {
             if (searchInput) searchInput.value = '';
-            if (dateFrom) dateFrom.value = defaultDateFrom;
-            if (dateTo) dateTo.value = defaultDateTo;
+            if (forecastDate) forecastDate.value = defaultForecastDate;
             if (categoryFilter) {
                 categoryFilter.value = '';
                 $(categoryFilter).trigger('change.select2');

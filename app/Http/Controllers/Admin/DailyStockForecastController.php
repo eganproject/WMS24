@@ -22,8 +22,7 @@ class DailyStockForecastController extends Controller
         return view('admin.reports.daily-stock-forecast.index', [
             'dataUrl' => route('admin.reports.daily-stock-forecast.data'),
             'categories' => Category::orderBy('name')->get(['id', 'name']),
-            'dateFrom' => today()->toDateString(),
-            'dateTo' => today()->addDays(6)->toDateString(),
+            'forecastDate' => today()->toDateString(),
             'displayWarehouse' => Warehouse::find($displayWarehouseId),
             'defaultWarehouse' => Warehouse::find($defaultWarehouseId),
         ]);
@@ -31,11 +30,7 @@ class DailyStockForecastController extends Controller
 
     public function data(Request $request)
     {
-        $dateFrom = Carbon::parse($request->input('date_from') ?: today()->toDateString())->startOfDay();
-        $dateTo = Carbon::parse($request->input('date_to') ?: $dateFrom->copy()->addDays(6)->toDateString())->startOfDay();
-        if ($dateTo->lt($dateFrom)) {
-            [$dateFrom, $dateTo] = [$dateTo, $dateFrom];
-        }
+        $forecastDate = Carbon::parse($request->input('date') ?: today()->toDateString())->startOfDay();
 
         $displayWarehouseId = WarehouseService::displayWarehouseId();
         $defaultWarehouseId = WarehouseService::defaultWarehouseId();
@@ -73,10 +68,10 @@ class DailyStockForecastController extends Controller
             ->get();
 
         $skuList = $items->pluck('sku')->filter()->values();
-        $dailyRemaining = $this->dailyRemainingBySku($skuList, $dateFrom, $dateTo);
+        $dailyRemaining = $this->dailyRemainingBySku($skuList, $forecastDate);
 
         $rows = $items
-            ->map(fn (Item $item) => $this->mapForecastRow($item, $dailyRemaining, $dateFrom, $dateTo, $displayWarehouseId, $defaultWarehouseId))
+            ->map(fn (Item $item) => $this->mapForecastRow($item, $dailyRemaining, $forecastDate, $displayWarehouseId, $defaultWarehouseId))
             ->filter(fn (array $row) => $this->matchesStatus($row, $status))
             ->sortBy([
                 ['forecast_stock', 'asc'],
@@ -99,37 +94,31 @@ class DailyStockForecastController extends Controller
                 'total_display_stock' => (int) $summaryRows->sum('display_stock'),
                 'total_default_stock' => (int) $summaryRows->sum('default_stock'),
             ],
-            'date_range' => [
-                'from' => $dateFrom->toDateString(),
-                'to' => $dateTo->toDateString(),
-            ],
+            'date' => $forecastDate->toDateString(),
             'data' => $rows,
         ]);
     }
 
-    private function dailyRemainingBySku(Collection $skuList, Carbon $dateFrom, Carbon $dateTo): Collection
+    private function dailyRemainingBySku(Collection $skuList, Carbon $forecastDate): Collection
     {
         if ($skuList->isEmpty()) {
             return collect();
         }
 
         return PickingList::query()
-            ->selectRaw('sku, DATE(list_date) as forecast_date, SUM(GREATEST(remaining_qty, 0)) as remaining_qty')
+            ->selectRaw('sku, SUM(GREATEST(remaining_qty, 0)) as remaining_qty')
             ->whereIn('sku', $skuList)
-            ->whereDate('list_date', '>=', $dateFrom->toDateString())
-            ->whereDate('list_date', '<=', $dateTo->toDateString())
+            ->whereDate('list_date', $forecastDate->toDateString())
             ->where('remaining_qty', '>', 0)
-            ->groupBy('sku', 'forecast_date')
-            ->get()
             ->groupBy('sku')
-            ->map(fn (Collection $rows) => $rows->keyBy('forecast_date'));
+            ->get()
+            ->keyBy('sku');
     }
 
     private function mapForecastRow(
         Item $item,
         Collection $dailyRemaining,
-        Carbon $dateFrom,
-        Carbon $dateTo,
+        Carbon $forecastDate,
         int $displayWarehouseId,
         int $defaultWarehouseId
     ): array {
@@ -137,20 +126,7 @@ class DailyStockForecastController extends Controller
         $displayStock = (int) ($stocks->get($displayWarehouseId)?->stock ?? 0);
         $defaultStock = (int) ($stocks->get($defaultWarehouseId)?->stock ?? 0);
         $safetyStock = (int) ($stocks->get($displayWarehouseId)?->safety_stock ?? $item->safety_stock ?? 0);
-        $dailyRows = $dailyRemaining->get($item->sku, collect());
-        $daily = [];
-        $totalRemaining = 0;
-        $cursor = $dateFrom->copy();
-
-        while ($cursor->lte($dateTo)) {
-            $dateKey = $cursor->toDateString();
-            $qty = (int) ($dailyRows->get($dateKey)?->remaining_qty ?? 0);
-            if ($qty > 0) {
-                $daily[] = ['date' => $dateKey, 'qty' => $qty];
-                $totalRemaining += $qty;
-            }
-            $cursor->addDay();
-        }
+        $totalRemaining = (int) ($dailyRemaining->get($item->sku)?->remaining_qty ?? 0);
 
         $forecastStock = $displayStock - $totalRemaining;
         $status = $this->forecastStatus($forecastStock, $safetyStock, $totalRemaining, $displayStock);
@@ -166,7 +142,7 @@ class DailyStockForecastController extends Controller
             'safety_stock' => $safetyStock,
             'total_remaining' => $totalRemaining,
             'forecast_stock' => $forecastStock,
-            'daily_remaining' => $daily,
+            'forecast_date' => $forecastDate->toDateString(),
             'status' => $status['key'],
             'status_label' => $status['label'],
             'status_class' => $status['class'],

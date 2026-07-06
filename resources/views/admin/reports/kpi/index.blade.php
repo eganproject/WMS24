@@ -16,7 +16,12 @@
             <div class="card-header border-0 pt-6">
                 <div class="card-title"><h3 class="fw-bolder mb-0">Master KPI</h3></div>
                 <div class="card-toolbar">
-                    <button type="button" class="btn btn-primary" id="btn_add_definition">Tambah KPI</button>
+                    <div class="d-flex gap-3">
+                        <a href="{{ $definitionsExportUrl }}" class="btn btn-light-primary">
+                            <i class="fas fa-file-excel"></i> Export Excel
+                        </a>
+                        <button type="button" class="btn btn-primary" id="btn_add_definition">Tambah KPI</button>
+                    </div>
                 </div>
             </div>
             <div class="card-body py-6">

@@ -53,6 +53,7 @@ class KpiAutoCalculator
         return match ($formula) {
             'packing_output' => $this->packingOutput($item, $snapshot),
             'packing_confirmation_rate' => $this->packingConfirmationRate($snapshot),
+            'packing_employee_input_completion' => $this->packingConfirmationRate($snapshot),
             'scan_out_productivity' => $this->scanOutProductivity($item, $snapshot),
             'missing_scan_out_rate' => $this->missingScanOutRate($snapshot),
             'qc_duplicate_scan_rate' => $this->qcDuplicateScanRate($item, $snapshot),
@@ -64,6 +65,7 @@ class KpiAutoCalculator
             'attendance_data_completeness' => $this->attendanceDataCompleteness($snapshot),
             'barcode_miss_resolution_rate' => $this->barcodeMissResolutionRate($snapshot),
             'resi_cancel_control' => $this->resiCancelControl($snapshot),
+            'resi_import_duplicate_accuracy' => $this->resiImportDuplicateAccuracy($snapshot),
             'return_finalization_lead_time' => $this->returnFinalizationLeadTime($snapshot),
             default => null,
         };
@@ -364,6 +366,34 @@ class KpiAutoCalculator
         }
 
         return $this->percentage((clone $base)->where('status', 'canceled')->count(), $total);
+    }
+
+    private function resiImportDuplicateAccuracy(KpiScoreSnapshot $snapshot): ?float
+    {
+        if (!$this->hasTable('resis') || !$this->hasColumn('resis', 'no_resi')) {
+            return null;
+        }
+
+        $base = DB::table('resis')
+            ->whereDate('tanggal_upload', '>=', $snapshot->period_start)
+            ->whereDate('tanggal_upload', '<=', $snapshot->period_end);
+
+        $total = (clone $base)->count();
+        if ($total === 0) {
+            return 100.0;
+        }
+
+        $duplicateExcess = (clone $base)
+            ->whereNotNull('no_resi')
+            ->where('no_resi', '!=', '')
+            ->select('no_resi')
+            ->selectRaw('COUNT(*) as total')
+            ->groupBy('no_resi')
+            ->havingRaw('COUNT(*) > 1')
+            ->get()
+            ->sum(fn ($row) => max(((int) $row->total) - 1, 0));
+
+        return round((max(0, $total - $duplicateExcess) / $total) * 100, 4);
     }
 
     private function returnFinalizationLeadTime(KpiScoreSnapshot $snapshot): ?float

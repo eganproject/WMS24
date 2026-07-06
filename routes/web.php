@@ -431,6 +431,7 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/activity-logs/{id}', [ActivityLogController::class, 'show'])->name('activity-logs.show');
         Route::get('/kpi', [KpiController::class, 'index'])->name('kpi.index');
         Route::get('/kpi/definitions/data', [KpiController::class, 'definitionsData'])->name('kpi.definitions.data');
+        Route::get('/kpi/definitions/export', [KpiController::class, 'exportDefinitions'])->name('kpi.definitions.export');
         Route::post('/kpi/definitions', [KpiController::class, 'storeDefinition'])->name('kpi.definitions.store');
         Route::put('/kpi/definitions/{definition}', [KpiController::class, 'updateDefinition'])->name('kpi.definitions.update');
         Route::delete('/kpi/definitions/{definition}', [KpiController::class, 'destroyDefinition'])->name('kpi.definitions.destroy');

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Exports\KpiDefinitionsExport;
 use App\Http\Controllers\Controller;
 use App\Models\Employee;
 use App\Models\KpiDefinition;
@@ -12,6 +13,7 @@ use App\Support\KpiAutoCalculator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Maatwebsite\Excel\Facades\Excel;
 
 class KpiController extends Controller
 {
@@ -32,6 +34,7 @@ class KpiController extends Controller
             'employees' => $employees,
             'definitions' => $definitions,
             'definitionsDataUrl' => route('admin.reports.kpi.definitions.data'),
+            'definitionsExportUrl' => route('admin.reports.kpi.definitions.export'),
             'definitionStoreUrl' => route('admin.reports.kpi.definitions.store'),
             'definitionUpdateUrlTpl' => route('admin.reports.kpi.definitions.update', ':id'),
             'definitionDeleteUrlTpl' => route('admin.reports.kpi.definitions.destroy', ':id'),
@@ -85,6 +88,13 @@ class KpiController extends Controller
                 'is_active' => $definition->is_active,
             ];
         });
+    }
+
+    public function exportDefinitions()
+    {
+        $filename = 'kpi-master-'.now()->format('Ymd-His').'.xlsx';
+
+        return Excel::download(new KpiDefinitionsExport(), $filename);
     }
 
     public function storeDefinition(Request $request)

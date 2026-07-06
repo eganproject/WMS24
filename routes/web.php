@@ -30,6 +30,7 @@ use App\Http\Controllers\Admin\ScanOutHistoryController;
 use App\Http\Controllers\Admin\ScanOutReportController;
 use App\Http\Controllers\Admin\LowStockReportController;
 use App\Http\Controllers\Admin\LowStockSnapshotController;
+use App\Http\Controllers\Admin\DailyStockForecastController;
 use App\Http\Controllers\Admin\ReturnReportController;
 use App\Http\Controllers\Admin\ActivityLogController;
 use App\Http\Controllers\Admin\AttendanceController;
@@ -462,6 +463,8 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/scan-out-reports/data', [ScanOutReportController::class, 'data'])->name('scan-out-reports.data');
         Route::get('/low-stock', [LowStockReportController::class, 'index'])->name('low-stock.index');
         Route::get('/low-stock/data', [LowStockReportController::class, 'data'])->name('low-stock.data');
+        Route::get('/daily-stock-forecast', [DailyStockForecastController::class, 'index'])->name('daily-stock-forecast.index');
+        Route::get('/daily-stock-forecast/data', [DailyStockForecastController::class, 'data'])->name('daily-stock-forecast.data');
         Route::get('/low-stock-snapshots', [LowStockSnapshotController::class, 'index'])->name('low-stock-snapshots.index');
         Route::get('/low-stock-snapshots/data', [LowStockSnapshotController::class, 'data'])->name('low-stock-snapshots.data');
         Route::post('/low-stock-snapshots', [LowStockSnapshotController::class, 'store'])->name('low-stock-snapshots.store');

@@ -17,6 +17,7 @@ class DatabaseSeeder extends Seeder
             RoleSeeder::class,
             MenuSeeder::class,
             EmployeeUserAuditMenuSeeder::class,
+            DailyStockForecastMenuSeeder::class,
             KpiMenuSeeder::class,
             KpiScoreReportMenuSeeder::class,
             KpiDefinitionSeeder::class,

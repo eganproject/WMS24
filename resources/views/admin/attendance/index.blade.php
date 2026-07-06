@@ -1397,7 +1397,7 @@
                         </div>
                     </form>
                 </div>
-                <x-attendance-table id="leaves_table" :headers="['Karyawan','Tipe','Mulai','Selesai','Status','Diproses Oleh','Alasan','Bukti','Aksi']" />
+                <x-attendance-table id="leaves_table" :headers="['Karyawan','Tipe','Mulai','Selesai','Status','Pengajuan','Diproses Oleh','Alasan','Bukti','Aksi']" />
             </div>
 
             {{-- ===== RAW LOGS ===== --}}
@@ -2122,7 +2122,7 @@ const tableConfigs = {
     schedules_table: { url: '{{ route('admin.attendance.schedules.data') }}', columns: ['employee','schedule_date','schedule_type','shift','note','__actions'] },
     holidays_table: { url: '{{ route('admin.attendance.holidays.data') }}', columns: ['holiday_date','name','type','is_paid','__actions'] },
     templates_table: { url: '{{ route('admin.attendance.templates.data') }}', columns: ['name','is_active','days','__actions'] },
-    leaves_table: { url: '{{ route('admin.attendance.leaves.data') }}', columns: ['employee','leave_type','start_date','end_date',{ data: 'status', render: renderLeaveStatusBadge },{ data: 'approved_by', render: (value, row) => value ? `${value}<div class="text-muted fs-8">${row.approved_at || ''}</div>` : '-' },'reason',{ data: 'proof_image_url', render: (value) => value ? `<a href="${escapeAttr(value)}" target="_blank" rel="noopener" class="badge badge-light-primary">Lihat Gambar</a>` : '-' },'__actions'] },
+    leaves_table: { url: '{{ route('admin.attendance.leaves.data') }}', columns: ['employee','leave_type','start_date','end_date',{ data: 'status', render: renderLeaveStatusBadge },{ data: 'submission_source_label', render: (value, row) => `${escapeAttr(value || '-')}${row.submitted_by ? `<div class="text-muted fs-8">${escapeAttr(row.submitted_by)}</div>` : ''}${row.submitted_at ? `<div class="text-muted fs-8">${escapeAttr(row.submitted_at)}</div>` : ''}` },{ data: 'approved_by', render: (value, row) => value ? `${value}<div class="text-muted fs-8">${row.approved_at || ''}</div>` : '-' },'reason',{ data: 'proof_image_url', render: (value) => value ? `<a href="${escapeAttr(value)}" target="_blank" rel="noopener" class="badge badge-light-primary">Lihat Gambar</a>` : '-' },'__actions'] },
     raw_logs_table: { url: '{{ route('admin.attendance.raw-logs.data') }}', columns: ['device','employee','device_user_id','scan_at','verify_type','state','__actions'] },
     attendances_table: { url: '{{ route('admin.attendance.attendances.data') }}', columns: [
         { data: 'employee', render: renderRecapEmployee },

@@ -51,6 +51,10 @@
         background: linear-gradient(135deg, rgba(30,64,175,0.18), rgba(59,130,246,0.2));
         border-color: rgba(59,130,246,0.25);
     }
+    .menu-icon.leave-request {
+        background: linear-gradient(135deg, rgba(249,115,22,0.18), rgba(251,191,36,0.2));
+        border-color: rgba(249,115,22,0.25);
+    }
     .menu-title {
         font-weight: 700;
         font-size: 15px;
@@ -104,6 +108,16 @@
                 <div>
                     <div class="menu-title">Performa Absensi</div>
                     <div class="menu-desc">Lihat ringkasan kehadiran, keterlambatan, lembur, dan riwayat harian.</div>
+                </div>
+            </a>
+        @endif
+
+        @if(!empty($showLeaveRequests))
+            <a class="menu-card" href="{{ $routes['leaveRequests'] }}">
+                <div class="menu-icon leave-request">CT</div>
+                <div>
+                    <div class="menu-title">Ajukan Cuti/Izin</div>
+                    <div class="menu-desc">Kirim pengajuan cuti, sakit, atau izin langsung dari akun Anda.</div>
                 </div>
             </a>
         @endif

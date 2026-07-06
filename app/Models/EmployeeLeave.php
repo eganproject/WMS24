@@ -20,6 +20,9 @@ class EmployeeLeave extends Model
         'end_date',
         'reason',
         'proof_image_path',
+        'submitted_by_user_id',
+        'submitted_at',
+        'submission_source',
         'status',
         'approved_by',
         'approved_at',
@@ -28,6 +31,7 @@ class EmployeeLeave extends Model
     protected $casts = [
         'start_date' => 'date',
         'end_date' => 'date',
+        'submitted_at' => 'datetime',
         'approved_at' => 'datetime',
     ];
 
@@ -39,5 +43,10 @@ class EmployeeLeave extends Model
     public function approver()
     {
         return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function submitter()
+    {
+        return $this->belongsTo(User::class, 'submitted_by_user_id');
     }
 }

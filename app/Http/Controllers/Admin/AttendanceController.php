@@ -1680,7 +1680,7 @@ class AttendanceController extends Controller
     public function leavesData(Request $request)
     {
         $query = EmployeeLeave::query()
-            ->with(['employee:id,employee_code,name', 'approver:id,name'])
+            ->with(['employee:id,employee_code,name', 'approver:id,name', 'submitter:id,name,email'])
             ->latest('start_date');
 
         return $this->datatable($query, $request, fn (EmployeeLeave $leave) => [
@@ -1693,6 +1693,10 @@ class AttendanceController extends Controller
             'reason' => $leave->reason,
             'proof_image_url' => $this->leaveProofImageUrl($leave),
             'has_proof_image' => !empty($leave->proof_image_path),
+            'submission_source' => $leave->submission_source ?? 'admin_entry',
+            'submission_source_label' => $leave->submission_source === 'employee_self_service' ? 'Karyawan' : 'Admin/HR',
+            'submitted_by' => $leave->submitter?->name,
+            'submitted_at' => $leave->submitted_at?->format('Y-m-d H:i:s'),
             'status' => $leave->status,
             'approved_by' => $leave->approver?->name,
             'approved_at' => $leave->approved_at?->format('Y-m-d H:i:s'),
@@ -1703,6 +1707,9 @@ class AttendanceController extends Controller
     {
         $validated = $this->validateLeave($request, false);
         $validated['status'] = EmployeeLeave::STATUS_PENDING;
+        $validated['submitted_by_user_id'] = auth()->id();
+        $validated['submitted_at'] = now();
+        $validated['submission_source'] = 'admin_entry';
         $storedProofImage = null;
 
         try {

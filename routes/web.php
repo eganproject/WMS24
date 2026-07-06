@@ -53,6 +53,7 @@ use App\Http\Controllers\Mobile\ScanOutController;
 use App\Http\Controllers\Mobile\QcScanController;
 use App\Http\Controllers\Mobile\PickingListMobileController;
 use App\Http\Controllers\EmployeeAttendancePerformanceController;
+use App\Http\Controllers\EmployeeLeaveRequestController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 
@@ -92,6 +93,9 @@ Route::middleware('auth')->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
     Route::get('/my/attendance-performance', [EmployeeAttendancePerformanceController::class, 'index'])->name('employee.attendance-performance');
+    Route::get('/my/leave-requests', [EmployeeLeaveRequestController::class, 'index'])->name('employee.leave-requests.index');
+    Route::post('/my/leave-requests', [EmployeeLeaveRequestController::class, 'store'])->name('employee.leave-requests.store');
+    Route::get('/my/leave-requests/{leave}/proof-image', [EmployeeLeaveRequestController::class, 'proofImage'])->name('employee.leave-requests.proof-image');
 });
 
 Route::middleware('auth')->prefix('mobile')->as('mobile.')->group(function () {

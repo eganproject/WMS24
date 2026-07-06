@@ -27,6 +27,7 @@ class MobileDashboardController extends Controller
             'routes' => [
                 'opname' => route('opname.index'),
                 'attendancePerformance' => route('employee.attendance-performance'),
+                'leaveRequests' => route('employee.leave-requests.index'),
                 'inboundScan' => route('mobile.inbound-scan.index'),
                 'qc' => route('mobile.qc.index'),
                 'scanOut' => route('mobile.scan-out.index'),
@@ -39,6 +40,7 @@ class MobileDashboardController extends Controller
             'showScanOut' => $hasAdminScan || $hasOtherRoles,
             'showPickingList' => $hasPicker || $hasOtherRoles,
             'showAttendancePerformance' => (bool) $user?->employee,
+            'showLeaveRequests' => (bool) $user?->employee,
         ]);
     }
 }

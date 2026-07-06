@@ -114,10 +114,101 @@ class AttendanceController extends Controller
             'leaves' => ['label' => 'Cuti/Izin', 'route' => 'admin.attendance.leaves.index', 'icon' => 'fas fa-plane-departure'],
             'raw_logs' => ['label' => 'Raw Log', 'route' => 'admin.attendance.raw-logs.index', 'icon' => 'fas fa-list'],
             'attendances' => ['label' => 'Rekap', 'route' => 'admin.attendance.attendances.index', 'icon' => 'fas fa-clipboard-check'],
+            'overtime' => ['label' => 'Monitor Lembur', 'route' => 'admin.attendance.overtime.index', 'icon' => 'fas fa-business-time'],
             'live_display' => ['label' => 'Live Display', 'route' => 'admin.attendance.live-display.index', 'icon' => 'fas fa-tv'],
             'absences' => ['label' => 'Monitor Harian', 'route' => 'admin.attendance.absences.index', 'icon' => 'fas fa-user-check'],
             'machine_logs' => ['label' => 'Machine Log', 'route' => 'admin.attendance.machine-logs.index', 'icon' => 'fas fa-satellite-dish'],
         ];
+    }
+
+    public function overtimeIndex()
+    {
+        return view('admin.attendance.overtime', [
+            'sectionLinks' => $this->sectionLinks(),
+            'employees' => Employee::query()
+                ->orderBy('name')
+                ->get(['id', 'employee_code', 'name', 'employment_status']),
+            'defaultDateFrom' => now()->startOfMonth()->toDateString(),
+            'defaultDateTo' => now()->toDateString(),
+            'dataUrl' => route('admin.attendance.overtime.data'),
+            'approveUrlTpl' => route('admin.attendance.attendances.overtime.approve', ':id'),
+            'rejectUrlTpl' => route('admin.attendance.attendances.overtime.reject', ':id'),
+            'recapUrl' => route('admin.attendance.attendances.index'),
+        ]);
+    }
+
+    public function overtimeData(Request $request)
+    {
+        $request->validate([
+            'date_from' => ['nullable', 'date_format:Y-m-d'],
+            'date_to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:date_from'],
+            'employee_id' => ['nullable', 'integer', 'exists:employees,id'],
+            'overtime_status' => ['nullable', Rule::in($this->overtimeStatusValues())],
+            'q' => ['nullable', 'string', 'max:150'],
+        ]);
+
+        $dateFrom = $request->input('date_from') ?: now()->startOfMonth()->toDateString();
+        $dateTo = $request->input('date_to') ?: $dateFrom;
+        $query = Attendance::query()
+            ->with([
+                'employee:id,employee_code,name,employment_status,position,position_id',
+                'employee.positionRelation:id,name',
+                'shift:id,name',
+                'approver:id,name',
+            ])
+            ->whereDate('attendance_date', '>=', $dateFrom)
+            ->whereDate('attendance_date', '<=', $dateTo)
+            ->where(function ($overtimeQuery) {
+                $overtimeQuery
+                    ->where('calculated_overtime_minutes', '>', 0)
+                    ->orWhere('approved_overtime_minutes', '>', 0)
+                    ->orWhereIn('overtime_status', [
+                        Attendance::OVERTIME_PENDING,
+                        Attendance::OVERTIME_APPROVED,
+                        Attendance::OVERTIME_REJECTED,
+                    ]);
+            })
+            ->when($request->input('employee_id'), fn ($q, $employeeId) => $q->where('employee_id', $employeeId))
+            ->when($request->input('overtime_status'), fn ($q, $status) => $q->where('overtime_status', $status))
+            ->when(trim((string) $request->input('q', '')) !== '', function ($q) use ($request) {
+                $search = trim((string) $request->input('q'));
+                $q->whereHas('employee', fn ($employeeQuery) => $employeeQuery
+                    ->where('name', 'like', "%{$search}%")
+                    ->orWhere('employee_code', 'like', "%{$search}%"));
+            });
+
+        $recordsFiltered = (clone $query)->count();
+        $summaryRows = (clone $query)->get([
+            'id',
+            'calculated_overtime_minutes',
+            'approved_overtime_minutes',
+            'overtime_status',
+        ]);
+        $summary = [
+            'total' => $summaryRows->count(),
+            'pending' => $summaryRows->where('overtime_status', Attendance::OVERTIME_PENDING)->count(),
+            'approved' => $summaryRows->where('overtime_status', Attendance::OVERTIME_APPROVED)->count(),
+            'rejected' => $summaryRows->where('overtime_status', Attendance::OVERTIME_REJECTED)->count(),
+            'calculated_minutes' => (int) $summaryRows->sum('calculated_overtime_minutes'),
+            'approved_minutes' => (int) $summaryRows->sum('approved_overtime_minutes'),
+        ];
+
+        $start = max(0, (int) $request->input('start', 0));
+        $length = (int) $request->input('length', 10);
+        $rows = $query
+            ->latest('attendance_date')
+            ->latest('id')
+            ->when($length > 0, fn ($q) => $q->skip($start)->take($length))
+            ->get()
+            ->map(fn (Attendance $attendance) => $this->overtimeRow($attendance));
+
+        return response()->json([
+            'draw' => (int) $request->input('draw'),
+            'recordsTotal' => $recordsFiltered,
+            'recordsFiltered' => $recordsFiltered,
+            'summary' => $summary,
+            'data' => $rows,
+        ]);
     }
 
     public function liveDisplay()
@@ -241,14 +332,31 @@ class AttendanceController extends Controller
 
     public function positionsData(Request $request)
     {
-        $query = EmployeePosition::query()->orderBy('name');
+        $query = EmployeePosition::query()
+            ->withCount([
+                'employees',
+                'employees as active_employees_count' => fn ($employeeQuery) => $employeeQuery->where('employment_status', Employee::STATUS_ACTIVE),
+            ])
+            ->orderBy('name');
         $this->applySearch($query, $request, ['name', 'description']);
+
+        if ($request->boolean('empty_only')) {
+            $query->doesntHave('employees');
+        }
+
+        if ($request->boolean('active_empty_only')) {
+            $query->whereDoesntHave('employees', fn ($employeeQuery) => $employeeQuery->where('employment_status', Employee::STATUS_ACTIVE));
+        }
 
         return $this->datatable($query, $request, fn (EmployeePosition $position) => [
             'id' => $position->id,
             'name' => $position->name,
             'description' => $position->description,
             'is_active' => $position->is_active,
+            'employees_count' => $position->employees_count,
+            'active_employees_count' => $position->active_employees_count,
+            'is_empty' => ((int) $position->employees_count) === 0,
+            'is_active_empty' => ((int) $position->active_employees_count) === 0,
         ]);
     }
 
@@ -2563,6 +2671,31 @@ class AttendanceController extends Controller
             Attendance::OVERTIME_PENDING,
             Attendance::OVERTIME_APPROVED,
             Attendance::OVERTIME_REJECTED,
+        ];
+    }
+
+    private function overtimeRow(Attendance $attendance): array
+    {
+        $employee = $attendance->employee;
+
+        return [
+            'id' => $attendance->id,
+            'employee' => trim(($employee?->employee_code ? $employee->employee_code.' - ' : '').($employee?->name ?? '-')),
+            'position' => $employee?->positionRelation?->name ?? $employee?->position ?? '-',
+            'employment_status' => $employee?->employment_status,
+            'attendance_date' => $attendance->attendance_date?->format('Y-m-d'),
+            'shift' => $attendance->shift?->name ?? '-',
+            'check_in_at' => $attendance->check_in_at?->format('Y-m-d H:i:s'),
+            'check_out_at' => $attendance->check_out_at?->format('Y-m-d H:i:s'),
+            'work_minutes' => (int) $attendance->work_minutes,
+            'calculated_overtime_minutes' => (int) $attendance->calculated_overtime_minutes,
+            'approved_overtime_minutes' => $attendance->approved_overtime_minutes !== null ? (int) $attendance->approved_overtime_minutes : null,
+            'overtime_status' => $attendance->overtime_status ?? Attendance::OVERTIME_NONE,
+            'overtime_note' => $attendance->overtime_note,
+            'approved_by' => $attendance->approver?->name,
+            'approved_at' => $attendance->approved_at?->format('Y-m-d H:i:s'),
+            'source' => $attendance->source,
+            'note' => $attendance->note,
         ];
     }
 

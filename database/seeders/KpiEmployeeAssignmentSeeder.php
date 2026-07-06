@@ -33,24 +33,43 @@ class KpiEmployeeAssignmentSeeder extends Seeder
 
         $effectiveFrom = now()->startOfMonth()->toDateString();
         $now = now();
+        $hasPositionColumn = Schema::hasColumn('kpi_definitions', 'employee_position_id');
 
         foreach ($rolePositionKeywords as $roleName => $keywords) {
-            $definitionIds = DB::table('kpi_definitions')
+            $definitionSelect = $hasPositionColumn ? ['id', 'employee_position_id'] : ['id'];
+
+            $definitions = DB::table('kpi_definitions')
                 ->where('role_name', $roleName)
                 ->where('is_active', true)
-                ->pluck('id');
+                ->when($hasPositionColumn, fn ($query) => $query->orWhere(function ($orQuery) use ($keywords) {
+                    $orQuery->where('kpi_definitions.is_active', true)
+                        ->whereExists(function ($exists) use ($keywords) {
+                            $exists->select(DB::raw(1))
+                                ->from('employee_positions')
+                                ->whereColumn('employee_positions.id', 'kpi_definitions.employee_position_id')
+                                ->where(function ($positionQuery) use ($keywords) {
+                                    foreach ($keywords as $keyword) {
+                                        $positionQuery->orWhereRaw("LOWER(employee_positions.name) LIKE ?", ['%'.$keyword.'%']);
+                                    }
+                                });
+                        });
+                }))
+                ->get($definitionSelect);
 
-            if ($definitionIds->isEmpty()) {
+            if ($definitions->isEmpty()) {
                 continue;
             }
 
-            $employeeIds = $this->employeeIdsForKeywords($keywords);
+            $employeeIds = $definitions->pluck('employee_position_id')->filter()->isNotEmpty()
+                ? $this->employeeIdsForPositionIds($definitions->pluck('employee_position_id')->filter()->unique()->values())
+                : $this->employeeIdsForKeywords($keywords);
+
             if ($employeeIds->isEmpty()) {
                 continue;
             }
 
             foreach ($employeeIds as $employeeId) {
-                foreach ($definitionIds as $definitionId) {
+                foreach ($definitions->pluck('id') as $definitionId) {
                     $exists = DB::table('kpi_employee_assignments')
                         ->where('employee_id', $employeeId)
                         ->where('kpi_definition_id', $definitionId)
@@ -92,5 +111,14 @@ class KpiEmployeeAssignmentSeeder extends Seeder
             });
 
         return $query->distinct()->pluck('employees.id');
+    }
+
+    private function employeeIdsForPositionIds($positionIds)
+    {
+        return DB::table('employees')
+            ->where('employment_status', 'active')
+            ->whereIn('position_id', $positionIds)
+            ->distinct()
+            ->pluck('id');
     }
 }

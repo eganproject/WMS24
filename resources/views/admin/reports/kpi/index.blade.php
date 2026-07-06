@@ -158,7 +158,12 @@
                 <div class="row g-5">
                     <div class="col-md-6">
                         <label class="form-label required">Role/Jabatan</label>
-                        <input type="text" class="form-control" name="role_name" id="definition_role_name" required>
+                        <select class="form-select" name="employee_position_id" id="definition_employee_position_id" data-control="select2" data-placeholder="Pilih jabatan" required>
+                            <option value="">Pilih jabatan</option>
+                            @foreach($positions as $position)
+                                <option value="{{ $position->id }}">{{ $position->name }}</option>
+                            @endforeach
+                        </select>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label required">Nama KPI</label>
@@ -249,7 +254,7 @@
                         <select class="form-select" name="kpi_definition_id" id="assignment_kpi_definition_id" required>
                             <option value="">Pilih KPI</option>
                             @foreach($definitions as $definition)
-                                <option value="{{ $definition->id }}">{{ $definition->role_name }} - {{ $definition->metric_name }}</option>
+                                <option value="{{ $definition->id }}">{{ $definition->positionRelation?->name ?? $definition->role_name }} - {{ $definition->metric_name }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -338,6 +343,16 @@
         const definitionModal = new bootstrap.Modal(document.getElementById('definition_modal'));
         const assignmentModal = new bootstrap.Modal(document.getElementById('assignment_modal'));
         const scoreItemModal = new bootstrap.Modal(document.getElementById('score_item_modal'));
+        const definitionModalEl = document.getElementById('definition_modal');
+
+        if (typeof $ !== 'undefined' && $.fn.select2) {
+            $('#definition_employee_position_id').select2({
+                width: '100%',
+                allowClear: true,
+                placeholder: 'Pilih jabatan',
+                dropdownParent: $(definitionModalEl),
+            }).on('select2:opening select2:closing select2:close', (event) => event.stopPropagation());
+        }
 
         const escapeHtml = (value) => String(value ?? '')
             .replace(/&/g, '&amp;')
@@ -390,7 +405,11 @@
             serverSide: true,
             ajax: kpiUrls.definitionsData,
             columns: [
-                { data: 'role_name', render: escapeHtml },
+                { data: null, render: (row) => {
+                    const positionName = row.position_name || row.role_name;
+                    const legacyNote = row.employee_position_id ? '' : '<div class="text-muted fs-7">Belum terhubung master jabatan</div>';
+                    return `<div class="fw-bold">${escapeHtml(positionName)}</div>${legacyNote}`;
+                } },
                 { data: 'metric_name', render: (data, type, row) => `<div class="fw-bold">${escapeHtml(data)}</div><div class="text-muted fs-7">${escapeHtml(row.description)}</div>` },
                 { data: null, render: (row) => `${escapeHtml(row.target_operator)} ${number(row.target_value)} ${escapeHtml(row.unit)}` },
                 { data: 'weight', className: 'text-end', render: (data) => `${number(data)}%` },
@@ -470,9 +489,13 @@
         const resetDefinitionForm = () => {
             document.getElementById('definition_form').reset();
             document.getElementById('definition_id').value = '';
+            document.getElementById('definition_employee_position_id').value = '';
             document.getElementById('definition_weight').value = '100';
             document.getElementById('definition_target_value').value = '0';
             document.getElementById('definition_modal_title').textContent = 'Tambah KPI';
+            if (typeof $ !== 'undefined' && $.fn.select2 && $('#definition_employee_position_id').data('select2')) {
+                $('#definition_employee_position_id').trigger('change.select2');
+            }
         };
 
         document.getElementById('btn_add_definition').addEventListener('click', () => {
@@ -484,11 +507,14 @@
             const row = JSON.parse(this.dataset.row);
             resetDefinitionForm();
             document.getElementById('definition_modal_title').textContent = 'Edit KPI';
-            for (const key of ['id', 'role_name', 'metric_name', 'description', 'target_operator', 'target_value', 'unit', 'weight', 'period_type', 'source_type', 'formula_key']) {
+            for (const key of ['id', 'employee_position_id', 'metric_name', 'description', 'target_operator', 'target_value', 'unit', 'weight', 'period_type', 'source_type', 'formula_key']) {
                 const el = document.getElementById(`definition_${key}`);
                 if (el) el.value = row[key] ?? '';
             }
             document.getElementById('definition_is_active').value = row.is_active ? '1' : '0';
+            if (typeof $ !== 'undefined' && $.fn.select2 && $('#definition_employee_position_id').data('select2')) {
+                $('#definition_employee_position_id').trigger('change.select2');
+            }
             definitionModal.show();
         });
 

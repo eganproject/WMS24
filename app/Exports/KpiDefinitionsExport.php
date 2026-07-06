@@ -31,10 +31,12 @@ class KpiDefinitionsExport implements FromCollection, WithHeadings, WithTitle, W
     public function collection()
     {
         return KpiDefinition::query()
+            ->with('positionRelation:id,name')
             ->orderBy('role_name')
             ->orderBy('metric_name')
             ->get()
             ->map(fn (KpiDefinition $row) => [
+                $row->positionRelation?->name ?? '',
                 $row->role_name,
                 $row->metric_name,
                 $row->description,
@@ -54,7 +56,8 @@ class KpiDefinitionsExport implements FromCollection, WithHeadings, WithTitle, W
     public function headings(): array
     {
         return [
-            'Role/Jabatan',
+            'Jabatan Master Karyawan',
+            'Role/Jabatan Label',
             'KPI',
             'Deskripsi',
             'Operator Target',
@@ -73,9 +76,9 @@ class KpiDefinitionsExport implements FromCollection, WithHeadings, WithTitle, W
     public function styles(Worksheet $sheet): array
     {
         $rowCount = $this->collection()->count();
-        $sheet->mergeCells('A1:M1');
-        $sheet->mergeCells('A2:M2');
-        $sheet->mergeCells('A3:M3');
+        $sheet->mergeCells('A1:N1');
+        $sheet->mergeCells('A2:N2');
+        $sheet->mergeCells('A3:N3');
         $sheet->setCellValue('A1', 'KPI Master');
         $sheet->setCellValue('A2', 'Export master KPI dari sistem');
         $sheet->setCellValue('A3', 'Total KPI: '.number_format($rowCount, 0, ',', '.'));
@@ -97,16 +100,16 @@ class KpiDefinitionsExport implements FromCollection, WithHeadings, WithTitle, W
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
                 $lastRow = max(5, 5 + $this->collection()->count());
-                $range = 'A5:M'.$lastRow;
+                $range = 'A5:N'.$lastRow;
 
                 $sheet->freezePane('A6');
                 $sheet->setAutoFilter($range);
                 $sheet->getStyle($range)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setRGB('E4E6EF');
-                $sheet->getStyle('A1:M'.$lastRow)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
-                $sheet->getStyle('C6:C'.$lastRow)->getAlignment()->setWrapText(true);
-                $sheet->getStyle('E6:G'.$lastRow)->getNumberFormat()->setFormatCode('#,##0.00');
+                $sheet->getStyle('A1:N'.$lastRow)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+                $sheet->getStyle('D6:D'.$lastRow)->getAlignment()->setWrapText(true);
+                $sheet->getStyle('F6:H'.$lastRow)->getNumberFormat()->setFormatCode('#,##0.00');
 
-                foreach (['A' => 24, 'B' => 34, 'C' => 60, 'J' => 34] as $column => $width) {
+                foreach (['A' => 28, 'B' => 24, 'C' => 34, 'D' => 60, 'K' => 34] as $column => $width) {
                     $sheet->getColumnDimension($column)->setWidth($width);
                 }
             },

@@ -1884,7 +1884,21 @@
                         <button class="btn btn-primary" id="position_submit"><i class="fas fa-plus me-1"></i>Tambah</button>
                     </div>
                 </form>
-                <x-attendance-table id="positions_table" :headers="['Nama','Deskripsi','Aktif','Aksi']" />
+                <div class="d-flex flex-wrap gap-3 align-items-center justify-content-between mb-4">
+                    <div class="text-muted fs-7">Gunakan filter untuk melihat jabatan yang belum memiliki karyawan.</div>
+                    <div class="d-flex flex-wrap gap-2">
+                        <button type="button" class="btn btn-sm btn-light-primary" id="position_filter_empty">
+                            <i class="fas fa-user-slash me-1"></i>Tanpa Karyawan
+                        </button>
+                        <button type="button" class="btn btn-sm btn-light" id="position_filter_active_empty">
+                            <i class="fas fa-user-clock me-1"></i>Tanpa Karyawan Aktif
+                        </button>
+                        <button type="button" class="btn btn-sm btn-light" id="position_filter_reset">
+                            <i class="fas fa-times me-1"></i>Reset Filter
+                        </button>
+                    </div>
+                </div>
+                <x-attendance-table id="positions_table" :headers="['Nama','Deskripsi','Karyawan','Aktif','Aksi']" />
             </div>
         </div>
     </div>
@@ -1914,6 +1928,7 @@ const weeklyTemplateOptions = @json($templateOptions ?? []);
 const positionStoreUrl = '{{ route('admin.attendance.positions.store') }}';
 const positionUpdateTpl = '{{ route('admin.attendance.positions.update', ':id') }}';
 const positionDeleteTpl = '{{ route('admin.attendance.positions.destroy', ':id') }}';
+let positionEmptyFilter = '';
 const activeSectionKey = @json($activeSection);
 const sectionLinks = @json($sectionLinks);
 const crudUrls = {
@@ -2083,6 +2098,18 @@ const tableConfigs = {
     positions_table: { url: '{{ route('admin.attendance.positions.data') }}', columns: [
         'name',
         'description',
+        { data: 'employees_count', render: (value, row) => {
+            const total = Number(value || 0);
+            const active = Number(row.active_employees_count || 0);
+            if (total === 0) {
+                return '<span class="badge badge-light-danger">Kosong</span><div class="text-muted fs-8">0 karyawan</div>';
+            }
+            if (active === 0) {
+                return `<span class="badge badge-light-warning">Tanpa aktif</span><div class="text-muted fs-8">${total.toLocaleString('id-ID')} total</div>`;
+            }
+
+            return `<span class="fw-bold">${active.toLocaleString('id-ID')}</span><div class="text-muted fs-8">${total.toLocaleString('id-ID')} total</div>`;
+        } },
         'is_active',
         { data: 'id', render: (value, row) => `
             <button class="btn btn-sm btn-light-primary btn-position-edit me-2" data-id="${value}" data-name="${escapeAttr(row.name)}" data-description="${escapeAttr(row.description || '')}" data-is-active="${row.is_active ? 1 : 0}">Edit</button>
@@ -2631,6 +2658,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         params.date_from = appliedScheduleFilters.date_from;
                         params.date_to = appliedScheduleFilters.date_to;
                         params.schedule_type = appliedScheduleFilters.schedule_type;
+                    }
+                    if (id === 'positions_table') {
+                        params.empty_only = positionEmptyFilter === 'empty' ? 1 : 0;
+                        params.active_empty_only = positionEmptyFilter === 'active_empty' ? 1 : 0;
                     }
                 },
             },
@@ -3832,6 +3863,27 @@ document.addEventListener('DOMContentLoaded', () => {
     const positionActive = document.getElementById('position_is_active');
     const positionSubmit = document.getElementById('position_submit');
     const employeePositionSelect = document.getElementById('employee_position_id');
+    const positionFilterEmpty = document.getElementById('position_filter_empty');
+    const positionFilterActiveEmpty = document.getElementById('position_filter_active_empty');
+    const positionFilterReset = document.getElementById('position_filter_reset');
+
+    const updatePositionFilterButtons = () => {
+        positionFilterEmpty?.classList.toggle('btn-primary', positionEmptyFilter === 'empty');
+        positionFilterEmpty?.classList.toggle('btn-light-primary', positionEmptyFilter !== 'empty');
+        positionFilterActiveEmpty?.classList.toggle('btn-primary', positionEmptyFilter === 'active_empty');
+        positionFilterActiveEmpty?.classList.toggle('btn-light', positionEmptyFilter !== 'active_empty');
+    };
+
+    const applyPositionFilter = (filter) => {
+        positionEmptyFilter = filter;
+        updatePositionFilterButtons();
+        tables.positions_table?.ajax.reload();
+    };
+
+    positionFilterEmpty?.addEventListener('click', () => applyPositionFilter(positionEmptyFilter === 'empty' ? '' : 'empty'));
+    positionFilterActiveEmpty?.addEventListener('click', () => applyPositionFilter(positionEmptyFilter === 'active_empty' ? '' : 'active_empty'));
+    positionFilterReset?.addEventListener('click', () => applyPositionFilter(''));
+    updatePositionFilterButtons();
 
     const resetPositionForm = () => {
         positionForm?.reset();

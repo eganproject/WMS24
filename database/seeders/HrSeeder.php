@@ -54,6 +54,7 @@ class HrSeeder extends Seeder
             'attendance-templates',
             'attendance-leaves',
             'attendance-recap',
+            'attendance-overtime',
             'attendance-absences',
         ];
 

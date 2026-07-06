@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Exports\KpiDefinitionsExport;
 use App\Http\Controllers\Controller;
 use App\Models\Employee;
+use App\Models\EmployeePosition;
 use App\Models\KpiDefinition;
 use App\Models\KpiEmployeeAssignment;
 use App\Models\KpiScoreItem;
@@ -25,14 +26,21 @@ class KpiController extends Controller
             ->get(['id', 'employee_code', 'name', 'position', 'position_id']);
 
         $definitions = KpiDefinition::query()
+            ->with('positionRelation:id,name')
             ->where('is_active', true)
             ->orderBy('role_name')
             ->orderBy('metric_name')
-            ->get(['id', 'role_name', 'metric_name', 'target_operator', 'target_value', 'unit']);
+            ->get(['id', 'role_name', 'employee_position_id', 'metric_name', 'target_operator', 'target_value', 'unit']);
+
+        $positions = EmployeePosition::query()
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name']);
 
         return view('admin.reports.kpi.index', [
             'employees' => $employees,
             'definitions' => $definitions,
+            'positions' => $positions,
             'definitionsDataUrl' => route('admin.reports.kpi.definitions.data'),
             'definitionsExportUrl' => route('admin.reports.kpi.definitions.export'),
             'definitionStoreUrl' => route('admin.reports.kpi.definitions.store'),
@@ -53,14 +61,18 @@ class KpiController extends Controller
 
     public function definitionsData(Request $request)
     {
-        $query = KpiDefinition::query()->orderBy('role_name')->orderBy('metric_name');
+        $query = KpiDefinition::query()
+            ->with('positionRelation:id,name')
+            ->orderBy('role_name')
+            ->orderBy('metric_name');
 
         $search = trim((string) $request->input('search.value', ''));
         if ($search !== '') {
             $query->where(function ($q) use ($search) {
                 $q->where('role_name', 'like', "%{$search}%")
                     ->orWhere('metric_name', 'like', "%{$search}%")
-                    ->orWhere('description', 'like', "%{$search}%");
+                    ->orWhere('description', 'like', "%{$search}%")
+                    ->orWhereHas('positionRelation', fn ($position) => $position->where('name', 'like', "%{$search}%"));
             });
         }
 
@@ -76,6 +88,8 @@ class KpiController extends Controller
             return [
                 'id' => $definition->id,
                 'role_name' => $definition->role_name,
+                'employee_position_id' => $definition->employee_position_id,
+                'position_name' => $definition->positionRelation?->name,
                 'metric_name' => $definition->metric_name,
                 'description' => $definition->description,
                 'target_operator' => $definition->target_operator,
@@ -100,6 +114,7 @@ class KpiController extends Controller
     public function storeDefinition(Request $request)
     {
         $data = $this->validateDefinition($request);
+        $data['role_name'] = EmployeePosition::findOrFail($data['employee_position_id'])->name;
         $data['created_by'] = auth()->id();
 
         $definition = KpiDefinition::create($data);
@@ -109,7 +124,10 @@ class KpiController extends Controller
 
     public function updateDefinition(Request $request, KpiDefinition $definition)
     {
-        $definition->update($this->validateDefinition($request, $definition));
+        $data = $this->validateDefinition($request, $definition);
+        $data['role_name'] = EmployeePosition::findOrFail($data['employee_position_id'])->name;
+
+        $definition->update($data);
 
         return response()->json(['message' => 'KPI berhasil diperbarui.']);
     }
@@ -405,13 +423,13 @@ class KpiController extends Controller
     private function validateDefinition(Request $request, ?KpiDefinition $definition = null): array
     {
         return $request->validate([
-            'role_name' => ['required', 'string', 'max:100'],
+            'employee_position_id' => ['required', 'integer', 'exists:employee_positions,id'],
             'metric_name' => [
                 'required',
                 'string',
                 'max:150',
                 Rule::unique('kpi_definitions', 'metric_name')
-                    ->where(fn ($query) => $query->where('role_name', $request->input('role_name')))
+                    ->where(fn ($query) => $query->where('employee_position_id', $request->input('employee_position_id')))
                     ->ignore($definition?->id),
             ],
             'description' => ['nullable', 'string'],

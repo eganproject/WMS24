@@ -11,6 +11,7 @@ class KpiDefinition extends Model
 
     protected $fillable = [
         'role_name',
+        'employee_position_id',
         'metric_name',
         'description',
         'target_operator',
@@ -33,6 +34,11 @@ class KpiDefinition extends Model
     public function assignments()
     {
         return $this->hasMany(KpiEmployeeAssignment::class);
+    }
+
+    public function positionRelation()
+    {
+        return $this->belongsTo(EmployeePosition::class, 'employee_position_id');
     }
 
     public function creator()

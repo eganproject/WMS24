@@ -15,6 +15,11 @@ class KpiDefinitionSeeder extends Seeder
             return;
         }
 
+        $hasPositionColumn = Schema::hasColumn('kpi_definitions', 'employee_position_id') && Schema::hasTable('employee_positions');
+        $positions = $hasPositionColumn
+            ? DB::table('employee_positions')->get(['id', 'name'])
+            : collect();
+
         $rows = [
             ['Supervisor', 'Daily Fulfillment Completion', 'Resi aktif yang selesai scan out pada hari/periode yang sama.', '>=', 98, '%', 'daily', 'Otomatis', 'Ada', 'Resi Import, QC, Scan Out, Reports > Scan Out Reports', 'scanned_total / import_total aktif', 'Import resi, proses QC sampai passed, scan out, lalu buka Scan Out Reports untuk membandingkan import_total vs scanned_total.', 'Jika perlu SLA lebih ketat, tambahkan master cut-off per kurir/store.'],
             ['Supervisor', 'QC To Scan Out Flow Rate', 'Persentase paket QC passed yang sudah scan out.', '>=', 95, '%', 'daily', 'Otomatis', 'Ada', 'Outbound > Transit QC, Scan Out History', 'QC passed yang memiliki scan_out / total QC passed', 'QC menyelesaikan resi, scan out memproses paket, Transit QC menunjukkan paket siap scan out dan yang sudah selesai.', 'Bisa ditambah target aging dari completed_at ke scanned_at.'],
@@ -59,18 +64,30 @@ class KpiDefinitionSeeder extends Seeder
 
         foreach ($rows as $row) {
             [$role, $metric, $definition, $operator, $target, $unit, $period, $trackingType, $featureStatus, $module, $formula, $flow, $note] = $row;
+            $position = $this->matchingPosition($positions, $role);
+            $roleName = $position?->name ?? $role;
 
-            $exists = DB::table('kpi_definitions')
-                ->where('role_name', $role)
+            $existing = DB::table('kpi_definitions')
+                ->whereIn('role_name', array_values(array_unique([$role, $roleName])))
                 ->where('metric_name', $metric)
-                ->exists();
+                ->first();
 
-            if ($exists) {
+            if ($existing) {
+                if ($position) {
+                    DB::table('kpi_definitions')
+                        ->where('id', $existing->id)
+                        ->update([
+                            'role_name' => $roleName,
+                            'employee_position_id' => $position->id,
+                            'updated_at' => $now,
+                        ]);
+                }
+
                 continue;
             }
 
-            DB::table('kpi_definitions')->insert([
-                'role_name' => $role,
+            $insert = [
+                'role_name' => $roleName,
                 'metric_name' => $metric,
                 'description' => $this->buildDescription($definition, $trackingType, $featureStatus, $module, $formula, $flow, $note),
                 'target_operator' => $operator,
@@ -84,8 +101,67 @@ class KpiDefinitionSeeder extends Seeder
                 'created_by' => null,
                 'created_at' => $now,
                 'updated_at' => $now,
-            ]);
+            ];
+
+            if ($hasPositionColumn) {
+                $insert['employee_position_id'] = $position?->id;
+            }
+
+            DB::table('kpi_definitions')->insert($insert);
         }
+    }
+
+    private function matchingPosition($positions, string $role)
+    {
+        if ($positions->isEmpty()) {
+            return null;
+        }
+
+        $rolePositionKeywords = [
+            'Supervisor' => ['supervisor', 'spv'],
+            'Stock Controller' => ['stock controller', 'stock control', 'inventory control', 'controller stok', 'admin stok', 'staff stok'],
+            'PIC Transfer Gudang' => ['pic transfer', 'transfer gudang', 'admin transfer', 'staff transfer'],
+            'Admin Sistem' => ['admin sistem', 'system admin', 'administrator sistem', 'it admin'],
+            'Admin Inbound' => ['admin inbound', 'inbound admin'],
+            'Staff Gudang Inbound' => ['staff gudang inbound', 'staff inbound', 'gudang inbound'],
+            'Admin Outbound' => ['admin outbound', 'outbound admin'],
+            'QC' => ['qc', 'quality control'],
+            'Picker' => ['picker', 'picking'],
+            'Packer' => ['packer', 'packing'],
+            'Scan Outbound' => ['scan outbound', 'scan out', 'scanner outbound', 'operator scan out'],
+            'Admin Return' => ['admin return', 'admin retur', 'return admin', 'retur admin'],
+            'Staff Gudang Return' => ['staff gudang return', 'staff gudang retur', 'staff return', 'staff retur', 'gudang return', 'gudang retur'],
+            'HR / Admin Absensi' => ['hr', 'human resource', 'admin absensi', 'absensi'],
+        ];
+
+        $normalizedRole = $this->normalize($role);
+        $exact = $positions->first(fn ($position) => $this->normalize($position->name) === $normalizedRole);
+        if ($exact) {
+            return $exact;
+        }
+
+        $keywords = $rolePositionKeywords[$role] ?? [$normalizedRole];
+
+        return $positions->first(function ($position) use ($keywords) {
+            $name = $this->normalize($position->name);
+
+            foreach ($keywords as $keyword) {
+                if (Str::contains($name, $keyword)) {
+                    return true;
+                }
+            }
+
+            return false;
+        });
+    }
+
+    private function normalize(?string $value): string
+    {
+        return Str::of($value ?? '')
+            ->lower()
+            ->replaceMatches('/[^a-z0-9]+/', ' ')
+            ->squish()
+            ->toString();
     }
 
     private function buildDescription(string $definition, string $trackingType, string $featureStatus, string $module, string $formula, string $flow, string $note): string

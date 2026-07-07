@@ -312,6 +312,10 @@ class AttendanceController extends Controller
     public function employeesData(Request $request)
     {
         $query = Employee::query()->with(['user:id,name,email', 'area:id,code,name', 'positionRelation:id,name'])->orderBy('name');
+        $employmentStatus = (string) $request->input('employment_status', Employee::STATUS_ACTIVE);
+        if ($employmentStatus !== 'all') {
+            $query->where('employment_status', $employmentStatus);
+        }
         $this->applySearch($query, $request, ['employee_code', 'name', 'phone']);
 
         return $this->datatable($query, $request, fn (Employee $employee) => [

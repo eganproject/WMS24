@@ -955,6 +955,19 @@
                         </div>
                     </form>
                 </div>
+                <div class="d-flex flex-wrap align-items-end justify-content-between gap-3 mb-4" id="employee_filters">
+                    <div>
+                        <label class="form-label fw-bold text-muted fs-7 mb-1">Status Karyawan</label>
+                        <select class="form-select form-select-solid w-200px" id="employee_filter_employment_status">
+                            <option value="active" selected>Aktif</option>
+                            <option value="inactive">Nonaktif</option>
+                            <option value="all">Semua</option>
+                        </select>
+                    </div>
+                    <div class="text-muted fs-7">
+                        Default menampilkan karyawan aktif. Pilih Nonaktif untuk melihat karyawan yang sudah dinonaktifkan.
+                    </div>
+                </div>
                 <x-attendance-table id="employees_table" :headers="['Kode','Nama','Area','User','Telepon','Jabatan','Status','Aksi']" />
             </div>
 
@@ -1931,6 +1944,7 @@ const positionDeleteTpl = '{{ route('admin.attendance.positions.destroy', ':id')
 let positionEmptyFilter = '';
 const activeSectionKey = @json($activeSection);
 const sectionLinks = @json($sectionLinks);
+const employeeFilterEmploymentStatus = document.getElementById('employee_filter_employment_status');
 const crudUrls = {
     employees_table: { update: '{{ route('admin.attendance.employees.update', ':id') }}', destroy: '{{ route('admin.attendance.employees.destroy', ':id') }}' },
     devices_table: { update: '{{ route('admin.attendance.devices.update', ':id') }}', destroy: '{{ route('admin.attendance.devices.destroy', ':id') }}' },
@@ -2504,7 +2518,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     if (typeof $ !== 'undefined' && $.fn.select2) {
-        document.querySelectorAll('#attendance_form_bank select, #attendance_form_modal select, #modal_positions select, #template_assignment_panel select, #attendance_recap_filters select, #raw_log_filters select, #schedule_filter_modal select').forEach((select) => {
+        document.querySelectorAll('#attendance_form_bank select, #attendance_form_modal select, #modal_positions select, #template_assignment_panel select, #attendance_recap_filters select, #raw_log_filters select, #schedule_filter_modal select, #employee_filters select').forEach((select) => {
             const allowClear = select.querySelector('option[value=""]') !== null;
             const parentModal = select.closest('.modal') || (select.closest('#attendance_form_bank') ? formModalEl : null);
             $(select).select2({
@@ -2646,6 +2660,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         params.status = recapFilterStatus?.value || '';
                         params.overtime_status = recapFilterOvertimeStatus?.value || '';
                     }
+                    if (id === 'employees_table') {
+                        params.employment_status = employeeFilterEmploymentStatus?.value || 'active';
+                    }
                     if (id === 'raw_logs_table') {
                         params.date_from = rawLogFilterDateFrom?.value || '';
                         params.date_to = rawLogFilterDateTo?.value || '';
@@ -2744,6 +2761,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     [recapFilterEmployee, recapFilterEmploymentStatus, recapFilterStatus, recapFilterOvertimeStatus].forEach((field) => {
         field?.addEventListener('change', reloadRecapTable);
+    });
+    employeeFilterEmploymentStatus?.addEventListener('change', () => {
+        initAttendanceTable('employees_table')?.ajax.reload();
     });
     const reloadRawLogsTable = () => initAttendanceTable('raw_logs_table')?.ajax.reload();
     document.getElementById('raw_log_apply_filters')?.addEventListener('click', reloadRawLogsTable);

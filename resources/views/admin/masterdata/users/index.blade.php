@@ -19,6 +19,11 @@
         </div>
         <div class="card-toolbar">
             <div class="d-flex justify-content-end" data-kt-user-table-toolbar="base">
+                <select id="filter_user_status" class="form-select form-select-solid w-150px me-3">
+                    <option value="">Semua Status</option>
+                    <option value="1">Aktif</option>
+                    <option value="0">Nonaktif</option>
+                </select>
                 <button type="button" class="btn btn-light-primary me-3" data-kt-menu-trigger="click" data-kt-menu-placement="bottom-end">
                     <span class="svg-icon svg-icon-2">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
@@ -40,14 +45,6 @@
                                 @foreach($roles as $role)
                                     <option value="{{ $role->id }}">{{ $role->name }}</option>
                                 @endforeach
-                            </select>
-                        </div>
-                        <div class="mb-10">
-                            <label class="form-label fs-6 fw-bold">Status:</label>
-                            <select id="filter_user_status" class="form-select form-select-solid fw-bolder" data-placeholder="Select option" data-allow-clear="true">
-                                <option value="">Semua</option>
-                                <option value="1">Aktif</option>
-                                <option value="0">Nonaktif</option>
                             </select>
                         </div>
                         <div class="d-flex justify-content-end">
@@ -215,6 +212,7 @@
         }
 
         applyBtn?.addEventListener('click', () => dt.ajax.reload());
+        statusSelect?.addEventListener('change', () => dt.ajax.reload());
         resetBtn?.addEventListener('click', () => {
             if (roleSelect) roleSelect.value = '';
             if (statusSelect) statusSelect.value = '';

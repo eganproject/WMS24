@@ -2,6 +2,7 @@
 
 namespace App\Imports;
 
+use App\Models\Category;
 use App\Models\Item;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
@@ -18,12 +19,16 @@ class ItemBundleImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
 
     private static array $bundleSkuKeys = ['bundle_sku', 'sku_bundle', 'bundle'];
     private static array $bundleNameKeys = ['bundle_name', 'nama_bundle', 'name', 'nama'];
+    private static array $categoryIdKeys = ['category_id', 'kategori_id', 'id_kategori'];
+    private static array $parentCategoryKeys = ['parent_category', 'parent_kategori', 'kategori_parent'];
+    private static array $categoryKeys = ['category', 'kategori'];
     private static array $componentSkuKeys = ['component_sku', 'sku_komponen', 'komponen', 'sku_component', 'component'];
     private static array $qtyKeys = ['required_qty', 'qty', 'jumlah', 'quantity'];
 
     public function collection(Collection $rows): void
     {
         $bundleCache = [];
+        $bundleCategoryBySku = [];
         $componentCache = [];
 
         foreach ($rows as $row) {
@@ -31,6 +36,7 @@ class ItemBundleImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
 
             $bundleSku = $this->detect($row, self::$bundleSkuKeys);
             $bundleName = $this->detectRawString($row, self::$bundleNameKeys);
+            $categoryId = $this->detectCategoryId($row);
             $componentSku = $this->detect($row, self::$componentSkuKeys);
             $qty = $this->detectQty($row);
 
@@ -38,8 +44,17 @@ class ItemBundleImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
                 continue;
             }
 
+            if ($categoryId !== null) {
+                if (array_key_exists($bundleSku, $bundleCategoryBySku) && $bundleCategoryBySku[$bundleSku] !== $categoryId) {
+                    throw ValidationException::withMessages([
+                        'category' => "Bundle SKU '{$bundleSku}' memiliki kategori berbeda dalam file yang sama.",
+                    ]);
+                }
+                $bundleCategoryBySku[$bundleSku] = $categoryId;
+            }
+
             if (!array_key_exists($bundleSku, $bundleCache)) {
-                $bundleCache[$bundleSku] = Item::where('sku', $bundleSku)->first(['id', 'sku', 'name', 'item_type']);
+                $bundleCache[$bundleSku] = Item::where('sku', $bundleSku)->first(['id', 'sku', 'name', 'item_type', 'category_id']);
             }
             $bundle = $bundleCache[$bundleSku];
 
@@ -48,7 +63,7 @@ class ItemBundleImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
                     'sku' => $bundleSku,
                     'name' => $bundleName !== '' ? $bundleName : $bundleSku,
                     'item_type' => Item::TYPE_BUNDLE,
-                    'category_id' => 0,
+                    'category_id' => $categoryId ?? 0,
                 ]);
                 $bundleCache[$bundleSku] = $bundle;
             }
@@ -56,6 +71,11 @@ class ItemBundleImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
                 throw ValidationException::withMessages([
                     'bundle_sku' => "SKU '{$bundleSku}' bukan item bundle.",
                 ]);
+            }
+            if ($categoryId !== null && (int) ($bundle->category_id ?? 0) !== $categoryId) {
+                $bundle->category_id = $categoryId;
+                $bundle->save();
+                $bundleCache[$bundleSku] = $bundle;
             }
 
             if (!array_key_exists($componentSku, $componentCache)) {
@@ -110,6 +130,42 @@ class ItemBundleImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
         return $value === null ? '' : trim((string) $value);
     }
 
+    private function detectCategoryId(array $row): ?int
+    {
+        $rawCategoryId = $this->detectRaw($row, self::$categoryIdKeys);
+        if ($rawCategoryId !== null && trim((string) $rawCategoryId) !== '') {
+            if (!is_numeric($rawCategoryId) || (float) $rawCategoryId !== (float) ((int) $rawCategoryId) || (int) $rawCategoryId < 0) {
+                throw ValidationException::withMessages([
+                    'category_id' => 'category_id harus berupa angka bulat minimal 0.',
+                ]);
+            }
+
+            $categoryId = (int) $rawCategoryId;
+            if ($categoryId > 0 && !Category::where('id', $categoryId)->exists()) {
+                throw ValidationException::withMessages([
+                    'category_id' => "Kategori ID '{$categoryId}' tidak ditemukan.",
+                ]);
+            }
+
+            return $categoryId;
+        }
+
+        $categoryName = $this->detectRawString($row, self::$categoryKeys);
+        if ($categoryName === '') {
+            return null;
+        }
+
+        $parentCategoryName = $this->detectRawString($row, self::$parentCategoryKeys);
+        $parentCategoryId = 0;
+        if ($parentCategoryName !== '') {
+            $parentCategory = $this->findOrCreateCategory($parentCategoryName, 0);
+            $parentCategoryId = $parentCategory?->id ?? 0;
+        }
+
+        $category = $this->findOrCreateCategory($categoryName, $parentCategoryId);
+        return $category?->id;
+    }
+
     private function detectQty(array $row): int
     {
         $raw = $this->detectRaw($row, self::$qtyKeys);
@@ -126,5 +182,28 @@ class ItemBundleImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
         }
 
         return (int) $raw;
+    }
+
+    private function findOrCreateCategory(string $name, int $parentId = 0): ?Category
+    {
+        $trimmed = trim($name);
+        if ($trimmed === '') {
+            return null;
+        }
+
+        $normalized = mb_strtolower($trimmed);
+        $category = Category::whereRaw('LOWER(name) = ?', [$normalized])->first();
+        if ($category) {
+            if ($parentId !== 0 && (int) $category->parent_id !== $parentId) {
+                $category->parent_id = $parentId;
+                $category->save();
+            }
+            return $category;
+        }
+
+        return Category::create([
+            'name' => $trimmed,
+            'parent_id' => $parentId,
+        ]);
     }
 }

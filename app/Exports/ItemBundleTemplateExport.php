@@ -10,16 +10,16 @@ class ItemBundleTemplateExport implements FromCollection, WithHeadings
 {
     public function headings(): array
     {
-        return ['bundle_sku', 'bundle_name', 'component_sku', 'required_qty'];
+        return ['bundle_sku', 'bundle_name', 'parent_category', 'category', 'component_sku', 'required_qty'];
     }
 
     public function collection(): Collection
     {
         return new Collection([
-            ['BUNDLE-001', 'Bundle Paket 001', 'ITEM-A', 2],
-            ['BUNDLE-001', 'Bundle Paket 001', 'ITEM-B', 1],
-            ['BUNDLE-002', 'Bundle Paket 002', 'ITEM-C', 3],
-            ['BUNDLE-002', 'Bundle Paket 002', 'ITEM-D', 1],
+            ['BUNDLE-001', 'Bundle Paket 001', 'Paket', 'Paket Promo', 'ITEM-A', 2],
+            ['BUNDLE-001', 'Bundle Paket 001', 'Paket', 'Paket Promo', 'ITEM-B', 1],
+            ['BUNDLE-002', 'Bundle Paket 002', 'Paket', 'Paket Reguler', 'ITEM-C', 3],
+            ['BUNDLE-002', 'Bundle Paket 002', 'Paket', 'Paket Reguler', 'ITEM-D', 1],
         ]);
     }
 }

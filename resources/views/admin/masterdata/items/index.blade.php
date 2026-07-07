@@ -391,12 +391,14 @@
                     <ul class="ms-5 mb-4">
                         <li><strong>bundle_sku</strong> (wajib) — SKU item bundle; akan dibuat otomatis jika belum ada</li>
                         <li><strong>bundle_name</strong> (opsional) — nama item bundle baru; jika kosong akan memakai nilai <code>bundle_sku</code></li>
+                        <li><strong>parent_category</strong> (opsional) — parent kategori; akan dibuat jika belum ada</li>
+                        <li><strong>category</strong> / <strong>category_id</strong> (opsional) — kategori bundle; jika kosong, kategori bundle lama tidak diubah</li>
                         <li><strong>component_sku</strong> (wajib) — SKU item komponen (item_type = single)</li>
                         <li><strong>required_qty</strong> (wajib) — jumlah komponen yang dibutuhkan per satu bundle, harus angka bulat minimal 1</li>
                     </ul>
                     <p class="text-muted small mb-1">Satu bundle bisa memiliki banyak baris komponen. Kelompokkan semua komponen bundle di bawah <code>bundle_sku</code> yang sama.</p>
                     <p class="text-muted small mb-1">Jika SKU sudah ada sebagai item single, import akan ditolak supaya SKU tidak berubah makna.</p>
-                    <p class="text-muted small mb-1">Alias yang didukung: <code>sku_bundle</code> / <code>bundle</code> untuk bundle; <code>nama_bundle</code> / <code>name</code> / <code>nama</code> untuk nama bundle; <code>sku_komponen</code> / <code>komponen</code> untuk komponen; <code>qty</code> / <code>jumlah</code> untuk jumlah.</p>
+                    <p class="text-muted small mb-1">Alias yang didukung: <code>sku_bundle</code> / <code>bundle</code> untuk bundle; <code>nama_bundle</code> / <code>name</code> / <code>nama</code> untuk nama bundle; <code>parent_kategori</code> untuk parent kategori; <code>kategori</code> / <code>kategori_id</code> untuk kategori; <code>sku_komponen</code> / <code>komponen</code> untuk komponen; <code>qty</code> / <code>jumlah</code> untuk jumlah.</p>
                     <p class="text-muted small mb-0">Gunakan format Excel (.xlsx/.xls) dengan header di baris pertama.</p>
                     <div class="mt-4">
                         <a href="{{ route('admin.masterdata.items.bundle-template') }}" class="btn btn-light-primary">

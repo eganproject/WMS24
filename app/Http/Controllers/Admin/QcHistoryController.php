@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\QcResiScan;
 use App\Models\QcResiScanDuplicateAttempt;
+use App\Models\QcResiScanSubstitution;
 use App\Support\QcTransitStatus;
 use Illuminate\Http\Request;
 
@@ -21,6 +22,91 @@ class QcHistoryController extends Controller
                 ['value' => QcTransitStatus::PASSED, 'label' => QcTransitStatus::scanStatusLabel(QcTransitStatus::PASSED)],
                 ['value' => QcTransitStatus::CANCELED, 'label' => QcTransitStatus::scanStatusLabel(QcTransitStatus::CANCELED)],
             ],
+        ]);
+    }
+
+    public function substitutionsIndex()
+    {
+        return view('admin.outbound.qc-substitutions.index', [
+            'dataUrl' => route('admin.outbound.qc-substitutions.data'),
+            'today' => now()->toDateString(),
+        ]);
+    }
+
+    public function substitutionsData(Request $request)
+    {
+        $baseQuery = QcResiScanSubstitution::query()
+            ->with(['qcScan.resi', 'creator'])
+            ->orderByDesc('created_at')
+            ->orderByDesc('id');
+
+        $this->applySubstitutionDateFilter($baseQuery, $request);
+
+        $query = clone $baseQuery;
+        $search = trim((string) $request->input('q', ''));
+        if ($search !== '') {
+            $exact = $this->isExactSearch($request);
+            $query->where(function ($q) use ($search, $exact) {
+                $this->applyTextSearch($q, 'original_sku', $search, $exact);
+                $this->applyTextSearch($q, 'replacement_sku', $search, $exact, 'or');
+                $this->applyTextSearch($q, 'reason', $search, $exact, 'or');
+                $q->orWhereHas('qcScan.resi', function ($resiQ) use ($search, $exact) {
+                    $this->applyTextSearch($resiQ, 'id_pesanan', $search, $exact);
+                    $this->applyTextSearch($resiQ, 'no_resi', $search, $exact, 'or');
+                })->orWhereHas('creator', function ($userQ) use ($search, $exact) {
+                    $this->applyTextSearch($userQ, 'name', $search, $exact);
+                    $this->applyTextSearch($userQ, 'email', $search, $exact, 'or');
+                });
+            });
+        }
+
+        $creator = trim((string) $request->input('created_by', ''));
+        if ($creator !== '') {
+            $query->whereHas('creator', function ($userQ) use ($creator) {
+                $userQ->where('name', 'like', "%{$creator}%")
+                    ->orWhere('email', 'like', "%{$creator}%");
+            });
+        }
+
+        $recordsTotal = (clone $baseQuery)->count();
+        $recordsFiltered = (clone $query)->count();
+        $start = max(0, (int) $request->input('start', 0));
+        $length = (int) $request->input('length', 10);
+        if ($length > 0) {
+            $query->skip($start)->take($length);
+        }
+
+        $data = $query->get()->map(function (QcResiScanSubstitution $row) {
+            $qc = $row->qcScan;
+            $resi = $qc?->resi;
+
+            return [
+                'id' => $row->id,
+                'created_at' => $row->created_at?->format('Y-m-d H:i') ?? '-',
+                'original_sku' => $row->original_sku,
+                'replacement_sku' => $row->replacement_sku,
+                'qty' => (int) $row->qty,
+                'reason' => $row->reason,
+                'buyer_note' => $row->buyer_note_snapshot ?? '',
+                'id_pesanan' => $resi?->id_pesanan ?? '-',
+                'no_resi' => $resi?->no_resi ?? '-',
+                'qc_status' => $qc?->status ?? '-',
+                'qc_status_label' => $qc ? QcTransitStatus::scanStatusLabel($qc->status) : '-',
+                'created_by' => $row->creator?->name ?? '-',
+            ];
+        });
+
+        return response()->json([
+            'draw' => (int) $request->input('draw'),
+            'recordsTotal' => $recordsTotal,
+            'recordsFiltered' => $recordsFiltered,
+            'summary' => [
+                'substitutions' => (clone $baseQuery)->count(),
+                'qty' => (int) ((clone $baseQuery)->sum('qty') ?? 0),
+                'original_skus' => (clone $baseQuery)->distinct('original_sku')->count('original_sku'),
+                'replacement_skus' => (clone $baseQuery)->distinct('replacement_sku')->count('replacement_sku'),
+            ],
+            'data' => $data,
         ]);
     }
 
@@ -252,6 +338,24 @@ class QcHistoryController extends Controller
         }
         if ($dateTo) {
             $query->whereDate('started_at', '<=', $dateTo);
+        }
+    }
+
+    private function applySubstitutionDateFilter($query, Request $request): void
+    {
+        $dateFrom = $request->input('date_from');
+        $dateTo = $request->input('date_to');
+
+        if (!$dateFrom && !$dateTo) {
+            $query->whereDate('created_at', now()->toDateString());
+            return;
+        }
+
+        if ($dateFrom) {
+            $query->whereDate('created_at', '>=', $dateFrom);
+        }
+        if ($dateTo) {
+            $query->whereDate('created_at', '<=', $dateTo);
         }
     }
 

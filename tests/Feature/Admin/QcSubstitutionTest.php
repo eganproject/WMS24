@@ -131,6 +131,56 @@ class QcSubstitutionTest extends TestCase
         $this->assertSame(1, (int) PickingListException::where('sku', 'KAB3')->value('qty'));
     }
 
+    public function test_qc_substitutions_history_lists_each_sku_replacement_and_supports_search(): void
+    {
+        $this->withoutMiddleware();
+
+        $user = $this->createUserWithRole('admin');
+        $kurir = Kurir::create(['name' => 'J&T']);
+        $resi = Resi::create([
+            'id_pesanan' => 'ORD-HISTORY-001',
+            'tanggal_pesanan' => now()->toDateString(),
+            'tanggal_upload' => now()->toDateString(),
+            'no_resi' => 'RESI-HISTORY-001',
+            'kurir_id' => $kurir->id,
+            'uploader_id' => $user->id,
+            'status' => 'active',
+        ]);
+        $qc = QcResiScan::create([
+            'resi_id' => $resi->id,
+            'scan_type' => 'no_resi',
+            'scan_code' => 'RESI-HISTORY-001',
+            'status' => 'draft',
+            'started_at' => now(),
+            'scanned_by' => $user->id,
+        ]);
+
+        \App\Models\QcResiScanSubstitution::create([
+            'qc_resi_scan_id' => $qc->id,
+            'original_sku' => 'SKU-ASAL',
+            'replacement_sku' => 'SKU-GANTI',
+            'qty' => 2,
+            'reason' => 'Permintaan pembeli',
+            'created_by' => $user->id,
+        ]);
+
+        $this->actingAs($user)
+            ->getJson(route('admin.outbound.qc-substitutions.data', [
+                'draw' => 1,
+                'date_from' => now()->toDateString(),
+                'date_to' => now()->toDateString(),
+                'q' => 'SKU-GANTI',
+            ]))
+            ->assertOk()
+            ->assertJsonPath('recordsFiltered', 1)
+            ->assertJsonPath('summary.substitutions', 1)
+            ->assertJsonPath('summary.qty', 2)
+            ->assertJsonPath('data.0.original_sku', 'SKU-ASAL')
+            ->assertJsonPath('data.0.replacement_sku', 'SKU-GANTI')
+            ->assertJsonPath('data.0.reason', 'Permintaan pembeli')
+            ->assertJsonPath('data.0.created_by', $user->name);
+    }
+
     private function createUserWithRole(string $slug): User
     {
         $role = Role::firstOrCreate(

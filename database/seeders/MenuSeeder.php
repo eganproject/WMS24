@@ -47,6 +47,7 @@ class MenuSeeder extends Seeder
             ['name' => 'QC Manual', 'slug' => 'outbound-manual-qc', 'route' => 'admin.outbound.manual-qc.index', 'icon' => 'fas fa-clipboard-check', 'parent_slug' => 'outbound', 'sort_order' => 12.5],
             ['name' => 'QC Scan Desktop', 'slug' => 'outbound-qc-scan', 'route' => 'admin.outbound.qc-scan.index', 'icon' => 'fas fa-barcode', 'parent_slug' => 'outbound', 'sort_order' => 13],
             ['name' => 'History QC', 'slug' => 'outbound-qc-history', 'route' => 'admin.outbound.qc-history.index', 'icon' => 'fas fa-search', 'parent_slug' => 'outbound', 'sort_order' => 13.25],
+            ['name' => 'Riwayat Substitusi SKU', 'slug' => 'outbound-qc-substitutions', 'route' => 'admin.outbound.qc-substitutions.index', 'icon' => 'fas fa-random', 'parent_slug' => 'outbound', 'sort_order' => 13.275],
             ['name' => 'Transit QC', 'slug' => 'outbound-transit-qc', 'route' => 'admin.outbound.transit-qc.index', 'icon' => 'fas fa-dolly', 'parent_slug' => 'outbound', 'sort_order' => 13.3],
             ['name' => 'Scan Out Desktop', 'slug' => 'outbound-scan-out', 'route' => 'admin.outbound.scan-out.index', 'icon' => 'fas fa-truck-loading', 'parent_slug' => 'outbound', 'sort_order' => 13.4],
             ['name' => 'Riwayat Scan Out', 'slug' => 'outbound-scan-out-history', 'route' => 'admin.outbound.scan-out-history.index', 'icon' => 'fas fa-truck-loading', 'parent_slug' => 'outbound', 'sort_order' => 13.5],

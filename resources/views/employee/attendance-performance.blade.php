@@ -595,6 +595,7 @@
             </div>
             <div class="record-list">
                 @forelse($historyDays as $day)
+<<<<<<< HEAD
                     <div class="record-row">
                         <div class="datebox">
                             {{ $day['date_day'] }}
@@ -606,6 +607,31 @@
                                 Masuk {{ $day['check_in_label'] }} · Pulang {{ $day['check_out_label'] }}
                                 <br>
                                 Kerja {{ $day['work_label'] }}{{ $day['late_label'] }}{{ $day['overtime_label'] }}
+=======
+                    @php
+                        $record = $day['record'];
+                        $status = $day['status'];
+                        $date = \Illuminate\Support\Carbon::parse($day['date']);
+                        $shiftName = $day['shift']?->name ?? '-';
+                    @endphp
+                    <div class="record-row">
+                        <div class="datebox">
+                            {{ $date->format('d') }}
+                            <span>{{ $date->translatedFormat('M') }}</span>
+                        </div>
+                        <div>
+                            <div class="record-title">{{ $shiftName }}</div>
+                            <div class="record-meta">
+                                Masuk {{ $day['check_in_at']?->format('H:i') ?? '-' }} · Pulang {{ $day['check_out_at']?->format('H:i') ?? '-' }}
+                                <br>
+                                Kerja {{ intdiv($day['work_minutes'], 60) }}j {{ ($day['work_minutes'] % 60) }}m
+                                @if($day['late_minutes'] > 0)
+                                    · Telat {{ $day['late_minutes'] }}m
+                                @endif
+                                @if($day['approved_overtime_minutes'] > 0)
+                                    · Lembur {{ intdiv($day['approved_overtime_minutes'], 60) }}j {{ ($day['approved_overtime_minutes'] % 60) }}m
+                                @endif
+>>>>>>> c8f6cc8376c2c2adb462f692693f6cb9fc42c4bc
                                 @if($day['note'])
                                     <br>{{ $day['note'] }}
                                 @endif

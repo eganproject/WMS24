@@ -90,6 +90,7 @@ class EmployeeAttendancePerformanceController extends Controller
             ->filter(fn (array $day) => $day['date'] <= $effectiveEnd->toDateString())
             ->reject(fn (array $day) => $day['status'] === AttendanceDailyStatusResolver::STATUS_UNSCHEDULED)
             ->sortByDesc('date')
+<<<<<<< HEAD
             ->map(function (array $day): array {
                 $date = Carbon::parse($day['date']);
                 $workMinutes = (int) $day['work_minutes'];
@@ -111,6 +112,11 @@ class EmployeeAttendancePerformanceController extends Controller
             ->values();
         $score = $this->performanceScore($scheduledDays, $counts, (int) $effectiveRecords->sum('early_leave_minutes'));
 
+=======
+            ->values();
+        $score = $this->performanceScore($scheduledDays, $counts, (int) $effectiveRecords->sum('early_leave_minutes'));
+
+>>>>>>> c8f6cc8376c2c2adb462f692693f6cb9fc42c4bc
         $totalWorkMinutes = (int) $effectiveRecords->sum('work_minutes');
         $avgWorkMinutes = $attendedDays > 0 ? (int) round($totalWorkMinutes / $attendedDays) : 0;
         $approvedOvertimeMinutes = (int) $effectiveRecords->sum('approved_overtime_minutes');

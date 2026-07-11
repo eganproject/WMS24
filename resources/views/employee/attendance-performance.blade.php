@@ -511,7 +511,7 @@
             <div class="metric">
                 <div class="label">Tepat Waktu</div>
                 <div class="value">{{ $summary['on_time_rate'] }}%</div>
-                <div class="meta">{{ $counts['present'] }} tepat waktu · {{ $counts['late'] }} terlambat</div>
+                <div class="meta">{{ $counts['present'] }} tepat waktu dari {{ $summary['scheduled_days'] }} hari kerja</div>
             </div>
             <div class="metric">
                 <div class="label">Jam Kerja</div>
@@ -591,31 +591,27 @@
         <section class="panel" style="margin-top: 16px;">
             <div class="panel-head">
                 <h2 class="panel-title">Riwayat Harian</h2>
-                <span class="muted">{{ $records->count() }} catatan</span>
+                <span class="muted">{{ $historyDays->count() }} hari terjadwal</span>
             </div>
             <div class="record-list">
-                @forelse($records as $record)
-                    @php($status = $record->status ?? 'no_record')
+                @forelse($historyDays as $day)
                     <div class="record-row">
                         <div class="datebox">
-                            {{ $record->attendance_date?->format('d') }}
-                            <span>{{ $record->attendance_date?->translatedFormat('M') }}</span>
+                            {{ $day['date_day'] }}
+                            <span>{{ $day['date_month'] }}</span>
                         </div>
                         <div>
-                            <div class="record-title">{{ $record->shift?->name ?? 'Tanpa shift' }}</div>
+                            <div class="record-title">{{ $day['shift_name'] }}</div>
                             <div class="record-meta">
-                                Masuk {{ $record->check_in_at?->format('H:i') ?? '-' }} · Pulang {{ $record->check_out_at?->format('H:i') ?? '-' }}
+                                Masuk {{ $day['check_in_label'] }} · Pulang {{ $day['check_out_label'] }}
                                 <br>
-                                Kerja {{ intdiv((int) $record->work_minutes, 60) }}j {{ ((int) $record->work_minutes % 60) }}m
-                                @if((int) $record->late_minutes > 0)
-                                    · Telat {{ $record->late_minutes }}m
-                                @endif
-                                @if((int) $record->approved_overtime_minutes > 0)
-                                    · Lembur {{ intdiv((int) $record->approved_overtime_minutes, 60) }}j {{ ((int) $record->approved_overtime_minutes % 60) }}m
+                                Kerja {{ $day['work_label'] }}{{ $day['late_label'] }}{{ $day['overtime_label'] }}
+                                @if($day['note'])
+                                    <br>{{ $day['note'] }}
                                 @endif
                             </div>
                         </div>
-                        <div class="pill {{ $statusClassCss($status) }}">{{ $statusLabels[$status] ?? $status }}</div>
+                        <div class="pill {{ $statusClassCss($day['status']) }}">{{ $statusLabels[$day['status']] ?? $day['status'] }}</div>
                     </div>
                 @empty
                     <div class="empty">Belum ada catatan absensi pada bulan ini.</div>

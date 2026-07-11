@@ -82,14 +82,40 @@ class EmployeeAttendancePerformanceController extends Controller
             ->count();
         $attendedDays = $counts['present'] + $counts['late'];
         $attendanceRate = $scheduledDays > 0 ? round(($attendedDays / $scheduledDays) * 100) : 0;
-        $onTimeRate = $attendedDays > 0 ? round(($counts['present'] / $attendedDays) * 100) : 0;
-        $score = $this->performanceScore($scheduledDays, $counts, (int) $records->sum('early_leave_minutes'));
+        $onTimeRate = $scheduledDays > 0 ? round(($counts['present'] / $scheduledDays) * 100) : 0;
+        $effectiveRecords = $records->filter(
+            fn (Attendance $record) => $record->attendance_date?->toDateString() <= $effectiveEnd->toDateString()
+        );
+        $historyDays = collect($days)
+            ->filter(fn (array $day) => $day['date'] <= $effectiveEnd->toDateString())
+            ->reject(fn (array $day) => $day['status'] === AttendanceDailyStatusResolver::STATUS_UNSCHEDULED)
+            ->sortByDesc('date')
+            ->map(function (array $day): array {
+                $date = Carbon::parse($day['date']);
+                $workMinutes = (int) $day['work_minutes'];
+                $overtimeMinutes = (int) $day['approved_overtime_minutes'];
 
-        $totalWorkMinutes = (int) $records->sum('work_minutes');
+                return array_merge($day, [
+                    'date_day' => $date->format('d'),
+                    'date_month' => $date->translatedFormat('M'),
+                    'shift_name' => $day['shift']?->name ?? '-',
+                    'check_in_label' => $day['check_in_at']?->format('H:i') ?? '-',
+                    'check_out_label' => $day['check_out_at']?->format('H:i') ?? '-',
+                    'work_label' => intdiv($workMinutes, 60).'j '.($workMinutes % 60).'m',
+                    'late_label' => $day['late_minutes'] > 0 ? ' · Telat '.$day['late_minutes'].'m' : '',
+                    'overtime_label' => $overtimeMinutes > 0
+                        ? ' · Lembur '.intdiv($overtimeMinutes, 60).'j '.($overtimeMinutes % 60).'m'
+                        : '',
+                ]);
+            })
+            ->values();
+        $score = $this->performanceScore($scheduledDays, $counts, (int) $effectiveRecords->sum('early_leave_minutes'));
+
+        $totalWorkMinutes = (int) $effectiveRecords->sum('work_minutes');
         $avgWorkMinutes = $attendedDays > 0 ? (int) round($totalWorkMinutes / $attendedDays) : 0;
-        $approvedOvertimeMinutes = (int) $records->sum('approved_overtime_minutes');
-        $totalLateMinutes = (int) $records->sum('late_minutes');
-        $totalEarlyLeaveMinutes = (int) $records->sum('early_leave_minutes');
+        $approvedOvertimeMinutes = (int) $effectiveRecords->sum('approved_overtime_minutes');
+        $totalLateMinutes = (int) $effectiveRecords->sum('late_minutes');
+        $totalEarlyLeaveMinutes = (int) $effectiveRecords->sum('early_leave_minutes');
 
         return view('employee.attendance-performance', [
             'employee' => $employee,
@@ -110,12 +136,13 @@ class EmployeeAttendancePerformanceController extends Controller
                 'approved_overtime' => $this->minutesLabel($approvedOvertimeMinutes),
                 'late_minutes' => $this->minutesLabel($totalLateMinutes),
                 'early_leave_minutes' => $this->minutesLabel($totalEarlyLeaveMinutes),
-                'avg_check_in' => $this->averageTime($records->filter(fn (Attendance $row) => $row->check_in_at !== null), 'check_in_at'),
-                'avg_check_out' => $this->averageTime($records->filter(fn (Attendance $row) => $row->check_out_at !== null), 'check_out_at'),
+                'avg_check_in' => $this->averageTime($effectiveRecords->filter(fn (Attendance $row) => $row->check_in_at !== null), 'check_in_at'),
+                'avg_check_out' => $this->averageTime($effectiveRecords->filter(fn (Attendance $row) => $row->check_out_at !== null), 'check_out_at'),
             ],
             'counts' => $counts,
             'weekStats' => $this->weekStats($days),
             'statusLabels' => $this->statusLabels(),
+            'historyDays' => $historyDays,
         ]);
     }
 
@@ -167,6 +194,13 @@ class EmployeeAttendancePerformanceController extends Controller
                 'is_work_day' => $daily['is_work_day'],
                 'record' => $record,
                 'schedule' => $schedule,
+                'shift' => $daily['shift'],
+                'check_in_at' => $record?->check_in_at,
+                'check_out_at' => $record?->check_out_at,
+                'late_minutes' => (int) ($record?->late_minutes ?? 0),
+                'work_minutes' => (int) ($record?->work_minutes ?? 0),
+                'approved_overtime_minutes' => (int) ($record?->approved_overtime_minutes ?? 0),
+                'note' => $daily['note'],
             ];
 
             $cursor->addDay();
@@ -180,14 +214,7 @@ class EmployeeAttendancePerformanceController extends Controller
         return collect($days)
             ->groupBy('week')
             ->map(function ($rows, $week) {
-                $workRows = $rows->filter(fn ($row) => in_array($row['status'], [
-                    Attendance::STATUS_PRESENT,
-                    Attendance::STATUS_LATE,
-                    Attendance::STATUS_ABSENT,
-                    Attendance::STATUS_INCOMPLETE,
-                    Attendance::STATUS_LEAVE,
-                    AttendanceDailyStatusResolver::STATUS_NOT_CHECKED_IN,
-                ], true));
+                $workRows = $rows->filter(fn ($row) => $row['is_work_day'] && $row['status'] !== 'future');
                 $attended = $workRows->filter(fn ($row) => in_array($row['status'], [
                     Attendance::STATUS_PRESENT,
                     Attendance::STATUS_LATE,

@@ -108,14 +108,42 @@
     }
     .ot-detail-grid {
         display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: .65rem;
-        padding: .85rem;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: .5rem .75rem;
+        padding: .7rem .8rem;
         border-radius: .65rem;
         background: #f5f8fa;
     }
     .ot-detail-grid .label { color: #7e8299; font-size: .72rem; }
     .ot-detail-grid .value { color: #181c32; font-weight: 600; }
+    .ot-approval-form {
+        display: grid;
+        grid-template-columns: minmax(180px, .7fr) minmax(280px, 1.3fr);
+        gap: .75rem;
+        align-items: start;
+    }
+    .ot-approval-modal {
+        padding: 1.15rem 1.35rem !important;
+    }
+    .ot-approval-modal .swal2-title {
+        padding: 0 0 .7rem !important;
+        font-size: 1.35rem !important;
+    }
+    .ot-approval-modal .swal2-html-container {
+        margin: 0 !important;
+        overflow: visible !important;
+    }
+    .ot-approval-modal .swal2-actions {
+        margin-top: .85rem !important;
+    }
+    @media (max-width: 767.98px) {
+        .ot-detail-grid,
+        .ot-approval-form { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 479.98px) {
+        .ot-detail-grid,
+        .ot-approval-form { grid-template-columns: 1fr; }
+    }
 </style>
 @endpush
 
@@ -444,8 +472,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const maximum = Number(row.calculated_overtime_minutes || 0);
             const result = await Swal.fire({
                 title: `Konfirmasi Approval ${index + 1} dari ${rows.length}`,
-                html: `${rowDetails(row)}<div class="text-start"><label class="form-label fw-bold">Menit disetujui</label><input id="swal_overtime_minutes" type="number" min="1" max="${maximum}" class="form-control" value="${maximum}"><div class="text-muted fs-8 mt-1">Maksimal ${maximum} menit sesuai lembur terhitung.</div><label class="form-label fw-bold mt-3">Catatan</label><textarea id="swal_overtime_note" class="form-control" rows="2">${escapeHtml(row.overtime_note || '')}</textarea></div>`,
-                width: 680,
+                html: `${rowDetails(row)}<div class="ot-approval-form text-start"><div><label class="form-label fw-bold mb-1">Menit disetujui</label><input id="swal_overtime_minutes" type="number" min="1" max="${maximum}" class="form-control" value="${maximum}"><div class="text-muted fs-8 mt-1">Maksimal ${maximum} menit.</div></div><div><label class="form-label fw-bold mb-1">Catatan</label><textarea id="swal_overtime_note" class="form-control" rows="1">${escapeHtml(row.overtime_note || '')}</textarea></div></div>`,
+                width: 'min(920px, calc(100vw - 2rem))',
+                customClass: { popup: 'ot-approval-modal' },
                 showCancelButton: true,
                 confirmButtonText: index === rows.length - 1 ? 'Simpan Semua Approval' : 'Lanjut',
                 cancelButtonText: 'Batalkan Proses',

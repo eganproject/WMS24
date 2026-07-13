@@ -211,6 +211,7 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/item-stocks/data', [ItemStockController::class, 'data'])->name('item-stocks.data');
         Route::get('/item-stocks/export', [ItemStockController::class, 'export'])->name('item-stocks.export');
         Route::post('/item-stocks/update-safety', [ItemStockController::class, 'updateSafety'])->name('item-stocks.update-safety');
+        Route::post('/item-stocks/bulk-update', [ItemStockController::class, 'bulkUpdate'])->name('item-stocks.update');
 
         // Stock Mutations
         Route::get('/stock-mutations', [StockMutationController::class, 'index'])->name('stock-mutations.index');

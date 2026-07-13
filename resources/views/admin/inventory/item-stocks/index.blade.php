@@ -6,6 +6,7 @@
 @php
     use App\Support\Permission as Perm;
     $canCreateStockAdjustment = Perm::can(auth()->user(), 'admin.inventory.stock-adjustments.index', 'create');
+    $canUpdateItemStocks = Perm::can(auth()->user(), 'admin.inventory.item-stocks.index', 'update');
 @endphp
 
 @push('styles')
@@ -41,6 +42,19 @@
 
     .item-stock-actions {
         gap: 0.75rem;
+    }
+
+    .item-stock-bulk-bar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: .75rem;
+        padding: .85rem 1rem;
+        margin-bottom: 1rem;
+        border: 1px solid #e4e6ef;
+        border-radius: .65rem;
+        background: #f9fafc;
     }
 
     @media (max-width: 991.98px) {
@@ -104,12 +118,28 @@
                     </select>
                 </div>
                 <button type="button" class="btn btn-light-primary" id="btn_export_item_stocks">Export Excel</button>
-                <button type="button" class="btn btn-primary" id="btn_bulk_safety_main" disabled>Ubah Safety Gudang Besar</button>
-                <button type="button" class="btn btn-primary" id="btn_bulk_safety_display" disabled>Ubah Safety Display</button>
+                @if($canUpdateItemStocks)
+                    <button type="button" class="btn btn-primary" id="btn_bulk_safety_main" disabled>Ubah Safety Gudang Besar</button>
+                    <button type="button" class="btn btn-primary" id="btn_bulk_safety_display" disabled>Ubah Safety Display</button>
+                @endif
             </div>
         </div>
     </div>
     <div class="card-body py-6">
+        @if($canUpdateItemStocks)
+            <div class="item-stock-bulk-bar" id="item_stocks_bulk_bar">
+                <div>
+                    <div class="fw-bold"><span id="item_stocks_selected_count">0</span> item dipilih</div>
+                    <div class="text-muted fs-8"><span id="item_stocks_physical_count">0</span> item fisik; monitoring dan safety tidak berlaku untuk bundle.</div>
+                </div>
+                <div class="d-flex flex-wrap gap-2">
+                    <button type="button" class="btn btn-sm btn-light-success" id="btn_bulk_activate_items" disabled><i class="fas fa-check-circle me-1"></i>Aktifkan Item</button>
+                    <button type="button" class="btn btn-sm btn-light-danger" id="btn_bulk_deactivate_items" disabled><i class="fas fa-ban me-1"></i>Nonaktifkan Item</button>
+                    <button type="button" class="btn btn-sm btn-light-primary" id="btn_bulk_enable_monitoring" disabled><i class="fas fa-bell me-1"></i>Aktifkan Monitor</button>
+                    <button type="button" class="btn btn-sm btn-light-secondary" id="btn_bulk_disable_monitoring" disabled><i class="fas fa-bell-slash me-1"></i>Nonaktifkan Monitor</button>
+                </div>
+            </div>
+        @endif
         <div class="table-responsive">
             <table class="table align-middle table-row-dashed fs-6 gy-5" id="item_stocks_table">
                 <thead>
@@ -404,8 +434,10 @@
     const dataUrl = '{{ route('admin.inventory.item-stocks.data') }}';
     const exportUrl = '{{ route('admin.inventory.item-stocks.export') }}';
     const updateSafetyUrl = '{{ $updateSafetyUrl ?? '' }}';
+    const bulkUpdateUrl = '{{ $bulkUpdateUrl ?? '' }}';
     const stockAdjustmentStoreUrl = '{{ route('admin.inventory.stock-adjustments.store') }}';
     const canCreateStockAdjustment = {{ $canCreateStockAdjustment ? 'true' : 'false' }};
+    const canUpdateItemStocks = {{ $canUpdateItemStocks ? 'true' : 'false' }};
     const mutationIndexUrl = '{{ route('admin.inventory.stock-mutations.index') }}';
     const defaultWarehouseId = {{ !empty($defaultWarehouseId) ? (int) $defaultWarehouseId : 'null' }};
     const displayWarehouseId = {{ !empty($displayWarehouseId) ? (int) $displayWarehouseId : 'null' }};
@@ -421,6 +453,12 @@
         const exportBtn = document.getElementById('btn_export_item_stocks');
         const bulkSafetyMainBtn = document.getElementById('btn_bulk_safety_main');
         const bulkSafetyDisplayBtn = document.getElementById('btn_bulk_safety_display');
+        const bulkActivateBtn = document.getElementById('btn_bulk_activate_items');
+        const bulkDeactivateBtn = document.getElementById('btn_bulk_deactivate_items');
+        const bulkEnableMonitoringBtn = document.getElementById('btn_bulk_enable_monitoring');
+        const bulkDisableMonitoringBtn = document.getElementById('btn_bulk_disable_monitoring');
+        const selectedCountEl = document.getElementById('item_stocks_selected_count');
+        const physicalCountEl = document.getElementById('item_stocks_physical_count');
         const selectAllCheckbox = document.getElementById('item_stocks_select_all');
         const safetyModalEl = document.getElementById('modal_safety_stock');
         const safetyModal = safetyModalEl ? new bootstrap.Modal(safetyModalEl) : null;
@@ -453,6 +491,7 @@
         };
 
         const selectedItemIds = new Set();
+        const selectedItemRows = new Map();
         let safetyBulkMode = false;
         let safetyBulkTarget = null;
 
@@ -773,7 +812,7 @@
             },
             columns: [
                 { data: 'id', orderable: false, searchable: false, className: 'text-center', render: (data, type, row) => {
-                    if (type !== 'display' || row.item_type === 'bundle') {
+                    if (type !== 'display' || !canUpdateItemStocks) {
                         return '';
                     }
 
@@ -786,7 +825,9 @@
                 }},
                 { data: 'id' },
                 { data: 'sku' },
-                { data: 'name' },
+                { data: 'name', render: (data, type, row) => type !== 'display'
+                    ? data
+                    : `<div>${escapeHtml(data || '-')}</div><span class="badge ${row.status === 'inactive' ? 'badge-light-danger' : 'badge-light-success'} mt-1">${escapeHtml(row.status_label || 'Aktif')}</span>` },
                 { data: 'item_type', render: (data) => renderItemTypeBadge(data) },
                 { data: 'stock_main', className: 'text-end', render: (data, type, row) => renderWarehouseStock(data, type, row, 'virtual_main', 'is_main_below_safety', { showKoli: true, warehouseId: defaultWarehouseId, warehouseLabel: @json($defaultWarehouseLabel ?? 'Gudang Besar'), stockKey: 'stock_main', mode: 'koli' }) },
                 { data: 'safety_main', className: 'text-end', render: (data, type, row) => renderSafetyValue(data, row, 'monitor_main') },
@@ -820,26 +861,40 @@
                 }},
             ]
         });
-        const currentPagePhysicalIds = () => dt.rows({ page: 'current' }).data().toArray()
-            .filter((row) => row.item_type !== 'bundle')
-            .map((row) => String(row.id));
+        const currentPageRows = () => dt.rows({ page: 'current' }).data().toArray();
+        const currentPageIds = () => currentPageRows().map((row) => String(row.id));
         const syncBulkSelectionUi = () => {
             const count = selectedItemIds.size;
+            const physicalCount = Array.from(selectedItemRows.values()).filter((row) => row.item_type !== 'bundle').length;
+            const hasBundle = count > physicalCount;
+            if (selectedCountEl) selectedCountEl.textContent = count.toLocaleString('id-ID');
+            if (physicalCountEl) physicalCountEl.textContent = physicalCount.toLocaleString('id-ID');
+            [bulkActivateBtn, bulkDeactivateBtn].forEach((button) => {
+                if (button) button.disabled = count === 0;
+            });
+            [bulkEnableMonitoringBtn, bulkDisableMonitoringBtn].forEach((button) => {
+                if (button) {
+                    button.disabled = count === 0 || hasBundle;
+                    button.title = hasBundle ? 'Keluarkan bundle dari pilihan untuk mengubah monitoring stok.' : '';
+                }
+            });
             if (bulkSafetyMainBtn) {
-                bulkSafetyMainBtn.disabled = count === 0;
-                bulkSafetyMainBtn.textContent = count > 0 ? `Ubah Safety Gudang Besar (${count})` : 'Ubah Safety Gudang Besar';
+                bulkSafetyMainBtn.disabled = count === 0 || hasBundle;
+                bulkSafetyMainBtn.title = hasBundle ? 'Keluarkan bundle dari pilihan untuk mengubah safety stock.' : '';
+                bulkSafetyMainBtn.textContent = count > 0 ? `Ubah Safety Gudang Besar (${physicalCount})` : 'Ubah Safety Gudang Besar';
             }
             if (bulkSafetyDisplayBtn) {
-                bulkSafetyDisplayBtn.disabled = count === 0;
-                bulkSafetyDisplayBtn.textContent = count > 0 ? `Ubah Safety Display (${count})` : 'Ubah Safety Display';
+                bulkSafetyDisplayBtn.disabled = count === 0 || hasBundle;
+                bulkSafetyDisplayBtn.title = hasBundle ? 'Keluarkan bundle dari pilihan untuk mengubah safety stock.' : '';
+                bulkSafetyDisplayBtn.textContent = count > 0 ? `Ubah Safety Display (${physicalCount})` : 'Ubah Safety Display';
             }
 
             if (selectAllCheckbox) {
-                const ids = currentPagePhysicalIds();
+                const ids = currentPageIds();
                 const checkedCount = ids.filter((id) => selectedItemIds.has(id)).length;
                 selectAllCheckbox.checked = ids.length > 0 && checkedCount === ids.length;
                 selectAllCheckbox.indeterminate = checkedCount > 0 && checkedCount < ids.length;
-                selectAllCheckbox.disabled = ids.length === 0;
+                selectAllCheckbox.disabled = !canUpdateItemStocks || ids.length === 0;
             }
 
             tableEl.find('.item-stock-row-check').each(function () {
@@ -853,10 +908,19 @@
         refreshMenus();
         dt.on('draw', refreshMenus);
 
+        const clearBulkSelection = () => {
+            selectedItemIds.clear();
+            selectedItemRows.clear();
+            syncBulkSelectionUi();
+        };
         const reloadTable = () => dt.ajax.reload();
-        searchInput?.addEventListener('input', reloadTable);
-        searchModeSelect?.addEventListener('change', reloadTable);
-        statusSelect?.addEventListener('change', reloadTable);
+        const reloadTableWithClearSelection = () => {
+            clearBulkSelection();
+            reloadTable();
+        };
+        searchInput?.addEventListener('input', reloadTableWithClearSelection);
+        searchModeSelect?.addEventListener('change', reloadTableWithClearSelection);
+        statusSelect?.addEventListener('change', reloadTableWithClearSelection);
         limitSelect?.addEventListener('change', () => {
             const val = Number(limitSelect.value || 10);
             dt.page.len(val).draw();
@@ -916,19 +980,24 @@
             if (!id) return;
             if (this.checked) {
                 selectedItemIds.add(id);
+                const row = dt.rows().data().toArray().find((candidate) => String(candidate.id) === id);
+                if (row) selectedItemRows.set(id, row);
             } else {
                 selectedItemIds.delete(id);
+                selectedItemRows.delete(id);
             }
             syncBulkSelectionUi();
         });
 
         selectAllCheckbox?.addEventListener('change', function() {
-            const ids = currentPagePhysicalIds();
-            ids.forEach((id) => {
+            currentPageRows().forEach((row) => {
+                const id = String(row.id);
                 if (this.checked) {
                     selectedItemIds.add(id);
+                    selectedItemRows.set(id, row);
                 } else {
                     selectedItemIds.delete(id);
+                    selectedItemRows.delete(id);
                 }
             });
             syncBulkSelectionUi();
@@ -964,6 +1033,84 @@
 
         bulkSafetyMainBtn?.addEventListener('click', () => openBulkSafetyModal('main'));
         bulkSafetyDisplayBtn?.addEventListener('click', () => openBulkSafetyModal('display'));
+
+        const selectedItemsPreview = () => {
+            const rows = Array.from(selectedItemRows.values());
+            const list = rows.slice(0, 6).map((row) => `<li><strong>${escapeHtml(row.sku || '-')}</strong> - ${escapeHtml(row.name || '-')}</li>`).join('');
+            const more = rows.length > 6 ? `<div class="text-muted mt-2">dan ${rows.length - 6} item lainnya</div>` : '';
+            return `<div class="text-start"><ul class="mb-0">${list}</ul>${more}</div>`;
+        };
+        const postBulkUpdate = async (payload) => {
+            const response = await fetch(bulkUpdateUrl, {
+                method: 'POST',
+                headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+                body: JSON.stringify({ ...payload, item_ids: Array.from(selectedItemIds) }),
+            });
+            const json = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                const message = json.errors ? Object.values(json.errors).flat().join('\n') : (json.message || 'Perubahan bulk gagal disimpan.');
+                throw new Error(message);
+            }
+            return json;
+        };
+        const runBulkItemStatus = async (action) => {
+            if (!selectedItemIds.size || typeof Swal === 'undefined') return;
+            const activate = action === 'activate_items';
+            const result = await Swal.fire({
+                title: `${activate ? 'Aktifkan' : 'Nonaktifkan'} ${selectedItemIds.size} item?`,
+                html: `${selectedItemsPreview()}<div class="alert ${activate ? 'alert-light-success' : 'alert-light-warning'} text-start mt-4 mb-0">${activate ? 'Item akan kembali tersedia untuk flow operasional yang mensyaratkan SKU aktif.' : 'Stok dan riwayat transaksi tidak dihapus. Item hanya tidak tersedia pada flow yang mensyaratkan SKU aktif; pengaturan monitoring tetap disimpan.'}</div>`,
+                icon: activate ? 'question' : 'warning',
+                showCancelButton: true,
+                confirmButtonText: activate ? 'Ya, Aktifkan' : 'Ya, Nonaktifkan',
+                cancelButtonText: 'Batal',
+                confirmButtonColor: activate ? '#50cd89' : '#f1416c',
+            });
+            if (!result.isConfirmed) return;
+            try {
+                const json = await postBulkUpdate({ action });
+                clearBulkSelection();
+                await Swal.fire('Berhasil', json.message, 'success');
+                reloadTable();
+            } catch (error) {
+                clearBulkSelection();
+                await Swal.fire('Gagal', error.message, 'error');
+                reloadTable();
+            }
+        };
+        const runBulkMonitoring = async (action) => {
+            if (!selectedItemIds.size || typeof Swal === 'undefined') return;
+            const rows = Array.from(selectedItemRows.values());
+            if (rows.some((row) => row.item_type === 'bundle')) {
+                await Swal.fire('Pilihan tidak valid', 'Monitoring stok hanya berlaku untuk item fisik. Keluarkan bundle dari pilihan.', 'warning');
+                return;
+            }
+            const enable = action === 'enable_monitoring';
+            const result = await Swal.fire({
+                title: `${enable ? 'Aktifkan' : 'Nonaktifkan'} monitoring?`,
+                html: `${selectedItemsPreview()}<div class="text-start mt-4"><label class="form-label fw-bold">Terapkan pada gudang</label><select id="bulk_monitoring_scope" class="form-select"><option value="both">Gudang Besar dan Display</option><option value="main">Gudang Besar saja</option><option value="display">Gudang Display saja</option></select><div class="text-muted fs-8 mt-2">Perubahan hanya memengaruhi peringatan safety stock pada gudang yang dipilih, bukan jumlah stok.</div></div>`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: enable ? 'Aktifkan Monitoring' : 'Nonaktifkan Monitoring',
+                cancelButtonText: 'Batal',
+                preConfirm: () => document.getElementById('bulk_monitoring_scope')?.value || 'both',
+            });
+            if (!result.isConfirmed) return;
+            try {
+                const json = await postBulkUpdate({ action, monitoring_scope: result.value });
+                clearBulkSelection();
+                await Swal.fire('Berhasil', json.message, 'success');
+                reloadTable();
+            } catch (error) {
+                clearBulkSelection();
+                await Swal.fire('Gagal', error.message, 'error');
+                reloadTable();
+            }
+        };
+
+        bulkActivateBtn?.addEventListener('click', () => runBulkItemStatus('activate_items'));
+        bulkDeactivateBtn?.addEventListener('click', () => runBulkItemStatus('deactivate_items'));
+        bulkEnableMonitoringBtn?.addEventListener('click', () => runBulkMonitoring('enable_monitoring'));
+        bulkDisableMonitoringBtn?.addEventListener('click', () => runBulkMonitoring('disable_monitoring'));
 
         // ── MODAL MUTASI ─────────────────────────────────────────────
         document.getElementById('edit_stock_target_pcs')?.addEventListener('input', syncEditStockPreview);
@@ -1125,8 +1272,7 @@
                 }
                 if (typeof Swal !== 'undefined') Swal.fire('Berhasil', json.message || 'Berhasil', 'success');
                 if (safetyBulkMode) {
-                    selectedItemIds.clear();
-                    syncBulkSelectionUi();
+                    clearBulkSelection();
                 }
                 safetyModal?.hide();
                 reloadTable();

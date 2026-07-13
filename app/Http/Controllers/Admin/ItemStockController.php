@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Exports\ItemStocksExport;
+use App\Models\ActivityLog;
 use App\Models\Item;
 use App\Models\ItemStock;
 use App\Models\Warehouse;
@@ -14,6 +15,7 @@ use Illuminate\Http\Request;
 use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class ItemStockController extends Controller
 {
@@ -36,6 +38,7 @@ class ItemStockController extends Controller
             'damagedWarehouseId'   => $damagedId,
             'warehouses'           => $warehouses,
             'updateSafetyUrl'      => route('admin.inventory.item-stocks.update-safety'),
+            'bulkUpdateUrl'        => route('admin.inventory.item-stocks.update'),
         ]);
     }
 
@@ -289,6 +292,169 @@ class ItemStockController extends Controller
                 ? 'Safety stock berhasil disimpan untuk '.$itemIds->count().' item'
                 : 'Safety stock berhasil disimpan',
         ]);
+    }
+
+    public function bulkUpdate(Request $request)
+    {
+        $validated = $request->validate([
+            'item_ids' => ['required', 'array', 'min:1', 'max:100'],
+            'item_ids.*' => ['required', 'integer', 'distinct', 'exists:items,id'],
+            'action' => ['required', Rule::in([
+                'activate_items',
+                'deactivate_items',
+                'enable_monitoring',
+                'disable_monitoring',
+            ])],
+            'monitoring_scope' => ['nullable', Rule::in(['main', 'display', 'both'])],
+        ]);
+
+        $itemIds = collect($validated['item_ids'])->map(fn ($id) => (int) $id)->sort()->values();
+        $action = $validated['action'];
+        $isMonitoringAction = in_array($action, ['enable_monitoring', 'disable_monitoring'], true);
+        if ($isMonitoringAction && empty($validated['monitoring_scope'])) {
+            throw ValidationException::withMessages([
+                'monitoring_scope' => ['Pilih gudang yang monitoring stoknya akan diubah.'],
+            ]);
+        }
+
+        $result = DB::transaction(function () use ($request, $itemIds, $action, $validated, $isMonitoringAction) {
+            $items = Item::query()
+                ->whereIn('id', $itemIds)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get(['id', 'sku', 'name', 'item_type', 'status']);
+
+            if ($items->count() !== $itemIds->count()) {
+                throw ValidationException::withMessages([
+                    'item_ids' => ['Sebagian item tidak lagi tersedia. Muat ulang tabel lalu coba kembali.'],
+                ]);
+            }
+
+            if ($isMonitoringAction && $items->contains(fn (Item $item) => $item->isBundle())) {
+                throw ValidationException::withMessages([
+                    'item_ids' => ['Monitoring stok hanya berlaku untuk item fisik. Hapus bundle dari pilihan lalu coba kembali.'],
+                ]);
+            }
+
+            $changedItemIds = collect();
+            $auditChanges = [];
+            if (!$isMonitoringAction) {
+                $targetStatus = $action === 'activate_items' ? Item::STATUS_ACTIVE : Item::STATUS_INACTIVE;
+                foreach ($items as $item) {
+                    $before = $item->status ?: Item::STATUS_ACTIVE;
+                    if ($before === $targetStatus) {
+                        continue;
+                    }
+
+                    $item->update(['status' => $targetStatus]);
+                    $changedItemIds->push($item->id);
+                    $auditChanges[] = [
+                        'item_id' => $item->id,
+                        'sku' => $item->sku,
+                        'field' => 'status',
+                        'before' => $before,
+                        'after' => $targetStatus,
+                    ];
+                }
+            } else {
+                $scope = $validated['monitoring_scope'];
+                $warehouseIds = match ($scope) {
+                    'main' => [WarehouseService::defaultWarehouseId()],
+                    'display' => [WarehouseService::displayWarehouseId()],
+                    default => [WarehouseService::defaultWarehouseId(), WarehouseService::displayWarehouseId()],
+                };
+                $warehouseIds = collect($warehouseIds)->filter()->unique()->values();
+                if ($warehouseIds->isEmpty()) {
+                    throw ValidationException::withMessages([
+                        'monitoring_scope' => ['Gudang monitoring belum dikonfigurasi.'],
+                    ]);
+                }
+
+                $targetMonitored = $action === 'enable_monitoring';
+                foreach ($items as $item) {
+                    $itemChanged = false;
+                    foreach ($warehouseIds as $warehouseId) {
+                        $stock = ItemStock::firstOrCreate(
+                            ['item_id' => $item->id, 'warehouse_id' => $warehouseId],
+                            ['stock' => 0, 'is_stock_monitored' => true]
+                        );
+                        $wasCreated = $stock->wasRecentlyCreated;
+                        $before = $wasCreated ? null : (bool) $stock->is_stock_monitored;
+                        if (!$wasCreated && $before === $targetMonitored) {
+                            continue;
+                        }
+
+                        if ((bool) $stock->is_stock_monitored !== $targetMonitored) {
+                            $stock->update(['is_stock_monitored' => $targetMonitored]);
+                        }
+                        $itemChanged = true;
+                        $auditChanges[] = [
+                            'item_id' => $item->id,
+                            'sku' => $item->sku,
+                            'warehouse_id' => (int) $warehouseId,
+                            'field' => 'is_stock_monitored',
+                            'before' => $before,
+                            'after' => $targetMonitored,
+                        ];
+                    }
+                    if ($itemChanged) {
+                        $changedItemIds->push($item->id);
+                    }
+                }
+            }
+
+            $changedCount = $changedItemIds->unique()->count();
+            $this->writeBulkAudit($request, $action, $itemIds, $auditChanges);
+
+            return [
+                'selected_count' => $itemIds->count(),
+                'changed_count' => $changedCount,
+                'unchanged_count' => $itemIds->count() - $changedCount,
+            ];
+        });
+
+        $labels = [
+            'activate_items' => 'diaktifkan',
+            'deactivate_items' => 'dinonaktifkan',
+            'enable_monitoring' => 'diaktifkan monitoring stoknya',
+            'disable_monitoring' => 'dinonaktifkan monitoring stoknya',
+        ];
+        $message = $result['changed_count'].' item berhasil '.$labels[$action].'.';
+        if ($result['unchanged_count'] > 0) {
+            $message .= ' '.$result['unchanged_count'].' item sudah dalam kondisi tersebut sehingga tidak diubah.';
+        }
+
+        return response()->json(array_merge($result, ['message' => $message]));
+    }
+
+    private function writeBulkAudit(Request $request, string $action, $itemIds, array $changes): void
+    {
+        try {
+            ActivityLog::create([
+                'user_id' => auth()->id(),
+                'action' => 'Bulk update item stock: '.$action,
+                'route_name' => $request->route()?->getName(),
+                'method' => strtoupper($request->method()),
+                'url' => $request->fullUrl(),
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'payload' => [
+                    'ringkasan' => [
+                        'hasil' => 'Berhasil',
+                        'aktivitas' => 'Bulk update item stock',
+                        'modul' => 'Inventory',
+                        'aksi' => $action,
+                        'target' => $itemIds->count().' item',
+                    ],
+                    'audit' => [
+                        'item_ids' => $itemIds->all(),
+                        'changes' => $changes,
+                    ],
+                ],
+            ]);
+        } catch (\Throwable) {
+            // Audit tambahan tidak boleh menggagalkan perubahan utama.
+        }
     }
 
     private function applyDataTableOrder($query, Request $request): void

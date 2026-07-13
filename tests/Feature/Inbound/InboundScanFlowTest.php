@@ -21,21 +21,25 @@ class InboundScanFlowTest extends TestCase
     {
         $this->withoutMiddleware(AuthorizeMenuPermission::class);
 
-        $admin = User::factory()->create();
+        $admin = User::factory()->create(['is_active' => true]);
 
         $this->actingAs($admin)
             ->get(route('admin.inbound.receipts.index'))
             ->assertOk()
             ->assertSee('const enableKoli = true;', false)
             ->assertSee('const koliFlowTypes = ["receipt"];', false)
-            ->assertSee('const koliRequiresDefaultWarehouse = false;', false);
+            ->assertSee('const koliRequiresDefaultWarehouse = false;', false)
+            ->assertSee('const enableInputUnitSelect = false;', false)
+            ->assertSee('const requireExplicitWarehouseSelection = false;', false)
+            ->assertDontSee('id="flow_quick_input_unit"', false)
+            ->assertDontSee('id="flow_warehouse_id"', false);
     }
 
     public function test_inbound_receipt_detail_renders_document_layout(): void
     {
         $this->withoutMiddleware(AuthorizeMenuPermission::class);
 
-        $admin = User::factory()->create();
+        $admin = User::factory()->create(['is_active' => true]);
         $supplier = Supplier::create(['name' => 'Supplier Dokumen Inbound']);
         $item = Item::create([
             'sku' => 'SKU-DOC-IN-001',
@@ -78,7 +82,7 @@ class InboundScanFlowTest extends TestCase
     {
         $this->withoutMiddleware(AuthorizeMenuPermission::class);
 
-        $admin = User::factory()->create();
+        $admin = User::factory()->create(['is_active' => true]);
         $supplier = Supplier::create(['name' => 'Supplier Inbound Koli']);
         $item = Item::create([
             'sku' => 'SKU-IN-KOLI-001',
@@ -109,11 +113,40 @@ class InboundScanFlowTest extends TestCase
         ]);
     }
 
+    public function test_inbound_receipt_rejects_return_only_pcs_input_unit(): void
+    {
+        $this->withoutMiddleware(AuthorizeMenuPermission::class);
+
+        $admin = User::factory()->create(['is_active' => true]);
+        $supplier = Supplier::create(['name' => 'Supplier Receipt Scope']);
+        $item = Item::create([
+            'sku' => 'SKU-IN-SCOPE-PCS',
+            'name' => 'Inbound Receipt Scope Item',
+            'category_id' => 0,
+            'koli_qty' => 12,
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson(route('admin.inbound.receipts.store'), [
+                'supplier_id' => $supplier->id,
+                'transacted_at' => now()->format('Y-m-d H:i:s'),
+                'items' => [[
+                    'item_id' => $item->id,
+                    'qty' => 5,
+                    'input_unit' => 'pcs',
+                ]],
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('items.0.input_unit');
+
+        $this->assertDatabaseCount('inbound_transactions', 0);
+    }
+
     public function test_inbound_receipt_rejects_koli_when_qty_does_not_match_item_koli_qty(): void
     {
         $this->withoutMiddleware(AuthorizeMenuPermission::class);
 
-        $admin = User::factory()->create();
+        $admin = User::factory()->create(['is_active' => true]);
         $supplier = Supplier::create(['name' => 'Supplier Inbound Koli Invalid']);
         $item = Item::create([
             'sku' => 'SKU-IN-KOLI-002',
@@ -144,7 +177,7 @@ class InboundScanFlowTest extends TestCase
     {
         $this->withoutMiddleware(AuthorizeMenuPermission::class);
 
-        $admin = User::factory()->create();
+        $admin = User::factory()->create(['is_active' => true]);
         $scanner = $this->createUserWithRole('inbound-scan');
         $supplier = Supplier::create(['name' => 'Supplier Inbound 1']);
         $warehouse = Warehouse::firstOrCreate(
@@ -267,7 +300,7 @@ class InboundScanFlowTest extends TestCase
     {
         $this->withoutMiddleware(AuthorizeMenuPermission::class);
 
-        $admin = User::factory()->create();
+        $admin = User::factory()->create(['is_active' => true]);
         $scanner = $this->createUserWithRole('inbound-scan');
         $supplier = Supplier::create(['name' => 'Supplier Inbound 2']);
         Warehouse::firstOrCreate(
@@ -325,7 +358,7 @@ class InboundScanFlowTest extends TestCase
     {
         $this->withoutMiddleware(AuthorizeMenuPermission::class);
 
-        $admin = User::factory()->create();
+        $admin = User::factory()->create(['is_active' => true]);
         $scanner = $this->createUserWithRole('inbound-scan');
         $supplier = Supplier::create(['name' => 'Supplier Inbound 3']);
         $warehouse = Warehouse::firstOrCreate(
@@ -419,7 +452,7 @@ class InboundScanFlowTest extends TestCase
             ]
         );
 
-        $user = User::factory()->create();
+        $user = User::factory()->create(['is_active' => true]);
         $user->roles()->attach($role);
 
         return $user;

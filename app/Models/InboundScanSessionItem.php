@@ -14,6 +14,7 @@ class InboundScanSessionItem extends Model
         'item_id',
         'sku',
         'item_name',
+        'input_unit',
         'qty_per_koli',
         'expected_qty',
         'expected_koli',

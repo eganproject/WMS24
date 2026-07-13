@@ -337,11 +337,16 @@
                                     <th>SKU</th>
                                     <th>Nama Barang</th>
                                     @if(!empty($showKoli ?? false))
-                                        <th class="text-end">Koli</th>
+                                        @if(($transaction->type ?? '') === 'return')
+                                            <th>Satuan Input</th>
+                                            <th class="text-end">Jumlah Input</th>
+                                        @else
+                                            <th class="text-end">Koli</th>
+                                        @endif
                                     @endif
-                                    <th class="text-end">Qty</th>
+                                    <th class="text-end">{{ ($transaction->type ?? '') === 'return' ? 'Qty PCS' : 'Qty' }}</th>
                                     @if(!empty($scanSession ?? null))
-                                        <th class="text-end">Scan Koli</th>
+                                        <th class="text-end">{{ ($transaction->type ?? '') === 'return' ? 'Scan Unit' : 'Scan Koli' }}</th>
                                         <th class="text-end">Scan Qty</th>
                                     @endif
                                     <th>Catatan Item</th>
@@ -359,7 +364,12 @@
                                         <td class="fw-bold">{{ $row->item?->sku ?: '-' }}</td>
                                         <td>{{ $row->item?->name ?: '-' }}</td>
                                         @if(!empty($showKoli ?? false))
-                                            <td class="text-end">{{ ($row->koli ?? 0) > 0 ? number_format((int) $row->koli, 0, ',', '.') : '-' }}</td>
+                                            @if(($transaction->type ?? '') === 'return')
+                                                <td><span class="badge {{ ($row->input_unit ?? 'koli') === 'pcs' ? 'badge-light-info' : 'badge-light-primary' }}">{{ strtoupper($row->input_unit ?? 'koli') }}</span></td>
+                                                <td class="text-end">{{ number_format(($row->input_unit ?? 'koli') === 'pcs' ? (int) $row->qty : (int) $row->koli, 0, ',', '.') }}</td>
+                                            @else
+                                                <td class="text-end">{{ ($row->koli ?? 0) > 0 ? number_format((int) $row->koli, 0, ',', '.') : '-' }}</td>
+                                            @endif
                                         @endif
                                         <td class="text-end fw-bold">{{ number_format((int) $row->qty, 0, ',', '.') }}</td>
                                         @if(!empty($scanSession ?? null))
@@ -370,7 +380,7 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="{{ !empty($scanSession ?? null) ? 8 : 6 }}" class="text-center text-muted py-8">Tidak ada item.</td>
+                                        <td colspan="{{ !empty($scanSession ?? null) ? (($transaction->type ?? '') === 'return' ? 9 : 8) : (($transaction->type ?? '') === 'return' ? 7 : 6) }}" class="text-center text-muted py-8">Tidak ada item.</td>
                                     </tr>
                                 @endforelse
                             </tbody>
@@ -403,7 +413,7 @@
                                 <div class="value">{{ number_format((int) ($scanSummary['scanned_qty'] ?? 0), 0, ',', '.') }} / {{ number_format((int) ($scanSummary['expected_qty'] ?? 0), 0, ',', '.') }}</div>
                             </div>
                             <div class="cell">
-                                <div class="label">Progress Koli</div>
+                                <div class="label">{{ ($transaction->type ?? '') === 'return' ? 'Progress Unit Scan' : 'Progress Koli' }}</div>
                                 <div class="value">{{ number_format((int) ($scanSummary['scanned_koli'] ?? 0), 0, ',', '.') }} / {{ number_format((int) ($scanSummary['expected_koli'] ?? 0), 0, ',', '.') }}</div>
                             </div>
                             <div class="cell">

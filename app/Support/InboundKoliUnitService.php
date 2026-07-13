@@ -27,6 +27,12 @@ class InboundKoliUnitService
 
     public function syncForInboundItem(InboundTransaction $transaction, InboundItem $row): Collection
     {
+        if ($transaction->type === 'return' && ($row->input_unit ?: 'koli') === 'pcs') {
+            $row->koliUnits()->delete();
+
+            return collect();
+        }
+
         $item = $row->item;
         if (!$item) {
             return collect();

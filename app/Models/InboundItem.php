@@ -14,6 +14,7 @@ class InboundItem extends Model
         'item_id',
         'qty',
         'koli',
+        'input_unit',
         'note',
     ];
 

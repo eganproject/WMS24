@@ -162,6 +162,16 @@
                             <div class="text-muted fs-7 mb-3" id="flow_quick_item_hint">
                                 Tulis satu item per baris. Format: SKU koli/qty catatan.
                             </div>
+                            @if(!empty($enableInputUnitSelect ?? false))
+                                <div class="w-200px mb-3">
+                                    <label class="form-label fw-bold mb-1">Satuan Input Cepat</label>
+                                    <select class="form-select form-select-solid" id="flow_quick_input_unit">
+                                        <option value="koli" selected>Koli</option>
+                                        <option value="pcs">PCS</option>
+                                    </select>
+                                    <div class="form-text">PCS hanya untuk Gudang Display atau Gudang Rusak.</div>
+                                </div>
+                            @endif
                             <textarea class="form-control form-control-solid mb-3" id="flow_quick_items" rows="4" placeholder="SKU-001 2&#10;SKU-002 5 Catatan item"></textarea>
                             <div class="d-flex align-items-center gap-3 flex-wrap">
                                 <button type="button" class="btn btn-light-primary" id="btn_add_quick_items">Tambahkan dari Teks</button>
@@ -178,9 +188,9 @@
                             </button>
                         @endif
                     </div>
-                    @if(!empty($warehouseOptions ?? []))
+                    @if(count($warehouseOptions ?? []) > 0)
                         <div class="fv-row mb-7" id="flow_warehouse_row" style="display:none;">
-                            <label class="fs-6 fw-bold form-label mb-2">Gudang</label>
+                            <label class="required fs-6 fw-bold form-label mb-2">Gudang Tujuan</label>
                             <select class="form-select form-select-solid" name="warehouse_id" id="flow_warehouse_id">
                                 <option value="">Pilih Gudang</option>
                                 @foreach($warehouseOptions as $wh)
@@ -309,8 +319,8 @@
                                 , <strong>surat_jalan_no</strong>, <strong>surat_jalan_at</strong>
                             @endif
                             , <strong>note</strong>, <strong>item_note</strong>, <strong>transacted_at</strong>
-                            @if(!empty($enableWarehouseSelect ?? false))
-                                , <strong>warehouse</strong>/<strong>gudang</strong> (isi kode/nama gudang)
+                            @if(!empty($enableInputUnitSelect ?? false))
+                                , <strong>input_unit</strong> (isi <strong>pcs</strong> atau <strong>koli</strong>)
                             @endif
                             .
                         </div>
@@ -330,6 +340,19 @@
                         <input type="file" class="form-control form-control-solid" id="import_flow_file" accept=".xlsx,.xls" />
                         <div class="invalid-feedback d-block" id="error_import_flow_file"></div>
                     </div>
+                    @if(!empty($requireExplicitWarehouseSelection ?? false) && count($warehouseOptions ?? []) > 0)
+                        <div class="fv-row mb-6">
+                            <label class="required fs-6 fw-bold form-label mb-2">Gudang Tujuan Import</label>
+                            <select class="form-select form-select-solid" id="import_flow_warehouse_id">
+                                <option value="">Pilih Gudang</option>
+                                @foreach($warehouseOptions as $wh)
+                                    <option value="{{ $wh['id'] }}">{{ $wh['name'] }}</option>
+                                @endforeach
+                            </select>
+                            <div class="invalid-feedback d-block" id="error_import_flow_warehouse_id"></div>
+                            <div class="form-text">Seluruh transaksi dalam file ini akan masuk ke gudang yang dipilih.</div>
+                        </div>
+                    @endif
                     <div class="text-end">
                         <button type="button" class="btn btn-light me-3" data-bs-dismiss="modal">Batal</button>
                         <button type="button" class="btn btn-primary" id="btn_import_flow_submit">Import</button>
@@ -360,6 +383,9 @@
                         <div class="fw-bold mb-2">Format file item</div>
                         <div class="text-muted fs-7">
                             Header minimal: <strong>sku</strong>, <strong>qty</strong> atau <strong>koli</strong>.<br>
+                            @if(!empty($enableInputUnitSelect ?? false))
+                                Opsional: <strong>input_unit</strong> (<strong>pcs</strong>/<strong>koli</strong>). Pilih gudang tujuan pada form terlebih dahulu.<br>
+                            @endif
                             Opsional: <strong>item_note</strong> atau <strong>note</strong>.<br>
                             Import ini hanya mengisi daftar item di form aktif dan akan mengganti item yang sedang ada setelah Anda konfirmasi.
                         </div>
@@ -403,8 +429,8 @@
                             <tr class="text-gray-400 fw-bolder text-uppercase">
                                 <th>SKU</th>
                                 <th>Nama Item</th>
-                                <th class="text-end" data-flow-item-detail-koli-head style="display:none;">Koli</th>
-                                <th class="text-end">Qty</th>
+                                <th class="text-end" data-flow-item-detail-koli-head style="display:none;">{{ !empty($enableInputUnitSelect ?? false) ? 'Input' : 'Koli' }}</th>
+                                <th class="text-end">{{ !empty($enableInputUnitSelect ?? false) ? 'Qty PCS' : 'Qty' }}</th>
                                 <th>Catatan</th>
                             </tr>
                         </thead>
@@ -446,6 +472,8 @@
     const permMap = @json($permMap ?? []);
     const canCreateDefault = {{ $canCreateDefault ? 'true' : 'false' }};
     const enableKoli = {{ !empty($enableKoli ?? false) ? 'true' : 'false' }};
+    const enableInputUnitSelect = {{ !empty($enableInputUnitSelect ?? false) ? 'true' : 'false' }};
+    const pcsInputWarehouseIds = @json($pcsInputWarehouseIds ?? []);
     const koliFlowTypes = @json($koliFlowTypes ?? []);
     const koliRequiresDefaultWarehouse = {{ !empty($koliRequiresDefaultWarehouse ?? false) ? 'true' : 'false' }};
     const enableWarehouseSelect = {{ !empty($enableWarehouseSelect ?? false) ? 'true' : 'false' }};
@@ -461,6 +489,7 @@
     const deliveryNotePrefixMap = @json($deliveryNotePrefixMap ?? []);
     const deliveryNoteImageLinkLabel = @json($deliveryNoteImageLinkLabel ?? 'Lihat Gambar');
     const showRecipientFields = {{ !empty($showRecipientFields ?? false) ? 'true' : 'false' }};
+    const requireExplicitWarehouseSelection = {{ !empty($requireExplicitWarehouseSelection ?? false) ? 'true' : 'false' }};
 
     document.addEventListener('DOMContentLoaded', () => {
         const tableEl = $('#stock_flow_table');
@@ -482,6 +511,7 @@
         const quickItemsBtn = document.getElementById('btn_add_quick_items');
         const quickItemsError = document.getElementById('flow_quick_items_error');
         const quickItemsHint = document.getElementById('flow_quick_item_hint');
+        const quickInputUnit = document.getElementById('flow_quick_input_unit');
         const addItemBtn = document.getElementById('btn_add_flow_item');
         const openCreateBtn = document.getElementById('btn_open_create_flow');
         const modalTitle = document.getElementById('flow_modal_title');
@@ -497,6 +527,8 @@
         const importModal = importModalEl ? new bootstrap.Modal(importModalEl) : null;
         const importInput = document.getElementById('import_flow_file');
         const importError = document.getElementById('error_import_flow_file');
+        const importWarehouseSelect = document.getElementById('import_flow_warehouse_id');
+        const importWarehouseError = document.getElementById('error_import_flow_warehouse_id');
         const importSubmit = document.getElementById('btn_import_flow_submit');
         const itemImportBtn = document.getElementById('btn_open_item_import');
         const itemImportModalEl = document.getElementById('modal_import_flow_items');
@@ -603,33 +635,38 @@
             const details = Array.isArray(row.item_details) ? row.item_details : [];
             const totalQty = details.reduce((sum, item) => sum + Number(item?.qty || 0), 0);
             const totalKoli = details.reduce((sum, item) => sum + Number(item?.koli || 0), 0);
-            const showKoli = isDefaultWarehouse(row.warehouse_id);
+            const showInput = enableInputUnitSelect || isDefaultWarehouse(row.warehouse_id);
 
             if (itemDetailTitle) itemDetailTitle.textContent = `Detail Item ${row.code || ''}`.trim();
             if (itemDetailSubtitle) {
                 const warehouse = renderWarehouseBadge(row.warehouse || '-', row.warehouse_id);
                 const summary = `${details.length.toLocaleString('id-ID')} SKU / ${totalQty.toLocaleString('id-ID')} Qty`;
-                const koliSummary = showKoli ? ` / ${totalKoli.toLocaleString('id-ID')} Koli` : '';
+                const koliSummary = !enableInputUnitSelect && showInput ? ` / ${totalKoli.toLocaleString('id-ID')} Koli` : '';
                 itemDetailSubtitle.innerHTML = `${warehouse}<span class="ms-2">${escapeHtml(summary + koliSummary)}</span>`;
             }
-            if (itemDetailKoliHead) itemDetailKoliHead.style.display = showKoli ? '' : 'none';
+            if (itemDetailKoliHead) itemDetailKoliHead.style.display = showInput ? '' : 'none';
             if (itemDetailRows) {
                 itemDetailRows.innerHTML = details.length
-                    ? details.map((item) => `
+                    ? details.map((item) => {
+                        const inputUnit = item?.input_unit === 'pcs' ? 'PCS' : 'KOLI';
+                        const inputAmount = item?.input_unit === 'pcs' ? item?.qty : item?.koli;
+                        return `
                         <tr>
                             <td class="fw-bold">${escapeHtml(item.sku || '-')}</td>
                             <td>${escapeHtml(item.name || '-')}</td>
-                            ${showKoli ? `<td class="text-end">${Number(item.koli || 0).toLocaleString('id-ID')}</td>` : ''}
+                            ${showInput ? `<td class="text-end">${Number(enableInputUnitSelect ? inputAmount : item?.koli || 0).toLocaleString('id-ID')}${enableInputUnitSelect ? ` ${inputUnit}` : ''}</td>` : ''}
                             <td class="text-end">${Number(item.qty || 0).toLocaleString('id-ID')}</td>
                             <td>${escapeHtml(item.note || '-')}</td>
                         </tr>
-                    `).join('')
-                    : `<tr><td colspan="${showKoli ? 5 : 4}" class="text-center text-muted py-8">Tidak ada item.</td></tr>`;
+                    `;
+                    }).join('')
+                    : `<tr><td colspan="${showInput ? 5 : 4}" class="text-center text-muted py-8">Tidak ada item.</td></tr>`;
             }
             itemDetailModal.show();
         };
 
         const renderScanProgress = (progress) => {
+            const unitLabel = progress?.unit_label || 'Koli';
             const expectedKoli = Number(progress?.expected_koli || 0);
             const expectedQty = Number(progress?.expected_qty || 0);
             if (!expectedKoli && expectedQty) {
@@ -653,7 +690,7 @@
                 ? `<div class="text-muted fs-7">Qty ${scannedQty}/${expectedQty}</div>`
                 : '';
 
-            return `<div><span class="badge ${klass}">Koli ${scannedKoli}/${expectedKoli}</span>${qtyLine}</div>`;
+            return `<div><span class="badge ${klass}">${escapeHtml(unitLabel)} ${scannedKoli}/${expectedKoli}</span>${qtyLine}</div>`;
         };
 
         const clearErrors = () => {
@@ -725,6 +762,18 @@
             return Number.isFinite(val) && val > 0 ? val : null;
         };
 
+        const getRowInputUnit = (row) => {
+            if (!enableInputUnitSelect) return 'koli';
+            return row?.querySelector('select[data-name="input_unit"]')?.value === 'koli' ? 'koli' : 'pcs';
+        };
+
+        const isPcsInputAllowed = () => {
+            if (!enableInputUnitSelect || !warehouseSelect?.value) return false;
+            return (Array.isArray(pcsInputWarehouseIds) ? pcsInputWarehouseIds : [])
+                .map(Number)
+                .includes(Number(warehouseSelect.value));
+        };
+
         const normalizeSku = (value) => String(value || '').trim().toLowerCase();
         const itemBySku = new Map((Array.isArray(itemCatalog) ? itemCatalog : [])
             .map((item) => [normalizeSku(item.sku), item]));
@@ -745,9 +794,33 @@
 
         const updateQuickItemHint = () => {
             if (!quickItemsHint) return;
-            quickItemsHint.textContent = isKoliActive()
-                ? 'Tulis satu item per baris. Format: SKU koli catatan. Qty dihitung otomatis dari isi/koli.'
-                : 'Tulis satu item per baris. Format: SKU qty catatan.';
+            const unit = enableInputUnitSelect ? (quickInputUnit?.value || 'pcs') : (isKoliActive() ? 'koli' : 'pcs');
+            quickItemsHint.textContent = unit === 'koli'
+                ? 'Tulis satu item per baris. Format: SKU jumlah_koli catatan. Qty PCS dihitung otomatis dari isi/koli.'
+                : 'Tulis satu item per baris. Format: SKU jumlah_pcs catatan.';
+        };
+
+        const applyInputUnitAvailability = () => {
+            if (!enableInputUnitSelect) return;
+            const pcsAllowed = isPcsInputAllowed();
+            const quickPcsOption = quickInputUnit?.querySelector('option[value="pcs"]');
+            if (quickPcsOption) quickPcsOption.disabled = !pcsAllowed;
+            if (quickInputUnit && !pcsAllowed && quickInputUnit.value === 'pcs') {
+                quickInputUnit.value = 'koli';
+            }
+
+            itemsContainer?.querySelectorAll('.flow-item-row').forEach((row) => {
+                const unitSelect = row.querySelector('.flow-item-unit');
+                const pcsOption = unitSelect?.querySelector('option[value="pcs"]');
+                if (pcsOption) pcsOption.disabled = !pcsAllowed;
+                if (unitSelect && !pcsAllowed && unitSelect.value === 'pcs') {
+                    unitSelect.value = 'koli';
+                    row.dataset.qtyKoliSource = 'qty';
+                }
+                updateKoliVisibility(row);
+                syncQtyKoliRow(row, 'qty');
+            });
+            updateQuickItemHint();
         };
 
         const setQuickItemsVisible = (visible) => {
@@ -781,11 +854,13 @@
 
         const updateKoliVisibility = (row) => {
             if (!enableKoli || !row) return;
-            const active = isKoliActive();
+            const active = isKoliActive() && getRowInputUnit(row) === 'koli';
             const koliCol = row.querySelector('[data-koli-col]');
             const koliEl = row.querySelector('input[data-name="koli"]');
+            const qtyCol = row.querySelector('[data-qty-col]');
 
             if (koliCol) koliCol.style.display = active ? '' : 'none';
+            if (qtyCol) qtyCol.style.display = active && enableInputUnitSelect ? 'none' : '';
             if (koliEl) {
                 koliEl.disabled = !active;
                 if (!active) {
@@ -810,8 +885,9 @@
 
         const updateKoliInfo = (row) => {
             if (!enableKoli || !row) return;
-            if (!isKoliActive()) {
+            if (!isKoliActive() || getRowInputUnit(row) !== 'koli') {
                 updateKoliVisibility(row);
+                setQtyValidation(row);
                 return;
             }
 
@@ -920,6 +996,13 @@
         const syncQtyKoliRow = (row, preferredSource = '') => {
             if (!enableKoli || !row) return;
             updateKoliVisibility(row);
+            if (getRowInputUnit(row) === 'pcs') {
+                const koliEl = row.querySelector('input[data-name="koli"]');
+                if (koliEl) koliEl.value = '';
+                row.dataset.qtyKoliSource = 'qty';
+                setQtyValidation(row);
+                return;
+            }
             if (!isKoliActive()) return;
 
             const qtyEl = row.querySelector('input[data-name="qty"]');
@@ -955,6 +1038,7 @@
 
         const resolveQtyKoliSource = (row) => {
             if (!enableKoli || !row) return '';
+            if (getRowInputUnit(row) === 'pcs') return 'qty';
             const explicitSource = row.dataset.qtyKoliSource || '';
             if (explicitSource === 'qty' || explicitSource === 'koli') {
                 return explicitSource;
@@ -1007,14 +1091,14 @@
             warehouseRow.style.display = shouldShow ? '' : 'none';
             warehouseSelect.required = shouldShow;
             if (shouldShow) {
-                if (!warehouseSelect.value) {
+                if (!warehouseSelect.value && !requireExplicitWarehouseSelection) {
                     const fallbackId = displayWarehouseId || defaultWarehouseId || '';
                     if (fallbackId) warehouseSelect.value = String(fallbackId);
                 }
             } else {
                 warehouseSelect.value = '';
             }
-            updateQuickItemHint();
+            applyInputUnitAvailability();
         };
 
         const applySupplierVisibility = (flowType) => {
@@ -1072,8 +1156,11 @@
             });
         }
 
-        warehouseSelect?.addEventListener('change', updateAllKoliVisibility);
-        warehouseSelect?.addEventListener('change', updateQuickItemHint);
+        warehouseSelect?.addEventListener('change', () => {
+            applyInputUnitAvailability();
+            updateAllKoliVisibility();
+        });
+        quickInputUnit?.addEventListener('change', updateQuickItemHint);
 
         const renumberRows = () => {
             const rows = itemsContainer.querySelectorAll('.flow-item-row');
@@ -1088,9 +1175,20 @@
         const createItemRow = (data = {}) => {
             const row = document.createElement('div');
             row.className = 'row g-3 align-items-end mb-4 flow-item-row';
-            const itemColSize = enableKoli ? 'col-md-5' : 'col-md-6';
-            const noteColSize = enableKoli ? 'col-md-2' : 'col-md-3';
-            const koliDisplay = isKoliActive() ? '' : ' style="display:none;"';
+            const itemColSize = enableInputUnitSelect ? 'col-md-4' : (enableKoli ? 'col-md-5' : 'col-md-6');
+            const noteColSize = enableInputUnitSelect ? 'col-md-3' : (enableKoli ? 'col-md-2' : 'col-md-3');
+            const initialInputUnit = enableInputUnitSelect && isPcsInputAllowed() && data.input_unit === 'pcs' ? 'pcs' : 'koli';
+            const koliDisplay = isKoliActive() && initialInputUnit === 'koli' ? '' : ' style="display:none;"';
+            const unitCol = enableInputUnitSelect ? `
+                <div class="col-md-2">
+                    <label class="required fs-6 fw-bold form-label mb-2">Satuan</label>
+                    <select class="form-select form-select-solid flow-item-unit" data-name="input_unit" required>
+                        <option value="koli"${initialInputUnit === 'koli' ? ' selected' : ''}>Koli</option>
+                        <option value="pcs"${initialInputUnit === 'pcs' ? ' selected' : ''}${isPcsInputAllowed() ? '' : ' disabled'}>PCS</option>
+                    </select>
+                    <div class="invalid-feedback" data-error-for="input_unit"></div>
+                </div>
+            ` : '';
             const koliCol = enableKoli ? `
                 <div class="col-md-2" data-koli-col${koliDisplay}>
                     <label class="fs-6 fw-bold form-label mb-2">Koli</label>
@@ -1108,9 +1206,10 @@
                     </select>
                     <div class="invalid-feedback" data-error-for="item_id"></div>
                 </div>
+                ${unitCol}
                 ${koliCol}
-                <div class="col-md-2">
-                    <label class="required fs-6 fw-bold form-label mb-2">Qty</label>
+                <div class="col-md-2" data-qty-col${enableInputUnitSelect && initialInputUnit === 'koli' ? ' style="display:none;"' : ''}>
+                    <label class="required fs-6 fw-bold form-label mb-2">${enableInputUnitSelect ? 'Qty PCS' : 'Qty'}</label>
                     <input type="number" min="1" step="1" class="form-control form-control-solid" data-name="qty" required />
                     <div class="invalid-feedback" data-error-for="qty"></div>
                 </div>
@@ -1134,9 +1233,11 @@
             if (koliEl) koliEl.value = data.koli ?? '';
             const noteEl = row.querySelector('input[data-name="note"]');
             if (noteEl) noteEl.value = data.note ?? '';
-            row.dataset.qtyKoliSource = getPositiveIntValue(koliEl)
+            row.dataset.qtyKoliSource = initialInputUnit === 'pcs'
+                ? 'qty'
+                : (getPositiveIntValue(koliEl)
                 ? 'koli'
-                : (getPositiveIntValue(qtyEl) ? 'qty' : '');
+                : (getPositiveIntValue(qtyEl) ? 'qty' : ''));
 
             updateKoliVisibility(row);
             initSelect2(selectEl);
@@ -1171,7 +1272,8 @@
                 throw new Error(`SKU bundle tidak bisa dipakai: ${sku}`);
             }
 
-            if (isKoliActive()) {
+            const inputUnit = enableInputUnitSelect ? (quickInputUnit?.value || 'pcs') : (isKoliActive() ? 'koli' : 'pcs');
+            if (inputUnit === 'koli') {
                 const koliQty = Number(item.koli_qty || 0);
                 if (!Number.isFinite(koliQty) || koliQty < 1) {
                     throw new Error(`Isi/koli belum diset untuk SKU: ${sku}`);
@@ -1181,6 +1283,7 @@
                     item_id: item.id,
                     qty: amount * koliQty,
                     koli: amount,
+                    input_unit: 'koli',
                     note,
                 };
             }
@@ -1189,6 +1292,7 @@
                 item_id: item.id,
                 qty: amount,
                 koli: '',
+                input_unit: 'pcs',
                 note,
             };
         };
@@ -1275,6 +1379,7 @@
                     item_id: item.item_id,
                     qty: item.qty,
                     koli: item.koli > 0 ? item.koli : '',
+                    input_unit: item.input_unit || 'koli',
                     note: item.note || '',
                 });
             });
@@ -1330,6 +1435,14 @@
                 if (row) row.dataset.qtyKoliSource = 'qty';
                 syncKoliFromQty(row);
             }
+        });
+
+        itemsContainer?.addEventListener('change', (e) => {
+            if (!e.target.matches('.flow-item-unit')) return;
+            const row = e.target.closest('.flow-item-row');
+            if (!row) return;
+            row.dataset.qtyKoliSource = 'qty';
+            syncQtyKoliRow(row, 'qty');
         });
 
         itemsContainer?.addEventListener('click', (e) => {
@@ -1607,6 +1720,8 @@
         importBtn?.addEventListener('click', () => {
             if (importInput) importInput.value = '';
             if (importError) importError.textContent = '';
+            if (importWarehouseSelect) importWarehouseSelect.value = '';
+            if (importWarehouseError) importWarehouseError.textContent = '';
         });
 
         itemImportBtn?.addEventListener('click', (event) => {
@@ -1619,13 +1734,19 @@
         importSubmit?.addEventListener('click', async () => {
             if (!importUrl) return;
             if (importError) importError.textContent = '';
+            if (importWarehouseError) importWarehouseError.textContent = '';
             const file = importInput?.files?.[0];
             if (!file) {
                 if (importError) importError.textContent = 'Pilih file Excel terlebih dahulu.';
                 return;
             }
+            if (requireExplicitWarehouseSelection && !importWarehouseSelect?.value) {
+                if (importWarehouseError) importWarehouseError.textContent = 'Pilih gudang tujuan import.';
+                return;
+            }
             const formData = new FormData();
             formData.append('file', file);
+            if (importWarehouseSelect?.value) formData.append('warehouse_id', importWarehouseSelect.value);
             try {
                 const res = await fetch(importUrl, {
                     method: 'POST',
@@ -1642,7 +1763,9 @@
                     return;
                 }
                 if (!res.ok) {
-                    const msg = json?.errors?.file?.[0] || json?.message;
+                    const warehouseMessage = json?.errors?.warehouse_id?.[0];
+                    const msg = json?.errors?.file?.[0] || warehouseMessage || json?.message;
+                    if (warehouseMessage && importWarehouseError) importWarehouseError.textContent = warehouseMessage;
                     if (typeof Swal !== 'undefined') {
                         Swal.fire('Error', msg || 'Gagal import', 'error');
                     } else if (importError) {
@@ -1670,6 +1793,10 @@
                 if (itemImportError) itemImportError.textContent = 'Pilih file Excel item terlebih dahulu.';
                 return;
             }
+            if (requireExplicitWarehouseSelection && !warehouseSelect?.value) {
+                if (itemImportError) itemImportError.textContent = 'Pilih gudang tujuan pada form sebelum import item.';
+                return;
+            }
 
             let confirmed = true;
             if (hasMeaningfulItemRows() && typeof Swal !== 'undefined') {
@@ -1695,6 +1822,7 @@
 
             const formData = new FormData();
             formData.append('file', file);
+            if (warehouseSelect?.value) formData.append('warehouse_id', warehouseSelect.value);
 
             try {
                 const res = await fetch(itemImportUrl, {
@@ -1813,6 +1941,7 @@
                 if (warehouseSelect) {
                     const fallbackId = displayWarehouseId || defaultWarehouseId || '';
                     warehouseSelect.value = json.warehouse_id ? String(json.warehouse_id) : (fallbackId ? String(fallbackId) : '');
+                    applyInputUnitAvailability();
                 }
                 if (fpTransacted) {
                     fpTransacted.setDate(json.transacted_at || null, true, 'Y-m-d\\TH:i');

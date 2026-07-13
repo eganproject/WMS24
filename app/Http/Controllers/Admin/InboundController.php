@@ -26,6 +26,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -216,9 +217,15 @@ class InboundController extends Controller
 
     public function returnsImport(Request $request)
     {
+        $warehouse = Warehouse::find((int) $request->input('warehouse_id'));
+        $allowPcs = $warehouse && in_array($warehouse->code, [
+            WarehouseService::displayWarehouseCode(),
+            WarehouseService::damagedWarehouseCode(),
+        ], true);
+
         return $this->importGroups(
             $request,
-            new InboundReturnsImport(),
+            new InboundReturnsImport($allowPcs),
             'return',
             'RET',
             'Import retur inbound berhasil',
@@ -310,6 +317,13 @@ class InboundController extends Controller
             'detailUrlTpl' => route("admin.inbound.{$routeBase}.detail", ':id'),
             'items' => $items,
             'warehouses' => $warehouses,
+            'warehouseOptions' => $type === 'return'
+                ? $warehouses->map(fn (Warehouse $warehouse) => [
+                    'id' => $warehouse->id,
+                    'name' => $warehouse->name,
+                    'code' => $warehouse->code,
+                ])->values()
+                : collect(),
             'defaultWarehouseId' => WarehouseService::defaultWarehouseId(),
             'displayWarehouseId' => WarehouseService::displayWarehouseId(),
             'typeOptions' => $typeOptions,
@@ -318,6 +332,16 @@ class InboundController extends Controller
             'enableKoli' => true,
             'koliFlowTypes' => [$type],
             'koliRequiresDefaultWarehouse' => false,
+            'enableWarehouseSelect' => $type === 'return',
+            'requireExplicitWarehouseSelection' => $type === 'return',
+            'enableInputUnitSelect' => $type === 'return',
+            'pcsInputWarehouseIds' => $type === 'return'
+                ? $warehouses
+                    ->whereIn('code', [WarehouseService::displayWarehouseCode(), WarehouseService::damagedWarehouseCode()])
+                    ->pluck('id')
+                    ->map(fn ($id) => (int) $id)
+                    ->values()
+                : collect(),
             'showApproveAction' => false,
             'showScanProgressColumn' => true,
             'statusLabels' => $statusLabels,
@@ -490,7 +514,9 @@ class InboundController extends Controller
             })->filter()->values();
 
             $expectedQty = (int) $items->sum('qty');
-            $expectedKoli = (int) $items->sum(fn ($item) => (int) ($item->koli ?? 0));
+            $expectedKoli = (int) $items->sum(fn ($item) => ($item->input_unit ?: 'koli') === 'pcs'
+                ? (int) ($item->qty ?? 0)
+                : (int) ($item->koli ?? 0));
             $scannedQty = (int) $scanItems->sum('scanned_qty');
             $scannedKoli = (int) $scanItems->sum('scanned_koli');
             $itemDetails = $items->map(function (InboundItem $item) {
@@ -499,6 +525,7 @@ class InboundController extends Controller
                     'name' => $item->item?->name ?? '-',
                     'qty' => (int) ($item->qty ?? 0),
                     'koli' => (int) ($item->koli ?? 0),
+                    'input_unit' => $item->input_unit ?: 'koli',
                     'note' => $item->note ?? '',
                 ];
             })->values();
@@ -516,6 +543,7 @@ class InboundController extends Controller
                 'sku_count' => $itemDetails->count(),
                 'qty' => $expectedQty,
                 'scan_progress' => [
+                    'unit_label' => $row->type === 'return' ? 'Unit' : 'Koli',
                     'expected_koli' => $expectedKoli,
                     'scanned_koli' => $scannedKoli,
                     'expected_qty' => $expectedQty,
@@ -563,6 +591,7 @@ class InboundController extends Controller
                     'item_id' => $item->item_id,
                     'qty' => $item->qty,
                     'koli' => $item->koli,
+                    'input_unit' => $item->input_unit ?: 'koli',
                     'note' => $item->note ?? '',
                 ];
             })->values(),
@@ -584,7 +613,9 @@ class InboundController extends Controller
         ])->where('type', $type)->findOrFail($id);
 
         $totalQty = (int) $transaction->items->sum('qty');
-        $totalKoli = (int) $transaction->items->sum(fn ($row) => (int) ($row->koli ?? 0));
+        $totalKoli = (int) $transaction->items
+            ->where('input_unit', 'koli')
+            ->sum(fn ($row) => (int) ($row->koli ?? 0));
         $warehouseLabel = $transaction->warehouse?->name;
         if (!$warehouseLabel) {
             $warehouseLabel = Warehouse::where('id', WarehouseService::defaultWarehouseId())->value('name') ?? 'Gudang Besar';
@@ -647,7 +678,9 @@ class InboundController extends Controller
                 'surat_jalan_at' => $validated['surat_jalan_at'] ?? null,
                 'surat_jalan_image_path' => $storedSuratJalanImage ? 'storage/'.$storedSuratJalanImage : null,
                 'note' => $validated['note'] ?? null,
-                'warehouse_id' => WarehouseService::defaultWarehouseId(),
+                'warehouse_id' => $type === 'return'
+                    ? (int) $validated['warehouse_id']
+                    : WarehouseService::defaultWarehouseId(),
                 'transacted_at' => $validated['transacted_at'] ?? now(),
                 'created_by' => auth()->id(),
                 'status' => InboundScanStatus::PENDING_SCAN,
@@ -659,6 +692,7 @@ class InboundController extends Controller
                     'item_id' => $row['item_id'],
                     'qty' => $row['qty'],
                     'koli' => $row['koli'],
+                    'input_unit' => $row['input_unit'],
                     'note' => $row['note'] ?? null,
                 ]);
             }
@@ -715,6 +749,9 @@ class InboundController extends Controller
                 'surat_jalan_no' => $this->resolveDeliveryNoteNo($validated['surat_jalan_no'] ?? null, 'SJ-'.$this->prefixForType($type)),
                 'surat_jalan_at' => $validated['surat_jalan_at'] ?? null,
                 'note' => $validated['note'] ?? null,
+                'warehouse_id' => $type === 'return'
+                    ? (int) $validated['warehouse_id']
+                    : $transaction->warehouse_id,
                 'transacted_at' => $validated['transacted_at'] ?? $transaction->transacted_at,
             ];
 
@@ -735,6 +772,7 @@ class InboundController extends Controller
                     'item_id' => $row['item_id'],
                     'qty' => $row['qty'],
                     'koli' => $row['koli'],
+                    'input_unit' => $row['input_unit'],
                     'note' => $row['note'] ?? null,
                 ]);
             }
@@ -829,6 +867,9 @@ class InboundController extends Controller
             'items.*.item_id' => ['required', 'integer', 'exists:items,id'],
             'items.*.qty' => ['required', 'integer', 'min:1'],
             'items.*.koli' => ['nullable', 'integer', 'min:1'],
+            'items.*.input_unit' => $type === 'return'
+                ? ['nullable', Rule::in(['pcs', 'koli'])]
+                : ['nullable', Rule::in(['koli'])],
             'items.*.note' => ['nullable', 'string'],
             'ref_no' => ['nullable', 'string', 'max:100'],
             'supplier_id' => $usesSupplier
@@ -840,6 +881,9 @@ class InboundController extends Controller
             'remove_surat_jalan_image' => ['nullable', 'boolean'],
             'note' => ['nullable', 'string'],
             'transacted_at' => ['required', 'date'],
+            'warehouse_id' => $type === 'return'
+                ? ['required', 'integer', 'exists:warehouses,id']
+                : ['nullable', 'integer', 'exists:warehouses,id'],
         ]);
 
         if (!$usesSupplier && $request->filled('supplier_id')) {
@@ -850,11 +894,14 @@ class InboundController extends Controller
 
         $items = collect($validated['items'] ?? [])
             ->filter(fn ($row) => (int) ($row['qty'] ?? 0) > 0 && (int) ($row['item_id'] ?? 0) > 0)
-            ->map(function ($row) {
+            ->map(function ($row) use ($type) {
                 return [
                     'item_id' => (int) $row['item_id'],
                     'qty' => (int) $row['qty'],
                     'koli' => isset($row['koli']) && (int) $row['koli'] > 0 ? (int) $row['koli'] : null,
+                    'input_unit' => $type === 'return' && in_array(($row['input_unit'] ?? 'koli'), ['pcs', 'koli'], true)
+                        ? ($row['input_unit'] ?? 'koli')
+                        : 'koli',
                     'note' => $row['note'] ?? null,
                 ];
             })->values();
@@ -881,7 +928,12 @@ class InboundController extends Controller
             ->get(['id', 'sku', 'name', 'koli_qty', 'item_type'])
             ->keyBy('id');
 
-        $normalized = $items->map(function ($row, $index) use ($itemMap) {
+        $destinationWarehouse = $type === 'return'
+            ? Warehouse::find((int) ($validated['warehouse_id'] ?? 0))
+            : null;
+        $pcsWarehouseCodes = [WarehouseService::displayWarehouseCode(), WarehouseService::damagedWarehouseCode()];
+
+        $normalized = $items->map(function ($row, $index) use ($itemMap, $type, $destinationWarehouse, $pcsWarehouseCodes) {
             $item = $itemMap->get($row['item_id']);
             if (!$item) {
                 throw ValidationException::withMessages([
@@ -889,20 +941,34 @@ class InboundController extends Controller
                 ]);
             }
 
-            try {
-                $resolved = InboundScanExpectation::resolve($item, (int) $row['qty'], $row['koli']);
-            } catch (ValidationException $e) {
-                $message = collect($e->errors())->flatten()->first() ?? $e->getMessage();
-                throw ValidationException::withMessages([
-                    "items.{$index}.qty" => $message,
-                    "items.{$index}.koli" => $message,
-                ]);
+            if ($row['input_unit'] === 'pcs') {
+                if ($type !== 'return' || !$destinationWarehouse || !in_array($destinationWarehouse->code, $pcsWarehouseCodes, true)) {
+                    throw ValidationException::withMessages([
+                        "items.{$index}.input_unit" => 'Input PCS hanya diperbolehkan untuk Gudang Display atau Gudang Rusak. Gudang Besar wajib menggunakan Koli.',
+                    ]);
+                }
+
+                $resolved = [
+                    'qty' => (int) $row['qty'],
+                    'koli' => null,
+                ];
+            } else {
+                try {
+                    $resolved = InboundScanExpectation::resolve($item, (int) $row['qty'], $row['koli']);
+                } catch (ValidationException $e) {
+                    $message = collect($e->errors())->flatten()->first() ?? $e->getMessage();
+                    throw ValidationException::withMessages([
+                        "items.{$index}.qty" => $message,
+                        "items.{$index}.koli" => $message,
+                    ]);
+                }
             }
 
             return [
                 'item_id' => (int) $row['item_id'],
                 'qty' => $resolved['qty'],
                 'koli' => $resolved['koli'],
+                'input_unit' => $row['input_unit'],
                 'note' => $row['note'],
             ];
         })->values()->all();
@@ -954,7 +1020,14 @@ class InboundController extends Controller
     ) {
         $request->validate([
             'file' => ['required', 'file', 'mimes:xlsx,xls', 'max:5120'],
+            'warehouse_id' => $type === 'return'
+                ? ['required', 'integer', 'exists:warehouses,id']
+                : ['nullable', 'integer', 'exists:warehouses,id'],
         ]);
+
+        $destinationWarehouseId = $type === 'return'
+            ? (int) $request->input('warehouse_id')
+            : WarehouseService::defaultWarehouseId();
 
         DB::beginTransaction();
         try {
@@ -985,7 +1058,7 @@ class InboundController extends Controller
                     'surat_jalan_no' => $this->resolveDeliveryNoteNo($group['surat_jalan_no'] ?? null, 'SJ-'.$prefix),
                     'surat_jalan_at' => $suratJalanAt,
                     'note' => $group['note'] ?? null,
-                    'warehouse_id' => WarehouseService::defaultWarehouseId(),
+                    'warehouse_id' => $destinationWarehouseId,
                     'transacted_at' => $transactedAt,
                     'created_by' => auth()->id(),
                     'status' => InboundScanStatus::PENDING_SCAN,
@@ -998,6 +1071,7 @@ class InboundController extends Controller
                         'item_id' => $row['item_id'],
                         'qty' => $row['qty'],
                         'koli' => $row['koli'],
+                        'input_unit' => $row['input_unit'] ?? 'koli',
                         'note' => $row['note'] ?? null,
                     ]);
                     $createdItems++;
@@ -1028,10 +1102,18 @@ class InboundController extends Controller
     {
         $request->validate([
             'file' => ['required', 'file', 'mimes:xlsx,xls', 'max:5120'],
+            'warehouse_id' => $type === 'return'
+                ? ['required', 'integer', 'exists:warehouses,id']
+                : ['nullable', 'integer', 'exists:warehouses,id'],
         ]);
 
         try {
-            $import = new InboundFormItemsImport();
+            $warehouse = $type === 'return' ? Warehouse::find((int) $request->input('warehouse_id')) : null;
+            $allowPcs = $warehouse && in_array($warehouse->code, [
+                WarehouseService::displayWarehouseCode(),
+                WarehouseService::damagedWarehouseCode(),
+            ], true);
+            $import = new InboundFormItemsImport($type === 'return', $allowPcs);
             Excel::import($import, $request->file('file'));
             BundleService::assertPhysicalItems(
                 collect($import->items)->pluck('item_id')->all(),
@@ -1044,6 +1126,7 @@ class InboundController extends Controller
                     'item_id' => (int) $row['item_id'],
                     'qty' => (int) $row['qty'],
                     'koli' => (int) ($row['koli'] ?? 0),
+                    'input_unit' => $row['input_unit'] ?? 'koli',
                     'note' => $row['note'] ?? null,
                     'sku' => $row['sku'],
                     'name' => $row['name'],

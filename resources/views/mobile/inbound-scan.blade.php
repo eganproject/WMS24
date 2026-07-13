@@ -211,7 +211,7 @@
 
     <div class="card">
         <div class="section-title">Scan SKU</div>
-        <div class="muted">Setiap scan SKU dihitung sebagai 1 koli.</div>
+        <div class="muted" id="scan_unit_hint">Setiap scan SKU dihitung sebagai 1 koli.</div>
         <div class="scan-actions">
             <div class="scan-row">
                 <input type="text" class="input" id="sku_code" placeholder="Scan SKU" autocomplete="off" />
@@ -273,6 +273,7 @@
         scanPhotoInput: document.getElementById('scan_photo'),
         photoScanWrap: document.getElementById('photo_scan_wrap'),
         btnScanSku: document.getElementById('btn_scan_sku'),
+        scanUnitHint: document.getElementById('scan_unit_hint'),
         scanStatus: document.getElementById('scan_status'),
         resultCard: document.getElementById('result_card'),
         resultTitle: document.getElementById('result_title'),
@@ -380,6 +381,7 @@
         if (Array.isArray(details) && details.length) {
             const items = details.map((row) => {
                 const sku = escapeHtml(row.sku || '-');
+                const unitLabel = row.input_unit === 'pcs' ? 'PCS' : 'Koli';
                 const expectedKoli = row.expected_koli ?? row.required ?? '-';
                 const scannedKoli = row.scanned_koli ?? row.scanned ?? '-';
                 const expectedQty = row.expected_qty ?? '-';
@@ -389,7 +391,7 @@
                 const diffKoli = Number.isFinite(Number(diffKoliRaw)) ? Number(diffKoliRaw) : null;
                 const diffQty = Number.isFinite(Number(diffQtyRaw)) ? Number(diffQtyRaw) : null;
                 const diffLine = diffKoli !== null && diffKoli !== 0
-                    ? `<div style="color:#c2410c; font-size:12px;">Selisih Koli ${diffKoli > 0 ? '+' : ''}${diffKoli}${diffQty !== null && diffQty !== 0 ? ` • Qty ${diffQty > 0 ? '+' : ''}${diffQty}` : ''}</div>`
+                    ? `<div style="color:#c2410c; font-size:12px;">Selisih ${unitLabel} ${diffKoli > 0 ? '+' : ''}${diffKoli}${diffQty !== null && diffQty !== 0 ? ` • Qty ${diffQty > 0 ? '+' : ''}${diffQty}` : ''}</div>`
                     : '';
                 let badge = '', rowStyle = '';
                 if (row.type === 'not_received') {
@@ -405,7 +407,7 @@
                 return `
                     <li style="margin-bottom:8px;${rowStyle}">
                         ${badge}<strong>${sku}</strong>
-                        <div style="color:#64748b; font-size:12px;">Koli ${scannedKoli}/${expectedKoli}</div>
+                        <div style="color:#64748b; font-size:12px;">${unitLabel} ${scannedKoli}/${expectedKoli}</div>
                         ${expectedQty !== '-' ? `<div style="color:#64748b; font-size:12px;">Qty ${scannedQty}/${expectedQty}</div>` : ''}
                         ${diffLine}
                     </li>
@@ -484,7 +486,7 @@
                         <div class="count-pill">${escapeHtml(statusLabel(row.status))}</div>
                     </div>
                     <div class="result-meta">${meta || '-'}</div>
-                    <div class="result-meta">Koli ${summary.scanned_koli || 0}/${summary.expected_koli || 0} • Qty ${summary.scanned_qty || 0}/${summary.expected_qty || 0}</div>
+                    <div class="result-meta">${row.type === 'return' ? 'Unit' : 'Koli'} ${summary.scanned_koli || 0}/${summary.expected_koli || 0} • Qty ${summary.scanned_qty || 0}/${summary.expected_qty || 0}</div>
                     <button type="button" class="primary-btn btn-open-transaction" data-id="${row.id}" style="width:auto;">Pilih Inbound</button>
                 </div>
             `;
@@ -494,6 +496,8 @@
     const renderTransaction = (transaction) => {
         state.transaction = transaction || null;
         if (!transaction) {
+            if (el.scanUnitHint) el.scanUnitHint.textContent = 'Setiap scan SKU dihitung sebagai 1 koli.';
+            if (el.btnScanSku) el.btnScanSku.textContent = 'Tambah 1 Koli';
             el.resultCard.style.display = 'none';
             el.btnCompleteInbound.disabled = true;
             el.btnResetInbound.disabled = true;
@@ -506,6 +510,14 @@
         const session = transaction.session || {};
         const audit = session.audit || {};
         const items = Array.isArray(transaction.items) ? transaction.items : [];
+        const isReturn = transaction.type === 'return';
+        const scanUnitLabel = isReturn ? 'Unit' : 'Koli';
+        if (el.scanUnitHint) {
+            el.scanUnitHint.textContent = isReturn
+                ? 'Setiap scan dihitung sebagai 1 unit sesuai satuan dokumen (Koli atau PCS).'
+                : 'Setiap scan SKU dihitung sebagai 1 koli.';
+        }
+        if (el.btnScanSku) el.btnScanSku.textContent = isReturn ? 'Tambah 1 Unit' : 'Tambah 1 Koli';
         const meta = [
             transaction.warehouse ? `Gudang: ${transaction.warehouse}` : null,
             transaction.ref_no ? `Ref: ${transaction.ref_no}` : null,
@@ -526,8 +538,9 @@
             ? 'Selesai (Selisih)'
             : statusLabel(transaction.status);
         el.resultBadge.className = `result-badge${transaction.status === 'completed' && !hasVariance ? ' done' : ''}`;
-        el.resultSummary.textContent = `Koli ${scannedKoli}/${expectedKoli} • Qty ${scannedQty}/${expectedQty}`;
+        el.resultSummary.textContent = `${scanUnitLabel} ${scannedKoli}/${expectedKoli} • Qty ${scannedQty}/${expectedQty}`;
         el.resultItems.innerHTML = items.map((row) => {
+            const unitLabel = row.input_unit === 'pcs' ? 'PCS' : 'Koli';
             const rowExpected = Number(row.expected_koli || 0);
             const rowScanned = Number(row.scanned_koli || 0);
             const isMatch = rowExpected > 0 && rowScanned === rowExpected;
@@ -545,8 +558,8 @@
                     <div class="result-row">
                         <div>
                             <strong>${escapeHtml(row.sku || '-')}</strong>
-                            <div class="result-meta">${escapeHtml(row.item_name || '-')} • ${row.qty_per_koli || 0} pcs/koli</div>
-                            <div class="result-meta">Qty ${row.scanned_qty || 0}/${row.expected_qty || 0} • Koli ${row.scanned_koli || 0}/${row.expected_koli || 0}</div>
+                            <div class="result-meta">${escapeHtml(row.item_name || '-')} • ${isReturn && row.input_unit === 'pcs' ? '1 PCS/scan' : `${row.qty_per_koli || 0} pcs/koli`}</div>
+                            <div class="result-meta">Qty ${row.scanned_qty || 0}/${row.expected_qty || 0} • ${unitLabel} ${row.scanned_koli || 0}/${row.expected_koli || 0}</div>
                         </div>
                         <div class="count-pill${pillClass}">${pillText}</div>
                     </div>
@@ -605,7 +618,9 @@
             if (tx?.status === 'completed') {
                 setStatus(el.scanStatus, 'Inbound sudah selesai discan.', 'success');
             } else {
-                setStatus(el.scanStatus, 'Scan SKU untuk menambah 1 koli.', 'muted');
+                setStatus(el.scanStatus, tx?.type === 'return'
+                    ? 'Scan SKU untuk menambah 1 unit.'
+                    : 'Scan SKU untuk menambah 1 koli.', 'muted');
                 el.skuCode.focus();
             }
         } catch (error) {

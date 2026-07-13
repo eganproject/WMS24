@@ -284,7 +284,9 @@ class InboundScanController extends Controller
             if ($totalScannedKoli <= 0) {
                 DB::rollBack();
                 return response()->json([
-                    'message' => 'Belum ada scan koli. Scan minimal 1 koli sebelum complete.',
+                    'message' => $transaction->type === 'return'
+                        ? 'Belum ada unit yang discan. Scan minimal 1 unit sebelum complete.'
+                        : 'Belum ada scan koli. Scan minimal 1 koli sebelum complete.',
                 ], 422);
             }
 
@@ -302,6 +304,7 @@ class InboundScanController extends Controller
                     };
                     $variance[] = [
                         'sku' => $item->sku,
+                        'input_unit' => $item->input_unit ?: 'koli',
                         'type' => $type,
                         'expected_koli' => $expectedKoli,
                         'scanned_koli' => $scannedKoli,
@@ -478,10 +481,18 @@ class InboundScanController extends Controller
 
             $qty = (int) $row->qty;
             $koli = (int) ($row->koli ?? 0);
-            $qtyPerKoli = $koli > 0 ? (int) ($qty / $koli) : 0;
+            $inputUnit = $transaction->type === 'return' && ($row->input_unit ?: 'koli') === 'pcs' ? 'pcs' : 'koli';
+            if ($inputUnit === 'pcs') {
+                $koli = $qty;
+                $qtyPerKoli = 1;
+            } else {
+                $qtyPerKoli = $koli > 0 ? (int) ($qty / $koli) : 0;
+            }
             if ($qty <= 0 || $koli <= 0 || $qtyPerKoli <= 0 || ($koli * $qtyPerKoli) !== $qty) {
                 throw ValidationException::withMessages([
-                    'transaction' => "Data inbound untuk SKU {$item->sku} tidak konsisten. Periksa qty dan koli.",
+                    'transaction' => $inputUnit === 'pcs'
+                        ? "Data inbound untuk SKU {$item->sku} tidak konsisten. Periksa qty dan satuan input."
+                        : "Data inbound untuk SKU {$item->sku} tidak konsisten. Periksa qty dan koli.",
                 ]);
             }
 
@@ -490,6 +501,7 @@ class InboundScanController extends Controller
                 'item_id' => $row->item_id,
                 'sku' => $item->sku,
                 'item_name' => $item->name,
+                'input_unit' => $inputUnit,
                 'qty_per_koli' => $qtyPerKoli,
                 'expected_qty' => $qty,
                 'expected_koli' => $koli,
@@ -643,6 +655,7 @@ class InboundScanController extends Controller
                     return [
                         'sku' => $item->sku,
                         'item_name' => $item->item_name,
+                        'input_unit' => $item->input_unit ?: 'koli',
                         'qty_per_koli' => (int) $item->qty_per_koli,
                         'expected_qty' => (int) $item->expected_qty,
                         'expected_koli' => (int) $item->expected_koli,
@@ -654,8 +667,12 @@ class InboundScanController extends Controller
                     $item = $row->item ?? null;
                     $qty = (int) ($row->qty ?? 0);
                     $koli = (int) ($row->koli ?? 0);
+                    $inputUnit = $transaction->type === 'return' && ($row->input_unit ?: 'koli') === 'pcs' ? 'pcs' : 'koli';
                     $qtyPerKoli = 0;
-                    if ($qty > 0 && $koli > 0 && $qty % $koli === 0) {
+                    if ($inputUnit === 'pcs') {
+                        $koli = $qty;
+                        $qtyPerKoli = 1;
+                    } elseif ($qty > 0 && $koli > 0 && $qty % $koli === 0) {
                         $qtyPerKoli = (int) ($qty / $koli);
                     } elseif ($item) {
                         $qtyPerKoli = (int) ($item->koli_qty ?? 0);
@@ -668,6 +685,7 @@ class InboundScanController extends Controller
                     return [
                         'sku' => $item?->sku ?? null,
                         'item_name' => $item?->name ?? null,
+                        'input_unit' => $inputUnit,
                         'qty_per_koli' => $qtyPerKoli,
                         'expected_qty' => $qty,
                         'expected_koli' => $koli,

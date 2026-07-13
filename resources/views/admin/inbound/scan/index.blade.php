@@ -716,7 +716,7 @@
         <div class="scan-hero-top">
             <div>
                 <div class="scan-hero-title">Workbench Scan Inbound</div>
-                <div class="scan-hero-subtitle">
+                <div class="scan-hero-subtitle" id="scan_hero_subtitle">
                     Halaman ini disiapkan untuk operator inbound yang memakai scanner barcode seperti keyboard.
                     Fokus utama ada di pencarian inbound, area scan SKU berukuran besar, progres koli per SKU, dan kontrol reset atau complete yang cepat tetapi tetap aman.
                 </div>
@@ -743,7 +743,7 @@
             </div>
             <div class="scan-hint-card">
                 <div class="scan-hint-label">Catatan</div>
-                <div class="scan-hint-value">Setiap 1 kali scan SKU dihitung sebagai 1 koli, mengikuti alur inbound scan yang sudah ada di aplikasi.</div>
+                <div class="scan-hint-value" id="scan_unit_hint">Setiap 1 kali scan SKU dihitung sebagai 1 koli, mengikuti alur inbound scan yang sudah ada di aplikasi.</div>
             </div>
         </div>
     </div>
@@ -755,7 +755,7 @@
             <div class="scan-summary-note" id="summary_meta">Belum ada inbound aktif.</div>
         </div>
         <div class="scan-summary-card">
-            <div class="scan-summary-label">Progress Koli</div>
+            <div class="scan-summary-label" id="summary_unit_label">Progress Koli</div>
             <div class="scan-summary-value" id="summary_koli">0 / 0</div>
             <div class="scan-summary-note" id="summary_remaining">Sisa 0 koli.</div>
         </div>
@@ -846,7 +846,7 @@
                         <thead>
                             <tr>
                                 <th>SKU</th>
-                                <th>Qty / Koli</th>
+                                <th id="detail_unit_header">Qty / Koli</th>
                                 <th>Target</th>
                                 <th>Hasil Scan</th>
                                 <th>Status</th>
@@ -907,6 +907,10 @@
         btnClearLog: document.getElementById('btn_clear_log'),
         btnToggleHelp: document.getElementById('btn_toggle_help'),
         helpPanel: document.getElementById('help_panel'),
+        scanHeroSubtitle: document.getElementById('scan_hero_subtitle'),
+        scanUnitHint: document.getElementById('scan_unit_hint'),
+        summaryUnitLabel: document.getElementById('summary_unit_label'),
+        detailUnitHeader: document.getElementById('detail_unit_header'),
     };
 
     const state = {
@@ -1021,10 +1025,11 @@
         let html = `<div style="text-align:left; font-size:13px;">${escapeHtml(message || '')}</div>`;
         if (Array.isArray(details) && details.length) {
             const rows = details.map((row) => {
+                const unitLabel = row.input_unit === 'pcs' ? 'PCS' : 'Koli';
                 const diffKoli = Number(row.diff_koli || 0);
                 const diffQty = Number(row.diff_qty || 0);
                 const diffLine = diffKoli || diffQty
-                    ? `<div style="color:#c2410c; font-size:12px;">Selisih koli ${diffKoli > 0 ? '+' : ''}${diffKoli} | qty ${diffQty > 0 ? '+' : ''}${diffQty}</div>`
+                    ? `<div style="color:#c2410c; font-size:12px;">Selisih ${unitLabel} ${diffKoli > 0 ? '+' : ''}${diffKoli} | qty ${diffQty > 0 ? '+' : ''}${diffQty}</div>`
                     : '';
                 let badge = '', rowStyle = '';
                 if (row.type === 'not_received') {
@@ -1040,7 +1045,7 @@
                 return `
                     <li style="margin-bottom:8px;${rowStyle}">
                         ${badge}<strong>${escapeHtml(row.sku || '-')}</strong>
-                        <div style="color:#64748b; font-size:12px;">Koli ${row.scanned_koli ?? 0}/${row.expected_koli ?? 0}</div>
+                        <div style="color:#64748b; font-size:12px;">${unitLabel} ${row.scanned_koli ?? 0}/${row.expected_koli ?? 0}</div>
                         <div style="color:#64748b; font-size:12px;">Qty ${row.scanned_qty ?? 0}/${row.expected_qty ?? 0}</div>
                         ${diffLine}
                     </li>
@@ -1234,7 +1239,7 @@
                         <div class="scan-badge ${badgeClass(row.status)}">${escapeHtml(statusLabel(row.status))}</div>
                     </div>
                     <div class="scan-search-meta">${escapeHtml(meta || '-')}</div>
-                    <div class="scan-search-progress">Koli ${summary.scanned_koli || 0}/${summary.expected_koli || 0} | Qty ${summary.scanned_qty || 0}/${summary.expected_qty || 0}</div>
+                    <div class="scan-search-progress">${row.type === 'return' ? 'Unit' : 'Koli'} ${summary.scanned_koli || 0}/${summary.expected_koli || 0} | Qty ${summary.scanned_qty || 0}/${summary.expected_qty || 0}</div>
                     <button type="button" class="scan-btn scan-search-open btn-open-transaction" data-id="${row.id}">Pilih Inbound</button>
                 </div>
             `;
@@ -1247,6 +1252,10 @@
         if (!transaction) {
             inboundLocked = false;
             renderPanels();
+            if (el.scanHeroSubtitle) el.scanHeroSubtitle.textContent = 'Halaman ini disiapkan untuk operator inbound yang memakai scanner barcode seperti keyboard. Fokus utama ada di pencarian inbound, area scan SKU berukuran besar, progres koli per SKU, dan kontrol reset atau complete yang cepat tetapi tetap aman.';
+            if (el.scanUnitHint) el.scanUnitHint.textContent = 'Setiap 1 kali scan SKU dihitung sebagai 1 koli, mengikuti alur inbound scan yang sudah ada di aplikasi.';
+            if (el.summaryUnitLabel) el.summaryUnitLabel.textContent = 'Progress Koli';
+            if (el.detailUnitHeader) el.detailUnitHeader.textContent = 'Qty / Koli';
             el.summaryCode.textContent = '-';
             el.summaryMeta.textContent = 'Belum ada inbound aktif.';
             el.summaryKoli.textContent = '0 / 0';
@@ -1276,6 +1285,20 @@
         const session = transaction.session || {};
         const audit = session.audit || {};
         const items = Array.isArray(transaction.items) ? transaction.items : [];
+        const isReturn = transaction.type === 'return';
+        const scanUnitLabel = isReturn ? 'Unit' : 'Koli';
+        if (el.scanHeroSubtitle) {
+            el.scanHeroSubtitle.textContent = isReturn
+                ? 'Halaman scan retur inbound. Progres mengikuti satuan item yang dipilih, yaitu Koli atau PCS.'
+                : 'Halaman ini disiapkan untuk operator inbound yang memakai scanner barcode seperti keyboard. Fokus utama ada di pencarian inbound, area scan SKU berukuran besar, progres koli per SKU, dan kontrol reset atau complete yang cepat tetapi tetap aman.';
+        }
+        if (el.scanUnitHint) {
+            el.scanUnitHint.textContent = isReturn
+                ? 'Setiap scan dihitung sebagai 1 unit sesuai satuan dokumen: Koli atau PCS.'
+                : 'Setiap 1 kali scan SKU dihitung sebagai 1 koli, mengikuti alur inbound scan yang sudah ada di aplikasi.';
+        }
+        if (el.summaryUnitLabel) el.summaryUnitLabel.textContent = isReturn ? 'Progress Unit Scan' : 'Progress Koli';
+        if (el.detailUnitHeader) el.detailUnitHeader.textContent = isReturn ? 'Isi / Unit' : 'Qty / Koli';
         const expectedKoli = Number(summary.expected_koli || 0);
         const scannedKoli = Number(summary.scanned_koli || 0);
         const expectedQty = Number(summary.expected_qty || 0);
@@ -1292,7 +1315,7 @@
         el.summaryCode.textContent = transaction.code || '-';
         el.summaryMeta.textContent = metaLine || 'Inbound aktif siap discan.';
         el.summaryKoli.textContent = `${scannedKoli} / ${expectedKoli}`;
-        el.summaryRemaining.textContent = `Sisa ${Math.max(0, expectedKoli - scannedKoli)} koli.`;
+        el.summaryRemaining.textContent = `Sisa ${Math.max(0, expectedKoli - scannedKoli)} ${isReturn ? 'unit' : 'koli'}.`;
         el.summaryQty.textContent = `${scannedQty} / ${expectedQty}`;
         el.summaryQtyNote.textContent = hasVariance
             ? 'Masih ada selisih terhadap surat jalan.'
@@ -1314,12 +1337,13 @@
             ? 'Selesai + Selisih'
             : statusLabel(transaction.status);
         el.detailBadge.className = `scan-badge ${badgeClass(transaction.status)}`;
-        el.detailStatus.textContent = `Koli ${scannedKoli}/${expectedKoli} | Qty ${scannedQty}/${expectedQty}`;
+        el.detailStatus.textContent = `${scanUnitLabel} ${scannedKoli}/${expectedKoli} | Qty ${scannedQty}/${expectedQty}`;
         if (el.activeInboundStrip) {
             el.activeInboundStrip.textContent = `${transaction.code || '-'} terkunci. Fokus scan SKU aktif.`;
         }
 
         el.detailItems.innerHTML = items.map((item) => {
+            const unitLabel = item.input_unit === 'pcs' ? 'PCS' : 'Koli';
             const itemExpectedKoli = Number(item.expected_koli || 0);
             const itemScannedKoli = Number(item.scanned_koli || 0);
             const itemExpectedQty = Number(item.expected_qty || 0);
@@ -1335,9 +1359,9 @@
                         <div class="scan-item-sku">${escapeHtml(item.sku || '-')}</div>
                         <div class="scan-item-name">${escapeHtml(item.item_name || '-')}</div>
                     </td>
-                    <td data-label="Qty / Koli">${item.qty_per_koli || 0} qty / koli</td>
-                    <td data-label="Target">Koli ${itemExpectedKoli} | Qty ${itemExpectedQty}</td>
-                    <td data-label="Hasil Scan">Koli ${itemScannedKoli} | Qty ${itemScannedQty}</td>
+                    <td data-label="${isReturn ? 'Isi / Unit' : 'Qty / Koli'}">${isReturn ? (item.input_unit === 'pcs' ? '1 PCS / scan' : `${item.qty_per_koli || 0} PCS / koli`) : `${item.qty_per_koli || 0} qty / koli`}</td>
+                    <td data-label="Target">${unitLabel} ${itemExpectedKoli} | Qty ${itemExpectedQty}</td>
+                    <td data-label="Hasil Scan">${unitLabel} ${itemScannedKoli} | Qty ${itemScannedQty}</td>
                     <td data-label="Status"><span class="scan-progress-pill ${pillClass}">${statusText}</span></td>
                 </tr>
             `;

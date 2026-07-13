@@ -7,6 +7,7 @@ use App\Exports\ItemStocksExport;
 use App\Models\ActivityLog;
 use App\Models\Item;
 use App\Models\ItemStock;
+use App\Models\PickingList;
 use App\Models\Warehouse;
 use App\Support\BundleService;
 use App\Support\ItemTextSearch;
@@ -99,12 +100,27 @@ class ItemStockController extends Controller
             $query->skip($start)->take($length);
         }
 
-        $data = $query->get()->map(function ($i) use ($defaultId, $displayId, $damagedId) {
+        $items = $query->get();
+        $pickingDate = today()->toDateString();
+        $itemSkus = $items->pluck('sku')->filter()->unique()->values();
+        $lockedStockBySku = $itemSkus->isEmpty()
+            ? collect()
+            : PickingList::query()
+                ->selectRaw('sku, SUM(CASE WHEN remaining_qty > 0 THEN remaining_qty ELSE 0 END) as locked_qty')
+                ->whereIn('sku', $itemSkus)
+                ->whereDate('list_date', $pickingDate)
+                ->where('remaining_qty', '>', 0)
+                ->groupBy('sku')
+                ->pluck('locked_qty', 'sku');
+
+        $data = $items->map(function ($i) use ($defaultId, $displayId, $damagedId, $lockedStockBySku) {
             $stocks = $i->stocks?->keyBy('warehouse_id') ?? collect();
             $baseSafety = (int) ($i->safety_stock ?? 0);
             $isBundle = $i->isBundle();
             $stockMain = $isBundle ? null : (int) ($stocks->get($defaultId)?->stock ?? 0);
             $stockDisplay = $isBundle ? null : (int) ($stocks->get($displayId)?->stock ?? 0);
+            $stockLocked = $isBundle ? null : max(0, (int) ($lockedStockBySku->get($i->sku) ?? 0));
+            $stockAfterPicking = $isBundle ? null : $stockDisplay - $stockLocked;
             $stockDamaged = $isBundle ? null : (int) ($stocks->get($damagedId)?->stock ?? 0);
             $safetyMainRaw = $stocks->get($defaultId)?->safety_stock;
             $safetyDisplayRaw = $stocks->get($displayId)?->safety_stock;
@@ -146,6 +162,8 @@ class ItemStockController extends Controller
                 'stock_main_koli' => $mainKoliFull,
                 'stock_main_koli_remainder' => $mainKoliRemainder,
                 'stock_display' => $stockDisplay,
+                'stock_locked' => $stockLocked,
+                'stock_after_picking' => $stockAfterPicking,
                 'stock_damaged' => $stockDamaged,
                 'stock_good_total' => $stockGoodTotal,
                 'stock_total' => $isBundle ? null : ($stockGoodTotal + $stockDamaged),
@@ -168,6 +186,7 @@ class ItemStockController extends Controller
             'draw' => (int) $request->input('draw'),
             'recordsTotal' => $recordsTotal,
             'recordsFiltered' => $recordsFiltered,
+            'picking_date' => $pickingDate,
             'data' => $data,
         ]);
     }
@@ -467,10 +486,10 @@ class ItemStockController extends Controller
             5 => 'COALESCE(stock_main_sort.stock, 0)',
             6 => 'COALESCE(stock_main_sort.safety_stock, items.safety_stock, 0)',
             7 => 'COALESCE(stock_display_sort.stock, 0)',
-            8 => 'COALESCE(stock_display_sort.safety_stock, items.safety_stock, 0)',
-            9 => 'COALESCE(stock_damaged_sort.stock, 0)',
-            10 => '(COALESCE(stock_main_sort.stock, 0) + COALESCE(stock_display_sort.stock, 0))',
-            11 => '(COALESCE(stock_main_sort.stock, 0) + COALESCE(stock_display_sort.stock, 0) + COALESCE(stock_damaged_sort.stock, 0))',
+            10 => 'COALESCE(stock_display_sort.safety_stock, items.safety_stock, 0)',
+            11 => 'COALESCE(stock_damaged_sort.stock, 0)',
+            12 => '(COALESCE(stock_main_sort.stock, 0) + COALESCE(stock_display_sort.stock, 0))',
+            13 => '(COALESCE(stock_main_sort.stock, 0) + COALESCE(stock_display_sort.stock, 0) + COALESCE(stock_damaged_sort.stock, 0))',
         ];
 
         $orderColumn = (int) $request->input('order.0.column', 3);

@@ -4,6 +4,7 @@ namespace Tests\Feature\Admin;
 
 use App\Models\Item;
 use App\Models\ItemStock;
+use App\Models\PickingList;
 use App\Models\StockAdjustment;
 use App\Models\StockMutation;
 use App\Models\Warehouse;
@@ -50,7 +51,12 @@ class ItemStockDataTest extends TestCase
             'stock' => 5,
             'safety_stock' => 6,
         ]);
-
+        PickingList::create([
+            'list_date' => today()->toDateString(),
+            'sku' => $lowItem->sku,
+            'qty' => 9,
+            'remaining_qty' => 7,
+        ]);
         $safeItem = Item::create([
             'sku' => 'SKU-SAFE-001',
             'name' => 'Item Aman',
@@ -69,6 +75,12 @@ class ItemStockDataTest extends TestCase
             'warehouse_id' => $displayWarehouse->id,
             'stock' => 7,
             'safety_stock' => 6,
+        ]);
+        PickingList::create([
+            'list_date' => today()->subDay()->toDateString(),
+            'sku' => $safeItem->sku,
+            'qty' => 10,
+            'remaining_qty' => 10,
         ]);
 
         Item::create([
@@ -98,11 +110,16 @@ class ItemStockDataTest extends TestCase
         $this->assertSame(2, $lowRow['stock_main_koli_remainder']);
         $this->assertTrue($lowRow['is_main_below_safety']);
         $this->assertTrue($lowRow['is_display_below_safety']);
+        $this->assertSame(7, $lowRow['stock_locked']);
+        $this->assertSame(-2, $lowRow['stock_after_picking']);
 
         $safeRow = $rows->get('SKU-SAFE-001');
         $this->assertNotNull($safeRow);
         $this->assertFalse($safeRow['is_main_below_safety']);
         $this->assertFalse($safeRow['is_display_below_safety']);
+        $this->assertSame(0, $safeRow['stock_locked']);
+        $this->assertSame(7, $safeRow['stock_after_picking']);
+        $this->assertSame(today()->toDateString(), $response->json('picking_date'));
 
         $bundleRow = $rows->get('SKU-BUNDLE-001');
         $this->assertNotNull($bundleRow);

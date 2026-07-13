@@ -117,6 +117,15 @@
                         <option value="all">Semua</option>
                     </select>
                 </div>
+                <div class="w-175px">
+                    <label class="form-label fs-7 text-muted">Tampilan Gudang</label>
+                    <select class="form-select form-select-solid" id="filter_item_stocks_warehouse" aria-label="Tampilan gudang">
+                        <option value="all" selected>Semua Gudang</option>
+                        <option value="{{ (int) $defaultWarehouseId }}">{{ $defaultWarehouseLabel ?? 'Gudang Besar' }}</option>
+                        <option value="{{ (int) $displayWarehouseId }}">{{ $displayWarehouseLabel ?? 'Gudang Display' }}</option>
+                        <option value="{{ (int) $damagedWarehouseId }}">{{ $damagedWarehouseLabel ?? 'Gudang Rusak' }}</option>
+                    </select>
+                </div>
                 <button type="button" class="btn btn-light-primary" id="btn_export_item_stocks">Export Excel</button>
                 @if($canUpdateItemStocks)
                     <button type="button" class="btn btn-primary" id="btn_bulk_safety_main" disabled>Ubah Safety Gudang Besar</button>
@@ -126,6 +135,13 @@
         </div>
     </div>
     <div class="card-body py-6">
+        <div class="alert alert-light-primary mb-5" id="display_stock_info" style="display:none;">
+            <div class="fw-semibold">Informasi stok operasional Gudang Display</div>
+            <div class="text-muted fs-7">
+                Stok Terkunci adalah sisa picking list hari berjalan (<span id="display_stock_picking_date">-</span>).
+                Stok Setelah Picking dihitung dari stok Gudang Display dikurangi Stok Terkunci dan dapat bernilai negatif jika kebutuhan picking melebihi stok.
+            </div>
+        </div>
         @if($canUpdateItemStocks)
             <div class="item-stock-bulk-bar" id="item_stocks_bulk_bar">
                 <div>
@@ -156,6 +172,8 @@
                         <th class="text-end">Stok {{ $defaultWarehouseLabel ?? 'Gudang Besar' }}</th>
                         <th class="text-end">Safety {{ $defaultWarehouseLabel ?? 'Gudang Besar' }}</th>
                         <th class="text-end">Stok {{ $displayWarehouseLabel ?? 'Gudang Display' }}</th>
+                        <th class="text-end">Stok Terkunci</th>
+                        <th class="text-end">Stok Setelah Picking</th>
                         <th class="text-end">Safety {{ $displayWarehouseLabel ?? 'Gudang Display' }}</th>
                         <th class="text-end">Stok {{ $damagedWarehouseLabel ?? 'Gudang Rusak' }}</th>
                         <th class="text-end">Total Stok Baik</th>
@@ -450,6 +468,9 @@
         const searchModeSelect = document.getElementById('filter_item_stocks_search_mode');
         const limitSelect = document.getElementById('filter_item_stocks_limit');
         const statusSelect = document.getElementById('filter_item_stocks_status');
+        const warehouseSelect = document.getElementById('filter_item_stocks_warehouse');
+        const displayStockInfo = document.getElementById('display_stock_info');
+        const displayStockPickingDate = document.getElementById('display_stock_picking_date');
         const exportBtn = document.getElementById('btn_export_item_stocks');
         const bulkSafetyMainBtn = document.getElementById('btn_bulk_safety_main');
         const bulkSafetyDisplayBtn = document.getElementById('btn_bulk_safety_display');
@@ -803,7 +824,12 @@
             pageLength: Number(limitSelect?.value || 10),
             ajax: {
                 url: dataUrl,
-                dataSrc: 'data',
+                dataSrc: function (json) {
+                    if (displayStockPickingDate) {
+                        displayStockPickingDate.textContent = json?.picking_date || '-';
+                    }
+                    return json?.data || [];
+                },
                 data: function(params) {
                     params.q = searchInput?.value || '';
                     params.search_mode = searchModeSelect?.value || 'contains';
@@ -832,6 +858,19 @@
                 { data: 'stock_main', className: 'text-end', render: (data, type, row) => renderWarehouseStock(data, type, row, 'virtual_main', 'is_main_below_safety', { showKoli: true, warehouseId: defaultWarehouseId, warehouseLabel: @json($defaultWarehouseLabel ?? 'Gudang Besar'), stockKey: 'stock_main', mode: 'koli' }) },
                 { data: 'safety_main', className: 'text-end', render: (data, type, row) => renderSafetyValue(data, row, 'monitor_main') },
                 { data: 'stock_display', className: 'text-end', render: (data, type, row) => renderWarehouseStock(data, type, row, 'virtual_display', 'is_display_below_safety', { warehouseId: displayWarehouseId, warehouseLabel: @json($displayWarehouseLabel ?? 'Gudang Display'), stockKey: 'stock_display', mode: 'pcs' }) },
+                { data: 'stock_locked', orderable: false, searchable: false, className: 'text-end', visible: false, render: (data, type, row) => {
+                    if (row.item_type === 'bundle') return '-';
+                    const value = Number.isFinite(Number(data)) ? Number(data) : 0;
+                    if (type !== 'display') return value;
+                    return `<span class="fw-bold ${value > 0 ? 'text-warning' : 'text-muted'}">${formatStockNumber(value)}</span><div class="text-muted fs-8">picking hari ini</div>`;
+                }},
+                { data: 'stock_after_picking', orderable: false, searchable: false, className: 'text-end', visible: false, render: (data, type, row) => {
+                    if (row.item_type === 'bundle') return '-';
+                    const value = Number.isFinite(Number(data)) ? Number(data) : 0;
+                    if (type !== 'display') return value;
+                    const colorClass = value < 0 ? 'text-danger' : (value === 0 ? 'text-warning' : 'text-success');
+                    return `<span class="fw-bolder ${colorClass}">${formatStockNumber(value)}</span><div class="text-muted fs-8">setelah picking</div>`;
+                }},
                 { data: 'safety_display', className: 'text-end', render: (data, type, row) => renderSafetyValue(data, row, 'monitor_display') },
                 { data: 'stock_damaged', className: 'text-end', render: (data, type, row) => row.item_type === 'bundle' ? '-' : (data ?? 0) },
                 { data: 'stock_good_total', className: 'text-end', render: (data, type, row) => row.item_type === 'bundle' ? `<span class="fw-bold text-primary">${row.virtual_total ?? 0}</span><div class="text-muted fs-8">virtual total</div>` : (data ?? 0) },
@@ -861,6 +900,30 @@
                 }},
             ]
         });
+        const syncWarehouseColumns = () => {
+            const selected = warehouseSelect?.value || 'all';
+            const isAll = selected === 'all';
+            const isMain = selected === String(defaultWarehouseId);
+            const isDisplay = selected === String(displayWarehouseId);
+            const isDamaged = selected === String(damagedWarehouseId);
+
+            dt.column(5).visible(isAll || isMain, false);
+            dt.column(6).visible(isAll || isMain, false);
+            dt.column(7).visible(isAll || isDisplay, false);
+            dt.column(8).visible(isDisplay, false);
+            dt.column(9).visible(isDisplay, false);
+            dt.column(10).visible(isAll || isDisplay, false);
+            dt.column(11).visible(isAll || isDamaged, false);
+            dt.column(12).visible(isAll, false);
+            dt.column(13).visible(isAll, false);
+            dt.columns.adjust().draw(false);
+
+            if (displayStockInfo) {
+                displayStockInfo.style.display = isDisplay ? '' : 'none';
+            }
+        };
+        warehouseSelect?.addEventListener('change', syncWarehouseColumns);
+        syncWarehouseColumns();
         const currentPageRows = () => dt.rows({ page: 'current' }).data().toArray();
         const currentPageIds = () => currentPageRows().map((row) => String(row.id));
         const syncBulkSelectionUi = () => {

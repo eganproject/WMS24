@@ -107,6 +107,13 @@
         </div>
     </div>
     <div class="card-body py-6">
+        <div class="alert alert-light-primary d-flex align-items-start mb-5">
+            <i class="fas fa-info-circle text-primary mt-1 me-3"></i>
+            <div>
+                <div class="fw-semibold">Stok Gudang menunjukkan stok pada gudang di baris tersebut dan digunakan untuk membandingkan stok pengaman.</div>
+                <div class="text-muted fs-7">Total Stok Item selalu merupakan gabungan stok PCS Gudang Besar dan Gudang Display (gudang kecil), sehingga nilainya tetap konsisten saat filter gudang berubah.</div>
+            </div>
+        </div>
         <div class="table-responsive">
             <table class="table align-middle table-row-dashed fs-6 gy-5" id="low_stock_table">
                 <thead>
@@ -116,7 +123,8 @@
                         <th>Nama</th>
                         <th>Gudang</th>
                         <th>Kategori</th>
-                        <th class="text-end">Stok</th>
+                        <th class="text-end">Stok Gudang</th>
+                        <th class="text-end min-w-175px">Total Stok Item</th>
                         <th class="text-end">Stok Pengaman</th>
                         <th class="text-end">Selisih</th>
                         <th>Status</th>
@@ -195,6 +203,16 @@
                     if (type !== 'display') return value;
                     const textClass = value <= 0 ? 'text-danger' : 'text-warning';
                     return `<span class="fw-bold ${textClass}">${value}</span>`;
+                }},
+                { data: 'total_stock', className: 'text-end', render: (data, type, row) => {
+                    const total = Number.isFinite(Number(data)) ? Number(data) : 0;
+                    if (type !== 'display') return total;
+                    const main = Number.isFinite(Number(row?.main_stock)) ? Number(row.main_stock) : 0;
+                    const display = Number.isFinite(Number(row?.display_stock)) ? Number(row.display_stock) : 0;
+                    const formatQty = (value) => value.toLocaleString('id-ID');
+                    return `<div class="fw-bolder text-gray-800">${formatQty(total)} PCS</div>
+                        <div class="text-muted fs-8 text-nowrap">Besar: ${formatQty(main)} PCS</div>
+                        <div class="text-muted fs-8 text-nowrap">Display: ${formatQty(display)} PCS</div>`;
                 }},
                 { data: 'safety_stock', className: 'text-end', render: (data, type, row) => {
                     const value = Number.isFinite(Number(data)) ? Number(data) : 0;

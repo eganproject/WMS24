@@ -32,6 +32,12 @@ class SafetyStockReportsTest extends TestCase
             'stock' => 8,
             'safety_stock' => null,
         ]);
+        ItemStock::create([
+            'item_id' => $defaultSafetyItem->id,
+            'warehouse_id' => $displayWarehouse->id,
+            'stock' => 3,
+            'safety_stock' => null,
+        ]);
 
         $displaySafetyItem = Item::create([
             'sku' => 'SKU-LOW-DISPLAY',
@@ -64,6 +70,9 @@ class SafetyStockReportsTest extends TestCase
 
         $mainRows = Collection::make($mainResponse->json('data'))->keyBy('sku');
         $this->assertSame(8, $mainRows->get('SKU-LOW-MAIN')['stock']);
+        $this->assertSame(8, $mainRows->get('SKU-LOW-MAIN')['main_stock']);
+        $this->assertSame(3, $mainRows->get('SKU-LOW-MAIN')['display_stock']);
+        $this->assertSame(11, $mainRows->get('SKU-LOW-MAIN')['total_stock']);
         $this->assertSame(10, $mainRows->get('SKU-LOW-MAIN')['safety_stock']);
         $this->assertSame('Default item', $mainRows->get('SKU-LOW-MAIN')['safety_source']);
 
@@ -77,7 +86,12 @@ class SafetyStockReportsTest extends TestCase
         $displayResponse->assertOk();
 
         $displayRows = Collection::make($displayResponse->json('data'))->keyBy('sku');
+        $this->assertSame(3, $displayRows->get('SKU-LOW-MAIN')['stock']);
+        $this->assertSame(11, $displayRows->get('SKU-LOW-MAIN')['total_stock']);
         $this->assertSame(5, $displayRows->get('SKU-LOW-DISPLAY')['stock']);
+        $this->assertSame(20, $displayRows->get('SKU-LOW-DISPLAY')['main_stock']);
+        $this->assertSame(5, $displayRows->get('SKU-LOW-DISPLAY')['display_stock']);
+        $this->assertSame(25, $displayRows->get('SKU-LOW-DISPLAY')['total_stock']);
         $this->assertSame(6, $displayRows->get('SKU-LOW-DISPLAY')['safety_stock']);
         $this->assertSame('Per gudang', $displayRows->get('SKU-LOW-DISPLAY')['safety_source']);
 

@@ -68,6 +68,9 @@ class LowStockReportController extends Controller
             'w.name as warehouse',
             \Illuminate\Support\Facades\DB::raw("{$safetyExpr} as safety_stock"),
             \Illuminate\Support\Facades\DB::raw("{$stockExpr} as stock"),
+            \Illuminate\Support\Facades\DB::raw($service->mainStockExpr().' as main_stock'),
+            \Illuminate\Support\Facades\DB::raw($service->displayStockExpr().' as display_stock'),
+            \Illuminate\Support\Facades\DB::raw($service->totalStockExpr().' as total_stock'),
             \Illuminate\Support\Facades\DB::raw("CASE WHEN s.safety_stock IS NOT NULL THEN 'Per gudang' ELSE 'Default item' END as safety_source"),
             \Illuminate\Support\Facades\DB::raw("CASE WHEN i.category_id = 0 THEN 'Tanpa Kategori' ELSE COALESCE(c.name, '-') END as category"),
         ])

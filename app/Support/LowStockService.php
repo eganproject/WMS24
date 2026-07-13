@@ -26,6 +26,8 @@ class LowStockService
 
         $safetyExpr = $this->safetyExpr();
         $stockExpr = $this->stockExpr();
+        $mainWarehouseId = WarehouseService::defaultWarehouseId();
+        $displayWarehouseId = WarehouseService::displayWarehouseId();
 
         return DB::table('items as i')
             ->join('warehouses as w', function ($join) use ($warehouseId, $isAllWarehouses) {
@@ -41,6 +43,14 @@ class LowStockService
             ->leftJoin('item_stocks as s', function ($join) {
                 $join->on('s.item_id', '=', 'i.id')
                     ->on('s.warehouse_id', '=', 'w.id');
+            })
+            ->leftJoin('item_stocks as main_stock_row', function ($join) use ($mainWarehouseId) {
+                $join->on('main_stock_row.item_id', '=', 'i.id')
+                    ->where('main_stock_row.warehouse_id', '=', $mainWarehouseId);
+            })
+            ->leftJoin('item_stocks as display_stock_row', function ($join) use ($displayWarehouseId) {
+                $join->on('display_stock_row.item_id', '=', 'i.id')
+                    ->where('display_stock_row.warehouse_id', '=', $displayWarehouseId);
             })
             ->leftJoin('categories as c', 'c.id', '=', 'i.category_id')
             ->where(function ($query) {
@@ -69,6 +79,9 @@ class LowStockService
             'w.name as warehouse',
             DB::raw("{$safetyExpr} as safety_stock"),
             DB::raw("{$stockExpr} as stock"),
+            DB::raw($this->mainStockExpr().' as main_stock'),
+            DB::raw($this->displayStockExpr().' as display_stock'),
+            DB::raw($this->totalStockExpr().' as total_stock'),
             DB::raw("CASE WHEN s.safety_stock IS NOT NULL THEN 'Per gudang' ELSE 'Default item' END as safety_source"),
             DB::raw("CASE WHEN i.category_id = 0 THEN 'Tanpa Kategori' ELSE COALESCE(c.name, '-') END as category"),
         ])
@@ -201,10 +214,27 @@ class LowStockService
         return 'COALESCE(s.stock, 0)';
     }
 
+    public function mainStockExpr(): string
+    {
+        return 'COALESCE(main_stock_row.stock, 0)';
+    }
+
+    public function displayStockExpr(): string
+    {
+        return 'COALESCE(display_stock_row.stock, 0)';
+    }
+
+    public function totalStockExpr(): string
+    {
+        return '('.$this->mainStockExpr().' + '.$this->displayStockExpr().')';
+    }
+
     public function mapRow(object $row): array
     {
         $stock = (int) ($row->stock ?? 0);
         $safety = (int) ($row->safety_stock ?? 0);
+        $mainStock = (int) ($row->main_stock ?? 0);
+        $displayStock = (int) ($row->display_stock ?? 0);
 
         return [
             'id' => (int) $row->id,
@@ -215,6 +245,9 @@ class LowStockService
             'category' => $row->category ?? '-',
             'address' => $row->address ?? '-',
             'stock' => $stock,
+            'main_stock' => $mainStock,
+            'display_stock' => $displayStock,
+            'total_stock' => $mainStock + $displayStock,
             'safety_stock' => $safety,
             'safety_source' => $row->safety_source ?? 'Default item',
             'gap' => max(0, $safety - $stock),

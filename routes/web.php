@@ -502,6 +502,8 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/attendances', [AttendanceController::class, 'sectionPage'])->defaults('section', 'attendances')->name('attendances.index');
         Route::get('/overtime', [AttendanceController::class, 'overtimeIndex'])->name('overtime.index');
         Route::get('/overtime/data', [AttendanceController::class, 'overtimeData'])->name('overtime.data');
+        Route::post('/overtime/bulk-approve', [AttendanceController::class, 'bulkApproveOvertime'])->name('overtime.bulk-approve');
+        Route::post('/overtime/bulk-reject', [AttendanceController::class, 'bulkRejectOvertime'])->name('overtime.bulk-reject');
         Route::get('/live-display', [AttendanceController::class, 'liveDisplay'])->name('live-display.index');
         Route::get('/live-display/feed', [AttendanceController::class, 'liveDisplayFeed'])->name('live-display.feed');
         Route::get('/absences', [AttendanceController::class, 'absencesIndex'])->name('absences.index');

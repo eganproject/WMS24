@@ -94,6 +94,28 @@
         color: #7e8299;
         font-size: .75rem;
     }
+    .ot-bulk-bar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: .75rem;
+        padding: .8rem 1rem;
+        margin-bottom: 1rem;
+        border: 1px solid #e4e6ef;
+        border-radius: .65rem;
+        background: #f9fafc;
+    }
+    .ot-detail-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: .65rem;
+        padding: .85rem;
+        border-radius: .65rem;
+        background: #f5f8fa;
+    }
+    .ot-detail-grid .label { color: #7e8299; font-size: .72rem; }
+    .ot-detail-grid .value { color: #181c32; font-weight: 600; }
 </style>
 @endpush
 
@@ -167,10 +189,25 @@
 </div>
 
 <div class="ot-card">
+    <div class="ot-bulk-bar">
+        <div>
+            <span class="fw-bold"><span id="bulk_selected_count">0</span> data dipilih</span>
+            <span class="text-muted fs-8 ms-2">Hanya lembur berstatus pending yang dapat dipilih.</span>
+        </div>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-sm btn-light-success" id="btn_bulk_approve" disabled>
+                <i class="fas fa-check-double me-1"></i>Bulk Approve
+            </button>
+            <button type="button" class="btn btn-sm btn-light-danger" id="btn_bulk_reject" disabled>
+                <i class="fas fa-times-circle me-1"></i>Bulk Reject
+            </button>
+        </div>
+    </div>
     <div class="table-responsive">
         <table class="table align-middle table-row-dashed fs-6 gy-4 ot-table" id="overtime_table">
             <thead>
                 <tr>
+                    <th class="text-center" style="width: 36px"><input type="checkbox" class="form-check-input" id="select_all_overtime" title="Pilih semua pending di halaman ini"></th>
                     <th>Karyawan</th>
                     <th>Tanggal</th>
                     <th>Shift</th>
@@ -197,10 +234,13 @@ document.addEventListener('DOMContentLoaded', () => {
         data: @json($dataUrl),
         approve: @json($approveUrlTpl),
         reject: @json($rejectUrlTpl),
+        bulkApprove: @json($bulkApproveUrl),
+        bulkReject: @json($bulkRejectUrl),
     };
     const csrfToken = @json(csrf_token());
     const initialDateFrom = @json($defaultDateFrom);
     const initialDateTo = @json($defaultDateTo);
+    const selectedRows = new Map();
 
     const route = (tpl, id) => tpl.replace(':id', id);
     const escapeHtml = (value) => String(value ?? '')
@@ -254,6 +294,32 @@ document.addEventListener('DOMContentLoaded', () => {
             alert(message);
         }
     };
+    const updateBulkState = () => {
+        const count = selectedRows.size;
+        document.getElementById('bulk_selected_count').textContent = number(count);
+        document.getElementById('btn_bulk_approve').disabled = count === 0;
+        document.getElementById('btn_bulk_reject').disabled = count === 0;
+        const visible = Array.from(document.querySelectorAll('.overtime-select:not(:disabled)'));
+        const selectedVisible = visible.filter((checkbox) => checkbox.checked).length;
+        const selectAll = document.getElementById('select_all_overtime');
+        selectAll.checked = visible.length > 0 && selectedVisible === visible.length;
+        selectAll.indeterminate = selectedVisible > 0 && selectedVisible < visible.length;
+    };
+    const clearSelection = () => {
+        selectedRows.clear();
+        updateBulkState();
+    };
+    const rowDetails = (row) => `
+        <div class="ot-detail-grid text-start mb-4">
+            <div><div class="label">Karyawan</div><div class="value">${escapeHtml(row.employee)}</div></div>
+            <div><div class="label">Posisi</div><div class="value">${escapeHtml(row.position || '-')}</div></div>
+            <div><div class="label">Tanggal / Shift</div><div class="value">${escapeHtml(row.attendance_date || '-')} / ${escapeHtml(row.shift || '-')} (${escapeHtml(row.shift_start_time || '-')}–${escapeHtml(row.shift_end_time || '-')})</div></div>
+            <div><div class="label">Jam Masuk</div><div class="value">${escapeHtml(row.check_in_at || '-')}</div></div>
+            <div><div class="label">Jam Keluar</div><div class="value">${escapeHtml(row.check_out_at || '-')}</div></div>
+            <div><div class="label">Durasi Kerja</div><div class="value">${hours(row.work_minutes)}</div></div>
+            <div><div class="label">Lembur Terhitung</div><div class="value">${hours(row.calculated_overtime_minutes)}</div></div>
+            <div><div class="label">Sumber</div><div class="value">${escapeHtml(row.source || '-')}</div></div>
+        </div>`;
 
     if (typeof $ !== 'undefined' && $.fn.select2) {
         $('[data-control="select2"]').each(function () {
@@ -288,6 +354,10 @@ document.addEventListener('DOMContentLoaded', () => {
             },
         },
         columns: [
+            { data: null, orderable: false, searchable: false, className: 'text-center', render: (row) => {
+                const selectable = row.overtime_status === 'pending' && Number(row.calculated_overtime_minutes || 0) > 0;
+                return `<input type="checkbox" class="form-check-input overtime-select" data-id="${row.id}" ${selectedRows.has(String(row.id)) ? 'checked' : ''} ${selectable ? '' : 'disabled'} aria-label="Pilih lembur ${escapeHtml(row.employee)}">`;
+            } },
             { data: null, render: (row) => `<div class="fw-bold">${escapeHtml(row.employee)}</div><div class="text-muted fs-8">${escapeHtml(row.position)}</div>` },
             { data: 'attendance_date', render: escapeHtml },
             { data: 'shift', render: escapeHtml },
@@ -311,11 +381,18 @@ document.addEventListener('DOMContentLoaded', () => {
             } },
         ],
         order: [],
+        drawCallback: updateBulkState,
     });
 
-    document.getElementById('btn_apply_filter').addEventListener('click', () => table.ajax.reload());
+    document.getElementById('btn_apply_filter').addEventListener('click', () => {
+        clearSelection();
+        table.ajax.reload();
+    });
     document.getElementById('filter_search').addEventListener('keydown', (event) => {
-        if (event.key === 'Enter') table.ajax.reload();
+        if (event.key === 'Enter') {
+            clearSelection();
+            table.ajax.reload();
+        }
     });
     document.getElementById('btn_reset_filter').addEventListener('click', () => {
         document.getElementById('filter_date_from').value = initialDateFrom;
@@ -326,9 +403,116 @@ document.addEventListener('DOMContentLoaded', () => {
         if (typeof $ !== 'undefined' && $.fn.select2) {
             $('#filter_employee_id, #filter_overtime_status').trigger('change.select2');
         }
+        clearSelection();
         table.ajax.reload();
     });
-    $('#filter_employee_id, #filter_overtime_status').on('change', () => table.ajax.reload());
+    $('#filter_employee_id, #filter_overtime_status').on('change', () => {
+        clearSelection();
+        table.ajax.reload();
+    });
+
+    $('#overtime_table').on('change', '.overtime-select', function () {
+        const row = table.row($(this).closest('tr')).data();
+        if (!row) return;
+        if (this.checked) selectedRows.set(String(row.id), row);
+        else selectedRows.delete(String(row.id));
+        updateBulkState();
+    });
+
+    document.getElementById('select_all_overtime').addEventListener('change', function () {
+        document.querySelectorAll('.overtime-select:not(:disabled)').forEach((checkbox) => {
+            checkbox.checked = this.checked;
+            const row = table.row($(checkbox).closest('tr')).data();
+            if (!row) return;
+            if (this.checked) selectedRows.set(String(row.id), row);
+            else selectedRows.delete(String(row.id));
+        });
+        updateBulkState();
+    });
+
+    document.getElementById('btn_bulk_approve').addEventListener('click', async () => {
+        const rows = Array.from(selectedRows.values());
+        if (!rows.length) return;
+        if (!window.Swal) {
+            notify('Bulk approve membutuhkan komponen modal yang belum termuat.', 'error');
+            return;
+        }
+
+        const items = [];
+        for (let index = 0; index < rows.length; index += 1) {
+            const row = rows[index];
+            const maximum = Number(row.calculated_overtime_minutes || 0);
+            const result = await Swal.fire({
+                title: `Konfirmasi Approval ${index + 1} dari ${rows.length}`,
+                html: `${rowDetails(row)}<div class="text-start"><label class="form-label fw-bold">Menit disetujui</label><input id="swal_overtime_minutes" type="number" min="1" max="${maximum}" class="form-control" value="${maximum}"><div class="text-muted fs-8 mt-1">Maksimal ${maximum} menit sesuai lembur terhitung.</div><label class="form-label fw-bold mt-3">Catatan</label><textarea id="swal_overtime_note" class="form-control" rows="2">${escapeHtml(row.overtime_note || '')}</textarea></div>`,
+                width: 680,
+                showCancelButton: true,
+                confirmButtonText: index === rows.length - 1 ? 'Simpan Semua Approval' : 'Lanjut',
+                cancelButtonText: 'Batalkan Proses',
+                allowOutsideClick: false,
+                preConfirm: () => {
+                    const approved = parseInt(document.getElementById('swal_overtime_minutes')?.value || '0', 10);
+                    if (!approved || approved < 1) {
+                        Swal.showValidationMessage('Menit disetujui wajib lebih dari 0.');
+                        return false;
+                    }
+                    if (approved > maximum) {
+                        Swal.showValidationMessage('Menit disetujui tidak boleh melebihi lembur terhitung.');
+                        return false;
+                    }
+                    return { id: row.id, approved_overtime_minutes: approved, overtime_note: document.getElementById('swal_overtime_note')?.value || '' };
+                },
+            });
+            if (!result.isConfirmed) return;
+            items.push(result.value);
+        }
+
+        try {
+            const json = await request(urls.bulkApprove, { items });
+            clearSelection();
+            notify(json.message || 'Bulk approval berhasil.');
+            table.ajax.reload(null, false);
+        } catch (error) {
+            clearSelection();
+            notify(error.message, 'error');
+            table.ajax.reload(null, false);
+        }
+    });
+
+    document.getElementById('btn_bulk_reject').addEventListener('click', async () => {
+        const rows = Array.from(selectedRows.values());
+        if (!rows.length) return;
+        const names = rows.slice(0, 5).map((row) => `<li>${escapeHtml(row.employee)} — ${escapeHtml(row.attendance_date)}</li>`).join('');
+        const more = rows.length > 5 ? `<div class="text-muted mt-2">dan ${rows.length - 5} data lainnya</div>` : '';
+        const result = window.Swal ? await Swal.fire({
+            title: `Reject ${rows.length} data lembur?`,
+            html: `<div class="text-start"><ul>${names}</ul>${more}<label class="form-label fw-bold mt-3">Alasan rejection</label><textarea id="swal_reject_note" class="form-control" rows="3" placeholder="Alasan wajib diisi"></textarea></div>`,
+            showCancelButton: true,
+            confirmButtonText: 'Reject Semua',
+            cancelButtonText: 'Batal',
+            confirmButtonColor: '#f1416c',
+            preConfirm: () => {
+                const note = document.getElementById('swal_reject_note')?.value.trim() || '';
+                if (!note) {
+                    Swal.showValidationMessage('Alasan rejection wajib diisi.');
+                    return false;
+                }
+                return note;
+            },
+        }) : { isConfirmed: false };
+        if (!result.isConfirmed) return;
+
+        try {
+            const json = await request(urls.bulkReject, { ids: rows.map((row) => row.id), overtime_note: result.value });
+            clearSelection();
+            notify(json.message || 'Bulk rejection berhasil.');
+            table.ajax.reload(null, false);
+        } catch (error) {
+            clearSelection();
+            notify(error.message, 'error');
+            table.ajax.reload(null, false);
+        }
+    });
 
     $('#overtime_table').on('click', '.btn-approve-overtime', async function () {
         const id = this.dataset.id;
@@ -361,6 +545,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             const json = await request(route(urls.approve, id), result.value);
+            selectedRows.delete(String(id));
+            updateBulkState();
             notify(json.message || 'Lembur berhasil di-approve.');
             table.ajax.reload(null, false);
         } catch (error) {
@@ -398,6 +584,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             const json = await request(route(urls.reject, id), { overtime_note: result.value || '' });
+            selectedRows.delete(String(id));
+            updateBulkState();
             notify(json.message || 'Lembur berhasil di-reject.');
             table.ajax.reload(null, false);
         } catch (error) {

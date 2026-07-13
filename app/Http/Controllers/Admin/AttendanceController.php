@@ -133,6 +133,8 @@ class AttendanceController extends Controller
             'dataUrl' => route('admin.attendance.overtime.data'),
             'approveUrlTpl' => route('admin.attendance.attendances.overtime.approve', ':id'),
             'rejectUrlTpl' => route('admin.attendance.attendances.overtime.reject', ':id'),
+            'bulkApproveUrl' => route('admin.attendance.overtime.bulk-approve'),
+            'bulkRejectUrl' => route('admin.attendance.overtime.bulk-reject'),
             'recapUrl' => route('admin.attendance.attendances.index'),
         ]);
     }
@@ -153,7 +155,7 @@ class AttendanceController extends Controller
             ->with([
                 'employee:id,employee_code,name,employment_status,position,position_id',
                 'employee.positionRelation:id,name',
-                'shift:id,name',
+                'shift:id,name,start_time,end_time',
                 'approver:id,name',
             ])
             ->whereDate('attendance_date', '>=', $dateFrom)
@@ -2364,6 +2366,100 @@ class AttendanceController extends Controller
         return response()->json(['message' => 'Lembur berhasil di-reject.', 'attendance' => $attendance]);
     }
 
+    public function bulkApproveOvertime(Request $request)
+    {
+        $validated = $request->validate([
+            'items' => ['required', 'array', 'min:1', 'max:100'],
+            'items.*.id' => ['required', 'integer', 'distinct', 'exists:attendances,id'],
+            'items.*.approved_overtime_minutes' => ['required', 'integer', 'min:1'],
+            'items.*.overtime_note' => ['nullable', 'string'],
+        ]);
+
+        $items = collect($validated['items'])->keyBy(fn (array $item) => (int) $item['id']);
+
+        DB::transaction(function () use ($request, $items) {
+            $attendances = Attendance::query()
+                ->whereIn('id', $items->keys())
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+
+            if ($attendances->count() !== $items->count()) {
+                throw ValidationException::withMessages(['items' => ['Sebagian data lembur tidak lagi tersedia. Muat ulang data lalu coba kembali.']]);
+            }
+
+            foreach ($attendances as $attendance) {
+                $item = $items->get($attendance->id);
+                $calculatedMinutes = (int) $attendance->calculated_overtime_minutes;
+                $approvedMinutes = (int) $item['approved_overtime_minutes'];
+
+                if ($attendance->overtime_status !== Attendance::OVERTIME_PENDING || $calculatedMinutes <= 0) {
+                    throw ValidationException::withMessages(['items' => ["Lembur absensi #{$attendance->id} sudah berubah atau tidak lagi pending. Muat ulang data."]]);
+                }
+
+                if ($approvedMinutes > $calculatedMinutes) {
+                    throw ValidationException::withMessages(['items' => ["Menit approval absensi #{$attendance->id} melebihi lembur terhitung ({$calculatedMinutes} menit)."]]);
+                }
+
+                $before = $this->auditSnapshot($attendance);
+                $attendance->update([
+                    'overtime_minutes' => $approvedMinutes,
+                    'approved_overtime_minutes' => $approvedMinutes,
+                    'overtime_status' => Attendance::OVERTIME_APPROVED,
+                    'overtime_note' => $item['overtime_note'] ?? $attendance->overtime_note,
+                    'approved_by' => auth()->id(),
+                    'approved_at' => now(),
+                ]);
+                $attendance->refresh();
+                $this->writeAttendanceAudit($request, 'Bulk approve lembur absensi', $attendance, $before, $this->auditSnapshot($attendance));
+            }
+        });
+
+        return response()->json(['message' => $items->count().' data lembur berhasil di-approve.']);
+    }
+
+    public function bulkRejectOvertime(Request $request)
+    {
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1', 'max:100'],
+            'ids.*' => ['required', 'integer', 'distinct', 'exists:attendances,id'],
+            'overtime_note' => ['required', 'string'],
+        ]);
+        $ids = collect($validated['ids'])->map(fn ($id) => (int) $id)->sort()->values();
+
+        DB::transaction(function () use ($request, $ids, $validated) {
+            $attendances = Attendance::query()
+                ->whereIn('id', $ids)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+
+            if ($attendances->count() !== $ids->count()) {
+                throw ValidationException::withMessages(['ids' => ['Sebagian data lembur tidak lagi tersedia. Muat ulang data lalu coba kembali.']]);
+            }
+
+            foreach ($attendances as $attendance) {
+                if ($attendance->overtime_status !== Attendance::OVERTIME_PENDING || (int) $attendance->calculated_overtime_minutes <= 0) {
+                    throw ValidationException::withMessages(['ids' => ["Lembur absensi #{$attendance->id} sudah berubah atau tidak lagi pending. Muat ulang data."]]);
+                }
+
+                $before = $this->auditSnapshot($attendance);
+                $attendance->update([
+                    'overtime_minutes' => 0,
+                    'approved_overtime_minutes' => 0,
+                    'overtime_status' => Attendance::OVERTIME_REJECTED,
+                    'overtime_note' => $validated['overtime_note'],
+                    'approved_by' => auth()->id(),
+                    'approved_at' => now(),
+                ]);
+                $attendance->refresh();
+                $this->writeAttendanceAudit($request, 'Bulk reject lembur absensi', $attendance, $before, $this->auditSnapshot($attendance));
+            }
+        });
+
+        return response()->json(['message' => $ids->count().' data lembur berhasil di-reject.']);
+    }
+
     public function destroyAttendance(Request $request, Attendance $attendance)
     {
         $before = $this->auditSnapshot($attendance);
@@ -2701,6 +2797,8 @@ class AttendanceController extends Controller
             'employment_status' => $employee?->employment_status,
             'attendance_date' => $attendance->attendance_date?->format('Y-m-d'),
             'shift' => $attendance->shift?->name ?? '-',
+            'shift_start_time' => $this->timeValue($attendance->shift?->start_time),
+            'shift_end_time' => $this->timeValue($attendance->shift?->end_time),
             'check_in_at' => $attendance->check_in_at?->format('Y-m-d H:i:s'),
             'check_out_at' => $attendance->check_out_at?->format('Y-m-d H:i:s'),
             'work_minutes' => (int) $attendance->work_minutes,

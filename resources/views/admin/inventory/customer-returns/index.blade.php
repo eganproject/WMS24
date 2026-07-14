@@ -664,6 +664,9 @@
 
         if (statusFilter && typeof $ !== 'undefined' && $.fn.select2) {
             $(statusFilter).select2({ minimumResultsForSearch: Infinity, width: '180px' });
+            // Select2 memicu event perubahan melalui jQuery, sehingga tabel harus
+            // mendengarkannya melalui jQuery juga agar filter selalu diterapkan.
+            $(statusFilter).on('change', () => dt?.ajax.reload());
         }
 
         if (tableEl.length && $.fn.DataTable) {
@@ -767,7 +770,9 @@
         }
 
         searchInput?.addEventListener('input', debounce(() => dt?.ajax.reload(), 300));
-        statusFilter?.addEventListener('change', () => dt?.ajax.reload());
+        if (statusFilter && (typeof $ === 'undefined' || !$.fn.select2)) {
+            statusFilter.addEventListener('change', () => dt?.ajax.reload());
+        }
 
         checkAllEl?.addEventListener('change', (event) => {
             const checked = !!event.target.checked;

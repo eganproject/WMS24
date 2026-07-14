@@ -13,21 +13,18 @@
 <style>
     .import-loading-overlay {
         position: fixed;
-        inset: 0;
-        background: rgba(15, 23, 42, 0.55);
+        right: 24px;
+        bottom: 24px;
         display: none;
-        align-items: center;
-        justify-content: center;
-        z-index: 2050;
-        padding: 24px;
+        z-index: 1060;
     }
     .import-loading-card {
         background: #fff;
-        border-radius: 16px;
-        padding: 24px 28px;
-        text-align: center;
+        border-radius: 10px;
+        padding: 16px 18px;
+        width: min(340px, calc(100vw - 48px));
         box-shadow: 0 20px 50px rgba(15, 23, 42, 0.2);
-        min-width: 260px;
+        border: 1px solid #e9ecef;
     }
     .buyer-note-text {
         white-space: pre-wrap;
@@ -35,11 +32,18 @@
     }
 </style>
 
-<div class="import-loading-overlay" id="import_loading_overlay">
+<div class="import-loading-overlay" id="import_loading_overlay" role="status" aria-live="polite" aria-hidden="true">
     <div class="import-loading-card">
-        <div class="spinner-border text-primary" role="status"></div>
-        <div class="fw-bold mt-3">Memproses import...</div>
-        <div class="text-muted fs-7 mt-1">Mohon tunggu, jangan tutup halaman.</div>
+        <div class="d-flex align-items-center gap-3 mb-3">
+            <span class="spinner-border spinner-border-sm text-primary" aria-hidden="true"></span>
+            <div>
+                <div class="fw-bold">Mengimpor resi</div>
+                <div class="text-muted fs-8" id="import_loading_message">Mengunggah dan memvalidasi file...</div>
+            </div>
+        </div>
+        <div class="progress h-6px">
+            <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary w-100" aria-label="Import sedang diproses"></div>
+        </div>
     </div>
 </div>
 
@@ -329,6 +333,7 @@
         const importInput = document.getElementById('import_resi_file');
         const importError = document.getElementById('error_import_resi_file');
         const importSubmit = document.getElementById('btn_import_resi_submit');
+        const importLoadingMessage = document.getElementById('import_loading_message');
         const cancelModalEl = document.getElementById('modal_cancel_resi');
         const cancelForm = document.getElementById('form_cancel_resi');
         const cancelModal = cancelModalEl ? new bootstrap.Modal(cancelModalEl) : null;
@@ -905,10 +910,37 @@
         const setLoading = (state) => {
             if (!loadingOverlay) return;
             loadingOverlay.style.display = state ? 'flex' : 'none';
+            loadingOverlay.setAttribute('aria-hidden', state ? 'false' : 'true');
+            if (state && importLoadingMessage) {
+                importLoadingMessage.textContent = 'Mengunggah dan memvalidasi file...';
+            }
             if (importSubmit) importSubmit.disabled = state;
             if (importInput) importInput.disabled = state;
             if (importBtn) importBtn.disabled = state;
             document.body.style.cursor = state ? 'progress' : '';
+        };
+
+        const getImportError = (response, json) => {
+            const validationError = json?.errors?.file?.[0]
+                || Object.values(json?.errors || {}).flat()?.[0];
+            if (validationError) return validationError;
+            if (json?.error) return json.error;
+            if (json?.message && json.message !== 'Gagal import resi') return json.message;
+            if (response.status === 413) return 'Ukuran file terlalu besar. Maksimal ukuran file adalah 5 MB.';
+            if (response.status >= 500) return 'Server gagal memproses file. Silakan coba lagi; bila tetap gagal, hubungi administrator.';
+            return 'Import resi gagal. Periksa format dan isi file Excel, lalu coba kembali.';
+        };
+
+        const showImportError = (message) => {
+            if (importError) importError.textContent = message;
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Import resi gagal',
+                    text: message,
+                    confirmButtonText: 'Periksa file',
+                });
+            }
         };
 
         importSubmit?.addEventListener('click', async () => {
@@ -934,15 +966,10 @@
                     body: formData,
                 });
                 const isJson = res.headers.get('content-type')?.includes('application/json');
-                const json = isJson ? await res.json() : {};
+                const json = isJson ? await res.json() : null;
 
                 if (!res.ok) {
-                    const msg = json?.errors?.file?.[0] || json?.message || 'Gagal import';
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire('Error', msg, 'error');
-                    } else if (importError) {
-                        importError.textContent = msg;
-                    }
+                    showImportError(getImportError(res, json));
                     return;
                 }
 
@@ -956,11 +983,7 @@
                 importModal?.hide();
                 reloadTable();
             } catch (e) {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire('Error', 'Gagal import', 'error');
-                } else if (importError) {
-                    importError.textContent = 'Gagal import';
-                }
+                showImportError('Koneksi ke server gagal atau proses import terputus. Periksa koneksi internet, lalu coba kembali.');
             } finally {
                 setLoading(false);
             }

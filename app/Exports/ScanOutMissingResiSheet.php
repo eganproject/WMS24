@@ -45,9 +45,10 @@ class ScanOutMissingResiSheet implements FromCollection, WithHeadings, WithTitle
 
         $query = DB::table('resis')
             ->leftJoin('shipment_scan_outs as so', 'so.resi_id', '=', 'resis.id')
+            ->leftJoin('kurirs', 'kurirs.id', '=', 'resis.kurir_id')
             ->whereNull('so.id')
             ->where(fn ($q) => $q->whereNull('resis.status')->orWhere('resis.status', '!=', 'canceled'))
-            ->select('resis.id_pesanan', 'resis.no_resi', 'resis.tanggal_upload')
+            ->select('resis.id_pesanan', 'resis.no_resi', 'kurirs.name as expedition', 'resis.tanggal_upload')
             ->orderByDesc('resis.tanggal_upload')
             ->orderBy('resis.id_pesanan');
 
@@ -61,6 +62,7 @@ class ScanOutMissingResiSheet implements FromCollection, WithHeadings, WithTitle
         $this->rows = $query->get()->map(fn ($row) => [
             (string) ($row->id_pesanan ?? ''),
             (string) ($row->no_resi ?? ''),
+            (string) ($row->expedition ?? '-'),
             $row->tanggal_upload ? Carbon::parse($row->tanggal_upload)->format('Y-m-d') : '',
         ])->values();
 
@@ -69,14 +71,14 @@ class ScanOutMissingResiSheet implements FromCollection, WithHeadings, WithTitle
 
     public function headings(): array
     {
-        return ['ID Pesanan', 'No. Resi', 'Tanggal Upload'];
+        return ['ID Pesanan', 'No. Resi', 'Ekspedisi', 'Tanggal Upload'];
     }
 
     public function styles(Worksheet $sheet): array
     {
-        $sheet->mergeCells('A1:C1');
-        $sheet->mergeCells('A2:C2');
-        $sheet->mergeCells('A3:C3');
+        $sheet->mergeCells('A1:D1');
+        $sheet->mergeCells('A2:D2');
+        $sheet->mergeCells('A3:D3');
         $sheet->setCellValue('A1', 'Resi Aktif Belum Scan Out');
         $sheet->setCellValue('A2', $this->filterSummary());
         $sheet->setCellValue('A3', 'Total resi: '.number_format($this->collection()->count(), 0, ',', '.'));
@@ -98,17 +100,18 @@ class ScanOutMissingResiSheet implements FromCollection, WithHeadings, WithTitle
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
                 $lastRow = max(5, 5 + $this->collection()->count());
-                $range = 'A5:C'.$lastRow;
+                $range = 'A5:D'.$lastRow;
 
                 $sheet->freezePane('A6');
                 $sheet->setAutoFilter($range);
                 $sheet->getStyle($range)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setRGB('E4E6EF');
-                $sheet->getStyle('A1:C'.$lastRow)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
-                $sheet->getStyle('A5:C5')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getStyle('A1:D'.$lastRow)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+                $sheet->getStyle('A5:D5')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                 $sheet->getStyle('A6:B'.$lastRow)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
                 $sheet->getColumnDimension('A')->setWidth(24);
                 $sheet->getColumnDimension('B')->setWidth(28);
-                $sheet->getColumnDimension('C')->setWidth(18);
+                $sheet->getColumnDimension('C')->setWidth(24);
+                $sheet->getColumnDimension('D')->setWidth(18);
             },
         ];
     }

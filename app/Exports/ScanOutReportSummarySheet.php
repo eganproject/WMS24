@@ -57,6 +57,7 @@ class ScanOutReportSummarySheet implements FromCollection, WithHeadings, WithTit
             return [
                 Carbon::parse($row->scan_date)->format('Y-m-d'),
                 $row->operator_name ?? '-',
+                $row->expedition ?? '-',
                 (int) $row->total_scan,
                 (int) $row->unique_scan,
                 $avgPerHour,
@@ -70,16 +71,16 @@ class ScanOutReportSummarySheet implements FromCollection, WithHeadings, WithTit
 
     public function headings(): array
     {
-        return ['Tanggal Scan', 'Operator', 'Total Scan', 'Resi Unik', 'Rata-rata / Jam', 'Scan Pertama', 'Scan Terakhir'];
+        return ['Tanggal Scan', 'Operator', 'Ekspedisi', 'Total Scan', 'Resi Unik', 'Rata-rata / Jam', 'Scan Pertama', 'Scan Terakhir'];
     }
 
     public function styles(Worksheet $sheet): array
     {
         $comparison = $this->comparison();
-        $sheet->mergeCells('A1:G1');
-        $sheet->mergeCells('A2:G2');
-        $sheet->mergeCells('A3:G3');
-        $sheet->mergeCells('A4:G4');
+        $sheet->mergeCells('A1:H1');
+        $sheet->mergeCells('A2:H2');
+        $sheet->mergeCells('A3:H3');
+        $sheet->mergeCells('A4:H4');
         $sheet->setCellValue('A1', 'Laporan Scan Out');
         $sheet->setCellValue('A2', $this->filterSummary());
         $sheet->setCellValue('A3', 'Total baris operator: '.number_format($this->collection()->count(), 0, ',', '.'));
@@ -109,18 +110,18 @@ class ScanOutReportSummarySheet implements FromCollection, WithHeadings, WithTit
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
                 $lastRow = max(6, 6 + $this->collection()->count());
-                $range = 'A6:G'.$lastRow;
+                $range = 'A6:H'.$lastRow;
 
                 $sheet->freezePane('A7');
                 $sheet->setAutoFilter($range);
                 $sheet->getStyle($range)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setRGB('E4E6EF');
-                $sheet->getStyle('A1:G'.$lastRow)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
-                $sheet->getStyle('C7:E'.$lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
-                $sheet->getStyle('C7:D'.$lastRow)->getNumberFormat()->setFormatCode('#,##0');
-                $sheet->getStyle('E7:E'.$lastRow)->getNumberFormat()->setFormatCode('#,##0.00');
-                $sheet->getStyle('A6:G6')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getStyle('A1:H'.$lastRow)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+                $sheet->getStyle('D7:F'.$lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                $sheet->getStyle('D7:E'.$lastRow)->getNumberFormat()->setFormatCode('#,##0');
+                $sheet->getStyle('F7:F'.$lastRow)->getNumberFormat()->setFormatCode('#,##0.00');
+                $sheet->getStyle('A6:H6')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-                foreach (['A' => 16, 'B' => 28, 'C' => 16, 'D' => 16, 'E' => 20, 'F' => 16, 'G' => 16] as $column => $width) {
+                foreach (['A' => 16, 'B' => 28, 'C' => 24, 'D' => 16, 'E' => 16, 'F' => 20, 'G' => 16, 'H' => 16] as $column => $width) {
                     $sheet->getColumnDimension($column)->setWidth($width);
                 }
             },
@@ -131,8 +132,11 @@ class ScanOutReportSummarySheet implements FromCollection, WithHeadings, WithTit
     {
         $query = DB::table('shipment_scan_outs as so')
             ->join('users as u', 'u.id', '=', 'so.scanned_by')
-            ->selectRaw('so.scan_date, so.scanned_by, u.name as operator_name, COUNT(*) as total_scan, COUNT(DISTINCT so.scan_code) as unique_scan, MIN(so.scanned_at) as first_scan, MAX(so.scanned_at) as last_scan')
-            ->groupBy('so.scan_date', 'so.scanned_by', 'u.name');
+            ->leftJoin('resis as r', 'r.id', '=', 'so.resi_id')
+            ->leftJoin('kurirs as so_kurir', 'so_kurir.id', '=', 'so.kurir_id')
+            ->leftJoin('kurirs as resi_kurir', 'resi_kurir.id', '=', 'r.kurir_id')
+            ->selectRaw("so.scan_date, so.scanned_by, u.name as operator_name, COALESCE(so_kurir.name, resi_kurir.name, '-') as expedition, COUNT(*) as total_scan, COUNT(DISTINCT so.scan_code) as unique_scan, MIN(so.scanned_at) as first_scan, MAX(so.scanned_at) as last_scan")
+            ->groupBy('so.scan_date', 'so.scanned_by', 'u.name', 'so_kurir.name', 'resi_kurir.name');
 
         $search = trim((string) ($this->filters['q'] ?? ''));
         if ($search !== '') {

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Exports\ScanOutReportExport;
 use App\Http\Controllers\Controller;
 use App\Models\Resi;
 use App\Models\ShipmentScanOut;
@@ -9,6 +10,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Maatwebsite\Excel\Facades\Excel;
 
 class ScanOutReportController extends Controller
 {
@@ -26,9 +28,23 @@ class ScanOutReportController extends Controller
 
         return view('admin.reports.scan-out-reports.index', [
             'dataUrl' => route('admin.reports.scan-out-reports.data'),
+            'exportUrl' => route('admin.reports.scan-out-reports.export'),
             'operators' => $operators,
             'today' => now()->toDateString(),
         ]);
+    }
+
+    public function export(Request $request)
+    {
+        $filters = $request->query();
+        if ($request->filled('operator_id')) {
+            $filters['operator_name'] = User::query()->whereKey($request->input('operator_id'))->value('name');
+        }
+
+        return Excel::download(
+            new ScanOutReportExport($filters),
+            'laporan-scan-out-'.now()->format('Ymd_His').'.xlsx'
+        );
     }
 
     public function data(Request $request)

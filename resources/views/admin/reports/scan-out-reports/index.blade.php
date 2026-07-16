@@ -29,6 +29,7 @@
                 </select>
                 <button type="button" class="btn btn-light" id="filter_apply">Terapkan</button>
                 <button type="button" class="btn btn-light" id="filter_reset">Reset</button>
+                <button type="button" class="btn btn-success" id="export_excel"><i class="fas fa-file-excel me-1"></i>Export Excel</button>
             </div>
         </div>
     </div>
@@ -141,6 +142,7 @@
 @push('scripts')
 <script>
     const dataUrl = '{{ $dataUrl }}';
+    const exportUrl = '{{ $exportUrl }}';
     const todayStr = '{{ $today ?? '' }}';
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -156,6 +158,7 @@
         const searchInput = document.querySelector('[data-kt-filter="search"]');
         const applyBtn = document.getElementById('filter_apply');
         const resetBtn = document.getElementById('filter_reset');
+        const exportBtn = document.getElementById('export_excel');
         const summaryTotalScan = document.getElementById('summary_total_scan');
         const summaryTotalOperator = document.getElementById('summary_total_operator');
         const summaryAvgHour = document.getElementById('summary_avg_hour');
@@ -284,6 +287,13 @@
 
         const reloadTable = () => dt.ajax.reload();
 
+        const currentFilters = () => ({
+            date_from: dateFromEl?.value || '',
+            date_to: dateToEl?.value || '',
+            operator_id: operatorSelect?.value || '',
+            q: searchInput?.value || '',
+        });
+
         applyBtn?.addEventListener('click', reloadTable);
         operatorSelect?.addEventListener('change', reloadTable);
         searchInput?.addEventListener('keyup', (event) => {
@@ -296,6 +306,11 @@
             if (operatorSelect) operatorSelect.value = '';
             if (searchInput) searchInput.value = '';
             reloadTable();
+        });
+
+        exportBtn?.addEventListener('click', () => {
+            const params = new URLSearchParams(currentFilters());
+            window.location.href = `${exportUrl}?${params.toString()}`;
         });
 
         missingPrevBtn?.addEventListener('click', () => {

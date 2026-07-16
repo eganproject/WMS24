@@ -300,6 +300,54 @@ class AttendanceRecapDisplayTest extends TestCase
             ->assertJsonPath('summary.absent_count', 1);
     }
 
+    public function test_work_schedule_overrides_stale_system_day_off_recap_in_monitor_and_recap(): void
+    {
+        Carbon::setTestNow('2026-06-05 10:00:00');
+        $this->actingAsAdmin();
+
+        $employee = Employee::create([
+            'employee_code' => 'EMP-STALE-OFF',
+            'name' => 'Karyawan Jadwal Masuk',
+            'employment_status' => Employee::STATUS_ACTIVE,
+        ]);
+        $shift = WorkShift::create([
+            'name' => 'Shift Pagi Stale',
+            'start_time' => '08:00:00',
+            'end_time' => '17:00:00',
+            'late_tolerance_minutes' => 15,
+        ]);
+        EmployeeSchedule::create([
+            'employee_id' => $employee->id,
+            'work_shift_id' => $shift->id,
+            'schedule_date' => '2026-06-05',
+            'schedule_type' => EmployeeSchedule::TYPE_WORK,
+        ]);
+        Attendance::create([
+            'employee_id' => $employee->id,
+            'attendance_date' => '2026-06-05',
+            'status' => Attendance::STATUS_DAY_OFF,
+            'source' => 'system',
+        ]);
+
+        $this->getJson(route('admin.attendance.absences.data', [
+            'date' => '2026-06-05',
+            'employee_id' => $employee->id,
+        ]))
+            ->assertOk()
+            ->assertJsonPath('data.0.schedule_type', EmployeeSchedule::TYPE_WORK)
+            ->assertJsonPath('data.0.status_key', Attendance::STATUS_ABSENT);
+
+        $this->getJson(route('admin.attendance.attendances.data', [
+            'draw' => 1,
+            'date_from' => '2026-06-05',
+            'date_to' => '2026-06-05',
+            'employee_id' => $employee->id,
+        ]))
+            ->assertOk()
+            ->assertJsonPath('data.0.schedule_type', EmployeeSchedule::TYPE_WORK)
+            ->assertJsonPath('data.0.status', Attendance::STATUS_ABSENT);
+    }
+
     public function test_daily_monitor_uses_effective_holiday_without_existing_recap(): void
     {
         Carbon::setTestNow('2026-06-05 10:00:00');

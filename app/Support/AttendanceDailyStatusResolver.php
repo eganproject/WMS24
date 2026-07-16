@@ -79,6 +79,10 @@ class AttendanceDailyStatusResolver
             return EmployeeSchedule::TYPE_HOLIDAY;
         }
 
+        if ($this->isStaleSystemNonWorkAttendance($schedule, $attendance)) {
+            return EmployeeSchedule::TYPE_WORK;
+        }
+
         return match ($attendance?->status) {
             Attendance::STATUS_LEAVE => EmployeeSchedule::TYPE_LEAVE,
             Attendance::STATUS_HOLIDAY => EmployeeSchedule::TYPE_HOLIDAY,
@@ -116,7 +120,7 @@ class AttendanceDailyStatusResolver
             return Attendance::STATUS_HOLIDAY;
         }
 
-        if ($attendance?->status) {
+        if ($attendance?->status && !$this->isStaleSystemNonWorkStatus($scheduleType, $attendance)) {
             return $attendance->status;
         }
 
@@ -137,6 +141,32 @@ class AttendanceDailyStatusResolver
         }
 
         return Attendance::STATUS_ABSENT;
+    }
+
+    /**
+     * A system-generated day-off/holiday recap can remain after a work schedule
+     * has been created or corrected. Do not let that stale recap override the
+     * current daily schedule. Global holidays and approved leave are handled
+     * before this check.
+     */
+    private function isStaleSystemNonWorkAttendance(?EmployeeSchedule $schedule, ?Attendance $attendance): bool
+    {
+        return $schedule?->schedule_type === EmployeeSchedule::TYPE_WORK
+            && $attendance?->source === 'system'
+            && in_array($attendance->status, [
+                Attendance::STATUS_DAY_OFF,
+                Attendance::STATUS_HOLIDAY,
+            ], true);
+    }
+
+    private function isStaleSystemNonWorkStatus(string $scheduleType, ?Attendance $attendance): bool
+    {
+        return $scheduleType === EmployeeSchedule::TYPE_WORK
+            && $attendance?->source === 'system'
+            && in_array($attendance->status, [
+                Attendance::STATUS_DAY_OFF,
+                Attendance::STATUS_HOLIDAY,
+            ], true);
     }
 
     public function scheduleLabel(string $scheduleType, ?Holiday $holiday = null): string

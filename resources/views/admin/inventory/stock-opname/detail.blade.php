@@ -131,6 +131,24 @@
         font-weight: 800;
         background: #f9fafb;
     }
+    .opn-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 18px; }
+    .opn-summary-card { border: 1px solid #d1d5db; border-radius: 6px; padding: 12px 14px; background: #fff; }
+    .opn-summary-card.is-success { border-color: #86efac; background: #f0fdf4; }
+    .opn-summary-card.is-danger { border-color: #fca5a5; background: #fef2f2; }
+    .opn-summary-card.is-primary { border-color: #93c5fd; background: #eff6ff; }
+    .opn-summary-label { color: #6b7280; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .35px; }
+    .opn-summary-value { margin-top: 3px; font-size: 24px; line-height: 1.15; font-weight: 800; }
+    .opn-summary-help { margin-top: 3px; color: #6b7280; font-size: 10px; }
+    .opn-table-wrap { overflow-x: auto; }
+    .opn-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; padding-bottom: 7px; border-bottom: 2px solid #d1d5db; }
+    .opn-section-heading h2 { margin: 0; font-size: 16px; font-weight: 800; }
+    .opn-section-heading.is-danger { border-bottom-color: #dc2626; color: #991b1b; }
+    .opn-section-heading.is-success { border-bottom-color: #16a34a; color: #166534; }
+    .opn-section-count { border-radius: 999px; padding: 3px 9px; color: #fff; font-size: 11px; font-weight: 800; }
+    .opn-section-heading.is-danger .opn-section-count { background: #991b1b; }
+    .opn-section-heading.is-success .opn-section-count { background: #166534; }
+    .opn-row-diff { background: #fff7f7; }
+    .opn-row-match { background: #f7fdf9; }
     .opn-note {
         margin-top: 18px;
         border: 1px solid #d1d5db;
@@ -235,6 +253,15 @@
             padding: 0;
         }
         .opn-topbar { margin-top: 0; }
+        .opn-summary-card, .opn-items tr { break-inside: avoid; }
+    }
+    @media (max-width: 767px) {
+        .opn-paper { padding: 22px 16px; }
+        .opn-summary { grid-template-columns: repeat(2, 1fr); }
+        .opn-topbar { flex-direction: column; }
+        .opn-title { min-width: 0; text-align: left; }
+        .opn-grid { grid-template-columns: 1fr; }
+        .opn-items { min-width: 760px; }
     }
 </style>
 @endpush
@@ -252,6 +279,13 @@
     $totalCounted = (int) $opname->items->sum('counted_qty');
     $totalAdjustment = (int) $opname->items->sum('adjustment');
     $totalKoli = (int) $opname->items->sum(fn ($row) => (int) ($row->koli ?? 0));
+    $totalSku = $opname->items->count();
+    $differentItems = $opname->items->filter(fn ($row) => (int) $row->adjustment !== 0)->values();
+    $matchingItems = $opname->items->filter(fn ($row) => (int) $row->adjustment === 0)->values();
+    $matchingSku = $matchingItems->count();
+    $differentSku = $differentItems->count();
+    $accuracy = $totalSku > 0 ? ($matchingSku / $totalSku) * 100 : 0;
+    $accuracyLabel = number_format($accuracy, 2, ',', '.').'%';
     $exportUrl = route('admin.inventory.stock-opname.export', $opname->id);
 
     $formatKoliBreakdown = function ($qty, $qtyPerKoli) {
@@ -347,6 +381,30 @@
             @endif
         </div>
 
+        <div class="opn-summary">
+            <div class="opn-summary-card">
+                <div class="opn-summary-label">Total SKU Dicek</div>
+                <div class="opn-summary-value">{{ number_format($totalSku, 0, ',', '.') }}</div>
+                <div class="opn-summary-help">Seluruh SKU dalam opname</div>
+            </div>
+            <div class="opn-summary-card is-success">
+                <div class="opn-summary-label">SKU Sesuai</div>
+                <div class="opn-summary-value">{{ number_format($matchingSku, 0, ',', '.') }}</div>
+                <div class="opn-summary-help">Fisik sama dengan sistem</div>
+            </div>
+            <div class="opn-summary-card is-danger">
+                <div class="opn-summary-label">SKU Selisih</div>
+                <div class="opn-summary-value">{{ number_format($differentSku, 0, ',', '.') }}</div>
+                <div class="opn-summary-help">Perlu ditinjau</div>
+            </div>
+            <div class="opn-summary-card is-primary">
+                <div class="opn-summary-label">Akurasi Stok Opname</div>
+                <div class="opn-summary-value">{{ $accuracyLabel }}</div>
+                <div class="opn-summary-help">SKU sesuai / total SKU</div>
+            </div>
+        </div>
+
+        <div class="opn-table-wrap">
         <table class="opn-items">
             <thead>
                 <tr>
@@ -363,7 +421,19 @@
                 </tr>
             </thead>
             <tbody>
-                @foreach($opname->items as $row)
+                @foreach([
+                    ['items' => $differentItems, 'label' => 'Ada Selisih', 'class' => 'is-danger', 'row_class' => 'opn-row-diff'],
+                    ['items' => $matchingItems, 'label' => 'Sesuai', 'class' => 'is-success', 'row_class' => 'opn-row-match'],
+                ] as $group)
+                    <tr>
+                        <td colspan="{{ $isDefaultWarehouse ? 8 : 7 }}" style="padding: 0; border: 0;">
+                            <div class="opn-section-heading {{ $group['class'] }}" style="margin-top: 16px;">
+                                <h2>{{ $group['label'] }}</h2>
+                                <span class="opn-section-count">{{ $group['items']->count() }} SKU</span>
+                            </div>
+                        </td>
+                    </tr>
+                @forelse($group['items'] as $row)
                     @php
                         $adj = (int) $row->adjustment;
                         $adjClass = $adj > 0 ? 'opn-adj-pos' : ($adj < 0 ? 'opn-adj-neg' : '');
@@ -375,7 +445,7 @@
                         $systemKoli = $formatKoliBreakdown($systemQty, $itemKoliQty);
                         $adjKoli = $formatKoliBreakdown($adj, $itemKoliQty);
                     @endphp
-                    <tr>
+                    <tr class="{{ $group['row_class'] }}">
                         <td class="opn-num">{{ $loop->iteration }}</td>
                         <td>{{ $row->item?->sku ?? '-' }}</td>
                         <td>{{ $row->item?->name ?? '-' }}</td>
@@ -417,12 +487,14 @@
                         </td>
                         <td>{{ $row->note ?: '-' }}</td>
                     </tr>
-                @endforeach
-                @if($opname->items->isEmpty())
+                @empty
                     <tr>
-                        <td colspan="{{ $isDefaultWarehouse ? 8 : 7 }}" class="text-center text-muted">Tidak ada item.</td>
+                        <td colspan="{{ $isDefaultWarehouse ? 8 : 7 }}" class="text-center text-muted">
+                            Tidak ada SKU dalam kategori {{ strtolower($group['label']) }}.
+                        </td>
                     </tr>
-                @endif
+                @endforelse
+                @endforeach
             </tbody>
             <tfoot>
                 <tr>
@@ -443,6 +515,7 @@
                 </tr>
             </tfoot>
         </table>
+        </div>
 
         <div class="opn-note">
             <strong>Catatan:</strong><br>

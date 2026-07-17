@@ -61,6 +61,8 @@ class StockOpnameApprovalTest extends TestCase
             ->assertSeeText('50,00%')
             ->assertSeeText('Ada Selisih')
             ->assertSeeText('Sesuai')
+            ->assertSeeText('Print Selisih')
+            ->assertSeeText('TOTAL SKU SELISIH')
             ->assertSeeText('SKU-SO-SELISIH')
             ->assertSeeText('SKU-SO-SESUAI');
     }

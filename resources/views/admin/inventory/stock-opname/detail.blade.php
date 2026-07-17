@@ -149,6 +149,7 @@
     .opn-section-heading.is-success .opn-section-count { background: #166534; }
     .opn-row-diff { background: #fff7f7; }
     .opn-row-match { background: #f7fdf9; }
+    .opn-difference-total { display: none; }
     .opn-note {
         margin-top: 18px;
         border: 1px solid #d1d5db;
@@ -254,6 +255,11 @@
         }
         .opn-topbar { margin-top: 0; }
         .opn-summary-card, .opn-items tr { break-inside: avoid; }
+        body.opn-print-differences .opn-summary,
+        body.opn-print-differences .opn-group-match,
+        body.opn-print-differences .opn-row-match,
+        body.opn-print-differences .opn-overall-total { display: none !important; }
+        body.opn-print-differences .opn-difference-total { display: table-row !important; }
     }
     @media (max-width: 767px) {
         .opn-paper { padding: 22px 16px; }
@@ -284,6 +290,10 @@
     $matchingItems = $opname->items->filter(fn ($row) => (int) $row->adjustment === 0)->values();
     $matchingSku = $matchingItems->count();
     $differentSku = $differentItems->count();
+    $differentSystem = (int) $differentItems->sum('system_qty');
+    $differentCounted = (int) $differentItems->sum('counted_qty');
+    $differentAdjustment = (int) $differentItems->sum('adjustment');
+    $differentKoli = (int) $differentItems->sum(fn ($row) => (int) ($row->koli ?? 0));
     $accuracy = $totalSku > 0 ? ($matchingSku / $totalSku) * 100 : 0;
     $accuracyLabel = number_format($accuracy, 2, ',', '.').'%';
     $exportUrl = route('admin.inventory.stock-opname.export', $opname->id);
@@ -313,6 +323,7 @@
     <div class="opn-actions">
         <a href="{{ $backUrl }}" class="btn btn-light">Kembali</a>
         <a href="{{ $exportUrl }}" class="btn btn-light-primary">Export Excel</a>
+        <button type="button" class="btn btn-light-danger" onclick="printOpnameDifferences()">Print Selisih</button>
         <button type="button" class="btn btn-success" onclick="window.print()">Cetak</button>
     </div>
 
@@ -422,10 +433,10 @@
             </thead>
             <tbody>
                 @foreach([
-                    ['items' => $differentItems, 'label' => 'Ada Selisih', 'class' => 'is-danger', 'row_class' => 'opn-row-diff'],
-                    ['items' => $matchingItems, 'label' => 'Sesuai', 'class' => 'is-success', 'row_class' => 'opn-row-match'],
+                    ['items' => $differentItems, 'label' => 'Ada Selisih', 'class' => 'is-danger', 'row_class' => 'opn-row-diff', 'group_class' => 'opn-group-diff'],
+                    ['items' => $matchingItems, 'label' => 'Sesuai', 'class' => 'is-success', 'row_class' => 'opn-row-match', 'group_class' => 'opn-group-match'],
                 ] as $group)
-                    <tr>
+                    <tr class="{{ $group['group_class'] }}">
                         <td colspan="{{ $isDefaultWarehouse ? 8 : 7 }}" style="padding: 0; border: 0;">
                             <div class="opn-section-heading {{ $group['class'] }}" style="margin-top: 16px;">
                                 <h2>{{ $group['label'] }}</h2>
@@ -488,7 +499,7 @@
                         <td>{{ $row->note ?: '-' }}</td>
                     </tr>
                 @empty
-                    <tr>
+                    <tr class="{{ $group['group_class'] }}">
                         <td colspan="{{ $isDefaultWarehouse ? 8 : 7 }}" class="text-center text-muted">
                             Tidak ada SKU dalam kategori {{ strtolower($group['label']) }}.
                         </td>
@@ -497,7 +508,7 @@
                 @endforeach
             </tbody>
             <tfoot>
-                <tr>
+                <tr class="opn-overall-total">
                     <td colspan="{{ $isDefaultWarehouse ? 4 : 3 }}">TOTAL</td>
                     <td class="opn-qty">{{ number_format($totalSystem, 0, ',', '.') }} pcs</td>
                     <td class="opn-qty">
@@ -510,6 +521,22 @@
                     </td>
                     <td class="opn-qty {{ $totalAdjustment > 0 ? 'opn-adj-pos' : ($totalAdjustment < 0 ? 'opn-adj-neg' : '') }}">
                         {{ ($totalAdjustment > 0 ? '+' : '').number_format($totalAdjustment, 0, ',', '.') }} pcs
+                    </td>
+                    <td></td>
+                </tr>
+                <tr class="opn-difference-total">
+                    <td colspan="{{ $isDefaultWarehouse ? 4 : 3 }}">TOTAL SKU SELISIH</td>
+                    <td class="opn-qty">{{ number_format($differentSystem, 0, ',', '.') }} pcs</td>
+                    <td class="opn-qty">
+                        @if($isDefaultWarehouse)
+                            {{ $differentKoli > 0 ? number_format($differentKoli, 0, ',', '.').' koli' : '-' }}
+                            <span class="opn-cell-sub">= {{ number_format($differentCounted, 0, ',', '.') }} pcs</span>
+                        @else
+                            {{ number_format($differentCounted, 0, ',', '.') }} pcs
+                        @endif
+                    </td>
+                    <td class="opn-qty {{ $differentAdjustment > 0 ? 'opn-adj-pos' : ($differentAdjustment < 0 ? 'opn-adj-neg' : '') }}">
+                        {{ ($differentAdjustment > 0 ? '+' : '').number_format($differentAdjustment, 0, ',', '.') }} pcs
                     </td>
                     <td></td>
                 </tr>
@@ -535,3 +562,16 @@
     </div>
 </div>
 @endsection
+
+@push('scripts')
+<script>
+    function printOpnameDifferences() {
+        document.body.classList.add('opn-print-differences');
+        window.print();
+    }
+
+    window.addEventListener('afterprint', function () {
+        document.body.classList.remove('opn-print-differences');
+    });
+</script>
+@endpush

@@ -455,6 +455,7 @@ class DashboardController extends Controller
             'kurir_id' => ['required', 'integer', 'exists:kurirs,id'],
             'date' => ['nullable', 'date'],
             'type' => ['nullable', 'in:total,scanned,remaining,canceled'],
+            'search' => ['nullable', 'string', 'max:10000'],
         ]);
 
         $date = Carbon::parse($validated['date'] ?? now())->toDateString();
@@ -504,6 +505,30 @@ class DashboardController extends Controller
             default => $pendingResis,
         };
 
+        $searchTerms = $this->parseResiSearchTerms($validated['search'] ?? '');
+        $matchedTerms = collect();
+        if ($searchTerms !== []) {
+            $normalizedTerms = collect($searchTerms)
+                ->map(fn (string $term) => mb_strtolower($term))
+                ->flip();
+
+            $selectedResis = $selectedResis->filter(function (Resi $resi) use ($normalizedTerms, &$matchedTerms) {
+                $values = [
+                    trim((string) $resi->no_resi),
+                    trim((string) $resi->id_pesanan),
+                ];
+
+                $matches = collect($values)
+                    ->filter()
+                    ->map(fn (string $value) => mb_strtolower($value))
+                    ->filter(fn (string $value) => $normalizedTerms->has($value));
+
+                $matchedTerms = $matchedTerms->merge($matches);
+
+                return $matches->isNotEmpty();
+            })->values();
+        }
+
         $data = $selectedResis->map(function ($resi) use ($scanOutsByResi) {
             $scanOut = $scanOutsByResi->get($resi->id);
             $isCanceled = ($resi->status ?? 'active') === 'canceled';
@@ -532,9 +557,25 @@ class DashboardController extends Controller
                 'scanned_total' => $scannedResis->count(),
                 'remaining_total' => $pendingResis->count(),
                 'canceled_total' => $canceledResis->count(),
+                'search_terms' => $searchTerms,
+                'unmatched_search_terms' => collect($searchTerms)
+                    ->reject(fn (string $term) => $matchedTerms->contains(mb_strtolower($term)))
+                    ->values(),
             ],
             'data' => $data,
         ]);
+    }
+
+    /** @return array<int, string> */
+    private function parseResiSearchTerms(string $search): array
+    {
+        return collect(preg_split('/[\s,;]+/u', trim($search), -1, PREG_SPLIT_NO_EMPTY))
+            ->map(fn (string $term) => trim($term))
+            ->filter()
+            ->unique(fn (string $term) => mb_strtolower($term))
+            ->take(200)
+            ->values()
+            ->all();
     }
 
     private function scanOutOverQuery(string $date)

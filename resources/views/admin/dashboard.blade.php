@@ -813,6 +813,24 @@
                     </button>
                 </div>
 
+                <form id="kurir_detail_search_form" class="mb-5" novalidate>
+                    <label for="kurir_detail_search" class="form-label fw-semibold mb-2">Cari nomor resi atau ID pesanan</label>
+                    <div class="d-flex gap-2 align-items-start">
+                        <textarea
+                            id="kurir_detail_search"
+                            class="form-control form-control-solid"
+                            rows="2"
+                            placeholder="Masukkan beberapa nomor resi atau ID pesanan, pisahkan dengan baris baru, koma, atau titik koma"
+                        ></textarea>
+                        <div class="d-flex flex-column gap-2">
+                            <button type="submit" class="btn btn-primary text-nowrap">Cari</button>
+                            <button type="button" class="btn btn-light text-nowrap" id="kurir_detail_search_reset">Reset</button>
+                        </div>
+                    </div>
+                    <div class="form-text">Pencarian bersifat presisi dan mengikuti kategori status yang sedang dipilih.</div>
+                    <div class="text-muted fs-8 mt-2 d-none" id="kurir_detail_search_summary"></div>
+                </form>
+
                 {{-- table --}}
                 <div class="table-responsive">
                     <table class="table table-row-dashed align-middle">
@@ -937,6 +955,10 @@
         const detailRemaining = document.getElementById('kurir_detail_remaining');
         const detailCanceled = document.getElementById('kurir_detail_canceled');
         const detailBody     = document.getElementById('kurir_detail_body');
+        const detailSearchForm = document.getElementById('kurir_detail_search_form');
+        const detailSearchInput = document.getElementById('kurir_detail_search');
+        const detailSearchReset = document.getElementById('kurir_detail_search_reset');
+        const detailSearchSummary = document.getElementById('kurir_detail_search_summary');
         const detailTypeButtons = Array.from(document.querySelectorAll('.js-kurir-detail-type'));
         const scanDiscrepancyBtn = document.getElementById('btn_scan_discrepancy');
         const scanDiscrepancyModalEl = document.getElementById('modal_scan_discrepancy');
@@ -953,6 +975,7 @@
             kurirName: '-',
             date: '',
             type: 'remaining',
+            search: '',
         };
 
         const detailTypeLabels = {
@@ -1084,6 +1107,24 @@
                 </tr>`;
         };
 
+        const setSearchSummary = (searchTerms = [], unmatchedTerms = []) => {
+            if (!detailSearchSummary) return;
+
+            if (!Array.isArray(searchTerms) || !searchTerms.length) {
+                detailSearchSummary.textContent = '';
+                detailSearchSummary.classList.add('d-none');
+                return;
+            }
+
+            const foundTotal = Math.max(0, searchTerms.length - (unmatchedTerms || []).length);
+            let message = `${foundTotal} dari ${searchTerms.length} kata kunci ditemukan.`;
+            if (Array.isArray(unmatchedTerms) && unmatchedTerms.length) {
+                message += ` Tidak ditemukan: ${unmatchedTerms.join(', ')}.`;
+            }
+            detailSearchSummary.textContent = message;
+            detailSearchSummary.classList.remove('d-none');
+        };
+
         const renderRows = (rows) => {
             if (!detailBody) return;
             if (!Array.isArray(rows) || !rows.length) {
@@ -1109,14 +1150,15 @@
                 </tr>`).join('');
         };
 
-        const loadKurirDetail = async ({ kurirId, kurirName = '-', date = '', type = 'remaining' }) => {
+        const loadKurirDetail = async ({ kurirId, kurirName = '-', date = '', type = 'remaining', search = '' }) => {
             if (!kurirId || !detailModal) return;
 
-            activeDetailRequest = { kurirId, kurirName, date, type };
+            activeDetailRequest = { kurirId, kurirName, date, type, search };
             setLoadingState(kurirName, date, type);
 
             try {
-                const params   = new URLSearchParams({ kurir_id: kurirId, date, type });
+                const params = new URLSearchParams({ kurir_id: kurirId, date, type });
+                if (search.trim()) params.set('search', search.trim());
                 const response = await fetch(`${kurirDetailUrl}?${params.toString()}`);
                 const payload  = await response.json();
 
@@ -1132,8 +1174,10 @@
                 if (detailScanned)   detailScanned.textContent   = Number(meta.scanned_total  || 0).toLocaleString('id-ID');
                 if (detailRemaining) detailRemaining.textContent = Number(meta.remaining_total || 0).toLocaleString('id-ID');
                 if (detailCanceled)  detailCanceled.textContent  = Number(meta.canceled_total || 0).toLocaleString('id-ID');
+                setSearchSummary(meta.search_terms || [], meta.unmatched_search_terms || []);
                 renderRows(payload?.data || []);
             } catch (error) {
+                setSearchSummary();
                 if (detailBody) detailBody.innerHTML = `
                     <tr>
                         <td colspan="5" class="text-center text-danger py-6">
@@ -1151,6 +1195,19 @@
             });
         });
 
+        detailSearchForm?.addEventListener('submit', (event) => {
+            event.preventDefault();
+            loadKurirDetail({
+                ...activeDetailRequest,
+                search: detailSearchInput?.value || '',
+            });
+        });
+
+        detailSearchReset?.addEventListener('click', () => {
+            if (detailSearchInput) detailSearchInput.value = '';
+            loadKurirDetail({ ...activeDetailRequest, search: '' });
+        });
+
         document.querySelectorAll('.btn-kurir-detail').forEach(button => {
             button.addEventListener('click', () => {
                 const kurirId   = button.getAttribute('data-kurir-id');
@@ -1160,6 +1217,8 @@
                 if (!kurirId || !detailModal) return;
 
                 detailModal.show();
+                if (detailSearchInput) detailSearchInput.value = '';
+                setSearchSummary();
                 loadKurirDetail({ kurirId, kurirName, date, type: 'remaining' });
             });
         });

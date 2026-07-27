@@ -9,6 +9,7 @@ class ReconcileCanceledTransferMutations extends Command
 {
     protected $signature = 'stock:reconcile-canceled-transfers
         {--execute : Terapkan rekonsiliasi. Tanpa opsi ini command hanya audit.}
+        {--dry-run : Audit tanpa perubahan; eksplisit untuk penggunaan di terminal.}
         {--batch=20 : Jumlah mutasi yang diproses per transaksi.}
         {--expected= : Jumlah mutasi void yang diharapkan sebagai pengaman tambahan.}';
 

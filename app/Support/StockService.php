@@ -95,6 +95,7 @@ class StockService
     {
         $mutations = StockMutation::where('source_type', $sourceType)
             ->where('source_id', $sourceId)
+            ->where('is_void', false)
             ->orderByDesc('id')
             ->get();
 
@@ -138,6 +139,51 @@ class StockService
             ->where('item_id', $itemId)
             ->where('warehouse_id', $warehouseId)
             ->value('stock') ?? 0);
+    }
+
+    /**
+     * Menulis jejak pembalik setelah saldo sumber dikembalikan oleh rollback.
+     * Saldo tidak diubah di sini; perubahan saldo sudah dilakukan oleh rollbackBySource().
+     */
+    public static function recordCancellationReversals(int $sourceId, ?int $createdBy = null, $occurredAt = null): void
+    {
+        $mutations = StockMutation::query()
+            ->where('source_type', 'transfer')
+            ->where('source_id', $sourceId)
+            ->where('is_void', false)
+            ->orderByDesc('id')
+            ->get();
+
+        foreach ($mutations as $mutation) {
+            $warehouseId = (int) $mutation->warehouse_id;
+            $stockAfter = self::currentQty((int) $mutation->item_id, $warehouseId);
+            $direction = $mutation->direction === 'out' ? 'in' : 'out';
+            $stockBefore = $direction === 'in'
+                ? $stockAfter - (int) $mutation->qty
+                : $stockAfter + (int) $mutation->qty;
+
+            StockMutation::updateOrCreate([
+                'item_id' => $mutation->item_id,
+                'warehouse_id' => $warehouseId,
+                'source_type' => 'transfer_cancel',
+                'source_id' => $sourceId,
+            ], [
+                'reference_item_id' => $mutation->reference_item_id,
+                'reference_sku' => $mutation->reference_sku,
+                'direction' => $direction,
+                'qty' => (int) $mutation->qty,
+                'stock_before' => $stockBefore,
+                'stock_after' => $stockAfter,
+                'source_subtype' => 'rollback',
+                'source_code' => $mutation->source_code,
+                'note' => 'Pembalik otomatis untuk transfer yang dibatalkan.',
+                'occurred_at' => $occurredAt ?? now(),
+                'created_by' => $createdBy,
+                'is_void' => false,
+                'voided_at' => null,
+                'voided_by' => null,
+            ]);
+        }
     }
 
     public static function assertSellableAvailable(iterable $rows, int $warehouseId): void

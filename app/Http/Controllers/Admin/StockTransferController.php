@@ -587,6 +587,11 @@ class StockTransferController extends Controller
         DB::beginTransaction();
         try {
             StockService::rollbackBySource('transfer', $transfer->id);
+            StockService::recordCancellationReversals(
+                $transfer->id,
+                auth()->id(),
+                now()
+            );
             InboundKoliUnit::where('reserved_transfer_id', $transfer->id)
                 ->update([
                     'status' => InboundKoliUnit::STATUS_AVAILABLE,

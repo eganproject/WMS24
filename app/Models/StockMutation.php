@@ -25,10 +25,15 @@ class StockMutation extends Model
         'note',
         'occurred_at',
         'created_by',
+        'is_void',
+        'voided_at',
+        'voided_by',
     ];
 
     protected $casts = [
         'occurred_at' => 'datetime',
+        'is_void' => 'boolean',
+        'voided_at' => 'datetime',
     ];
 
     public function item()

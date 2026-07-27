@@ -5,6 +5,7 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use App\Console\Commands\PurgeAttendanceWebhookLogs;
 use App\Console\Commands\RecalculatePoLineFulfillment;
+use App\Console\Commands\ReconcileCanceledTransferMutations;
 use App\Console\Commands\TelegramSetWebhook;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -16,6 +17,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withCommands([
         PurgeAttendanceWebhookLogs::class,
         RecalculatePoLineFulfillment::class,
+        ReconcileCanceledTransferMutations::class,
         TelegramSetWebhook::class,
     ])
     ->withMiddleware(function (Middleware $middleware): void {

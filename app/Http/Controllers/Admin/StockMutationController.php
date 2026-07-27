@@ -29,6 +29,7 @@ class StockMutationController extends Controller
             ? Item::query()->find($initialItemId, ['id', 'sku', 'name'])
             : null;
         $sourceTypes = StockMutation::query()
+            ->where('is_void', false)
             ->whereNotNull('source_type')
             ->select('source_type')
             ->distinct()
@@ -55,7 +56,9 @@ class StockMutationController extends Controller
     {
         $query = StockMutation::query()
             ->with(['item', 'referenceItem', 'creator', 'warehouse'])
-            ->orderBy('occurred_at', 'desc');
+            ->where('is_void', false)
+            ->orderBy('occurred_at', 'desc')
+            ->orderBy('id', 'desc');
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
@@ -107,7 +110,7 @@ class StockMutationController extends Controller
             $query->where('warehouse_id', (int) $warehouseFilter);
         }
 
-        $recordsTotal = StockMutation::count();
+        $recordsTotal = StockMutation::where('is_void', false)->count();
         $recordsFiltered = (clone $query)->count();
 
         $start = (int) $request->input('start', 0);

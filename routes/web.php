@@ -48,6 +48,7 @@ use App\Http\Controllers\Admin\LocationController;
 use App\Http\Controllers\Admin\KurirController;
 use App\Http\Controllers\Admin\SupplierController;
 use App\Http\Controllers\Admin\EmployeeUserAuditController;
+use App\Http\Controllers\Admin\StockApiAllowedIpController;
 use App\Http\Controllers\Mobile\StockOpnameMobileController;
 use App\Http\Controllers\Mobile\MobileDashboardController;
 use App\Http\Controllers\Mobile\InboundScanController;
@@ -142,6 +143,10 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
     Route::get('/dashboard/scan-out-discrepancy', [DashboardController::class, 'scanOutDiscrepancy'])->name('dashboard.scan-out-discrepancy');
 
     Route::prefix('masterdata')->as('masterdata.')->group(function () {
+        Route::get('/stock-api-access',[StockApiAllowedIpController::class,'index'])->name('stock-api-access.index');
+        Route::post('/stock-api-access',[StockApiAllowedIpController::class,'store'])->name('stock-api-access.store');
+        Route::put('/stock-api-access/{stockApiAllowedIp}',[StockApiAllowedIpController::class,'update'])->name('stock-api-access.update');
+        Route::delete('/stock-api-access/{stockApiAllowedIp}',[StockApiAllowedIpController::class,'destroy'])->name('stock-api-access.destroy');
         // Users DataTables
         Route::get('/users/data', [AdminUserController::class, 'data'])->name('users.data');
         Route::post('/users/import', [AdminUserController::class, 'import'])->name('users.import');

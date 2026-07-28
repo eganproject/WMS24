@@ -1,0 +1,3 @@
+<?php
+use Illuminate\Database\Migrations\Migration; use Illuminate\Database\Schema\Blueprint; use Illuminate\Support\Facades\Schema;
+return new class extends Migration { public function up(): void { Schema::create('stock_api_sync_records',function(Blueprint $t){$t->id();$t->unsignedBigInteger('item_id')->nullable()->index();$t->string('sku',100)->unique();$t->string('name');$t->string('category')->nullable();$t->string('uom',30)->default('pcs');$t->decimal('qty',18,3)->default(0);$t->decimal('min_qty',18,3)->nullable();$t->string('status',10)->index();$t->timestamp('source_updated_at')->index();$t->timestamps();$t->index(['source_updated_at','sku']);});} public function down(): void {Schema::dropIfExists('stock_api_sync_records');} };

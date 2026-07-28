@@ -7,6 +7,7 @@ use App\Models\ItemStock;
 use App\Models\StockMutation;
 use Illuminate\Validation\ValidationException;
 use App\Support\WarehouseService;
+use App\Support\StockApiSyncService;
 
 class StockService
 {
@@ -72,7 +73,7 @@ class StockService
             ]);
         }
 
-        StockMutation::create([
+        $mutation = StockMutation::create([
             'item_id' => $itemId,
             'reference_item_id' => $payload['reference_item_id'] ?? $itemId,
             'reference_sku' => $payload['reference_sku'] ?? $item->sku,
@@ -89,6 +90,8 @@ class StockService
             'occurred_at' => $payload['occurred_at'] ?? now(),
             'created_by' => $payload['created_by'] ?? null,
         ]);
+        StockApiSyncService::syncItem($itemId, $mutation->occurred_at);
+        StockApiSyncService::syncBundlesUsingComponent($itemId, $mutation->occurred_at);
     }
 
     public static function rollbackBySource(string $sourceType, int $sourceId): void
@@ -130,6 +133,8 @@ class StockService
 
             $stock->stock = $newStock;
             $stock->save();
+            StockApiSyncService::syncItem((int)$mutation->item_id);
+            StockApiSyncService::syncBundlesUsingComponent((int)$mutation->item_id);
         }
     }
 

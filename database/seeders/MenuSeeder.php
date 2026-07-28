@@ -24,7 +24,6 @@ class MenuSeeder extends Seeder
             ['name' => 'Items', 'slug' => 'items', 'route' => 'admin.masterdata.items.index', 'icon' => 'fas fa-box', 'parent_slug' => 'master-data', 'sort_order' => 21.6],
             ['name' => 'Areas', 'slug' => 'areas', 'route' => 'admin.masterdata.areas.index', 'icon' => 'fas fa-road', 'parent_slug' => 'master-data', 'sort_order' => 21.61],
             ['name' => 'Locations', 'slug' => 'locations', 'route' => 'admin.masterdata.locations.index', 'icon' => 'fas fa-map-marker-alt', 'parent_slug' => 'master-data', 'sort_order' => 21.62],
-            ['name' => 'Akses API Stok', 'slug' => 'stock-api-access', 'route' => 'admin.masterdata.stock-api-access.index', 'icon' => 'fas fa-shield-alt', 'parent_slug' => 'master-data', 'sort_order' => 21.63],
             ['name' => 'Item Stocks', 'slug' => 'item-stocks', 'route' => 'admin.inventory.item-stocks.index', 'icon' => 'fas fa-boxes', 'parent_slug' => 'inventory', 'sort_order' => 10],
             ['name' => 'Stock Mutations', 'slug' => 'stock-mutations', 'route' => 'admin.inventory.stock-mutations.index', 'icon' => 'fas fa-exchange-alt', 'parent_slug' => 'inventory', 'sort_order' => 11],
             ['name' => 'Transfer Gudang', 'slug' => 'stock-transfers', 'route' => 'admin.inventory.stock-transfers.index', 'icon' => 'fas fa-exchange-alt', 'parent_slug' => 'inventory', 'sort_order' => 11.5],

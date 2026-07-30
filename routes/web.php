@@ -39,6 +39,7 @@ use App\Http\Controllers\Admin\KpiController;
 use App\Http\Controllers\Admin\KpiScoreReportController;
 use App\Http\Controllers\Admin\StockOpnameReportController;
 use App\Http\Controllers\Admin\ReplenishmentReportController;
+use App\Http\Controllers\Admin\DisplayReceiptReportController;
 use App\Http\Controllers\Admin\StockTransferReportController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\MenuController;
@@ -486,6 +487,8 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/attendance/export', [AttendanceReportController::class, 'export'])->name('attendance.export');
         Route::get('/replenishment', [ReplenishmentReportController::class, 'index'])->name('replenishment.index');
         Route::get('/replenishment/data', [ReplenishmentReportController::class, 'data'])->name('replenishment.data');
+        Route::get('/display-receipts', [DisplayReceiptReportController::class, 'index'])->name('display-receipts.index');
+        Route::get('/display-receipts/data', [DisplayReceiptReportController::class, 'data'])->name('display-receipts.data');
         Route::get('/stock-transfers', [StockTransferReportController::class, 'index'])->name('stock-transfers.index');
         Route::get('/stock-transfers/data', [StockTransferReportController::class, 'data'])->name('stock-transfers.data');
         Route::get('/stock-transfers/chart-data', [StockTransferReportController::class, 'chartData'])->name('stock-transfers.chart-data');

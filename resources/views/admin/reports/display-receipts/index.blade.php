@@ -44,7 +44,7 @@
     <div class="card-body py-6">
         <div class="table-responsive">
             <table class="table align-middle table-row-dashed fs-6 gy-5" id="display_receipts_table">
-                <thead><tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0"><th>Waktu Masuk</th><th>SKU</th><th>Nama Item</th><th class="text-end">Qty</th><th>Asal</th><th>Detail Proses</th><th>Dokumen</th><th>Operator</th><th>Catatan</th><th class="text-end">Aksi</th></tr></thead>
+                <thead><tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0"><th>Waktu Masuk</th><th>SKU Hasil</th><th>Nama Item</th><th class="text-end">Qty</th><th>Asal</th><th>SKU Rusak Sumber / Resep</th><th>Dokumen</th><th>Operator</th><th>Catatan</th><th class="text-end">Aksi</th></tr></thead>
                 <tbody></tbody>
             </table>
         </div>
@@ -79,7 +79,11 @@ document.addEventListener('DOMContentLoaded', () => {
             { data: 'occurred_at' }, { data: 'sku' }, { data: 'item_name' },
             { data: 'qty', className: 'text-end fw-bolder', render: (data) => Number(data || 0).toLocaleString('id-ID') },
             { data: 'source_group', render: (data) => `<span class="badge badge-light-primary">${text(data)}</span>` },
-            { data: 'source_detail', render: (data) => `<span class="text-muted fs-8">${text(data)}</span>` },
+            { data: 'rework_source_items', render: (data, type, row) => {
+                if (row?.source_group !== 'Hasil Rework') return `<span class="text-muted">-</span>`;
+                const recipe = row?.rework_recipe && row.rework_recipe !== '-' ? `<div class="text-muted fs-8">${text(row.rework_recipe)}</div>` : '';
+                return `<div class="fw-semibold">${text(data)}</div>${recipe}`;
+            }},
             { data: 'source_code' }, { data: 'user' },
             { data: 'note', render: (data) => `<span class="text-muted">${text(data)}</span>` },
             { data: 'mutation_url', className: 'text-end', orderable: false, searchable: false, render: (url) => `<a href="${text(url)}" class="btn btn-sm btn-light-primary">Detail</a>` },

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\DamagedAllocation;
 use App\Models\StockMutation;
 use App\Models\Warehouse;
 use App\Support\WarehouseService;
@@ -56,7 +57,36 @@ class DisplayReceiptReportController extends Controller
             $query->skip($start)->take(min($length, 100));
         }
 
-        $data = $query->get()->map(function (StockMutation $mutation) {
+        $mutations = $query->get();
+        $reworkAllocationIds = $mutations
+            ->filter(fn (StockMutation $mutation) => $mutation->source_type === 'damaged_allocation' && $mutation->source_subtype === 'rework_output')
+            ->pluck('source_id')
+            ->filter()
+            ->unique()
+            ->values();
+        $reworkContexts = $reworkAllocationIds->isEmpty()
+            ? collect()
+            : DamagedAllocation::query()
+                ->with(['sourceItems.item:id,sku,name', 'recipe:id,code,name'])
+                ->whereIn('id', $reworkAllocationIds)
+                ->get()
+                ->keyBy('id');
+
+        $data = $mutations->map(function (StockMutation $mutation) use ($reworkContexts) {
+            $rework = $reworkContexts->get((int) $mutation->source_id);
+            $sourceItems = $rework
+                ? $rework->sourceItems
+                    ->groupBy('item_id')
+                    ->map(function ($rows) {
+                        $item = $rows->first()?->item;
+                        $label = trim(($item?->sku ?? '-').($item?->name ? ' - '.$item->name : ''));
+
+                        return $label.' ('.(int) $rows->sum('qty').')';
+                    })
+                    ->values()
+                    ->implode(', ')
+                : '-';
+
             return [
                 'id' => $mutation->id,
                 'occurred_at' => $mutation->occurred_at?->format('Y-m-d H:i') ?? '-',
@@ -66,6 +96,10 @@ class DisplayReceiptReportController extends Controller
                 'source_group' => $this->sourceGroupLabel($mutation),
                 'source_detail' => $this->sourceDetailLabel($mutation),
                 'source_code' => $mutation->source_code ?: '-',
+                'rework_source_items' => $sourceItems,
+                'rework_recipe' => $rework?->recipe
+                    ? trim(($rework->recipe->code ?? '').' - '.($rework->recipe->name ?? ''))
+                    : '-',
                 'note' => $mutation->note ?? '-',
                 'user' => $mutation->creator?->name ?? '-',
                 'mutation_url' => route('admin.inventory.stock-mutations.show', $mutation->id),

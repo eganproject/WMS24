@@ -130,6 +130,7 @@ class DashboardController extends Controller
                     ? $byResiTotal
                     : strcasecmp($a['name'], $b['name']);
             })
+            ->filter(fn (array $kurir) => $kurir['resi_total'] > 0)
             ->values();
 
         return view('admin.dashboard', [

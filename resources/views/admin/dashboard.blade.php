@@ -336,6 +336,19 @@
         border-radius: inherit;
         background: linear-gradient(90deg, #ef4444, #f59e0b);
     }
+    .kurir-table th { color:#9ca3af; font-size:10px; font-weight:800; letter-spacing:.04em; padding:10px 8px; text-transform:uppercase; white-space:nowrap; }
+    .kurir-table td { border-color:#f1f5f9; color:#4b5563; font-size:12px; padding:12px 8px; vertical-align:middle; white-space:nowrap; }
+    .kurir-table tbody tr:last-child td { border-bottom:0; }
+    .kurir-table-name { color:#111827; font-weight:700; }
+    .kurir-table-progress { min-width:86px; }
+    .kurir-table-progress .kurir-progress-track { height:5px; }
+    .operational-summary { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:12px; }
+    .operational-summary-item { border:1px solid #eef2f7; border-radius:12px; padding:14px; background:#f8fafc; }
+    .operational-summary-label { color:#6b7280; font-size:11px; font-weight:700; }
+    .operational-summary-value { color:#111827; font-size:24px; font-weight:800; line-height:1.2; margin-top:4px; }
+    .attention-list { border-top:1px solid #eef2f7; margin-top:18px; padding-top:6px; }
+    .attention-row { align-items:center; border-bottom:1px solid #f1f5f9; display:flex; gap:12px; justify-content:space-between; padding:12px 0; }
+    .attention-row:last-child { border-bottom:0; }
 </style>
 @endpush
 
@@ -542,85 +555,51 @@
     </div>
 @endif
 
-<div class="card">
-    <div class="card-header border-0 pt-6 pb-2">
-        <div class="card-title flex-column">
-            <span class="dash-section-title">Per Kurir</span>
-            <span class="dash-section-sub mt-1">Resi aktif & scan out per kurir — {{ $today ?? '-' }}</span>
+<div class="row g-6">
+    <div class="col-xl-6">
+        <div class="card h-100">
+            <div class="card-header border-0 pt-6 pb-2"><div class="card-title flex-column"><span class="dash-section-title">Per Kurir</span><span class="dash-section-sub mt-1">Resi aktif dan scan out — {{ $today ?? '-' }}</span></div></div>
+            <div class="card-body pt-2">
+                @if(isset($kurirs) && $kurirs->count())
+                    <div class="table-responsive"><table class="table kurir-table align-middle mb-0">
+                        <thead><tr><th>Kurir</th><th class="text-end">Aktif</th><th class="text-end">Scan</th><th class="text-end">Sisa</th><th>Progress</th><th></th></tr></thead>
+                        <tbody>
+                        @foreach($kurirs as $kurir)
+                            @php $kPct = $kurir['resi_total'] > 0 ? min(100, round($kurir['scan_total'] / $kurir['resi_total'] * 100)) : 0; @endphp
+                            <tr>
+                                <td><div class="kurir-table-name">{{ $kurir['name'] }}</div><small class="text-muted">Update {{ $kurir['last_update'] }}</small></td>
+                                <td class="text-end fw-semibold">{{ number_format($kurir['resi_total']) }}</td>
+                                <td class="text-end fw-semibold text-success">{{ number_format($kurir['scan_total']) }}</td>
+                                <td class="text-end fw-semibold {{ $kurir['remaining'] > 0 ? 'text-warning' : 'text-success' }}">{{ number_format($kurir['remaining']) }}</td>
+                                <td class="kurir-table-progress"><div class="d-flex justify-content-between mb-1"><small class="text-muted">Selesai</small><small class="fw-bold">{{ $kPct }}%</small></div><div class="kurir-progress-track"><div class="kurir-progress-fill {{ $kPct >= 100 ? 'is-complete' : '' }}" style="width: {{ $kPct }}%;"></div></div></td>
+                                <td class="text-end"><button type="button" class="btn btn-sm btn-icon btn-light-primary btn-kurir-detail" title="Lihat detail resi" data-kurir-id="{{ $kurir['id'] }}" data-kurir-name="{{ $kurir['name'] }}" data-date="{{ $today ?? '' }}"><i class="fas fa-chevron-right"></i></button></td>
+                            </tr>
+                        @endforeach
+                        </tbody>
+                    </table></div>
+                @else
+                    <div class="dash-empty"><i class="fas fa-truck"></i><p>Belum ada data kurir untuk tanggal ini.</p></div>
+                @endif
+            </div>
         </div>
     </div>
-    <div class="card-body pt-2">
-        @if(isset($kurirs) && $kurirs->count())
-            <div class="kurir-grid">
-                @foreach($kurirs as $kurir)
-                    @php
-                        $kPct = $kurir['resi_total'] > 0
-                            ? min(100, round($kurir['scan_total'] / $kurir['resi_total'] * 100))
-                            : 0;
-                    @endphp
-                    <div class="kurir-card">
-                        {{-- head --}}
-                        <div class="kurir-card-head">
-                            <div>
-                                <div class="kurir-name">{{ $kurir['name'] }}</div>
-                            </div>
-                            <div class="kurir-updated">
-                                <i class="fas fa-clock" style="font-size:10px;"></i>
-                                {{ $kurir['last_update'] }}
-                            </div>
-                        </div>
-
-                        {{-- stat chips --}}
-                        <div class="kurir-stats">
-                            <div class="kurir-stat-chip chip-blue">
-                                <div class="chip-val">{{ number_format($kurir['resi_total']) }}</div>
-                                <div class="chip-lbl">Aktif</div>
-                            </div>
-                            <div class="kurir-stat-chip chip-green">
-                                <div class="chip-val">{{ number_format($kurir['scan_total']) }}</div>
-                                <div class="chip-lbl">Scan</div>
-                            </div>
-                            <div class="kurir-stat-chip chip-amber">
-                                <div class="chip-val">{{ number_format($kurir['remaining']) }}</div>
-                                <div class="chip-lbl">Sisa</div>
-                            </div>
-                            <div class="kurir-stat-chip chip-red">
-                                <div class="chip-val">{{ number_format($kurir['canceled_total'] ?? 0) }}</div>
-                                <div class="chip-lbl">Cancel</div>
-                            </div>
-                        </div>
-
-                        {{-- progress --}}
-                        <div class="kurir-progress-wrap">
-                            <div class="kurir-progress-label">
-                                <span>Progress scan out</span>
-                                <span>{{ $kPct }}%</span>
-                            </div>
-                            <div class="kurir-progress-track">
-                                <div class="kurir-progress-fill {{ $kPct >= 100 ? 'is-complete' : '' }}"
-                                     style="width: {{ $kPct }}%;"></div>
-                            </div>
-                        </div>
-
-                        {{-- action --}}
-                        <button
-                            type="button"
-                            class="btn btn-sm btn-light-primary btn-kurir-detail w-100"
-                            data-kurir-id="{{ $kurir['id'] }}"
-                            data-kurir-name="{{ $kurir['name'] }}"
-                            data-date="{{ $today ?? '' }}"
-                        >
-                            <i class="fas fa-list-ul me-1"></i> Lihat Detail Resi
-                        </button>
-                    </div>
-                @endforeach
+    <div class="col-xl-6">
+        <div class="card h-100">
+            <div class="card-header border-0 pt-6 pb-2"><div class="card-title flex-column"><span class="dash-section-title">Fokus Operasional</span><span class="dash-section-sub mt-1">Ringkasan progres dan data yang perlu ditindaklanjuti.</span></div></div>
+            <div class="card-body pt-2">
+                <div class="operational-summary">
+                    <div class="operational-summary-item"><div class="operational-summary-label">Penyelesaian Scan Out</div><div class="operational-summary-value text-primary">{{ $overallPct }}%</div></div>
+                    <div class="operational-summary-item"><div class="operational-summary-label">Sisa Belum Scan</div><div class="operational-summary-value text-warning">{{ number_format($remaining) }}</div></div>
+                    <div class="operational-summary-item"><div class="operational-summary-label">QC Selesai</div><div class="operational-summary-value text-success">{{ number_format($totalQcScan ?? 0) }}</div></div>
+                    <div class="operational-summary-item"><div class="operational-summary-label">Kurir Aktif</div><div class="operational-summary-value">{{ number_format(($kurirs ?? collect())->where('resi_total', '>', 0)->count()) }}</div></div>
+                </div>
+                <div class="attention-list">
+                    <div class="attention-row"><div><div class="fw-bold fs-7">Selisih Scan Out</div><div class="text-muted fs-8">Lebih {{ number_format($scanOutOverCount ?? 0) }} · Kurang {{ number_format($scanOutUnderCount ?? 0) }}</div></div><span class="badge {{ (($scanOutOverCount ?? 0) + ($scanOutUnderCount ?? 0)) > 0 ? 'badge-light-warning' : 'badge-light-success' }}">{{ number_format(($scanOutOverCount ?? 0) + ($scanOutUnderCount ?? 0)) }}</span></div>
+                    <div class="attention-row"><div><div class="fw-bold fs-7">Resi Dibatalkan</div><div class="text-muted fs-8">Tidak termasuk dalam target aktif</div></div><span class="badge badge-light-danger">{{ number_format($totalCanceledVal) }}</span></div>
+                    <div class="attention-row"><div><div class="fw-bold fs-7">Double Resi</div><div class="text-muted fs-8">Nomor resi ganda pada tanggal dipilih</div></div><span class="badge {{ $duplicateResiGroupCountVal > 0 ? 'badge-light-warning' : 'badge-light-success' }}">{{ number_format($duplicateResiGroupCountVal) }}</span></div>
+                </div>
             </div>
-        @else
-            <div class="dash-empty">
-                <i class="fas fa-truck"></i>
-                <p>Belum ada data kurir untuk tanggal ini.</p>
-            </div>
-        @endif
+        </div>
     </div>
 </div>
 

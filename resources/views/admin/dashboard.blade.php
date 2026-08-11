@@ -336,10 +336,10 @@
         border-radius: inherit;
         background: linear-gradient(90deg, #ef4444, #f59e0b);
     }
-    .kurir-table th { color:#9ca3af; font-size:10px; font-weight:800; letter-spacing:.04em; padding:10px 8px; text-transform:uppercase; white-space:nowrap; }
-    .kurir-table td { border-color:#f1f5f9; color:#4b5563; font-size:12px; padding:12px 8px; vertical-align:middle; white-space:nowrap; }
+    .kurir-table th { color:#9ca3af; font-size:11px; font-weight:800; letter-spacing:.04em; padding:10px 8px; text-transform:uppercase; white-space:nowrap; }
+    .kurir-table td { border-color:#f1f5f9; color:#4b5563; font-size:13px; padding:13px 8px; vertical-align:middle; white-space:nowrap; }
     .kurir-table tbody tr:last-child td { border-bottom:0; }
-    .kurir-table-name { color:#111827; font-weight:700; }
+    .kurir-table-name { color:#111827; font-size:14px; font-weight:700; }
     .kurir-table-progress { min-width:86px; }
     .kurir-table-progress .kurir-progress-track { height:5px; }
     .operational-summary { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:12px; }
@@ -365,6 +365,7 @@
     $emptyStockTotal = (int) ($emptyStockSummary['total_empty'] ?? 0);
     $emptyWarehouseTotal = (int) ($emptyStockSummary['warehouse_total'] ?? 0);
     $pendingApprovalTotal = (int) ($pendingApprovalSummary['total'] ?? 0);
+    $manualOutbound = $manualOutboundSummary ?? [];
 @endphp
 
 {{-- ──────────────────────────────────────────────────────────────────── --}}
@@ -562,7 +563,7 @@
             <div class="card-body pt-2">
                 @if(isset($kurirs) && $kurirs->count())
                     <div class="table-responsive"><table class="table kurir-table align-middle mb-0">
-                        <thead><tr><th>Kurir</th><th class="text-end">Aktif</th><th class="text-end">Scan</th><th class="text-end">Sisa</th><th>Progress</th><th></th></tr></thead>
+                        <thead><tr><th>Kurir</th><th class="text-end">Aktif</th><th class="text-end">Scan</th><th class="text-end">Sisa</th><th class="text-end">Cancel</th><th>Progress</th><th></th></tr></thead>
                         <tbody>
                         @foreach($kurirs as $kurir)
                             @php $kPct = $kurir['resi_total'] > 0 ? min(100, round($kurir['scan_total'] / $kurir['resi_total'] * 100)) : 0; @endphp
@@ -571,6 +572,7 @@
                                 <td class="text-end fw-semibold">{{ number_format($kurir['resi_total']) }}</td>
                                 <td class="text-end fw-semibold text-success">{{ number_format($kurir['scan_total']) }}</td>
                                 <td class="text-end fw-semibold {{ $kurir['remaining'] > 0 ? 'text-warning' : 'text-success' }}">{{ number_format($kurir['remaining']) }}</td>
+                                <td class="text-end fw-semibold {{ ($kurir['canceled_total'] ?? 0) > 0 ? 'text-danger' : 'text-muted' }}">{{ number_format($kurir['canceled_total'] ?? 0) }}</td>
                                 <td class="kurir-table-progress"><div class="d-flex justify-content-between mb-1"><small class="text-muted">Selesai</small><small class="fw-bold">{{ $kPct }}%</small></div><div class="kurir-progress-track"><div class="kurir-progress-fill {{ $kPct >= 100 ? 'is-complete' : '' }}" style="width: {{ $kPct }}%;"></div></div></td>
                                 <td class="text-end"><button type="button" class="btn btn-sm btn-icon btn-light-primary btn-kurir-detail" title="Lihat detail resi" data-kurir-id="{{ $kurir['id'] }}" data-kurir-name="{{ $kurir['name'] }}" data-date="{{ $today ?? '' }}"><i class="fas fa-chevron-right"></i></button></td>
                             </tr>
@@ -597,6 +599,21 @@
                     <div class="attention-row"><div><div class="fw-bold fs-7">Selisih Scan Out</div><div class="text-muted fs-8">Lebih {{ number_format($scanOutOverCount ?? 0) }} · Kurang {{ number_format($scanOutUnderCount ?? 0) }}</div></div><span class="badge {{ (($scanOutOverCount ?? 0) + ($scanOutUnderCount ?? 0)) > 0 ? 'badge-light-warning' : 'badge-light-success' }}">{{ number_format(($scanOutOverCount ?? 0) + ($scanOutUnderCount ?? 0)) }}</span></div>
                     <div class="attention-row"><div><div class="fw-bold fs-7">Resi Dibatalkan</div><div class="text-muted fs-8">Tidak termasuk dalam target aktif</div></div><span class="badge badge-light-danger">{{ number_format($totalCanceledVal) }}</span></div>
                     <div class="attention-row"><div><div class="fw-bold fs-7">Double Resi</div><div class="text-muted fs-8">Nomor resi ganda pada tanggal dipilih</div></div><span class="badge {{ $duplicateResiGroupCountVal > 0 ? 'badge-light-warning' : 'badge-light-success' }}">{{ number_format($duplicateResiGroupCountVal) }}</span></div>
+                </div>
+                <div class="d-flex align-items-center justify-content-between mt-6 mb-3">
+                    <div><div class="dash-section-title">Outbound Manual</div><div class="dash-section-sub">Transaksi pada {{ $today ?? '-' }}</div></div>
+                    <a href="{{ $manualOutbound['url'] ?? route('admin.outbound.manuals.index') }}" class="btn btn-sm btn-light-primary">Lihat Data</a>
+                </div>
+                <div class="operational-summary">
+                    <div class="operational-summary-item"><div class="operational-summary-label">Total Transaksi</div><div class="operational-summary-value text-primary">{{ number_format($manualOutbound['total'] ?? 0) }}</div></div>
+                    <div class="operational-summary-item"><div class="operational-summary-label">Total Qty</div><div class="operational-summary-value">{{ number_format($manualOutbound['qty'] ?? 0) }}</div></div>
+                    <div class="operational-summary-item"><div class="operational-summary-label">Belum Selesai</div><div class="operational-summary-value text-warning">{{ number_format($manualOutbound['outstanding'] ?? 0) }}</div></div>
+                    <div class="operational-summary-item"><div class="operational-summary-label">Selesai</div><div class="operational-summary-value text-success">{{ number_format($manualOutbound['completed'] ?? 0) }}</div></div>
+                </div>
+                <div class="d-flex flex-wrap gap-2 mt-3">
+                    <span class="badge badge-light-warning">Approval: {{ number_format($manualOutbound['pending'] ?? 0) }}</span>
+                    <span class="badge badge-light-info">Menunggu QC: {{ number_format($manualOutbound['pending_qc'] ?? 0) }}</span>
+                    <span class="badge badge-light-primary">Sedang QC: {{ number_format($manualOutbound['qc_scanning'] ?? 0) }}</span>
                 </div>
             </div>
         </div>

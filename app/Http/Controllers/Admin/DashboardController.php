@@ -69,6 +69,34 @@ class DashboardController extends Controller
         $duplicateResiGroupCount = $duplicateResiRows->count();
         $duplicateResiTotal = (int) $duplicateResiRows->sum('total');
 
+        $manualOutboundQuery = OutboundTransaction::query()
+            ->where('type', 'manual')
+            ->whereDate('transacted_at', $selectedDate);
+        $manualOutboundStatusCounts = (clone $manualOutboundQuery)
+            ->select('status', DB::raw('count(*) as total'))
+            ->groupBy('status')
+            ->pluck('total', 'status');
+        $manualOutboundTotal = (clone $manualOutboundQuery)->count();
+        $manualOutboundQty = (int) DB::table('outbound_items as oi')
+            ->join('outbound_transactions as ot', 'ot.id', '=', 'oi.outbound_transaction_id')
+            ->where('ot.type', 'manual')
+            ->whereDate('ot.transacted_at', $selectedDate)
+            ->sum('oi.qty');
+        $manualOutboundCompleted = (int) ($manualOutboundStatusCounts['approved'] ?? 0);
+        $manualOutboundSummary = [
+            'total' => $manualOutboundTotal,
+            'qty' => $manualOutboundQty,
+            'pending' => (int) ($manualOutboundStatusCounts['pending'] ?? 0),
+            'pending_qc' => (int) ($manualOutboundStatusCounts['pending_qc'] ?? 0),
+            'qc_scanning' => (int) ($manualOutboundStatusCounts['qc_scanning'] ?? 0),
+            'completed' => $manualOutboundCompleted,
+            'outstanding' => max(0, $manualOutboundTotal - $manualOutboundCompleted),
+            'url' => route('admin.outbound.manuals.index', [
+                'date_from' => $selectedDate,
+                'date_to' => $selectedDate,
+            ]),
+        ];
+
         $resiCounts = Resi::select('kurir_id', DB::raw('count(*) as total'))
             ->whereDate('tanggal_upload', $selectedDate)
             ->groupBy('kurir_id')
@@ -151,6 +179,7 @@ class DashboardController extends Controller
             'duplicateResiGroupCount' => $duplicateResiGroupCount,
             'duplicateResiTotal' => $duplicateResiTotal,
             'kurirs' => $kurirs,
+            'manualOutboundSummary' => $manualOutboundSummary,
             'emptyStockSummary' => $this->emptyStockSummary(),
             'emptyStockRows' => $this->emptyStockRows(),
             'pendingApprovalSummary' => $this->pendingApprovalSummary(),

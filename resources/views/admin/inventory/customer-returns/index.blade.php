@@ -33,9 +33,13 @@
     }
 
     .customer-return-index-controls .form-select,
+    .customer-return-index-controls .form-control,
     .customer-return-index-controls .btn {
         min-width: 180px;
     }
+
+    .customer-return-date-filter { width: 155px; }
+    .customer-return-index-controls #btn_reset_customer_return_date { min-width: 44px; }
 
     .customer-return-index-search {
         min-width: 280px;
@@ -310,6 +314,10 @@
                     <option value="completed">Selesai</option>
                     <option value="no_received">Tidak Diterima</option>
                 </select>
+                <input type="date" class="form-control form-control-solid customer-return-date-filter" id="filter_date_from" aria-label="Tanggal terima mulai" title="Tanggal terima mulai" />
+                <span class="text-muted fw-semibold">s/d</span>
+                <input type="date" class="form-control form-control-solid customer-return-date-filter" id="filter_date_to" aria-label="Tanggal terima sampai" title="Tanggal terima sampai" />
+                <button type="button" class="btn btn-light btn-icon" id="btn_reset_customer_return_date" title="Reset filter tanggal" aria-label="Reset filter tanggal"><i class="fas fa-undo"></i></button>
                 @if($canUpdate)
                     <button type="button" class="btn btn-light-primary" id="btn_finalize_selected">Finalisasi Terpilih</button>
                 @endif
@@ -373,6 +381,9 @@
         const tableEl = $('#customer_returns_table');
         const searchInput = document.querySelector('[data-kt-filter="search"]');
         const statusFilter = document.getElementById('filter_status');
+        const dateFromFilter = document.getElementById('filter_date_from');
+        const dateToFilter = document.getElementById('filter_date_to');
+        const resetDateBtn = document.getElementById('btn_reset_customer_return_date');
         const checkAllEl = document.getElementById('check_all_customer_returns');
         const finalizeSelectedBtn = document.getElementById('btn_finalize_selected');
         const exportBtn = document.getElementById('btn_export_customer_returns');
@@ -681,6 +692,8 @@
                     data: function (params) {
                         params.q = searchInput?.value || '';
                         params.status = statusFilter?.value || '';
+                        params.date_from = dateFromFilter?.value || '';
+                        params.date_to = dateToFilter?.value || '';
                     },
                 },
                 columns: [
@@ -773,6 +786,22 @@
         if (statusFilter && (typeof $ === 'undefined' || !$.fn.select2)) {
             statusFilter.addEventListener('change', () => dt?.ajax.reload());
         }
+        dateFromFilter?.addEventListener('change', () => {
+            if (dateToFilter && dateFromFilter.value && (!dateToFilter.value || dateToFilter.value < dateFromFilter.value)) {
+                dateToFilter.value = dateFromFilter.value;
+            }
+            if (dateToFilter) dateToFilter.min = dateFromFilter.value || '';
+            dt?.ajax.reload();
+        });
+        dateToFilter?.addEventListener('change', () => dt?.ajax.reload());
+        resetDateBtn?.addEventListener('click', () => {
+            if (dateFromFilter) dateFromFilter.value = '';
+            if (dateToFilter) {
+                dateToFilter.value = '';
+                dateToFilter.min = '';
+            }
+            dt?.ajax.reload();
+        });
 
         checkAllEl?.addEventListener('change', (event) => {
             const checked = !!event.target.checked;
@@ -789,6 +818,8 @@
             const params = new URLSearchParams();
             if (searchInput?.value) params.set('q', searchInput.value);
             if (statusFilter?.value) params.set('status', statusFilter.value);
+            if (dateFromFilter?.value) params.set('date_from', dateFromFilter.value);
+            if (dateToFilter?.value) params.set('date_to', dateToFilter.value);
             const query = params.toString();
             window.location.href = query ? `${customerReturnExportUrl}?${query}` : customerReturnExportUrl;
         });

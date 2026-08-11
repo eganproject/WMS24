@@ -464,6 +464,31 @@ class CustomerReturnFlowTest extends TestCase
             ->assertSee('Catatan dokumen retur');
     }
 
+    public function test_customer_return_data_can_be_filtered_by_received_date_range(): void
+    {
+        CustomerReturn::create([
+            'code' => 'CRT-DATE-IN',
+            'resi_no' => 'RESI-DATE-IN',
+            'received_at' => '2026-07-10 09:00:00',
+            'status' => CustomerReturn::STATUS_INSPECTED,
+        ]);
+        CustomerReturn::create([
+            'code' => 'CRT-DATE-OUT',
+            'resi_no' => 'RESI-DATE-OUT',
+            'received_at' => '2026-07-11 09:00:00',
+            'status' => CustomerReturn::STATUS_INSPECTED,
+        ]);
+
+        $response = $this->withoutMiddleware()->getJson(route('admin.inventory.customer-returns.data', [
+            'date_from' => '2026-07-10',
+            'date_to' => '2026-07-10',
+        ]));
+
+        $response->assertOk()
+            ->assertJsonPath('recordsFiltered', 1)
+            ->assertJsonPath('data.0.code', 'CRT-DATE-IN');
+    }
+
     private function createWarehouseFixtures(): array
     {
         $mainWarehouse = Warehouse::firstOrCreate(

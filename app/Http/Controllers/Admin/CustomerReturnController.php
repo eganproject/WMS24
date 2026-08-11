@@ -60,6 +60,11 @@ class CustomerReturnController extends Controller
 
     public function data(Request $request)
     {
+        $validatedFilters = $request->validate([
+            'date_from' => ['nullable', 'date_format:Y-m-d'],
+            'date_to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:date_from'],
+        ]);
+
         $query = CustomerReturn::query()
             ->with(['items.item', 'creator', 'inspector', 'finalizer', 'damagedGood'])
             ->orderByDesc('received_at')
@@ -86,6 +91,13 @@ class CustomerReturnController extends Controller
         $status = trim((string) $request->input('status', ''));
         if ($status !== '') {
             $query->where('customer_returns.status', $status);
+        }
+
+        if (!empty($validatedFilters['date_from'])) {
+            $query->where('customer_returns.received_at', '>=', Carbon::parse($validatedFilters['date_from'])->startOfDay());
+        }
+        if (!empty($validatedFilters['date_to'])) {
+            $query->where('customer_returns.received_at', '<=', Carbon::parse($validatedFilters['date_to'])->endOfDay());
         }
 
         $recordsTotal = CustomerReturn::count();

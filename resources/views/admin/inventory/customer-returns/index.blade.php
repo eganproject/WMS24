@@ -314,9 +314,9 @@
                     <option value="completed">Selesai</option>
                     <option value="no_received">Tidak Diterima</option>
                 </select>
-                <input type="date" class="form-control form-control-solid customer-return-date-filter" id="filter_date_from" aria-label="Tanggal terima mulai" title="Tanggal terima mulai" />
+                <input type="text" class="form-control form-control-solid customer-return-date-filter" id="filter_date_from" placeholder="Tanggal mulai" autocomplete="off" aria-label="Tanggal terima mulai" title="Tanggal terima mulai" />
                 <span class="text-muted fw-semibold">s/d</span>
-                <input type="date" class="form-control form-control-solid customer-return-date-filter" id="filter_date_to" aria-label="Tanggal terima sampai" title="Tanggal terima sampai" />
+                <input type="text" class="form-control form-control-solid customer-return-date-filter" id="filter_date_to" placeholder="Tanggal sampai" autocomplete="off" aria-label="Tanggal terima sampai" title="Tanggal terima sampai" />
                 <button type="button" class="btn btn-light btn-icon" id="btn_reset_customer_return_date" title="Reset filter tanggal" aria-label="Reset filter tanggal"><i class="fas fa-undo"></i></button>
                 @if($canUpdate)
                     <button type="button" class="btn btn-light-primary" id="btn_finalize_selected">Finalisasi Terpilih</button>
@@ -387,6 +387,8 @@
         const checkAllEl = document.getElementById('check_all_customer_returns');
         const finalizeSelectedBtn = document.getElementById('btn_finalize_selected');
         const exportBtn = document.getElementById('btn_export_customer_returns');
+        let dateFromPicker = null;
+        let dateToPicker = null;
         let dt = null;
 
         const escapeHtml = (value) => String(value ?? '')
@@ -680,6 +682,32 @@
             $(statusFilter).on('change', () => dt?.ajax.reload());
         }
 
+        if (typeof flatpickr !== 'undefined') {
+            if (dateFromFilter) {
+                dateFromPicker = flatpickr(dateFromFilter, {
+                    dateFormat: 'Y-m-d',
+                    allowInput: true,
+                    disableMobile: true,
+                    onChange: () => {
+                        const fromValue = dateFromFilter.value;
+                        if (dateToPicker) dateToPicker.set('minDate', fromValue || null);
+                        if (dateToFilter && fromValue && (!dateToFilter.value || dateToFilter.value < fromValue)) {
+                            dateToPicker?.setDate(fromValue, false, 'Y-m-d');
+                        }
+                        dt?.ajax.reload();
+                    },
+                });
+            }
+            if (dateToFilter) {
+                dateToPicker = flatpickr(dateToFilter, {
+                    dateFormat: 'Y-m-d',
+                    allowInput: true,
+                    disableMobile: true,
+                    onChange: () => dt?.ajax.reload(),
+                });
+            }
+        }
+
         if (tableEl.length && $.fn.DataTable) {
             dt = tableEl.DataTable({
                 processing: true,
@@ -787,16 +815,23 @@
             statusFilter.addEventListener('change', () => dt?.ajax.reload());
         }
         dateFromFilter?.addEventListener('change', () => {
+            if (dateFromPicker) return;
             if (dateToFilter && dateFromFilter.value && (!dateToFilter.value || dateToFilter.value < dateFromFilter.value)) {
                 dateToFilter.value = dateFromFilter.value;
             }
             if (dateToFilter) dateToFilter.min = dateFromFilter.value || '';
             dt?.ajax.reload();
         });
-        dateToFilter?.addEventListener('change', () => dt?.ajax.reload());
+        dateToFilter?.addEventListener('change', () => {
+            if (!dateToPicker) dt?.ajax.reload();
+        });
         resetDateBtn?.addEventListener('click', () => {
-            if (dateFromFilter) dateFromFilter.value = '';
-            if (dateToFilter) {
+            if (dateFromPicker) dateFromPicker.clear(false);
+            else if (dateFromFilter) dateFromFilter.value = '';
+            if (dateToPicker) {
+                dateToPicker.clear(false);
+                dateToPicker.set('minDate', null);
+            } else if (dateToFilter) {
                 dateToFilter.value = '';
                 dateToFilter.min = '';
             }

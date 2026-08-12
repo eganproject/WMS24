@@ -48,4 +48,13 @@ class WarehouseService
     {
         return self::warehouseIdByCode(self::damagedWarehouseCode()) ?? 0;
     }
+
+    /** @return array<int> */
+    public static function sellableWarehouseIds(): array
+    {
+        return array_values(array_unique(array_filter([
+            self::warehouseIdByCode(self::defaultWarehouseCode()),
+            self::warehouseIdByCode(self::displayWarehouseCode()),
+        ], static fn (?int $id): bool => $id !== null)));
+    }
 }

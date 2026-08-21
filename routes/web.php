@@ -341,6 +341,7 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::post('/receipts/import', [InboundController::class, 'receiptsImport'])->name('receipts.import');
         Route::post('/receipts/items-import', [InboundController::class, 'receiptsItemsImport'])->name('receipts.items-import');
         Route::get('/receipts/template', [InboundController::class, 'receiptsTemplate'])->name('receipts.template');
+        Route::get('/receipts/export', [InboundController::class, 'receiptsExport'])->name('receipts.export');
         Route::get('/surat-jalan-image/{id}', [InboundController::class, 'suratJalanImage'])->name('surat-jalan-image');
         Route::get('/receipts/{id}', [InboundController::class, 'receiptsShow'])->name('receipts.show');
         Route::get('/receipts/{id}/qr-preview', [InboundController::class, 'receiptsQrPreview'])->name('receipts.qr-preview');

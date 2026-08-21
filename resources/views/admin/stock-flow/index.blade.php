@@ -83,11 +83,16 @@
                         <option value="{{ $statusValue }}">{{ $statusLabel }}</option>
                     @endforeach
                 </select>
-                <input type="text" class="form-control form-control-solid w-150px" id="filter_date_from" placeholder="Dari" />
-                <input type="text" class="form-control form-control-solid w-150px" id="filter_date_to" placeholder="Sampai" />
+                <input type="text" class="form-control form-control-solid w-150px" id="filter_date_from" placeholder="Dari" value="{{ $defaultDateFrom ?? '' }}" />
+                <input type="text" class="form-control form-control-solid w-150px" id="filter_date_to" placeholder="Sampai" value="{{ $defaultDateTo ?? '' }}" />
                 <button type="button" class="btn btn-light" id="filter_apply">Filter</button>
                 <button type="button" class="btn btn-light" id="filter_reset">Reset</button>
             </div>
+            @if(!empty($exportUrl ?? null))
+                <button type="button" class="btn btn-light-success me-3" id="btn_export_flow">
+                    Export Excel
+                </button>
+            @endif
             @if($canImport)
                 <button type="button" class="btn btn-light-primary me-3" id="btn_import_flow" data-bs-toggle="modal" data-bs-target="#modal_import_flow">
                     Import Excel
@@ -490,6 +495,9 @@
     const deliveryNoteImageLinkLabel = @json($deliveryNoteImageLinkLabel ?? 'Lihat Gambar');
     const showRecipientFields = {{ !empty($showRecipientFields ?? false) ? 'true' : 'false' }};
     const requireExplicitWarehouseSelection = {{ !empty($requireExplicitWarehouseSelection ?? false) ? 'true' : 'false' }};
+    const exportUrl = @json($exportUrl ?? null);
+    const defaultDateFrom = @json($defaultDateFrom ?? '');
+    const defaultDateTo = @json($defaultDateTo ?? '');
 
     document.addEventListener('DOMContentLoaded', () => {
         const tableEl = $('#stock_flow_table');
@@ -522,6 +530,7 @@
         const statusFilter = document.getElementById('filter_status');
         const filterApplyBtn = document.getElementById('filter_apply');
         const filterResetBtn = document.getElementById('filter_reset');
+        const exportBtn = document.getElementById('btn_export_flow');
         const importBtn = document.getElementById('btn_import_flow');
         const importModalEl = document.getElementById('modal_import_flow');
         const importModal = importModalEl ? new bootstrap.Modal(importModalEl) : null;
@@ -554,6 +563,20 @@
         let fpTo = null;
         let fpTransacted = null;
         let fpSuratJalan = null;
+
+        /** Kembalikan filter tanggal ke rentang default halaman (kosong bila tidak ada default). */
+        const applyDefaultDateRange = () => {
+            const setDate = (picker, input, value) => {
+                if (!input) return;
+                if (picker) {
+                    if (value) picker.setDate(value, false); else picker.clear();
+                    return;
+                }
+                input.value = value || '';
+            };
+            setDate(fpFrom, dateFromEl, defaultDateFrom);
+            setDate(fpTo, dateToEl, defaultDateTo);
+        };
 
         const formatDateTime = (date) => {
             const pad = (n) => String(n).padStart(2, '0');
@@ -1465,6 +1488,15 @@
 
         const refreshMenus = () => { if (window.KTMenu) KTMenu.createInstances(); };
 
+        const collectFilterParams = () => {
+            const params = { q: searchInput?.value || '' };
+            if (warehouseFilter?.value) params.warehouse_id = warehouseFilter.value;
+            if (statusFilter?.value) params.status = statusFilter.value;
+            if (dateFromEl?.value) params.date_from = dateFromEl.value;
+            if (dateToEl?.value) params.date_to = dateToEl.value;
+            return params;
+        };
+
         const dt = tableEl.DataTable({
             processing: true,
             serverSide: true,
@@ -1474,11 +1506,7 @@
                 url: dataUrl,
                 dataSrc: 'data',
                 data: function(params) {
-                    params.q = searchInput?.value || '';
-                    if (warehouseFilter?.value) params.warehouse_id = warehouseFilter.value;
-                    if (statusFilter?.value) params.status = statusFilter.value;
-                    if (dateFromEl?.value) params.date_from = dateFromEl.value;
-                    if (dateToEl?.value) params.date_to = dateToEl.value;
+                    Object.assign(params, collectFilterParams());
                 }
             },
             columns: [
@@ -1610,9 +1638,18 @@
                     $(statusFilter).val('all').trigger('change.select2');
                 }
             }
-            if (fpFrom) fpFrom.clear(); else if (dateFromEl) dateFromEl.value = '';
-            if (fpTo) fpTo.clear(); else if (dateToEl) dateToEl.value = '';
+            applyDefaultDateRange();
             reloadTable();
+        });
+
+        exportBtn?.addEventListener('click', () => {
+            if (!exportUrl) return;
+            const params = new URLSearchParams();
+            Object.entries(collectFilterParams()).forEach(([key, value]) => {
+                if (value !== '' && value !== null && value !== undefined) params.set(key, value);
+            });
+            const query = params.toString();
+            window.location.href = query ? `${exportUrl}?${query}` : exportUrl;
         });
 
         const filenameFromDisposition = (disposition, fallback) => {

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Exports\InboundManualTemplateExport;
+use App\Exports\InboundReceiptsExport;
 use App\Exports\InboundReceiptTemplateExport;
 use App\Http\Controllers\Controller;
 use App\Imports\InboundFormItemsImport;
@@ -203,6 +204,13 @@ class InboundController extends Controller
         return Excel::download(new InboundReceiptTemplateExport(), $filename);
     }
 
+    public function receiptsExport(Request $request)
+    {
+        $filename = 'penerimaan-barang-'.now()->format('YmdHis').'.xlsx';
+
+        return Excel::download(new InboundReceiptsExport($request->query()), $filename);
+    }
+
     public function manualsImport(Request $request)
     {
         return $this->importGroups(
@@ -307,9 +315,14 @@ class InboundController extends Controller
             ],
         ];
 
+        $defaultDateRange = $type === 'receipt' ? $this->defaultDateRange() : ['from' => null, 'to' => null];
+
         return view('admin.stock-flow.index', [
             'pageTitle' => $pageTitle,
             'dataUrl' => route("admin.inbound.{$routeBase}.data"),
+            'defaultDateFrom' => $defaultDateRange['from'],
+            'defaultDateTo' => $defaultDateRange['to'],
+            'exportUrl' => $type === 'receipt' ? route('admin.inbound.receipts.export') : null,
             'storeUrl' => route("admin.inbound.{$routeBase}.store"),
             'showUrlTpl' => route("admin.inbound.{$routeBase}.show", ':id'),
             'updateUrlTpl' => route("admin.inbound.{$routeBase}.update", ':id'),
@@ -1160,6 +1173,15 @@ class InboundController extends Controller
     private function usesSupplier(string $type): bool
     {
         return $type === 'receipt';
+    }
+
+    /** Rentang tanggal awal halaman: 7 hari terakhir termasuk hari ini. */
+    private function defaultDateRange(): array
+    {
+        return [
+            'from' => now()->subDays(6)->format('Y-m-d'),
+            'to' => now()->format('Y-m-d'),
+        ];
     }
 
     private function applyDateFilter($query, Request $request): void

@@ -13,7 +13,7 @@ use Maatwebsite\Excel\Concerns\WithStrictNullComparison;
 use Maatwebsite\Excel\Concerns\WithStyles;
 use Maatwebsite\Excel\Concerns\WithTitle;
 
-class InboundReceiptsDetailSheet extends InboundReceiptsSheet implements FromCollection, WithHeadings, WithTitle, WithCustomStartCell, WithStyles, WithStrictNullComparison, WithEvents
+class InboundReceiptsDetailSheet extends InboundReceiptsTableSheet implements FromCollection, WithHeadings, WithTitle, WithCustomStartCell, WithStyles, WithStrictNullComparison, WithEvents
 {
     private ?Collection $rows = null;
 

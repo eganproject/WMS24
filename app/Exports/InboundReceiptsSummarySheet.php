@@ -12,13 +12,13 @@ use Maatwebsite\Excel\Concerns\WithStrictNullComparison;
 use Maatwebsite\Excel\Concerns\WithStyles;
 use Maatwebsite\Excel\Concerns\WithTitle;
 
-class InboundReceiptsSummarySheet extends InboundReceiptsSheet implements FromCollection, WithHeadings, WithTitle, WithCustomStartCell, WithStyles, WithStrictNullComparison, WithEvents
+class InboundReceiptsSummarySheet extends InboundReceiptsTableSheet implements FromCollection, WithHeadings, WithTitle, WithCustomStartCell, WithStyles, WithStrictNullComparison, WithEvents
 {
     private ?Collection $rows = null;
 
     public function title(): string
     {
-        return 'Ringkasan Penerimaan';
+        return 'Daftar Penerimaan';
     }
 
     public function headings(): array

@@ -74,7 +74,10 @@ document.addEventListener('DOMContentLoaded', function () {
         warehouse: document.getElementById('filter_warehouse'), history: document.getElementById('filter_history_days'), forecast: document.getElementById('filter_forecast_days'),
         category: document.getElementById('filter_category'), status: document.getElementById('filter_status'), search: document.getElementById('forecast_search'),
     };
-    const number = (value, digits = 0) => Number(value || 0).toLocaleString('id-ID', { maximumFractionDigits: digits, minimumFractionDigits: digits });
+    const number = (value, digits = 0) => {
+        const fractionDigits = Number.isInteger(digits) ? Math.min(20, Math.max(0, digits)) : 0;
+        return Number(value || 0).toLocaleString('id-ID', { maximumFractionDigits: fractionDigits, minimumFractionDigits: fractionDigits });
+    };
     const escapeHtml = (value) => $('<div>').text(value ?? '').html();
     const date = (value) => value ? new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium' }).format(new Date(value + 'T00:00:00')) : '-';
     const badge = (row) => `<span class="badge badge-light-${row.status_class || 'secondary'}">${escapeHtml(row.status_label)}</span>`;
@@ -84,7 +87,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     const table = $table.DataTable({
-        processing: true, serverSide: false, dom: 'rtip', pageLength: 25, order: [[7, 'asc']],
+        processing: true, serverSide: true, ordering: false, dom: 'rtip', pageLength: 25,
         ajax: { url: dataUrl, data: (params) => { params.warehouse_id = fields.warehouse.value; params.history_days = fields.history.value; params.forecast_days = fields.forecast.value; params.category_id = fields.category.value; params.status = fields.status.value; params.q = fields.search.value; }, dataSrc: (json) => {
             const summary = json.summary || {}; $('#summary_total').text(number(summary.total_items)); $('#summary_runout').text(number(summary.runout)); $('#summary_critical').text(number(summary.critical)); $('#summary_safe').text(number(summary.safe));
             const period = json.period || {}; $('#period_info').text(`Rata-rata dihitung dari ${period.start || '-'} s.d. ${period.end || '-'} (${number(period.history_days)} hari), gudang ${period.warehouse || '-'}. Forecast stok untuk ${number(period.forecast_days)} hari ke depan.`);
@@ -102,9 +105,10 @@ document.addEventListener('DOMContentLoaded', function () {
             { data: 'runout_date', render: date }, { data: null, render: badge },
         ],
     });
-    let timer; fields.search.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => table.ajax.reload(), 250); });
-    document.getElementById('filter_apply').addEventListener('click', () => table.ajax.reload());
-    [fields.warehouse, fields.category, fields.status].forEach((field) => field.addEventListener('change', () => table.ajax.reload()));
+    const reloadFromFirstPage = () => table.ajax.reload(null, true);
+    let timer; fields.search.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(reloadFromFirstPage, 250); });
+    document.getElementById('filter_apply').addEventListener('click', reloadFromFirstPage);
+    [fields.warehouse, fields.category, fields.status].forEach((field) => field.addEventListener('change', reloadFromFirstPage));
 });
 </script>
 @endpush

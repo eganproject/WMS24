@@ -58,38 +58,62 @@ class StockRunoutForecastController extends Controller
             $outboundQuery->where('is_void', false);
         }
 
-        $outboundByItem = $outboundQuery->groupBy('item_id')->pluck('total_outbound', 'item_id');
+        $outboundQuery->groupBy('item_id');
 
-        $items = Item::query()
-            ->with([
-                'category:id,name',
-                'stocks' => fn ($query) => $query->where('warehouse_id', $warehouseId),
-            ])
-            ->where('status', Item::STATUS_ACTIVE)
+        $stockExpr = 'COALESCE(stock_rows.stock, 0)';
+        $safetyExpr = 'COALESCE(stock_rows.safety_stock, items.safety_stock, 0)';
+        $outboundExpr = 'COALESCE(outbound_usage.total_outbound, 0)';
+        $averageExpr = "({$outboundExpr} / {$historyDays})";
+        $forecastExpr = "({$stockExpr} - ({$averageExpr} * {$forecastDays}))";
+
+        $baseQuery = Item::query()
+            ->leftJoin('item_stocks as stock_rows', function ($join) use ($warehouseId) {
+                $join->on('stock_rows.item_id', '=', 'items.id')
+                    ->where('stock_rows.warehouse_id', '=', $warehouseId);
+            })
+            ->leftJoinSub($outboundQuery, 'outbound_usage', fn ($join) => $join->on('outbound_usage.item_id', '=', 'items.id'))
+            ->leftJoin('categories', 'categories.id', '=', 'items.category_id')
+            ->where('items.status', Item::STATUS_ACTIVE)
             ->where(function ($query) {
                 $query->whereNull('item_type')->orWhere('item_type', '!=', Item::TYPE_BUNDLE);
             })
             ->when($categoryId !== null && $categoryId !== '', function ($query) use ($categoryId) {
                 if ((string) $categoryId === '0') {
-                    $query->where(fn ($categoryQuery) => $categoryQuery->whereNull('category_id')->orWhere('category_id', 0));
+                    $query->where(fn ($categoryQuery) => $categoryQuery->whereNull('items.category_id')->orWhere('items.category_id', 0));
                     return;
                 }
 
-                $query->where('category_id', (int) $categoryId);
+                $query->where('items.category_id', (int) $categoryId);
             })
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(fn ($searchQuery) => $searchQuery
-                    ->where('sku', 'like', "%{$search}%")
-                    ->orWhere('name', 'like', "%{$search}%"));
-            })
-            ->orderBy('sku')
-            ->get();
+                    ->where('items.sku', 'like', "%{$search}%")
+                    ->orWhere('items.name', 'like', "%{$search}%"));
+            });
 
-        $rows = $items->map(function (Item $item) use ($outboundByItem, $historyDays, $forecastDays) {
-            $itemStock = $item->stocks->first();
-            $stock = (int) ($itemStock?->stock ?? 0);
-            $safetyStock = (int) ($itemStock?->safety_stock ?? $item->safety_stock ?? 0);
-            $totalOutbound = (int) ($outboundByItem->get($item->id) ?? 0);
+        $summary = $this->summary($baseQuery, $stockExpr, $safetyExpr, $averageExpr, $forecastExpr);
+        $dataQuery = clone $baseQuery;
+        $this->applyStatusFilter($dataQuery, $status, $stockExpr, $safetyExpr, $averageExpr, $forecastExpr);
+        $recordsFiltered = (clone $dataQuery)->count('items.id');
+        $start = max(0, (int) $request->input('start', 0));
+        $length = min(100, max(1, (int) $request->input('length', 25)));
+
+        $rows = $dataQuery
+            ->select([
+                'items.sku', 'items.name', 'categories.name as category_name',
+                DB::raw("{$stockExpr} as stock"), DB::raw("{$safetyExpr} as safety_stock"),
+                DB::raw("{$outboundExpr} as total_outbound"),
+            ])
+            ->orderByRaw("CASE WHEN {$forecastExpr} <= 0 OR {$stockExpr} <= 0 THEN 0 WHEN {$forecastExpr} <= {$safetyExpr} THEN 1 WHEN {$averageExpr} <= 0 THEN 3 ELSE 2 END")
+            ->orderByRaw("CASE WHEN {$averageExpr} > 0 THEN {$stockExpr} / {$averageExpr} ELSE 999999 END")
+            ->orderBy('items.sku')
+            ->offset($start)
+            ->limit($length)
+            ->get()
+            ->map(function ($item) use ($historyDays, $forecastDays) {
+            $stock = (int) $item->stock;
+            $safetyStock = (int) $item->safety_stock;
+            $totalOutbound = (int) $item->total_outbound;
             $dailyAverage = round($totalOutbound / $historyDays, 2);
             $forecastStock = round($stock - ($dailyAverage * $forecastDays), 2);
             $daysUntilSafety = $dailyAverage > 0 ? max(0, round(($stock - $safetyStock) / $dailyAverage, 1)) : null;
@@ -102,7 +126,7 @@ class StockRunoutForecastController extends Controller
             return [
                 'sku' => $item->sku,
                 'name' => $item->name,
-                'category' => $item->category?->name ?? 'Tanpa Kategori',
+                'category' => $item->category_name ?? 'Tanpa Kategori',
                 'stock' => $stock,
                 'safety_stock' => $safetyStock,
                 'total_outbound' => $totalOutbound,
@@ -116,12 +140,7 @@ class StockRunoutForecastController extends Controller
                 'status_label' => $rowStatus['label'],
                 'status_class' => $rowStatus['class'],
             ];
-        })->filter(fn (array $row) => $status === '' || $status === 'all' || $row['status'] === $status)
-            ->sortBy([
-                ['days_until_runout', 'asc'],
-                ['daily_average', 'desc'],
-                ['sku', 'asc'],
-            ])->values();
+        })->values();
 
         return response()->json([
             'period' => [
@@ -132,14 +151,46 @@ class StockRunoutForecastController extends Controller
                 'warehouse' => $warehouse->name,
             ],
             'summary' => [
-                'total_items' => $rows->count(),
-                'runout' => $rows->where('status', 'runout')->count(),
-                'critical' => $rows->where('status', 'critical')->count(),
-                'safe' => $rows->where('status', 'safe')->count(),
-                'no_demand' => $rows->where('status', 'no_demand')->count(),
+                'total_items' => $summary['total_items'],
+                'runout' => $summary['runout'],
+                'critical' => $summary['critical'],
+                'safe' => $summary['safe'],
+                'no_demand' => $summary['no_demand'],
             ],
+            'draw' => (int) $request->input('draw'),
+            'recordsTotal' => $recordsFiltered,
+            'recordsFiltered' => $recordsFiltered,
             'data' => $rows,
         ]);
+    }
+
+    private function applyStatusFilter($query, string $status, string $stockExpr, string $safetyExpr, string $averageExpr, string $forecastExpr): void
+    {
+        if ($status === '' || $status === 'all') return;
+
+        match ($status) {
+            'runout' => $query->whereRaw("{$stockExpr} <= 0 OR {$forecastExpr} <= 0"),
+            'critical' => $query->whereRaw("{$averageExpr} > 0 AND {$forecastExpr} > 0 AND {$forecastExpr} <= {$safetyExpr}"),
+            'safe' => $query->whereRaw("{$averageExpr} > 0 AND {$forecastExpr} > {$safetyExpr}"),
+            'no_demand' => $query->whereRaw("{$stockExpr} > 0 AND {$averageExpr} <= 0"),
+            default => null,
+        };
+    }
+
+    private function summary($query, string $stockExpr, string $safetyExpr, string $averageExpr, string $forecastExpr): array
+    {
+        $count = function (string $status) use ($query, $stockExpr, $safetyExpr, $averageExpr, $forecastExpr): int {
+            $filteredQuery = clone $query;
+            $this->applyStatusFilter($filteredQuery, $status, $stockExpr, $safetyExpr, $averageExpr, $forecastExpr);
+
+            return $filteredQuery->count('items.id');
+        };
+
+        return [
+            'total_items' => (clone $query)->count('items.id'),
+            'runout' => $count('runout'), 'critical' => $count('critical'),
+            'safe' => $count('safe'), 'no_demand' => $count('no_demand'),
+        ];
     }
 
     private function status(int $stock, int $safetyStock, float $dailyAverage, float $forecastStock): array

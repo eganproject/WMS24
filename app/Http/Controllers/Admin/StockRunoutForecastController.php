@@ -61,7 +61,6 @@ class StockRunoutForecastController extends Controller
         $outboundQuery->groupBy('item_id');
 
         $stockExpr = 'COALESCE(stock_rows.stock, 0)';
-        $safetyExpr = 'COALESCE(stock_rows.safety_stock, items.safety_stock, 0)';
         $outboundExpr = 'COALESCE(outbound_usage.total_outbound, 0)';
         $averageExpr = "({$outboundExpr} / {$historyDays})";
         $forecastExpr = "({$stockExpr} - ({$averageExpr} * {$forecastDays}))";
@@ -91,9 +90,9 @@ class StockRunoutForecastController extends Controller
                     ->orWhere('items.name', 'like', "%{$search}%"));
             });
 
-        $summary = $this->summary($baseQuery, $stockExpr, $safetyExpr, $averageExpr, $forecastExpr);
+        $summary = $this->summary($baseQuery, $stockExpr, $averageExpr, $forecastExpr);
         $dataQuery = clone $baseQuery;
-        $this->applyStatusFilter($dataQuery, $status, $stockExpr, $safetyExpr, $averageExpr, $forecastExpr);
+        $this->applyStatusFilter($dataQuery, $status, $stockExpr, $averageExpr, $forecastExpr);
         $recordsFiltered = (clone $dataQuery)->count('items.id');
         $start = max(0, (int) $request->input('start', 0));
         $length = min(100, max(1, (int) $request->input('length', 25)));
@@ -101,10 +100,10 @@ class StockRunoutForecastController extends Controller
         $rows = $dataQuery
             ->select([
                 'items.sku', 'items.name', 'categories.name as category_name',
-                DB::raw("{$stockExpr} as stock"), DB::raw("{$safetyExpr} as safety_stock"),
+                DB::raw("{$stockExpr} as stock"),
                 DB::raw("{$outboundExpr} as total_outbound"),
             ])
-            ->orderByRaw("CASE WHEN {$forecastExpr} <= 0 OR {$stockExpr} <= 0 THEN 0 WHEN {$forecastExpr} <= {$safetyExpr} THEN 1 WHEN {$averageExpr} <= 0 THEN 3 ELSE 2 END")
+            ->orderByRaw("CASE WHEN {$forecastExpr} <= 0 OR {$stockExpr} <= 0 THEN 0 WHEN {$averageExpr} <= 0 THEN 2 ELSE 1 END")
             ->orderByRaw("CASE WHEN {$averageExpr} > 0 THEN {$stockExpr} / {$averageExpr} ELSE 999999 END")
             ->orderBy('items.sku')
             ->offset($start)
@@ -112,30 +111,28 @@ class StockRunoutForecastController extends Controller
             ->get()
             ->map(function ($item) use ($historyDays, $forecastDays) {
             $stock = (int) $item->stock;
-            $safetyStock = (int) $item->safety_stock;
             $totalOutbound = (int) $item->total_outbound;
             $dailyAverage = round($totalOutbound / $historyDays, 2);
+            $forecastDemand = round($dailyAverage * $forecastDays, 2);
             $forecastStock = round($stock - ($dailyAverage * $forecastDays), 2);
-            $daysUntilSafety = $dailyAverage > 0 ? max(0, round(($stock - $safetyStock) / $dailyAverage, 1)) : null;
             $daysUntilRunout = $dailyAverage > 0 ? max(0, round($stock / $dailyAverage, 1)) : null;
             $runoutDate = $daysUntilRunout === null
                 ? null
                 : Carbon::today()->addDays((int) ceil($daysUntilRunout))->toDateString();
-            $rowStatus = $this->status($stock, $safetyStock, $dailyAverage, $forecastStock);
+            $rowStatus = $this->status($stock, $dailyAverage, $forecastStock);
 
             return [
                 'sku' => $item->sku,
                 'name' => $item->name,
                 'category' => $item->category_name ?? 'Tanpa Kategori',
                 'stock' => $stock,
-                'safety_stock' => $safetyStock,
                 'total_outbound' => $totalOutbound,
                 'daily_average' => $dailyAverage,
+                'forecast_demand' => $forecastDemand,
                 'forecast_stock' => $forecastStock,
-                'days_until_safety' => $daysUntilSafety,
                 'days_until_runout' => $daysUntilRunout,
                 'runout_date' => $runoutDate,
-                'replenishment_need' => max(0, (int) ceil($safetyStock - $forecastStock)),
+                'restock_need' => max(0, (int) ceil($forecastDemand - $stock)),
                 'status' => $rowStatus['key'],
                 'status_label' => $rowStatus['label'],
                 'status_class' => $rowStatus['class'],
@@ -152,9 +149,8 @@ class StockRunoutForecastController extends Controller
             ],
             'summary' => [
                 'total_items' => $summary['total_items'],
-                'runout' => $summary['runout'],
-                'critical' => $summary['critical'],
-                'safe' => $summary['safe'],
+                'restock' => $summary['restock'],
+                'sufficient' => $summary['sufficient'],
                 'no_demand' => $summary['no_demand'],
             ],
             'draw' => (int) $request->input('draw'),
@@ -164,49 +160,44 @@ class StockRunoutForecastController extends Controller
         ]);
     }
 
-    private function applyStatusFilter($query, string $status, string $stockExpr, string $safetyExpr, string $averageExpr, string $forecastExpr): void
+    private function applyStatusFilter($query, string $status, string $stockExpr, string $averageExpr, string $forecastExpr): void
     {
         if ($status === '' || $status === 'all') return;
 
         match ($status) {
-            'runout' => $query->whereRaw("{$stockExpr} <= 0 OR {$forecastExpr} <= 0"),
-            'critical' => $query->whereRaw("{$averageExpr} > 0 AND {$forecastExpr} > 0 AND {$forecastExpr} <= {$safetyExpr}"),
-            'safe' => $query->whereRaw("{$averageExpr} > 0 AND {$forecastExpr} > {$safetyExpr}"),
+            'restock' => $query->whereRaw("{$stockExpr} <= 0 OR {$forecastExpr} <= 0"),
+            'sufficient' => $query->whereRaw("{$averageExpr} > 0 AND {$forecastExpr} > 0"),
             'no_demand' => $query->whereRaw("{$stockExpr} > 0 AND {$averageExpr} <= 0"),
             default => null,
         };
     }
 
-    private function summary($query, string $stockExpr, string $safetyExpr, string $averageExpr, string $forecastExpr): array
+    private function summary($query, string $stockExpr, string $averageExpr, string $forecastExpr): array
     {
-        $count = function (string $status) use ($query, $stockExpr, $safetyExpr, $averageExpr, $forecastExpr): int {
+        $count = function (string $status) use ($query, $stockExpr, $averageExpr, $forecastExpr): int {
             $filteredQuery = clone $query;
-            $this->applyStatusFilter($filteredQuery, $status, $stockExpr, $safetyExpr, $averageExpr, $forecastExpr);
+            $this->applyStatusFilter($filteredQuery, $status, $stockExpr, $averageExpr, $forecastExpr);
 
             return $filteredQuery->count('items.id');
         };
 
         return [
             'total_items' => (clone $query)->count('items.id'),
-            'runout' => $count('runout'), 'critical' => $count('critical'),
-            'safe' => $count('safe'), 'no_demand' => $count('no_demand'),
+            'restock' => $count('restock'), 'sufficient' => $count('sufficient'),
+            'no_demand' => $count('no_demand'),
         ];
     }
 
-    private function status(int $stock, int $safetyStock, float $dailyAverage, float $forecastStock): array
+    private function status(int $stock, float $dailyAverage, float $forecastStock): array
     {
         if ($stock <= 0 || $forecastStock <= 0) {
-            return ['key' => 'runout', 'label' => 'Akan Habis', 'class' => 'danger'];
-        }
-
-        if ($dailyAverage > 0 && $forecastStock <= $safetyStock) {
-            return ['key' => 'critical', 'label' => 'Di Bawah Safety', 'class' => 'warning'];
+            return ['key' => 'restock', 'label' => 'Perlu Restock', 'class' => 'danger'];
         }
 
         if ($dailyAverage <= 0) {
             return ['key' => 'no_demand', 'label' => 'Belum Ada Keluar', 'class' => 'secondary'];
         }
 
-        return ['key' => 'safe', 'label' => 'Aman', 'class' => 'success'];
+        return ['key' => 'sufficient', 'label' => 'Cukup untuk Periode', 'class' => 'success'];
     }
 }

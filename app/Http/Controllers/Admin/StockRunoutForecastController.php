@@ -29,6 +29,9 @@ class StockRunoutForecastController extends Controller
     {
         $historyDays = max(1, min(365, (int) $request->input('history_days', 30)));
         $forecastDays = max(1, min(365, (int) $request->input('forecast_days', 14)));
+        $runoutWithinDays = $request->filled('runout_within_days')
+            ? max(0, min(365, (int) $request->input('runout_within_days')))
+            : null;
         $search = trim((string) $request->input('q', ''));
         $categoryId = $request->input('category_id');
 
@@ -89,7 +92,8 @@ class StockRunoutForecastController extends Controller
                     ->orWhere('items.name', 'like', "%{$search}%"));
             })
             ->whereRaw("{$averageExpr} > 0")
-            ->whereRaw("{$forecastExpr} < 0");
+            ->whereRaw("{$forecastExpr} < 0")
+            ->when($runoutWithinDays !== null, fn ($query) => $query->whereRaw("({$stockExpr} / {$averageExpr}) <= ?", [$runoutWithinDays]));
 
         $summary = $this->summary($baseQuery, $stockExpr, $outboundExpr, $averageExpr, $forecastDays, $historyDays);
         $recordsFiltered = (clone $baseQuery)->count('items.id');
@@ -137,6 +141,7 @@ class StockRunoutForecastController extends Controller
             'period' => [
                 'history_days' => $historyDays,
                 'forecast_days' => $forecastDays,
+                'runout_within_days' => $runoutWithinDays,
                 'start' => $periodStart->toDateString(),
                 'end' => $periodEnd->toDateString(),
                 'stock_scope' => 'Gabungan gudang besar dan gudang kecil',

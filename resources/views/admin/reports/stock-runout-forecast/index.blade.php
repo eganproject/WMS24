@@ -27,6 +27,10 @@
                     <input type="number" id="filter_forecast_days" class="form-control form-control-solid w-150px" min="1" max="365" value="14">
                 </div>
                 <div>
+                    <label class="text-muted fs-7 mb-1">Habis dalam maks. (hari)</label>
+                    <input type="number" id="filter_runout_within_days" class="form-control form-control-solid w-150px" min="0" max="365" placeholder="Semua">
+                </div>
+                <div>
                     <label class="text-muted fs-7 mb-1">Kategori</label>
                     <select id="filter_category" class="form-select form-select-solid w-180px"><option value="">Semua Kategori</option><option value="0">Tanpa Kategori</option>@foreach($categories as $category)<option value="{{ $category->id }}">{{ $category->name }}</option>@endforeach</select>
                 </div>
@@ -63,7 +67,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const dataUrl = @json($dataUrl);
     const $table = $('#stock_runout_forecast_table');
     const fields = {
-        history: document.getElementById('filter_history_days'), forecast: document.getElementById('filter_forecast_days'),
+        history: document.getElementById('filter_history_days'), forecast: document.getElementById('filter_forecast_days'), runoutWithin: document.getElementById('filter_runout_within_days'),
         category: document.getElementById('filter_category'), search: document.getElementById('forecast_search'),
     };
     const number = (value, digits = 0) => {
@@ -79,9 +83,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const table = $table.DataTable({
         processing: true, serverSide: true, ordering: false, dom: 'rtip', pageLength: 25,
-        ajax: { url: dataUrl, data: (params) => { params.history_days = fields.history.value; params.forecast_days = fields.forecast.value; params.category_id = fields.category.value; params.q = fields.search.value; }, dataSrc: (json) => {
+        ajax: { url: dataUrl, data: (params) => { params.history_days = fields.history.value; params.forecast_days = fields.forecast.value; params.runout_within_days = fields.runoutWithin.value; params.category_id = fields.category.value; params.q = fields.search.value; }, dataSrc: (json) => {
             const summary = json.summary || {}; $('#summary_total').text(number(summary.total_items)); $('#summary_restock_need').text(number(summary.total_restock_need)); $('#summary_daily_average').text(number(summary.total_daily_average, 2)); $('#summary_nearest_runout').text(summary.nearest_runout_days === null ? '-' : `${number(summary.nearest_runout_days, 1)} hari`);
-            const period = json.period || {}; $('#period_info').text(`Rata-rata penjualan marketplace dan outbound manual dihitung dari ${period.start || '-'} s.d. ${period.end || '-'} (${number(period.history_days)} hari). Stok: ${period.stock_scope || 'gabungan gudang besar + kecil'}. Forecast untuk ${number(period.forecast_days)} hari ke depan.`);
+            const period = json.period || {}; const runoutNote = period.runout_within_days === null ? '' : ` Ditampilkan yang habis dalam maksimal ${number(period.runout_within_days)} hari.`; $('#period_info').text(`Rata-rata penjualan marketplace dan outbound manual dihitung dari ${period.start || '-'} s.d. ${period.end || '-'} (${number(period.history_days)} hari). Stok: ${period.stock_scope || 'gabungan gudang besar + kecil'}. Forecast untuk ${number(period.forecast_days)} hari ke depan.${runoutNote}`);
             return json.data || [];
         }},
         columns: [

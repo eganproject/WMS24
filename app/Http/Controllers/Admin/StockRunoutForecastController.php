@@ -6,8 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Models\Item;
 use App\Models\StockMutation;
-use App\Models\Warehouse;
-use App\Support\WarehouseService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -19,17 +17,11 @@ class StockRunoutForecastController extends Controller
      * Source mutasi yang benar-benar merepresentasikan barang keluar untuk pesanan.
      * Transfer, penyesuaian, dan barang rusak sengaja tidak dihitung sebagai permintaan harian.
      */
-    private const DEMAND_SOURCE_TYPES = ['outbound', 'qc_shipment'];
-
     public function index()
     {
-        $defaultWarehouseId = WarehouseService::defaultWarehouseId();
-
         return view('admin.reports.stock-runout-forecast.index', [
             'dataUrl' => route('admin.reports.stock-runout-forecast.data'),
             'categories' => Category::orderBy('name')->get(['id', 'name']),
-            'warehouses' => Warehouse::orderBy('name')->get(['id', 'code', 'name']),
-            'defaultWarehouseId' => $defaultWarehouseId,
         ]);
     }
 
@@ -37,19 +29,22 @@ class StockRunoutForecastController extends Controller
     {
         $historyDays = max(1, min(365, (int) $request->input('history_days', 30)));
         $forecastDays = max(1, min(365, (int) $request->input('forecast_days', 14)));
-        $warehouseId = (int) $request->input('warehouse_id', WarehouseService::defaultWarehouseId());
         $search = trim((string) $request->input('q', ''));
         $categoryId = $request->input('category_id');
 
-        $warehouse = Warehouse::findOrFail($warehouseId);
         $periodEnd = today()->endOfDay();
         $periodStart = today()->subDays($historyDays - 1)->startOfDay();
 
         $outboundQuery = StockMutation::query()
             ->select('item_id', DB::raw('SUM(qty) as total_outbound'))
-            ->where('warehouse_id', $warehouseId)
             ->where('direction', 'out')
-            ->whereIn('source_type', self::DEMAND_SOURCE_TYPES)
+            ->where(function ($query) {
+                $query->where('source_type', 'qc_shipment')
+                    ->orWhere(function ($manualQuery) {
+                        $manualQuery->where('source_type', 'outbound')
+                            ->where('source_subtype', 'manual');
+                    });
+            })
             ->whereBetween('occurred_at', [$periodStart, $periodEnd]);
 
         // Database lama belum memiliki kolom void; pada database baru mutasi yang dibatalkan tidak boleh dihitung.
@@ -59,16 +54,21 @@ class StockRunoutForecastController extends Controller
 
         $outboundQuery->groupBy('item_id');
 
+        $stockQuery = DB::table('item_stocks as stock')
+            ->join('warehouses as warehouse', 'warehouse.id', '=', 'stock.warehouse_id')
+            ->where(function ($query) {
+                $query->whereNull('warehouse.type')->orWhere('warehouse.type', '!=', 'damaged');
+            })
+            ->select('stock.item_id', DB::raw('SUM(stock.stock) as stock'))
+            ->groupBy('stock.item_id');
+
         $stockExpr = 'COALESCE(stock_rows.stock, 0)';
         $outboundExpr = 'COALESCE(outbound_usage.total_outbound, 0)';
         $averageExpr = "({$outboundExpr} / {$historyDays})";
         $forecastExpr = "({$stockExpr} - ({$averageExpr} * {$forecastDays}))";
 
         $baseQuery = Item::query()
-            ->leftJoin('item_stocks as stock_rows', function ($join) use ($warehouseId) {
-                $join->on('stock_rows.item_id', '=', 'items.id')
-                    ->where('stock_rows.warehouse_id', '=', $warehouseId);
-            })
+            ->leftJoinSub($stockQuery, 'stock_rows', fn ($join) => $join->on('stock_rows.item_id', '=', 'items.id'))
             ->leftJoinSub($outboundQuery, 'outbound_usage', fn ($join) => $join->on('outbound_usage.item_id', '=', 'items.id'))
             ->leftJoin('categories', 'categories.id', '=', 'items.category_id')
             ->where('items.status', Item::STATUS_ACTIVE)
@@ -139,7 +139,7 @@ class StockRunoutForecastController extends Controller
                 'forecast_days' => $forecastDays,
                 'start' => $periodStart->toDateString(),
                 'end' => $periodEnd->toDateString(),
-                'warehouse' => $warehouse->name,
+                'stock_scope' => 'Gabungan gudang besar dan gudang kecil',
             ],
             'summary' => [
                 'total_items' => $summary['total_items'],

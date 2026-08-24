@@ -88,7 +88,8 @@ class StockRunoutForecastController extends Controller
                 $query->where(fn ($searchQuery) => $searchQuery
                     ->where('items.sku', 'like', "%{$search}%")
                     ->orWhere('items.name', 'like', "%{$search}%"));
-            });
+            })
+            ->whereRaw("{$averageExpr} > 0");
 
         $summary = $this->summary($baseQuery, $stockExpr, $averageExpr, $forecastExpr);
         $dataQuery = clone $baseQuery;
@@ -151,7 +152,6 @@ class StockRunoutForecastController extends Controller
                 'total_items' => $summary['total_items'],
                 'restock' => $summary['restock'],
                 'sufficient' => $summary['sufficient'],
-                'no_demand' => $summary['no_demand'],
             ],
             'draw' => (int) $request->input('draw'),
             'recordsTotal' => $recordsFiltered,
@@ -167,7 +167,6 @@ class StockRunoutForecastController extends Controller
         match ($status) {
             'restock' => $query->whereRaw("{$stockExpr} <= 0 OR {$forecastExpr} <= 0"),
             'sufficient' => $query->whereRaw("{$averageExpr} > 0 AND {$forecastExpr} > 0"),
-            'no_demand' => $query->whereRaw("{$stockExpr} > 0 AND {$averageExpr} <= 0"),
             default => null,
         };
     }
@@ -184,7 +183,6 @@ class StockRunoutForecastController extends Controller
         return [
             'total_items' => (clone $query)->count('items.id'),
             'restock' => $count('restock'), 'sufficient' => $count('sufficient'),
-            'no_demand' => $count('no_demand'),
         ];
     }
 
@@ -192,10 +190,6 @@ class StockRunoutForecastController extends Controller
     {
         if ($stock <= 0 || $forecastStock <= 0) {
             return ['key' => 'restock', 'label' => 'Perlu Restock', 'class' => 'danger'];
-        }
-
-        if ($dailyAverage <= 0) {
-            return ['key' => 'no_demand', 'label' => 'Belum Ada Keluar', 'class' => 'secondary'];
         }
 
         return ['key' => 'sufficient', 'label' => 'Cukup untuk Periode', 'class' => 'success'];

@@ -407,6 +407,11 @@
         </button>
     </li>
     <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-resi-report-tab" data-bs-toggle="tab" data-bs-target="#tab_resi_report" type="button" role="tab" aria-controls="tab_resi_report" aria-selected="false">
+            <i class="fas fa-receipt me-2"></i>Laporan Resi
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
         <button class="nav-link" id="tab-empty-stock-tab" data-bs-toggle="tab" data-bs-target="#tab_empty_stock" type="button" role="tab" aria-controls="tab_empty_stock" aria-selected="false">
             <i class="fas fa-box-open me-2"></i>Stock Kosong
             @if($emptyStockTotal > 0)
@@ -620,6 +625,32 @@
     </div>
 </div>
 
+</div>
+
+<div class="tab-pane fade" id="tab_resi_report" role="tabpanel" aria-labelledby="tab-resi-report-tab">
+    <div class="card mb-6">
+        <div class="card-body d-flex flex-column flex-lg-row align-items-lg-end justify-content-between gap-4">
+            <div>
+                <div class="dash-section-title">Rata-rata Resi per Hari</div>
+                <div class="dash-section-sub mt-1">Jumlah resi aktif dihitung per hari kalender, termasuk hari tanpa resi.</div>
+            </div>
+            <div class="d-flex gap-3 flex-wrap align-items-end">
+                <div><label class="form-label fs-8 fw-semibold mb-1">Tanggal Awal</label><input type="date" id="resi_report_date_from" class="form-control form-control-solid" value="{{ $resiReportDefaultFrom ?? '' }}"></div>
+                <div><label class="form-label fs-8 fw-semibold mb-1">Tanggal Akhir</label><input type="date" id="resi_report_date_to" class="form-control form-control-solid" value="{{ $resiReportDefaultTo ?? '' }}"></div>
+                <button type="button" class="btn btn-primary" id="resi_report_apply"><i class="fas fa-chart-bar me-1"></i>Tampilkan</button>
+            </div>
+        </div>
+    </div>
+    <div class="dash-mini-grid mb-6">
+        <div class="dash-mini-card"><div class="dash-mini-label">Total Resi Aktif</div><div class="dash-mini-value text-primary" id="resi_report_total">-</div><div class="text-muted fs-8" id="resi_report_period">Pilih periode laporan.</div></div>
+        <div class="dash-mini-card"><div class="dash-mini-label">Rata-rata Resi / Hari</div><div class="dash-mini-value text-success" id="resi_report_average">-</div><div class="text-muted fs-8">Berdasarkan seluruh hari dalam periode.</div></div>
+        <div class="dash-mini-card"><div class="dash-mini-label">Jumlah Tertinggi</div><div class="dash-mini-value text-warning" id="resi_report_peak">-</div><div class="text-muted fs-8" id="resi_report_peak_date">-</div></div>
+        <div class="dash-mini-card"><div class="dash-mini-label">Resi Dibatalkan</div><div class="dash-mini-value text-danger" id="resi_report_canceled">-</div><div class="text-muted fs-8">Tidak termasuk resi aktif.</div></div>
+    </div>
+    <div class="card">
+        <div class="card-header border-0 pt-6 pb-2"><div class="card-title flex-column"><span class="dash-section-title">Rincian Resi Harian</span><span class="dash-section-sub mt-1">Gunakan periode di atas untuk melihat tren jumlah resi.</span></div></div>
+        <div class="card-body pt-2"><div class="table-responsive"><table class="table table-row-dashed align-middle"><thead><tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0"><th>Tanggal</th><th class="text-end">Resi Aktif</th><th class="text-end">Resi Dibatalkan</th></tr></thead><tbody id="resi_report_body"><tr><td colspan="3" class="text-center text-muted py-8">Pilih periode, lalu klik Tampilkan.</td></tr></tbody></table></div></div>
+    </div>
 </div>
 
 <div class="tab-pane fade" id="tab_empty_stock" role="tabpanel" aria-labelledby="tab-empty-stock-tab">
@@ -907,6 +938,7 @@
 <script>
     const kurirDetailUrl  = '{{ route('admin.dashboard.kurir-detail') }}';
     const scanDiscrepancyUrl = '{{ route('admin.dashboard.scan-out-discrepancy') }}';
+    const resiReportUrl = '{{ route('admin.dashboard.resi-report') }}';
     const selectedDateStr = '{{ $today ?? '' }}';
     const currentDateStr  = '{{ $currentDate ?? '' }}';
 
@@ -941,6 +973,52 @@
             else if (filterDateEl)         { filterDateEl.value = resetDate; }
             applyDateFilter(resetDate);
         });
+
+        // ── Laporan resi per periode ────────────────────────────────────
+        const resiReportTab = document.getElementById('tab-resi-report-tab');
+        const resiReportFrom = document.getElementById('resi_report_date_from');
+        const resiReportTo = document.getElementById('resi_report_date_to');
+        const resiReportApply = document.getElementById('resi_report_apply');
+        const resiReportBody = document.getElementById('resi_report_body');
+        const formatReportNumber = (value, digits = 0) => Number(value || 0).toLocaleString('id-ID', { maximumFractionDigits: digits });
+        const formatReportDate = (value) => value ? new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium' }).format(new Date(`${value}T00:00:00`)) : '-';
+        let resiReportLoaded = false;
+
+        const loadResiReport = async () => {
+            const dateFrom = resiReportFrom?.value || '';
+            const dateTo = resiReportTo?.value || '';
+            if (!dateFrom || !dateTo || dateFrom > dateTo) {
+                if (resiReportBody) resiReportBody.innerHTML = '<tr><td colspan="3" class="text-center text-danger py-8">Tanggal awal harus diisi dan tidak boleh melewati tanggal akhir.</td></tr>';
+                return;
+            }
+
+            if (resiReportBody) resiReportBody.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-8"><span class="spinner-border spinner-border-sm me-2"></span>Memuat laporan resi...</td></tr>';
+            try {
+                const params = new URLSearchParams({ date_from: dateFrom, date_to: dateTo });
+                const response = await fetch(`${resiReportUrl}?${params.toString()}`);
+                const payload = await response.json();
+                if (!response.ok) throw new Error(payload?.message || 'Gagal memuat laporan resi.');
+
+                const meta = payload?.meta || {};
+                document.getElementById('resi_report_total').textContent = formatReportNumber(meta.total_resi);
+                document.getElementById('resi_report_average').textContent = formatReportNumber(meta.daily_average, 2);
+                document.getElementById('resi_report_peak').textContent = formatReportNumber(meta.peak_total);
+                document.getElementById('resi_report_canceled').textContent = formatReportNumber(meta.total_canceled);
+                document.getElementById('resi_report_period').textContent = `${formatReportDate(meta.date_from)} – ${formatReportDate(meta.date_to)} · ${formatReportNumber(meta.days)} hari`;
+                document.getElementById('resi_report_peak_date').textContent = meta.peak_date ? `Pada ${formatReportDate(meta.peak_date)}` : '-';
+
+                const rows = payload?.data || [];
+                if (resiReportBody) resiReportBody.innerHTML = rows.length
+                    ? rows.map(row => `<tr><td class="fw-semibold">${formatReportDate(row.date)}</td><td class="text-end fw-bolder text-primary">${formatReportNumber(row.active_total)}</td><td class="text-end text-danger">${formatReportNumber(row.canceled_total)}</td></tr>`).join('')
+                    : '<tr><td colspan="3" class="text-center text-muted py-8">Tidak ada data resi pada periode ini.</td></tr>';
+                resiReportLoaded = true;
+            } catch (error) {
+                if (resiReportBody) resiReportBody.innerHTML = `<tr><td colspan="3" class="text-center text-danger py-8"><i class="fas fa-exclamation-triangle me-2"></i>${String(error.message || 'Gagal memuat laporan.')}</td></tr>`;
+            }
+        };
+
+        resiReportApply?.addEventListener('click', loadResiReport);
+        resiReportTab?.addEventListener('shown.bs.tab', () => { if (!resiReportLoaded) loadResiReport(); });
 
         // ── Kurir detail modal ───────────────────────────────────────────
         const detailModalEl  = document.getElementById('modal_kurir_detail');

@@ -183,6 +183,58 @@ class DashboardController extends Controller
             'emptyStockSummary' => $this->emptyStockSummary(),
             'emptyStockRows' => $this->emptyStockRows(),
             'pendingApprovalSummary' => $this->pendingApprovalSummary(),
+            'resiReportDefaultFrom' => now()->subDays(6)->toDateString(),
+            'resiReportDefaultTo' => $currentDate,
+        ]);
+    }
+
+    public function resiReport(Request $request)
+    {
+        $dateTo = $this->parseDate($request->input('date_to')) ?: now()->toDateString();
+        $dateFrom = $this->parseDate($request->input('date_from')) ?: Carbon::parse($dateTo)->subDays(6)->toDateString();
+
+        if (Carbon::parse($dateFrom)->greaterThan(Carbon::parse($dateTo))) {
+            [$dateFrom, $dateTo] = [$dateTo, $dateFrom];
+        }
+
+        $countsByDate = Resi::query()
+            ->selectRaw('DATE(tanggal_upload) as date')
+            ->selectRaw("SUM(CASE WHEN status IS NULL OR status <> 'canceled' THEN 1 ELSE 0 END) as active_total")
+            ->selectRaw("SUM(CASE WHEN status = 'canceled' THEN 1 ELSE 0 END) as canceled_total")
+            ->whereDate('tanggal_upload', '>=', $dateFrom)
+            ->whereDate('tanggal_upload', '<=', $dateTo)
+            ->groupByRaw('DATE(tanggal_upload)')
+            ->get()
+            ->keyBy('date');
+
+        $start = Carbon::parse($dateFrom);
+        $end = Carbon::parse($dateTo);
+        $rows = collect();
+        for ($date = $start->copy(); $date->lte($end); $date->addDay()) {
+            $day = $date->toDateString();
+            $rows->push([
+                'date' => $day,
+                'active_total' => (int) ($countsByDate->get($day)?->active_total ?? 0),
+                'canceled_total' => (int) ($countsByDate->get($day)?->canceled_total ?? 0),
+            ]);
+        }
+
+        $days = $rows->count();
+        $totalActive = (int) $rows->sum('active_total');
+        $peak = $rows->sortByDesc('active_total')->first();
+
+        return response()->json([
+            'meta' => [
+                'date_from' => $dateFrom,
+                'date_to' => $dateTo,
+                'days' => $days,
+                'total_resi' => $totalActive,
+                'total_canceled' => (int) $rows->sum('canceled_total'),
+                'daily_average' => $days > 0 ? round($totalActive / $days, 2) : 0,
+                'peak_date' => $peak['date'] ?? null,
+                'peak_total' => (int) ($peak['active_total'] ?? 0),
+            ],
+            'data' => $rows->values(),
         ]);
     }
 

@@ -143,6 +143,7 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/dashboard/kurir-detail', [DashboardController::class, 'kurirDetail'])->name('dashboard.kurir-detail');
     Route::get('/dashboard/scan-out-discrepancy', [DashboardController::class, 'scanOutDiscrepancy'])->name('dashboard.scan-out-discrepancy');
+    Route::get('/dashboard/resi-report', [DashboardController::class, 'resiReport'])->name('dashboard.resi-report');
 
     Route::prefix('masterdata')->as('masterdata.')->group(function () {
         Route::get('/stock-api-access',[StockApiAllowedIpController::class,'index'])->name('stock-api-access.index');

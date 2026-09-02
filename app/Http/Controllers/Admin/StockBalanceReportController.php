@@ -7,7 +7,6 @@ use App\Http\Controllers\Controller;
 use App\Models\Warehouse;
 use App\Support\Permission;
 use App\Support\StockBalanceReportService;
-use App\Support\WarehouseService;
 use Illuminate\Http\Request;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -19,7 +18,6 @@ class StockBalanceReportController extends Controller
             'dataUrl' => route('admin.reports.stock-balance.data'),
             'exportUrl' => route('admin.reports.stock-balance.export'),
             'warehouses' => Warehouse::query()->orderBy('name')->get(['id', 'code', 'name']),
-            'defaultWarehouseId' => WarehouseService::defaultWarehouseId(),
             'defaultDateFrom' => now()->startOfMonth()->toDateString(),
             'defaultDateTo' => now()->toDateString(),
         ]);
@@ -120,6 +118,8 @@ class StockBalanceReportController extends Controller
         $validated = $request->validate([
             'date_from' => ['required', 'date_format:Y-m-d'],
             'date_to' => ['required', 'date_format:Y-m-d', 'after_or_equal:date_from'],
+            'warehouse_ids' => ['nullable', 'array'],
+            'warehouse_ids.*' => ['integer', 'distinct', 'exists:warehouses,id'],
             'warehouse_id' => ['nullable', 'integer', 'exists:warehouses,id'],
             'q' => ['nullable', 'string', 'max:150'],
         ], [
@@ -128,10 +128,21 @@ class StockBalanceReportController extends Controller
             'date_to.after_or_equal' => 'Tanggal akhir tidak boleh sebelum tanggal awal.',
         ]);
 
+        $warehouseIds = collect($validated['warehouse_ids'] ?? [])
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn (int $id) => $id > 0)
+            ->unique()
+            ->values();
+
+        // Tetap menerima parameter lama warehouse_id untuk URL/bookmark yang sudah tersimpan.
+        if ($warehouseIds->isEmpty() && !empty($validated['warehouse_id'])) {
+            $warehouseIds->push((int) $validated['warehouse_id']);
+        }
+
         return [
             'date_from' => $validated['date_from'],
             'date_to' => $validated['date_to'],
-            'warehouse_id' => isset($validated['warehouse_id']) ? (int) $validated['warehouse_id'] : null,
+            'warehouse_ids' => $warehouseIds->all(),
             'q' => trim((string) ($validated['q'] ?? '')),
         ];
     }

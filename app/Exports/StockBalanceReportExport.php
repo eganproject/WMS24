@@ -131,10 +131,17 @@ class StockBalanceReportExport implements FromCollection, WithHeadings, WithTitl
 
     private function filterSummary(): string
     {
-        $warehouseId = (int) ($this->filters['warehouse_id'] ?? 0);
-        $warehouse = $warehouseId > 0
-            ? (Warehouse::query()->whereKey($warehouseId)->value('name') ?? 'Gudang tidak ditemukan')
-            : 'Semua Gudang';
+        $warehouseIds = array_values(array_filter(array_map(
+            'intval',
+            (array) ($this->filters['warehouse_ids'] ?? [])
+        )));
+        $warehouse = $warehouseIds === []
+            ? 'Seluruh Gudang'
+            : Warehouse::query()
+                ->whereIn('id', $warehouseIds)
+                ->orderBy('name')
+                ->pluck('name')
+                ->implode(', ');
         $search = trim((string) ($this->filters['q'] ?? ''));
 
         return sprintf(

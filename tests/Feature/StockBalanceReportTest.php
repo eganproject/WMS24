@@ -45,7 +45,7 @@ class StockBalanceReportTest extends TestCase
         $response = $this->actingAs($user)->getJson(route('admin.reports.stock-balance.data', [
             'date_from' => '2026-08-10',
             'date_to' => '2026-08-20',
-            'warehouse_id' => $warehouse->id,
+            'warehouse_ids' => [$warehouse->id],
             'draw' => 1,
             'start' => 0,
             'length' => 25,
@@ -75,10 +75,30 @@ class StockBalanceReportTest extends TestCase
         ItemStock::create(['item_id' => $firstItem->id, 'warehouse_id' => $mainWarehouse->id, 'stock' => 10]);
         ItemStock::create(['item_id' => $secondItem->id, 'warehouse_id' => $otherWarehouse->id, 'stock' => 20]);
 
+        $allWarehousesResponse = $this->actingAs($user)->getJson(route('admin.reports.stock-balance.data', [
+            'date_from' => '2026-08-01',
+            'date_to' => '2026-08-31',
+        ]));
+        $allWarehousesResponse->assertOk()
+            ->assertJsonPath('recordsFiltered', 2)
+            ->assertJsonPath('summary.total_warehouses', 2)
+            ->assertJsonPath('summary.ending_stock', 30);
+
+        $multipleWarehousesResponse = $this->actingAs($user)->getJson(route('admin.reports.stock-balance.data', [
+            'date_from' => '2026-08-01',
+            'date_to' => '2026-08-31',
+            'warehouse_ids' => [$mainWarehouse->id, $otherWarehouse->id],
+            'q' => 'FILTER',
+        ]));
+        $multipleWarehousesResponse->assertOk()
+            ->assertJsonPath('recordsFiltered', 2)
+            ->assertJsonPath('summary.total_warehouses', 2)
+            ->assertJsonPath('summary.ending_stock', 30);
+
         $response = $this->actingAs($user)->getJson(route('admin.reports.stock-balance.data', [
             'date_from' => '2026-08-01',
             'date_to' => '2026-08-31',
-            'warehouse_id' => $otherWarehouse->id,
+            'warehouse_ids' => [$otherWarehouse->id],
             'q' => 'FILTER-TWO',
         ]));
 
@@ -98,13 +118,15 @@ class StockBalanceReportTest extends TestCase
             ->get(route('admin.reports.stock-balance.index'))
             ->assertOk()
             ->assertSee('Laporan Saldo Stok')
-            ->assertSee('Stok Awal');
+            ->assertSee('Stok Awal')
+            ->assertSee('Seluruh Gudang')
+            ->assertSee('Gudang (bisa pilih beberapa)');
 
         $this->actingAs($user)
             ->get(route('admin.reports.stock-balance.export', [
                 'date_from' => '2026-08-01',
                 'date_to' => '2026-08-31',
-                'warehouse_id' => $otherWarehouse->id,
+                'warehouse_ids' => [$mainWarehouse->id, $otherWarehouse->id],
             ]))
             ->assertOk()
             ->assertDownload();

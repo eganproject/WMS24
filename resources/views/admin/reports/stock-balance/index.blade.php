@@ -100,15 +100,16 @@
                 <input type="text" class="form-control form-control-solid" id="report_search" placeholder="SKU atau nama barang" autocomplete="off" />
             </div>
             <div>
-                <label class="text-muted fs-7 mb-1">Gudang</label>
-                <select class="form-select form-select-solid" id="filter_warehouse">
-                    <option value="">Semua Gudang</option>
+                <label class="text-muted fs-7 mb-1">Gudang (bisa pilih beberapa)</label>
+                <select class="form-select form-select-solid" id="filter_warehouse" multiple>
+                    <option value="all" selected>Seluruh Gudang</option>
                     @foreach($warehouses as $warehouse)
-                        <option value="{{ $warehouse->id }}" @selected((int) $warehouse->id === (int) $defaultWarehouseId)>
+                        <option value="{{ $warehouse->id }}">
                             {{ $warehouse->name }}{{ $warehouse->code ? ' ('.$warehouse->code.')' : '' }}
                         </option>
                     @endforeach
                 </select>
+                <div class="text-muted fs-8 mt-1">Pilih satu atau beberapa gudang.</div>
             </div>
             <div>
                 <label class="text-muted fs-7 mb-1">Tanggal Awal</label>
@@ -191,7 +192,7 @@
     const stockBalanceDataUrl = @json($dataUrl);
     const stockBalanceExportUrl = @json($exportUrl);
     const stockBalanceDefaults = {
-        warehouseId: @json((string) $defaultWarehouseId),
+        warehouseValues: ['all'],
         dateFrom: @json($defaultDateFrom),
         dateTo: @json($defaultDateTo),
     };
@@ -215,11 +216,16 @@
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
 
+        const selectedWarehouseIds = () => Array.from(warehouseFilter.selectedOptions)
+            .map((option) => option.value)
+            .filter((value) => value && value !== 'all');
+
         const currentParams = () => {
             const params = new URLSearchParams();
             params.set('date_from', dateFromInput.value);
             params.set('date_to', dateToInput.value);
-            if (warehouseFilter.value) params.set('warehouse_id', warehouseFilter.value);
+            const selectedWarehouses = selectedWarehouseIds();
+            selectedWarehouses.forEach((value) => params.append('warehouse_ids[]', value));
             if (searchInput.value.trim()) params.set('q', searchInput.value.trim());
             return params;
         };
@@ -253,8 +259,35 @@
         }
 
         if (typeof $ !== 'undefined' && $.fn.select2) {
-            $(warehouseFilter).select2({ width: '100%', placeholder: 'Semua Gudang', allowClear: true });
+            $(warehouseFilter).select2({
+                width: '100%',
+                placeholder: 'Pilih gudang',
+                closeOnSelect: false,
+            });
         }
+
+        let previousWarehouseValues = ['all'];
+        const normalizeWarehouseSelection = () => {
+            let values = Array.from(warehouseFilter.selectedOptions).map((option) => option.value);
+            const allWasSelected = previousWarehouseValues.includes('all');
+            const allIsSelected = values.includes('all');
+
+            if (allIsSelected && !allWasSelected) {
+                values = ['all'];
+            } else if (allIsSelected && values.length > 1) {
+                values = values.filter((value) => value !== 'all');
+            } else if (!values.length) {
+                values = ['all'];
+            }
+
+            Array.from(warehouseFilter.options).forEach((option) => {
+                option.selected = values.includes(option.value);
+            });
+            if (typeof $ !== 'undefined' && $.fn.select2) {
+                $(warehouseFilter).trigger('change.select2');
+            }
+            previousWarehouseValues = values;
+        };
 
         const table = $('#stock_balance_table').DataTable({
             processing: true,
@@ -267,7 +300,10 @@
             ajax: {
                 url: stockBalanceDataUrl,
                 data: function (requestParams) {
-                    currentParams().forEach((value, key) => requestParams[key] = value);
+                    requestParams.date_from = dateFromInput.value;
+                    requestParams.date_to = dateToInput.value;
+                    requestParams.warehouse_ids = selectedWarehouseIds();
+                    requestParams.q = searchInput.value.trim();
                 },
                 dataSrc: function (json) {
                     updateSummary(json.summary || {}, json.period || {});
@@ -305,7 +341,10 @@
         };
 
         applyButton.addEventListener('click', reload);
-        warehouseFilter.addEventListener('change', reload);
+        warehouseFilter.addEventListener('change', () => {
+            normalizeWarehouseSelection();
+            reload();
+        });
         searchInput.addEventListener('input', () => {
             clearTimeout(searchTimer);
             searchTimer = setTimeout(reload, 450);
@@ -314,8 +353,13 @@
 
         resetButton.addEventListener('click', () => {
             searchInput.value = '';
-            warehouseFilter.value = stockBalanceDefaults.warehouseId;
-            if (typeof $ !== 'undefined' && $.fn.select2) $(warehouseFilter).trigger('change.select2');
+            Array.from(warehouseFilter.options).forEach((option) => {
+                option.selected = stockBalanceDefaults.warehouseValues.includes(option.value);
+            });
+            previousWarehouseValues = [...stockBalanceDefaults.warehouseValues];
+            if (typeof $ !== 'undefined' && $.fn.select2) {
+                $(warehouseFilter).trigger('change.select2');
+            }
             dateFromInput.value = stockBalanceDefaults.dateFrom;
             dateToInput.value = stockBalanceDefaults.dateTo;
             reload();

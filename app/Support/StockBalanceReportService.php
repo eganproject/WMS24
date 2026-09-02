@@ -17,7 +17,10 @@ class StockBalanceReportService
     {
         $dateFrom = (string) $filters['date_from'].' 00:00:00';
         $dateTo = (string) $filters['date_to'].' 23:59:59';
-        $warehouseId = (int) ($filters['warehouse_id'] ?? 0);
+        $warehouseIds = array_values(array_unique(array_filter(
+            array_map('intval', (array) ($filters['warehouse_ids'] ?? [])),
+            fn (int $id) => $id > 0
+        )));
 
         $movements = DB::table('stock_mutations')
             ->select(['item_id', 'warehouse_id'])
@@ -41,8 +44,8 @@ class StockBalanceReportService
             ->where('occurred_at', '>=', $dateFrom)
             ->groupBy('item_id', 'warehouse_id');
 
-        if ($warehouseId > 0) {
-            $movements->where('warehouse_id', $warehouseId);
+        if ($warehouseIds !== []) {
+            $movements->whereIn('warehouse_id', $warehouseIds);
         }
 
         $openingExpression = '(COALESCE(item_stocks.stock, 0) - COALESCE(movements.movement_in_since_start, 0) + COALESCE(movements.movement_out_since_start, 0))';
@@ -73,8 +76,8 @@ class StockBalanceReportService
             ->selectRaw('COALESCE(movements.period_out, 0) AS stock_out')
             ->selectRaw("{$endingExpression} AS ending_stock");
 
-        if ($warehouseId > 0) {
-            $query->where('item_stocks.warehouse_id', $warehouseId);
+        if ($warehouseIds !== []) {
+            $query->whereIn('item_stocks.warehouse_id', $warehouseIds);
         }
 
         $search = trim((string) ($filters['q'] ?? ''));

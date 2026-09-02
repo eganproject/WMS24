@@ -35,6 +35,8 @@ class StockMutationController extends Controller
             ->distinct()
             ->orderBy('source_type')
             ->pluck('source_type');
+        $requestedDateFrom = request()->input('date_from');
+        $requestedDateTo = request()->input('date_to');
 
         return view('admin.inventory.stock-mutations.index', [
             'warehouses' => $warehouses,
@@ -43,8 +45,8 @@ class StockMutationController extends Controller
             'damagedWarehouseId' => WarehouseService::damagedWarehouseId(),
             'warehouseLabel' => $warehouseLabel,
             'today' => now()->toDateString(),
-            'defaultDateFrom' => $initialItem ? '' : now()->toDateString(),
-            'defaultDateTo' => $initialItem ? '' : now()->toDateString(),
+            'defaultDateFrom' => $requestedDateFrom !== null ? (string) $requestedDateFrom : ($initialItem ? '' : now()->toDateString()),
+            'defaultDateTo' => $requestedDateTo !== null ? (string) $requestedDateTo : ($initialItem ? '' : now()->toDateString()),
             'initialItemId' => $initialItemId,
             'initialItem' => $initialItem,
             'initialWarehouseId' => request()->input('warehouse_id'),

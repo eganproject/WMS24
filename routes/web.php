@@ -42,6 +42,7 @@ use App\Http\Controllers\Admin\StockOpnameReportController;
 use App\Http\Controllers\Admin\ReplenishmentReportController;
 use App\Http\Controllers\Admin\DisplayReceiptReportController;
 use App\Http\Controllers\Admin\StockTransferReportController;
+use App\Http\Controllers\Admin\StockBalanceReportController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\MenuController;
 use App\Http\Controllers\Admin\PermissionController;
@@ -497,6 +498,9 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/stock-transfers', [StockTransferReportController::class, 'index'])->name('stock-transfers.index');
         Route::get('/stock-transfers/data', [StockTransferReportController::class, 'data'])->name('stock-transfers.data');
         Route::get('/stock-transfers/chart-data', [StockTransferReportController::class, 'chartData'])->name('stock-transfers.chart-data');
+        Route::get('/stock-balance', [StockBalanceReportController::class, 'index'])->name('stock-balance.index');
+        Route::get('/stock-balance/data', [StockBalanceReportController::class, 'data'])->name('stock-balance.data');
+        Route::get('/stock-balance/export', [StockBalanceReportController::class, 'export'])->name('stock-balance.export');
         Route::get('/stock-opname', [StockOpnameReportController::class, 'index'])->name('stock-opname.index');
         Route::get('/stock-opname/data', [StockOpnameReportController::class, 'data'])->name('stock-opname.data');
         Route::get('/stock-opname/sku-diff', [StockOpnameReportController::class, 'diffSku'])->name('stock-opname.diff-sku');

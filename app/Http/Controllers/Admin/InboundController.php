@@ -357,6 +357,7 @@ class InboundController extends Controller
                 : collect(),
             'showApproveAction' => false,
             'showScanProgressColumn' => true,
+            'enhancedItemList' => $type === 'return',
             'statusLabels' => $statusLabels,
             'statusFilterOptions' => [
                 InboundScanStatus::PENDING_SCAN => 'Menunggu Scan',

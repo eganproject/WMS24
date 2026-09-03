@@ -48,8 +48,253 @@
     $canImport = !empty($importUrl ?? null) && $canCreateDefault;
 @endphp
 
+@if(!empty($enhancedItemList ?? false))
+    @push('styles')
+    <style>
+        .return-in-list-card {
+            background: linear-gradient(180deg, #ffffff 0%, #f8faff 100%);
+            overflow: hidden;
+        }
+
+        .return-in-list-card > .card-header {
+            gap: 1rem;
+            background: rgba(255, 255, 255, 0.92);
+            border-bottom: 1px solid #eef2f7 !important;
+        }
+
+        .return-in-list-card .card-toolbar,
+        .return-in-list-card .card-toolbar > .d-flex {
+            flex-wrap: wrap;
+        }
+
+        .return-in-table-wrap {
+            padding: 0.25rem;
+        }
+
+        #stock_flow_table.return-in-table {
+            min-width: 1480px;
+            border-collapse: separate !important;
+            border-spacing: 0 0.7rem !important;
+        }
+
+        #stock_flow_table.return-in-table thead th {
+            border: 0 !important;
+            padding-top: 0;
+            padding-bottom: 0.35rem;
+            white-space: nowrap;
+        }
+
+        #stock_flow_table.return-in-table tbody td {
+            padding-top: 1rem;
+            padding-bottom: 1rem;
+            vertical-align: middle;
+            background: #fff;
+            border-top: 1px solid #edf1f7 !important;
+            border-bottom: 1px solid #edf1f7 !important;
+            white-space: normal;
+        }
+
+        #stock_flow_table.return-in-table tbody td:first-child {
+            border-left: 1px solid #edf1f7 !important;
+            border-radius: 0.9rem 0 0 0.9rem;
+        }
+
+        #stock_flow_table.return-in-table tbody td:last-child {
+            border-right: 1px solid #edf1f7 !important;
+            border-radius: 0 0.9rem 0.9rem 0;
+        }
+
+        #stock_flow_table.return-in-table tbody tr:hover td {
+            background: #fbfcff;
+            border-color: #dce9fb !important;
+        }
+
+        #stock_flow_table.return-in-table .stock-flow-item-column {
+            min-width: 360px;
+            width: 360px;
+        }
+
+        .return-in-item-card {
+            display: block;
+            width: 100%;
+            min-width: 330px;
+            padding: 0;
+            overflow: hidden;
+            text-align: left;
+            color: #3f4254;
+            background: #fff;
+            border: 1px solid #e7ecf4;
+            border-radius: 0.85rem;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+        }
+
+        .return-in-item-card:hover,
+        .return-in-item-card:focus-visible {
+            border-color: #9ec5fe;
+            box-shadow: 0 0.45rem 1.1rem rgba(0, 82, 204, 0.10);
+            transform: translateY(-1px);
+            outline: 0;
+        }
+
+        .return-in-item-card__header,
+        .return-in-item-card__footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+        }
+
+        .return-in-item-card__header {
+            padding: 0.7rem 0.8rem;
+            background: #f1f7ff;
+            border-bottom: 1px solid #e3edfb;
+        }
+
+        .return-in-item-card__title {
+            color: #181c32;
+            font-weight: 700;
+        }
+
+        .return-in-item-card__body {
+            display: grid;
+            gap: 0.5rem;
+            padding: 0.65rem 0.8rem;
+        }
+
+        .return-in-item-line {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 0.75rem;
+            align-items: center;
+        }
+
+        .return-in-item-line + .return-in-item-line {
+            padding-top: 0.5rem;
+            border-top: 1px dashed #e7ecf4;
+        }
+
+        .return-in-item-line__identity {
+            min-width: 0;
+        }
+
+        .return-in-item-line__sku {
+            display: block;
+            color: #009ef7;
+            font-size: 0.78rem;
+            font-weight: 700;
+            line-height: 1.2;
+        }
+
+        .return-in-item-line__name {
+            display: block;
+            margin-top: 0.15rem;
+            overflow: hidden;
+            color: #5e6278;
+            font-size: 0.78rem;
+            line-height: 1.25;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .return-in-item-line__amount {
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        .return-in-item-line__amount strong {
+            display: block;
+            color: #181c32;
+            font-size: 0.85rem;
+        }
+
+        .return-in-item-line__amount small {
+            display: block;
+            margin-top: 0.1rem;
+            color: #7e8299;
+            font-size: 0.7rem;
+        }
+
+        .return-in-item-card__footer {
+            padding: 0.55rem 0.8rem;
+            color: #009ef7;
+            background: #fbfcff;
+            border-top: 1px solid #edf1f7;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .return-in-total-qty {
+            min-width: 76px;
+            padding: 0.55rem 0.65rem;
+            text-align: center;
+            background: #f1f7ff;
+            border: 1px solid #dce9fb;
+            border-radius: 0.75rem;
+        }
+
+        .return-in-total-qty strong,
+        .return-in-total-qty span {
+            display: block;
+        }
+
+        .return-in-total-qty strong {
+            color: #181c32;
+            font-size: 1rem;
+            line-height: 1.1;
+        }
+
+        .return-in-total-qty span {
+            margin-top: 0.2rem;
+            color: #7e8299;
+            font-size: 0.68rem;
+            font-weight: 700;
+        }
+
+        .return-in-note {
+            max-width: 220px;
+            padding: 0.55rem 0.65rem;
+            color: #5e6278;
+            background: #fff8dd;
+            border-radius: 0.7rem;
+            font-size: 0.78rem;
+            line-height: 1.4;
+        }
+
+        .return-in-detail-table thead th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            padding: 0.85rem 0.75rem;
+            background: #f5f8fa;
+            white-space: nowrap;
+        }
+
+        .return-in-detail-table tbody td {
+            padding: 0.85rem 0.75rem;
+            vertical-align: middle;
+        }
+
+        .return-in-detail-table tbody tr:nth-child(even) td {
+            background: #fbfcff;
+        }
+
+        @media (max-width: 991.98px) {
+            .return-in-list-card .card-header,
+            .return-in-list-card .card-title,
+            .return-in-list-card .card-toolbar {
+                width: 100%;
+            }
+
+            .return-in-list-card .card-toolbar > .d-flex {
+                margin-right: 0 !important;
+            }
+        }
+    </style>
+    @endpush
+@endif
+
 @section('content')
-<div class="card">
+<div class="card {{ !empty($enhancedItemList ?? false) ? 'return-in-list-card' : '' }}">
     <div class="card-header border-0 pt-6">
         <div class="card-title">
             <div class="d-flex align-items-center position-relative my-1">
@@ -106,8 +351,8 @@
         </div>
     </div>
     <div class="card-body py-6">
-        <div class="table-responsive">
-            <table class="table align-middle table-row-dashed fs-6 gy-5" id="stock_flow_table">
+        <div class="table-responsive {{ !empty($enhancedItemList ?? false) ? 'return-in-table-wrap' : '' }}">
+            <table class="table align-middle table-row-dashed fs-6 gy-5 {{ !empty($enhancedItemList ?? false) ? 'return-in-table' : '' }}" id="stock_flow_table">
                 <thead>
                     <tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0">
                         <th>ID</th>
@@ -126,7 +371,7 @@
                         @if(!empty($showRecipientFields ?? false))
                             <th>Penerima</th>
                         @endif
-                        <th>Item</th>
+                        <th class="stock-flow-item-column">{{ !empty($enhancedItemList ?? false) ? 'Ringkasan Item Retur' : 'Item' }}</th>
                         <th>Qty</th>
                         @if(!empty($showScanProgressColumn ?? false))
                             <th>Progress Scan</th>
@@ -411,11 +656,11 @@
 @endif
 
 <div class="modal fade" id="modal_flow_item_detail" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+    <div class="modal-dialog modal-dialog-centered {{ !empty($enhancedItemList ?? false) ? 'modal-xl' : 'modal-lg' }} modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <div>
-                    <h2 class="fw-bolder mb-1" id="flow_item_detail_title">Detail Item</h2>
+                    <h2 class="fw-bolder mb-1" id="flow_item_detail_title">{{ !empty($enhancedItemList ?? false) ? 'Rincian Item Retur' : 'Detail Item' }}</h2>
                     <div class="text-muted" id="flow_item_detail_subtitle">-</div>
                 </div>
                 <div class="btn btn-icon btn-sm btn-active-icon-primary" data-bs-dismiss="modal">
@@ -429,9 +674,12 @@
             </div>
             <div class="modal-body">
                 <div class="table-responsive">
-                    <table class="table table-row-dashed align-middle fs-7 mb-0">
+                    <table class="table table-row-dashed align-middle fs-7 mb-0 {{ !empty($enhancedItemList ?? false) ? 'return-in-detail-table' : '' }}">
                         <thead>
                             <tr class="text-gray-400 fw-bolder text-uppercase">
+                                @if(!empty($enhancedItemList ?? false))
+                                    <th class="text-center">No</th>
+                                @endif
                                 <th>SKU</th>
                                 <th>Nama Item</th>
                                 <th class="text-end" data-flow-item-detail-koli-head style="display:none;">{{ !empty($enableInputUnitSelect ?? false) ? 'Input' : 'Koli' }}</th>
@@ -495,6 +743,7 @@
     const deliveryNoteImageLinkLabel = @json($deliveryNoteImageLinkLabel ?? 'Lihat Gambar');
     const showRecipientFields = {{ !empty($showRecipientFields ?? false) ? 'true' : 'false' }};
     const requireExplicitWarehouseSelection = {{ !empty($requireExplicitWarehouseSelection ?? false) ? 'true' : 'false' }};
+    const enhancedItemList = {{ !empty($enhancedItemList ?? false) ? 'true' : 'false' }};
     const exportUrl = @json($exportUrl ?? null);
     const defaultDateFrom = @json($defaultDateFrom ?? '');
     const defaultDateTo = @json($defaultDateTo ?? '');
@@ -636,6 +885,53 @@
             .replace(/'/g, '&#039;');
 
         const renderItemSummary = (row) => {
+            if (enhancedItemList && row?.type === 'return') {
+                const details = Array.isArray(row?.item_details) ? row.item_details : [];
+                if (!details.length) {
+                    return '<span class="text-muted fs-7">Belum ada item</span>';
+                }
+
+                const totalQty = details.reduce((sum, item) => sum + Number(item?.qty || 0), 0);
+                const visibleItems = details.slice(0, 2);
+                const remaining = Math.max(0, details.length - visibleItems.length);
+                const itemLines = visibleItems.map((item) => {
+                    const qty = Number(item?.qty || 0);
+                    const koli = Number(item?.koli || 0);
+                    const usesPcs = item?.input_unit === 'pcs';
+                    const inputLabel = usesPcs
+                        ? 'Input PCS'
+                        : `${koli.toLocaleString('id-ID')} Koli`;
+
+                    return `
+                        <span class="return-in-item-line">
+                            <span class="return-in-item-line__identity">
+                                <span class="return-in-item-line__sku">${escapeHtml(item?.sku || '-')}</span>
+                                <span class="return-in-item-line__name" title="${escapeHtml(item?.name || '-')}">${escapeHtml(item?.name || '-')}</span>
+                            </span>
+                            <span class="return-in-item-line__amount">
+                                <strong>${qty.toLocaleString('id-ID')} PCS</strong>
+                                <small>${escapeHtml(inputLabel)}</small>
+                            </span>
+                        </span>
+                    `;
+                }).join('');
+                const remainingLabel = remaining > 0 ? `+${remaining.toLocaleString('id-ID')} item lainnya` : 'Semua item ditampilkan';
+
+                return `
+                    <button type="button" class="return-in-item-card btn-flow-item-detail" title="Buka seluruh rincian item retur">
+                        <span class="return-in-item-card__header">
+                            <span class="return-in-item-card__title"><i class="fas fa-box-open text-primary me-2"></i>${details.length.toLocaleString('id-ID')} SKU</span>
+                            <span class="badge badge-light-primary">${totalQty.toLocaleString('id-ID')} PCS</span>
+                        </span>
+                        <span class="return-in-item-card__body">${itemLines}</span>
+                        <span class="return-in-item-card__footer">
+                            <span>${escapeHtml(remainingLabel)}</span>
+                            <span>Lihat rincian <i class="fas fa-chevron-right ms-1"></i></span>
+                        </span>
+                    </button>
+                `;
+            }
+
             const useCompactSummary = defaultTypeFilter === 'receipt'
                 || (row?.type === 'manual' && showRecipientFields);
 
@@ -653,6 +949,28 @@
             `;
         };
 
+        const renderTotalQty = (value, renderType, row) => {
+            if (renderType !== 'display' || !enhancedItemList || row?.type !== 'return') {
+                return value;
+            }
+            const qty = Number(value || 0);
+            return `
+                <div class="return-in-total-qty" title="Total kuantitas item retur">
+                    <strong>${qty.toLocaleString('id-ID')}</strong>
+                    <span>PCS</span>
+                </div>
+            `;
+        };
+
+        const renderFlowNote = (value, renderType, row) => {
+            if (renderType !== 'display' || !enhancedItemList || row?.type !== 'return') {
+                return value || '-';
+            }
+            const note = String(value || '').trim();
+            if (!note) return '<span class="text-muted fs-7">Tidak ada catatan</span>';
+            return `<div class="return-in-note"><i class="fas fa-sticky-note text-warning me-2"></i>${escapeHtml(note)}</div>`;
+        };
+
         const showItemDetail = (row) => {
             if (!row || !itemDetailModal) return;
             const details = Array.isArray(row.item_details) ? row.item_details : [];
@@ -660,7 +978,11 @@
             const totalKoli = details.reduce((sum, item) => sum + Number(item?.koli || 0), 0);
             const showInput = enableInputUnitSelect || isDefaultWarehouse(row.warehouse_id);
 
-            if (itemDetailTitle) itemDetailTitle.textContent = `Detail Item ${row.code || ''}`.trim();
+            if (itemDetailTitle) {
+                itemDetailTitle.textContent = enhancedItemList && row?.type === 'return'
+                    ? `Rincian Item Retur ${row.code || ''}`.trim()
+                    : `Detail Item ${row.code || ''}`.trim();
+            }
             if (itemDetailSubtitle) {
                 const warehouse = renderWarehouseBadge(row.warehouse || '-', row.warehouse_id);
                 const summary = `${details.length.toLocaleString('id-ID')} SKU / ${totalQty.toLocaleString('id-ID')} Qty`;
@@ -670,11 +992,12 @@
             if (itemDetailKoliHead) itemDetailKoliHead.style.display = showInput ? '' : 'none';
             if (itemDetailRows) {
                 itemDetailRows.innerHTML = details.length
-                    ? details.map((item) => {
+                    ? details.map((item, index) => {
                         const inputUnit = item?.input_unit === 'pcs' ? 'PCS' : 'KOLI';
                         const inputAmount = item?.input_unit === 'pcs' ? item?.qty : item?.koli;
                         return `
                         <tr>
+                            ${enhancedItemList ? `<td class="text-center text-muted fw-bold">${index + 1}</td>` : ''}
                             <td class="fw-bold">${escapeHtml(item.sku || '-')}</td>
                             <td>${escapeHtml(item.name || '-')}</td>
                             ${showInput ? `<td class="text-end">${Number(enableInputUnitSelect ? inputAmount : item?.koli || 0).toLocaleString('id-ID')}${enableInputUnitSelect ? ` ${inputUnit}` : ''}</td>` : ''}
@@ -683,7 +1006,7 @@
                         </tr>
                     `;
                     }).join('')
-                    : `<tr><td colspan="${showInput ? 5 : 4}" class="text-center text-muted py-8">Tidak ada item.</td></tr>`;
+                    : `<tr><td colspan="${(showInput ? 5 : 4) + (enhancedItemList ? 1 : 0)}" class="text-center text-muted py-8">Tidak ada item.</td></tr>`;
             }
             itemDetailModal.show();
         };
@@ -1552,11 +1875,11 @@
                     }},
                 @endif
                 { data: 'item', orderable: false, searchable: false, render: (data, type, row) => renderItemSummary(row) },
-                { data: 'qty' },
+                { data: 'qty', render: (data, type, row) => renderTotalQty(data, type, row) },
                 @if(!empty($showScanProgressColumn ?? false))
                     { data: 'scan_progress', orderable:false, searchable:false, render: (data) => renderScanProgress(data) },
                 @endif
-                { data: 'note' },
+                { data: 'note', render: (data, type, row) => renderFlowNote(data, type, row) },
                 { data: 'id', orderable:false, searchable:false, className:'text-end', render: (data, type, row)=>{
                     const rowType = row?.type || defaultTypeFilter;
                     const perms = permMap?.[rowType] || {};

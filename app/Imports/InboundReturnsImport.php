@@ -5,19 +5,18 @@ namespace App\Imports;
 use App\Models\Item;
 use App\Support\InboundScanExpectation;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Maatwebsite\Excel\Concerns\SkipsEmptyRows;
 use Maatwebsite\Excel\Concerns\ToCollection;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
 
-class InboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
+class InboundReturnsImport implements SkipsEmptyRows, ToCollection, WithHeadingRow
 {
     /** @var array<string,array{ref_no:?string,surat_jalan_no:?string,surat_jalan_at:?string,note:?string,transacted_at:?string,items:array<int,array{item_id:int,qty:int,koli:int,note:?string}>}> */
     public array $groups = [];
 
-    public function __construct(private readonly bool $allowPcs = false)
-    {
-    }
+    public function __construct(private readonly bool $allowPcs = false) {}
 
     public function collection(Collection $rows)
     {
@@ -29,9 +28,9 @@ class InboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyRo
 
         $first = $rows->first();
         $headers = array_keys($first?->toArray() ?? []);
-        if (!in_array('sku', $headers, true)) {
+        if (! in_array('sku', $headers, true)) {
             throw ValidationException::withMessages([
-                'file' => 'Header wajib: sku, qty/koli (opsional: ref_no, note, item_note, transacted_at)',
+                'file' => 'Header wajib: sku, qty/koli (opsional: input_unit, ref_no, surat_jalan_no, surat_jalan_at, note, item_note, transacted_at)',
             ]);
         }
         $qtyKey = $this->detectQtyKey($headers);
@@ -42,25 +41,29 @@ class InboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyRo
             ]);
         }
 
-        $skus = $rows->map(fn ($row) => trim((string) ($row['sku'] ?? '')))
+        $skus = $rows->map(fn ($row) => $this->normalizeSku((string) ($row['sku'] ?? '')))
             ->filter()
             ->unique()
             ->values();
 
-        $items = Item::whereIn('sku', $skus)->get(['id', 'sku', 'koli_qty']);
-        $skuMap = $items->keyBy('sku');
+        $skuMap = Item::query()
+            ->whereIn(DB::raw('UPPER(sku)'), $skus)
+            ->get(['id', 'sku', 'koli_qty'])
+            ->keyBy(fn (Item $item) => $this->normalizeSku((string) $item->sku));
 
         $missing = [];
         $errors = [];
         $rowIndex = 1;
         foreach ($rows as $row) {
             $rowIndex++;
-            $sku = trim((string) ($row['sku'] ?? ''));
+            $rawSku = trim((string) ($row['sku'] ?? ''));
+            $sku = $this->normalizeSku($rawSku);
             if ($sku === '') {
                 continue;
             }
-            if (!isset($skuMap[$sku])) {
-                $missing[$sku] = true;
+            if (! $skuMap->has($sku)) {
+                $missing[$rawSku] = true;
+
                 continue;
             }
             $item = $skuMap[$sku];
@@ -69,15 +72,18 @@ class InboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyRo
             $inputUnit = $this->parseInputUnit($row);
             if ($inputUnit === null) {
                 $errors[] = "Baris {$rowIndex}: input_unit harus diisi pcs atau koli untuk SKU {$sku}";
+
                 continue;
             }
             if ($inputUnit === 'pcs') {
-                if (!$this->allowPcs) {
+                if (! $this->allowPcs) {
                     $errors[] = "Baris {$rowIndex}: input PCS hanya diperbolehkan untuk Gudang Display atau Gudang Rusak";
+
                     continue;
                 }
                 if ($qty <= 0 || $koli > 0) {
                     $errors[] = "Baris {$rowIndex}: satuan PCS wajib menggunakan kolom qty tanpa nilai koli untuk SKU {$sku}";
+
                     continue;
                 }
             }
@@ -86,12 +92,14 @@ class InboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyRo
                 $koliQty = (int) ($item->koli_qty ?? 0);
                 if ($koliQty <= 0) {
                     $errors[] = "Baris {$rowIndex}: isi per koli belum diisi untuk SKU {$sku}";
+
                     continue;
                 }
                 $qty = $koli * $koliQty;
             }
             if ($qty <= 0) {
                 $errors[] = "Baris {$rowIndex}: qty/koli tidak valid untuk SKU {$sku}";
+
                 continue;
             }
 
@@ -102,6 +110,7 @@ class InboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyRo
                     $resolved = InboundScanExpectation::resolve($item, $qty, $koli > 0 ? $koli : null);
                 } catch (ValidationException $e) {
                     $errors[] = "Baris {$rowIndex}: ".(collect($e->errors())->flatten()->first() ?? $e->getMessage());
+
                     continue;
                 }
             }
@@ -119,7 +128,7 @@ class InboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyRo
                 $transactedAt !== '' ? $transactedAt : '__date__',
             ];
             $groupKey = implode('|', $groupKeyParts);
-            if (!isset($this->groups[$groupKey])) {
+            if (! isset($this->groups[$groupKey])) {
                 $this->groups[$groupKey] = [
                     'ref_no' => $ref !== '' ? $ref : null,
                     'surat_jalan_no' => $suratJalanNo !== '' ? $suratJalanNo : null,
@@ -144,7 +153,7 @@ class InboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyRo
             }
 
             $itemId = (int) $item->id;
-            if (!isset($this->groups[$groupKey]['items'][$itemId])) {
+            if (! isset($this->groups[$groupKey]['items'][$itemId])) {
                 $this->groups[$groupKey]['items'][$itemId] = [
                     'item_id' => $itemId,
                     'qty' => $resolved['qty'],
@@ -155,6 +164,7 @@ class InboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyRo
             } else {
                 if (($this->groups[$groupKey]['items'][$itemId]['input_unit'] ?? 'koli') !== $inputUnit) {
                     $errors[] = "Baris {$rowIndex}: SKU {$sku} tidak boleh dicampur antara satuan PCS dan Koli dalam transaksi yang sama";
+
                     continue;
                 }
                 $this->groups[$groupKey]['items'][$itemId]['qty'] += $resolved['qty'];
@@ -167,14 +177,14 @@ class InboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyRo
             }
         }
 
-        if (!empty($missing)) {
+        if (! empty($missing)) {
             $list = implode(', ', array_keys($missing));
             throw ValidationException::withMessages([
                 'file' => 'SKU tidak ditemukan: '.$list,
             ]);
         }
 
-        if (!empty($errors)) {
+        if (! empty($errors)) {
             throw ValidationException::withMessages([
                 'file' => implode(' | ', array_slice($errors, 0, 5)),
             ]);
@@ -184,6 +194,7 @@ class InboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyRo
             $items = array_values($group['items'] ?? []);
             if (empty($items)) {
                 unset($this->groups[$key]);
+
                 continue;
             }
             $this->groups[$key]['items'] = $items;
@@ -203,6 +214,7 @@ class InboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyRo
                 return $key;
             }
         }
+
         return null;
     }
 
@@ -213,6 +225,7 @@ class InboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyRo
                 return $key;
             }
         }
+
         return null;
     }
 
@@ -230,15 +243,27 @@ class InboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyRo
             return 0;
         }
         $value = is_numeric($raw) ? (int) $raw : (int) preg_replace('/[^0-9\-]/', '', (string) $raw);
+
         return $value > 0 ? $value : 0;
+    }
+
+    private function normalizeSku(string $value): string
+    {
+        return mb_strtoupper(trim($value));
     }
 
     private function parseInputUnit($row): ?string
     {
         $value = strtolower(trim((string) ($row['input_unit'] ?? $row['satuan'] ?? $row['unit'] ?? '')));
-        if ($value === '') return 'koli';
-        if (in_array($value, ['pcs', 'piece', 'pieces', 'satuan'], true)) return 'pcs';
-        if (in_array($value, ['koli', 'kolian'], true)) return 'koli';
+        if ($value === '') {
+            return 'koli';
+        }
+        if (in_array($value, ['pcs', 'piece', 'pieces', 'satuan'], true)) {
+            return 'pcs';
+        }
+        if (in_array($value, ['koli', 'kolian'], true)) {
+            return 'koli';
+        }
 
         return null;
     }

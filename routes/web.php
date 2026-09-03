@@ -360,6 +360,8 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::post('/returns', [InboundController::class, 'returnsStore'])->name('returns.store');
         Route::post('/returns/import', [InboundController::class, 'returnsImport'])->name('returns.import');
         Route::post('/returns/items-import', [InboundController::class, 'returnsItemsImport'])->name('returns.items-import');
+        Route::get('/returns/template', [InboundController::class, 'returnsTemplate'])->name('returns.template');
+        Route::get('/returns/items-template', [InboundController::class, 'returnsItemsTemplate'])->name('returns.items-template');
         Route::get('/returns/{id}', [InboundController::class, 'returnsShow'])->name('returns.show');
         Route::put('/returns/{id}', [InboundController::class, 'returnsUpdate'])->name('returns.update');
         Route::delete('/returns/{id}', [InboundController::class, 'returnsDestroy'])->name('returns.destroy');
@@ -399,6 +401,7 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/manuals/export', [OutboundController::class, 'manualsExport'])->name('manuals.export');
         Route::post('/manuals', [OutboundController::class, 'manualsStore'])->name('manuals.store');
         Route::post('/manuals/import', [OutboundController::class, 'manualsImport'])->name('manuals.import');
+        Route::get('/manuals/template', [OutboundController::class, 'manualsTemplate'])->name('manuals.template');
         Route::get('/manuals/{id}', [OutboundController::class, 'manualsShow'])->name('manuals.show');
         Route::put('/manuals/{id}', [OutboundController::class, 'manualsUpdate'])->name('manuals.update');
         Route::delete('/manuals/{id}', [OutboundController::class, 'manualsDestroy'])->name('manuals.destroy');

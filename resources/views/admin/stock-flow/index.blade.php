@@ -657,6 +657,9 @@
                             @if(!empty($enableInputUnitSelect ?? false))
                                 , <strong>input_unit</strong> (isi <strong>pcs</strong> atau <strong>koli</strong>)
                             @endif
+                            @if(!empty($showRecipientFields ?? false))
+                                , <strong>recipient_name</strong>, <strong>recipient_phone</strong>, <strong>recipient_address</strong>
+                            @endif
                             .
                         </div>
                         @if(!empty($templateUrl ?? null))
@@ -665,7 +668,7 @@
                                     <div class="text-muted fs-7 mb-2">{{ $templateNote }}</div>
                                 @endif
                                 <a href="{{ $templateUrl }}" class="btn btn-light-primary btn-sm">
-                                    {{ $templateLabel ?? 'Download Template' }}
+                                    <i class="fas fa-file-excel me-2"></i>{{ $templateLabel ?? 'Download Template' }}
                                 </a>
                             </div>
                         @endif
@@ -724,6 +727,13 @@
                             Opsional: <strong>item_note</strong> atau <strong>note</strong>.<br>
                             Import ini hanya mengisi daftar item di form aktif dan akan mengganti item yang sedang ada setelah Anda konfirmasi.
                         </div>
+                        @if(!empty($itemTemplateUrl ?? null))
+                            <div class="mt-4">
+                                <a href="{{ $itemTemplateUrl }}" class="btn btn-light-primary btn-sm">
+                                    <i class="fas fa-file-excel me-2"></i>Unduh Template Item
+                                </a>
+                            </div>
+                        @endif
                     </div>
                     <div class="fv-row mb-6">
                         <label class="required fs-6 fw-bold form-label mb-2">File Excel Item</label>
@@ -2271,6 +2281,10 @@
             const formData = new FormData();
             formData.append('file', file);
             if (importWarehouseSelect?.value) formData.append('warehouse_id', importWarehouseSelect.value);
+            const originalContent = importSubmit.innerHTML;
+            importSubmit.disabled = true;
+            importSubmit.setAttribute('aria-busy', 'true');
+            importSubmit.innerHTML = '<span class="spinner-border spinner-border-sm align-middle me-2" role="status" aria-hidden="true"></span>Memproses import...';
             try {
                 const res = await fetch(importUrl, {
                     method: 'POST',
@@ -2305,6 +2319,10 @@
                 reloadTable();
             } catch (err) {
                 if (typeof Swal !== 'undefined') Swal.fire('Error', 'Gagal import', 'error');
+            } finally {
+                importSubmit.disabled = false;
+                importSubmit.removeAttribute('aria-busy');
+                importSubmit.innerHTML = originalContent;
             }
         });
 
@@ -2347,6 +2365,10 @@
             const formData = new FormData();
             formData.append('file', file);
             if (warehouseSelect?.value) formData.append('warehouse_id', warehouseSelect.value);
+            const originalContent = itemImportSubmit.innerHTML;
+            itemImportSubmit.disabled = true;
+            itemImportSubmit.setAttribute('aria-busy', 'true');
+            itemImportSubmit.innerHTML = '<span class="spinner-border spinner-border-sm align-middle me-2" role="status" aria-hidden="true"></span>Memproses item...';
 
             try {
                 const res = await fetch(itemImportUrl, {
@@ -2395,6 +2417,10 @@
             } catch (err) {
                 console.error(err);
                 if (typeof Swal !== 'undefined') Swal.fire('Error', 'Gagal import item', 'error');
+            } finally {
+                itemImportSubmit.disabled = false;
+                itemImportSubmit.removeAttribute('aria-busy');
+                itemImportSubmit.innerHTML = originalContent;
             }
         });
 

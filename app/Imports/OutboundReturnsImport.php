@@ -8,19 +8,21 @@ use App\Models\Warehouse;
 use App\Support\OutboundKoliExpectation;
 use App\Support\WarehouseService;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Maatwebsite\Excel\Concerns\SkipsEmptyRows;
 use Maatwebsite\Excel\Concerns\ToCollection;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
 
-class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
+class OutboundReturnsImport implements SkipsEmptyRows, ToCollection, WithHeadingRow
 {
-    /** @var array<string,array{ref_no:?string,supplier_id:?int,surat_jalan_no:?string,surat_jalan_at:?string,note:?string,transacted_at:?string,warehouse_id:?int,items:array<int,array{item_id:int,qty:int,note:?string}>}> */
+    /** @var array<string,array{ref_no:?string,supplier_id:?int,surat_jalan_no:?string,surat_jalan_at:?string,recipient_name:?string,recipient_phone:?string,recipient_address:?string,note:?string,transacted_at:?string,warehouse_id:?int,items:array<int,array{item_id:int,qty:int,note:?string}>}> */
     public array $groups = [];
 
-    public function __construct(private readonly bool $requireSupplier = false)
-    {
-    }
+    public function __construct(
+        private readonly bool $requireSupplier = false,
+        private readonly bool $supportsRecipient = false,
+    ) {}
 
     public function collection(Collection $rows)
     {
@@ -32,7 +34,7 @@ class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
 
         $first = $rows->first();
         $headers = array_keys($first?->toArray() ?? []);
-        if (!in_array('sku', $headers, true)) {
+        if (! in_array('sku', $headers, true)) {
             throw ValidationException::withMessages([
                 'file' => 'Header wajib: sku, qty/koli (opsional: ref_no, surat_jalan_no, surat_jalan_at, note, item_note, transacted_at, warehouse/gudang)',
             ]);
@@ -53,25 +55,29 @@ class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
         $warehouseMaps = $this->buildWarehouseMaps();
         $supplierMaps = $this->requireSupplier ? $this->buildSupplierMaps() : ['ids' => [], 'names' => []];
 
-        $skus = $rows->map(fn ($row) => trim((string) ($row['sku'] ?? '')))
+        $skus = $rows->map(fn ($row) => $this->normalizeSku((string) ($row['sku'] ?? '')))
             ->filter()
             ->unique()
             ->values();
 
-        $items = Item::whereIn('sku', $skus)->get(['id', 'sku', 'koli_qty'])->keyBy('sku');
-        $skuMap = $items->pluck('id', 'sku')->all();
+        $items = Item::query()
+            ->whereIn(DB::raw('UPPER(sku)'), $skus)
+            ->get(['id', 'sku', 'koli_qty'])
+            ->keyBy(fn (Item $item) => $this->normalizeSku((string) $item->sku));
 
         $missing = [];
         $errors = [];
         $rowIndex = 1;
         foreach ($rows as $row) {
             $rowIndex++;
-            $sku = trim((string) ($row['sku'] ?? ''));
+            $rawSku = trim((string) ($row['sku'] ?? ''));
+            $sku = $this->normalizeSku($rawSku);
             if ($sku === '') {
                 continue;
             }
-            if (!isset($skuMap[$sku])) {
-                $missing[$sku] = true;
+            if (! $items->has($sku)) {
+                $missing[$rawSku] = true;
+
                 continue;
             }
             $item = $items->get($sku);
@@ -79,8 +85,9 @@ class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
             $koli = $koliKey ? $this->parseQty($row, $koliKey) : 0;
             $warehouseId = $this->parseWarehouseId($row, $warehouseMaps, $errors, $rowIndex);
 
-            if (!$item) {
+            if (! $item) {
                 $missing[$sku] = true;
+
                 continue;
             }
 
@@ -92,6 +99,7 @@ class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
             if ($usesKoli) {
                 if ($koli <= 0) {
                     $errors[] = "Baris {$rowIndex}: koli wajib diisi untuk outbound dari Gudang Besar";
+
                     continue;
                 }
 
@@ -99,10 +107,12 @@ class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
                     $resolved = OutboundKoliExpectation::resolve($item, $qty, $koli);
                 } catch (ValidationException $e) {
                     $errors[] = "Baris {$rowIndex}: ".(collect($e->errors())->flatten()->first() ?? $e->getMessage());
+
                     continue;
                 }
             } elseif ($qty <= 0) {
                 $errors[] = "Baris {$rowIndex}: qty tidak valid untuk SKU {$sku}";
+
                 continue;
             }
 
@@ -115,19 +125,46 @@ class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
             $transactedAt = trim((string) ($row['transacted_at'] ?? $row['tanggal'] ?? ''));
             $suratJalanNo = trim((string) ($row['surat_jalan_no'] ?? $row['sj_no'] ?? ''));
             $suratJalanAt = trim((string) ($row['surat_jalan_at'] ?? $row['tanggal_surat_jalan'] ?? ''));
+            $recipientName = $this->supportsRecipient
+                ? $this->normalizeNullableText($row['recipient_name'] ?? $row['nama_penerima'] ?? null)
+                : null;
+            $recipientPhone = $this->supportsRecipient
+                ? $this->normalizeNullableText($row['recipient_phone'] ?? $row['telepon_penerima'] ?? $row['no_hp_penerima'] ?? null)
+                : null;
+            $recipientAddress = $this->supportsRecipient
+                ? $this->normalizeNullableText($row['recipient_address'] ?? $row['alamat_penerima'] ?? null)
+                : null;
+
+            foreach ([
+                'nama penerima' => [$recipientName, 150],
+                'telepon penerima' => [$recipientPhone, 50],
+                'alamat penerima' => [$recipientAddress, 1000],
+            ] as $label => [$value, $max]) {
+                if ($value !== null && mb_strlen($value) > $max) {
+                    $errors[] = "Baris {$rowIndex}: {$label} maksimal {$max} karakter";
+
+                    continue 2;
+                }
+            }
 
             $groupKey = implode('::', [
                 $ref !== '' ? $ref : '__default__',
                 $suratJalanNo !== '' ? $suratJalanNo : 'null_sj',
                 $this->requireSupplier && $supplierId ? (string) $supplierId : 'null_supplier',
                 (string) ($warehouseId ?: 'null'),
+                $recipientName ?? 'null_recipient_name',
+                $recipientPhone ?? 'null_recipient_phone',
+                $recipientAddress ?? 'null_recipient_address',
             ]);
-            if (!isset($this->groups[$groupKey])) {
+            if (! isset($this->groups[$groupKey])) {
                 $this->groups[$groupKey] = [
                     'ref_no' => $ref !== '' ? $ref : null,
                     'supplier_id' => $supplierId,
                     'surat_jalan_no' => $suratJalanNo !== '' ? $suratJalanNo : null,
                     'surat_jalan_at' => $suratJalanAt !== '' ? $suratJalanAt : null,
+                    'recipient_name' => $recipientName,
+                    'recipient_phone' => $recipientPhone,
+                    'recipient_address' => $recipientAddress,
                     'note' => $note !== '' ? $note : null,
                     'transacted_at' => $transactedAt !== '' ? $transactedAt : null,
                     'warehouse_id' => $warehouseId,
@@ -154,8 +191,8 @@ class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
                 }
             }
 
-            $itemId = (int) $skuMap[$sku];
-            if (!isset($this->groups[$groupKey]['items'][$itemId])) {
+            $itemId = (int) $item->id;
+            if (! isset($this->groups[$groupKey]['items'][$itemId])) {
                 $this->groups[$groupKey]['items'][$itemId] = [
                     'item_id' => $itemId,
                     'qty' => $resolved['qty'],
@@ -169,14 +206,14 @@ class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
             }
         }
 
-        if (!empty($missing)) {
+        if (! empty($missing)) {
             $list = implode(', ', array_keys($missing));
             throw ValidationException::withMessages([
                 'file' => 'SKU tidak ditemukan: '.$list,
             ]);
         }
 
-        if (!empty($errors)) {
+        if (! empty($errors)) {
             throw ValidationException::withMessages([
                 'file' => implode(' | ', array_slice($errors, 0, 5)),
             ]);
@@ -186,6 +223,7 @@ class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
             $items = array_values($group['items'] ?? []);
             if (empty($items)) {
                 unset($this->groups[$key]);
+
                 continue;
             }
             $this->groups[$key]['items'] = $items;
@@ -205,6 +243,7 @@ class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
                 return $key;
             }
         }
+
         return null;
     }
 
@@ -226,6 +265,7 @@ class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
                 return $key;
             }
         }
+
         return null;
     }
 
@@ -243,12 +283,13 @@ class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
             return 0;
         }
         $value = is_numeric($raw) ? (int) $raw : (int) preg_replace('/[^0-9\-]/', '', (string) $raw);
+
         return $value > 0 ? $value : 0;
     }
 
     /**
-     * @param array{codes:array<string,int>,names:array<string,int>,ids:array<int,bool>} $maps
-     * @param array<int,string> $errors
+     * @param  array{codes:array<string,int>,names:array<string,int>,ids:array<int,bool>}  $maps
+     * @param  array<int,string>  $errors
      */
     private function parseWarehouseId($row, array $maps, array &$errors, int $rowIndex): ?int
     {
@@ -295,6 +336,7 @@ class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
         }
 
         $errors[] = "Baris {$rowIndex}: gudang tidak ditemukan ({$value})";
+
         return null;
     }
 
@@ -319,6 +361,7 @@ class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
                 $names[$name] = $id;
             }
         }
+
         return [
             'codes' => $codes,
             'names' => $names,
@@ -351,8 +394,8 @@ class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
     }
 
     /**
-     * @param array{ids:array<int,bool>,names:array<string,int>} $maps
-     * @param array<int,string> $errors
+     * @param  array{ids:array<int,bool>,names:array<string,int>}  $maps
+     * @param  array<int,string>  $errors
      */
     private function parseSupplierId($row, array $maps, array &$errors, int $rowIndex): ?int
     {
@@ -376,6 +419,7 @@ class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
             if ($this->requireSupplier) {
                 $errors[] = "Baris {$rowIndex}: supplier wajib diisi";
             }
+
             return null;
         }
 
@@ -393,6 +437,7 @@ class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
         }
 
         $errors[] = "Baris {$rowIndex}: supplier tidak ditemukan ({$value})";
+
         return null;
     }
 
@@ -400,12 +445,29 @@ class OutboundReturnsImport implements ToCollection, WithHeadingRow, SkipsEmptyR
     {
         $value = strtolower(trim($value));
         $value = preg_replace('/\\s+/', ' ', $value) ?? $value;
+
         return $value;
     }
 
     private function normalizeSupplierName(string $value): string
     {
         $value = strtolower(trim($value));
+
         return preg_replace('/\\s+/', ' ', $value) ?? $value;
+    }
+
+    private function normalizeSku(string $value): string
+    {
+        return mb_strtoupper(trim($value));
+    }
+
+    private function normalizeNullableText(mixed $value): ?string
+    {
+        $value = trim((string) $value);
+        if ($value === '') {
+            return null;
+        }
+
+        return preg_replace('/[ \t]+/', ' ', $value) ?? $value;
     }
 }

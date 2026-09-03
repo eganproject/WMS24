@@ -5,12 +5,13 @@ namespace App\Imports;
 use App\Models\Item;
 use App\Support\InboundScanExpectation;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Maatwebsite\Excel\Concerns\SkipsEmptyRows;
 use Maatwebsite\Excel\Concerns\ToCollection;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
 
-class InboundFormItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
+class InboundFormItemsImport implements SkipsEmptyRows, ToCollection, WithHeadingRow
 {
     /** @var array<int,array{item_id:int,qty:int,koli:int,note:?string,sku:string,name:string}> */
     public array $items = [];
@@ -18,8 +19,7 @@ class InboundFormItemsImport implements ToCollection, WithHeadingRow, SkipsEmpty
     public function __construct(
         private readonly bool $supportsInputUnit = false,
         private readonly bool $allowPcs = false,
-    ) {
-    }
+    ) {}
 
     public function collection(Collection $rows)
     {
@@ -30,7 +30,7 @@ class InboundFormItemsImport implements ToCollection, WithHeadingRow, SkipsEmpty
         }
 
         $headers = array_keys($rows->first()?->toArray() ?? []);
-        if (!in_array('sku', $headers, true)) {
+        if (! in_array('sku', $headers, true)) {
             throw ValidationException::withMessages([
                 'file' => 'Header wajib: sku, qty/koli. Opsional: item_note atau note.',
             ]);
@@ -50,6 +50,7 @@ class InboundFormItemsImport implements ToCollection, WithHeadingRow, SkipsEmpty
             ->values();
 
         $itemMap = Item::query()
+            ->whereIn(DB::raw('UPPER(sku)'), $skuInputs)
             ->get(['id', 'sku', 'name', 'koli_qty'])
             ->mapWithKeys(fn (Item $item) => [$this->normalizeSku((string) $item->sku) => $item]);
 
@@ -67,8 +68,9 @@ class InboundFormItemsImport implements ToCollection, WithHeadingRow, SkipsEmpty
 
             /** @var Item|null $item */
             $item = $itemMap->get($normalizedSku);
-            if (!$item) {
+            if (! $item) {
                 $missing[$normalizedSku] = true;
+
                 continue;
             }
 
@@ -77,15 +79,18 @@ class InboundFormItemsImport implements ToCollection, WithHeadingRow, SkipsEmpty
             $inputUnit = $this->supportsInputUnit ? $this->parseInputUnit($row) : 'koli';
             if ($inputUnit === null) {
                 $errors[] = "Baris {$rowIndex}: input_unit harus diisi pcs atau koli untuk SKU {$item->sku}";
+
                 continue;
             }
             if ($inputUnit === 'pcs') {
-                if (!$this->allowPcs) {
+                if (! $this->allowPcs) {
                     $errors[] = "Baris {$rowIndex}: input PCS hanya diperbolehkan untuk Gudang Display atau Gudang Rusak";
+
                     continue;
                 }
                 if ($qty <= 0 || $koli > 0) {
                     $errors[] = "Baris {$rowIndex}: satuan PCS wajib menggunakan kolom qty tanpa nilai koli untuk SKU {$item->sku}";
+
                     continue;
                 }
             }
@@ -94,6 +99,7 @@ class InboundFormItemsImport implements ToCollection, WithHeadingRow, SkipsEmpty
                 $koliQty = (int) ($item->koli_qty ?? 0);
                 if ($koliQty <= 0) {
                     $errors[] = "Baris {$rowIndex}: isi per koli belum diisi untuk SKU {$item->sku}";
+
                     continue;
                 }
 
@@ -102,6 +108,7 @@ class InboundFormItemsImport implements ToCollection, WithHeadingRow, SkipsEmpty
 
             if ($qty <= 0) {
                 $errors[] = "Baris {$rowIndex}: qty/koli tidak valid untuk SKU {$item->sku}";
+
                 continue;
             }
 
@@ -112,6 +119,7 @@ class InboundFormItemsImport implements ToCollection, WithHeadingRow, SkipsEmpty
                     $resolved = InboundScanExpectation::resolve($item, $qty, $koli > 0 ? $koli : null);
                 } catch (ValidationException $e) {
                     $errors[] = "Baris {$rowIndex}: ".(collect($e->errors())->flatten()->first() ?? $e->getMessage());
+
                     continue;
                 }
             }
@@ -119,7 +127,7 @@ class InboundFormItemsImport implements ToCollection, WithHeadingRow, SkipsEmpty
             $itemId = (int) $item->id;
             $itemNote = trim((string) ($row['item_note'] ?? $row['note_item'] ?? $row['note'] ?? ''));
 
-            if (!isset($aggregated[$itemId])) {
+            if (! isset($aggregated[$itemId])) {
                 $aggregated[$itemId] = [
                     'item_id' => $itemId,
                     'qty' => $resolved['qty'],
@@ -129,11 +137,13 @@ class InboundFormItemsImport implements ToCollection, WithHeadingRow, SkipsEmpty
                     'sku' => (string) $item->sku,
                     'name' => (string) $item->name,
                 ];
+
                 continue;
             }
 
             if (($aggregated[$itemId]['input_unit'] ?? 'koli') !== $inputUnit) {
                 $errors[] = "Baris {$rowIndex}: SKU {$item->sku} tidak boleh dicampur antara satuan PCS dan Koli";
+
                 continue;
             }
             $aggregated[$itemId]['qty'] += $resolved['qty'];
@@ -145,13 +155,13 @@ class InboundFormItemsImport implements ToCollection, WithHeadingRow, SkipsEmpty
             }
         }
 
-        if (!empty($missing)) {
+        if (! empty($missing)) {
             throw ValidationException::withMessages([
                 'file' => 'SKU tidak ditemukan: '.implode(', ', array_keys($missing)),
             ]);
         }
 
-        if (!empty($errors)) {
+        if (! empty($errors)) {
             throw ValidationException::withMessages([
                 'file' => implode(' | ', array_slice($errors, 0, 5)),
             ]);
@@ -219,9 +229,15 @@ class InboundFormItemsImport implements ToCollection, WithHeadingRow, SkipsEmpty
     private function parseInputUnit($row): ?string
     {
         $value = strtolower(trim((string) ($row['input_unit'] ?? $row['satuan'] ?? $row['unit'] ?? '')));
-        if ($value === '') return 'koli';
-        if (in_array($value, ['pcs', 'piece', 'pieces', 'satuan'], true)) return 'pcs';
-        if (in_array($value, ['koli', 'kolian'], true)) return 'koli';
+        if ($value === '') {
+            return 'koli';
+        }
+        if (in_array($value, ['pcs', 'piece', 'pieces', 'satuan'], true)) {
+            return 'pcs';
+        }
+        if (in_array($value, ['koli', 'kolian'], true)) {
+            return 'koli';
+        }
 
         return null;
     }

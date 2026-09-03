@@ -2,22 +2,23 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Http\Controllers\Controller;
-use App\Models\OutboundItem;
-use App\Models\OutboundTransaction;
-use App\Models\Item;
-use App\Models\Supplier;
-use App\Models\Warehouse;
-use App\Models\StockMutation;
 use App\Exports\OutboundManualExport;
 use App\Exports\OutboundReturnTemplateExport;
+use App\Exports\StockFlowImportTemplateExport;
+use App\Http\Controllers\Controller;
 use App\Imports\OutboundReturnsImport;
+use App\Models\Item;
+use App\Models\OutboundItem;
+use App\Models\OutboundTransaction;
+use App\Models\StockMutation;
+use App\Models\Supplier;
+use App\Models\Warehouse;
 use App\Support\BundleService;
+use App\Support\OutboundKoliExpectation;
 use App\Support\OutboundManualQcStatus;
 use App\Support\OutboundManualReport;
-use App\Support\OutboundKoliExpectation;
-use App\Support\StockService;
 use App\Support\Permission;
+use App\Support\StockService;
 use App\Support\WarehouseService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -25,6 +26,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Maatwebsite\Excel\Facades\Excel;
+use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 
 class OutboundController extends Controller
 {
@@ -159,7 +161,17 @@ class OutboundController extends Controller
     {
         $filename = 'outbound-retur-template-'.now()->format('YmdHis').'.xlsx';
 
-        return Excel::download(new OutboundReturnTemplateExport(), $filename);
+        return Excel::download(new OutboundReturnTemplateExport, $filename);
+    }
+
+    public function manualsTemplate()
+    {
+        $filename = 'outbound-manual-template-'.now()->format('YmdHis').'.xlsx';
+
+        return Excel::download(
+            new StockFlowImportTemplateExport(StockFlowImportTemplateExport::OUTBOUND_MANUAL),
+            $filename
+        );
     }
 
     public function manualsImport(Request $request)
@@ -168,7 +180,7 @@ class OutboundController extends Controller
             'file' => ['required', 'file', 'mimes:xlsx,xls', 'max:5120'],
         ]);
 
-        $import = new OutboundReturnsImport(false);
+        $import = new OutboundReturnsImport(false, true);
         DB::beginTransaction();
         try {
             Excel::import($import, $request->file('file'));
@@ -187,16 +199,7 @@ class OutboundController extends Controller
                     $warehouseId = WarehouseService::displayWarehouseId();
                 }
                 StockService::assertSellableAvailable($group['items'], $warehouseId);
-                $transactedAt = now();
-                if (!empty($group['transacted_at'])) {
-                    try {
-                        $transactedAt = Carbon::parse($group['transacted_at']);
-                    } catch (\Throwable $e) {
-                        throw ValidationException::withMessages([
-                            'file' => 'Format transacted_at tidak valid: '.$group['transacted_at'],
-                        ]);
-                    }
-                }
+                $transactedAt = $this->parseOptionalImportedDate($group['transacted_at'] ?? null, 'transacted_at') ?? now();
                 $suratJalanAt = $this->parseOptionalImportedDate($group['surat_jalan_at'] ?? null, 'surat_jalan_at');
 
                 $tx = OutboundTransaction::create([
@@ -204,6 +207,9 @@ class OutboundController extends Controller
                     'type' => 'manual',
                     'ref_no' => $group['ref_no'] ?? null,
                     'supplier_id' => null,
+                    'recipient_name' => $group['recipient_name'] ?? null,
+                    'recipient_phone' => $group['recipient_phone'] ?? null,
+                    'recipient_address' => $group['recipient_address'] ?? null,
                     'surat_jalan_no' => $this->resolveDeliveryNoteNo($group['surat_jalan_no'] ?? null, 'SJ-OUT-MNL'),
                     'surat_jalan_at' => $suratJalanAt,
                     'note' => $group['note'] ?? null,
@@ -237,6 +243,7 @@ class OutboundController extends Controller
             throw $e;
         } catch (\Throwable $e) {
             DB::rollBack();
+
             return response()->json([
                 'message' => 'Gagal import outbound manual',
                 'error' => $e->getMessage(),
@@ -268,17 +275,8 @@ class OutboundController extends Controller
                 if ($warehouseId <= 0) {
                     $warehouseId = WarehouseService::displayWarehouseId();
                 }
-                $transactedAt = now();
                 StockService::assertSellableAvailable($group['items'], $warehouseId);
-                if (!empty($group['transacted_at'])) {
-                    try {
-                        $transactedAt = Carbon::parse($group['transacted_at']);
-                    } catch (\Throwable $e) {
-                        throw ValidationException::withMessages([
-                            'file' => 'Format transacted_at tidak valid: '.$group['transacted_at'],
-                        ]);
-                    }
-                }
+                $transactedAt = $this->parseOptionalImportedDate($group['transacted_at'] ?? null, 'transacted_at') ?? now();
                 $suratJalanAt = $this->parseOptionalImportedDate($group['surat_jalan_at'] ?? null, 'surat_jalan_at');
 
                 $tx = OutboundTransaction::create([
@@ -319,6 +317,7 @@ class OutboundController extends Controller
             throw $e;
         } catch (\Throwable $e) {
             DB::rollBack();
+
             return response()->json([
                 'message' => 'Gagal import retur outbound',
                 'error' => $e->getMessage(),
@@ -417,11 +416,21 @@ class OutboundController extends Controller
                 'manual' => 'Import Manual Outbound',
                 default => null,
             },
-            'templateUrl' => $type === 'return'
-                ? route('admin.outbound.returns.template')
-                : null,
-            'templateLabel' => 'Download Template Retur Outbound',
-            'templateNote' => 'Header: sku, qty atau koli, supplier. Opsional: warehouse/gudang, ref_no, surat_jalan_no, surat_jalan_at, note, item_note, transacted_at. Jika warehouse adalah Gudang Besar, koli wajib diisi.',
+            'templateUrl' => match ($type) {
+                'return' => route('admin.outbound.returns.template'),
+                'manual' => route('admin.outbound.manuals.template'),
+                default => null,
+            },
+            'templateLabel' => match ($type) {
+                'return' => 'Download Template Retur Outbound',
+                'manual' => 'Unduh Template Outbound Manual',
+                default => 'Download Template',
+            },
+            'templateNote' => match ($type) {
+                'return' => 'Gunakan template agar format SKU, qty/koli, supplier, gudang, dan dokumen sesuai validasi sistem.',
+                'manual' => 'Template dilengkapi contoh, panduan pengisian, data penerima, serta referensi SKU dan gudang.',
+                default => null,
+            },
             'statusLabels' => $type === 'manual' ? OutboundManualQcStatus::labels() : [],
             'statusFilterOptions' => $type === 'manual'
                 ? OutboundManualQcStatus::labels()
@@ -539,6 +548,7 @@ class OutboundController extends Controller
                     return '';
                 }
                 $qty = (int) ($it->qty ?? 0);
+
                 return sprintf('%s (%d)', $sku, $qty);
             })->filter()->values();
             $itemLabel = $labels->implode(', ');
@@ -720,6 +730,7 @@ class OutboundController extends Controller
             throw $e;
         } catch (\Throwable $e) {
             DB::rollBack();
+
             return response()->json([
                 'message' => 'Gagal menyimpan outbound',
                 'error' => $e->getMessage(),
@@ -755,6 +766,7 @@ class OutboundController extends Controller
             $tx = OutboundTransaction::where('type', $type)->findOrFail($id);
             if (in_array($tx->status ?? 'pending', $this->lockedStatusesFor($type), true)) {
                 DB::rollBack();
+
                 return response()->json(['message' => 'Data sudah masuk tahap QC/selesai dan tidak bisa diubah'], 422);
             }
 
@@ -790,6 +802,7 @@ class OutboundController extends Controller
             throw $e;
         } catch (\Throwable $e) {
             DB::rollBack();
+
             return response()->json([
                 'message' => 'Gagal memperbarui outbound',
                 'error' => $e->getMessage(),
@@ -808,6 +821,7 @@ class OutboundController extends Controller
             $tx = OutboundTransaction::where('type', $type)->findOrFail($id);
             if (in_array($tx->status ?? 'pending', $this->deleteLockedStatusesFor($type), true)) {
                 DB::rollBack();
+
                 return response()->json(['message' => 'Data sudah masuk tahap QC/selesai dan tidak bisa dihapus'], 422);
             }
 
@@ -819,11 +833,13 @@ class OutboundController extends Controller
         } catch (ValidationException $e) {
             DB::rollBack();
             $msg = collect($e->errors())->flatten()->first() ?? $e->getMessage();
+
             return response()->json([
                 'message' => $msg,
             ], 422);
         } catch (\Throwable $e) {
             DB::rollBack();
+
             return response()->json([
                 'message' => 'Gagal menghapus outbound',
                 'error' => $e->getMessage(),
@@ -846,28 +862,33 @@ class OutboundController extends Controller
 
             if (($tx->status ?? 'pending') === 'approved') {
                 DB::rollBack();
+
                 return response()->json(['message' => 'Data sudah disetujui']);
             }
 
             if ($type === 'manual') {
                 if (($tx->status ?? '') === OutboundManualQcStatus::PENDING_QC) {
                     DB::rollBack();
+
                     return response()->json(['message' => 'Outbound manual masih menunggu QC.']);
                 }
 
                 if (($tx->status ?? '') === OutboundManualQcStatus::QC_SCANNING) {
                     DB::rollBack();
+
                     return response()->json(['message' => 'Outbound manual sedang diproses QC.']);
                 }
 
                 if (($tx->status ?? '') !== OutboundManualQcStatus::PENDING) {
                     DB::rollBack();
+
                     return response()->json(['message' => 'Outbound manual belum siap approval.']);
                 }
 
                 $qcSession = $tx->qcSession()->first();
-                if (!$qcSession || !$qcSession->completed_at) {
+                if (! $qcSession || ! $qcSession->completed_at) {
                     DB::rollBack();
+
                     return response()->json(['message' => 'QC manual harus diselesaikan sebelum approval.'], 422);
                 }
 
@@ -876,7 +897,7 @@ class OutboundController extends Controller
                     ->exists();
 
                 $approvedAt = now();
-                if (!$hasMutations) {
+                if (! $hasMutations) {
                     StockService::depleteSellableRows($tx->items, (int) $tx->warehouse_id, [
                         'source_type' => 'outbound',
                         'source_subtype' => $tx->type,
@@ -903,7 +924,7 @@ class OutboundController extends Controller
                 ->exists();
 
             $approvedAt = now();
-            if (!$hasMutations) {
+            if (! $hasMutations) {
                 StockService::depleteSellableRows($tx->items, (int) $tx->warehouse_id, [
                     'source_type' => 'outbound',
                     'source_subtype' => $tx->type,
@@ -926,6 +947,7 @@ class OutboundController extends Controller
             throw $e;
         } catch (\Throwable $e) {
             DB::rollBack();
+
             return response()->json([
                 'message' => 'Gagal menyetujui outbound',
                 'error' => $e->getMessage(),
@@ -958,7 +980,7 @@ class OutboundController extends Controller
             'warehouse_id' => ['nullable', 'integer', 'exists:warehouses,id'],
         ]);
 
-        if (!$usesSupplier && $request->filled('supplier_id')) {
+        if (! $usesSupplier && $request->filled('supplier_id')) {
             throw ValidationException::withMessages([
                 'supplier_id' => 'Supplier hanya digunakan untuk outbound retur.',
             ]);
@@ -993,7 +1015,7 @@ class OutboundController extends Controller
                 $itemId = (int) ($row['item_id'] ?? 0);
                 $item = $itemMap->get($itemId);
 
-                if (!$item) {
+                if (! $item) {
                     throw ValidationException::withMessages([
                         "items.{$index}.item_id" => 'Item outbound tidak ditemukan.',
                     ]);
@@ -1001,7 +1023,7 @@ class OutboundController extends Controller
 
                 $qty = (int) ($row['qty'] ?? 0);
                 if ($usesKoli) {
-                    if (!isset($row['koli']) || (int) $row['koli'] <= 0) {
+                    if (! isset($row['koli']) || (int) $row['koli'] <= 0) {
                         throw ValidationException::withMessages([
                             "items.{$index}.koli" => $koliRequiredMessage,
                         ]);
@@ -1041,6 +1063,7 @@ class OutboundController extends Controller
         $normalized = $items->groupBy('item_id')->map(function ($rows, $itemId) {
             $qty = $rows->sum('qty');
             $note = $rows->pluck('note')->first(fn ($n) => $n !== null && $n !== '') ?? null;
+
             return [
                 'item_id' => (int) $itemId,
                 'qty' => $qty,
@@ -1056,7 +1079,7 @@ class OutboundController extends Controller
 
         foreach ($normalized as $row) {
             $item = $itemMap->get((int) $row['item_id']);
-            if (!$item) {
+            if (! $item) {
                 throw ValidationException::withMessages([
                     'items' => 'Item outbound tidak ditemukan.',
                 ]);
@@ -1067,13 +1090,13 @@ class OutboundController extends Controller
         }
 
         $validated['supplier_id'] = $usesSupplier ? (int) ($validated['supplier_id'] ?? 0) : null;
-        if (!empty($validated['transacted_at'])) {
+        if (! empty($validated['transacted_at'])) {
             $validated['transacted_at'] = Carbon::parse($validated['transacted_at']);
         } else {
             $validated['transacted_at'] = null;
         }
 
-        $validated['surat_jalan_at'] = !empty($validated['surat_jalan_at'])
+        $validated['surat_jalan_at'] = ! empty($validated['surat_jalan_at'])
             ? Carbon::parse($validated['surat_jalan_at'])
             : null;
 
@@ -1170,6 +1193,10 @@ class OutboundController extends Controller
         }
 
         try {
+            if (is_numeric($value) && (float) $value > 0) {
+                return Carbon::instance(ExcelDate::excelToDateTimeObject((float) $value));
+            }
+
             return Carbon::parse($value);
         } catch (\Throwable) {
             throw ValidationException::withMessages([

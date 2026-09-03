@@ -25,7 +25,7 @@ class OutboundReturnImportTest extends TestCase
         $this->withoutMiddleware(AuthorizeMenuPermission::class);
         $this->createWarehouseFixtures();
 
-        $user = User::factory()->create();
+        $user = User::factory()->create(['is_active' => true]);
         $supplier = Supplier::create(['name' => 'Supplier Retur Import']);
         $item = Item::create([
             'sku' => 'SKU-OUT-IMP-001',
@@ -70,7 +70,7 @@ class OutboundReturnImportTest extends TestCase
         $this->withoutMiddleware(AuthorizeMenuPermission::class);
         $this->createWarehouseFixtures();
 
-        $user = User::factory()->create();
+        $user = User::factory()->create(['is_active' => true]);
         $supplier = Supplier::create(['name' => 'Supplier Retur Import']);
         Item::create([
             'sku' => 'SKU-OUT-IMP-002',
@@ -94,11 +94,11 @@ class OutboundReturnImportTest extends TestCase
     }
 
     /**
-     * @param array<int,array<int|string|null>> $rows
+     * @param  array<int,array<int|string|null>>  $rows
      */
     private function makeExcelUpload(array $rows): UploadedFile
     {
-        $spreadsheet = new Spreadsheet();
+        $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
 
         foreach ($rows as $rowIndex => $row) {

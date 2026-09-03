@@ -19,7 +19,7 @@ class InboundFormItemsImportTest extends TestCase
     {
         $this->withoutMiddleware(AuthorizeMenuPermission::class);
 
-        $user = User::factory()->create();
+        $user = User::factory()->create(['is_active' => true]);
         $itemA = Item::create([
             'sku' => 'SKU-IMPORT-001',
             'name' => 'Import Item A',
@@ -65,7 +65,7 @@ class InboundFormItemsImportTest extends TestCase
     {
         $this->withoutMiddleware(AuthorizeMenuPermission::class);
 
-        $user = User::factory()->create();
+        $user = User::factory()->create(['is_active' => true]);
         Item::create([
             'sku' => 'SKU-IMPORT-OK',
             'name' => 'Import Item OK',
@@ -88,11 +88,11 @@ class InboundFormItemsImportTest extends TestCase
     }
 
     /**
-     * @param array<int,array<int|string|null>> $rows
+     * @param  array<int,array<int|string|null>>  $rows
      */
     private function makeExcelUpload(array $rows): UploadedFile
     {
-        $spreadsheet = new Spreadsheet();
+        $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
 
         foreach ($rows as $rowIndex => $row) {

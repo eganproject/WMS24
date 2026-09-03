@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Exports\InboundManualTemplateExport;
 use App\Exports\InboundReceiptsExport;
 use App\Exports\InboundReceiptTemplateExport;
+use App\Exports\StockFlowImportTemplateExport;
 use App\Http\Controllers\Controller;
 use App\Imports\InboundFormItemsImport;
 use App\Imports\InboundReceiptsImport;
@@ -30,6 +31,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Maatwebsite\Excel\Facades\Excel;
+use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 
 class InboundController extends Controller
 {
@@ -173,7 +175,7 @@ class InboundController extends Controller
         $transaction = InboundTransaction::findOrFail($id);
         $path = $this->storageRelativePath($transaction->surat_jalan_image_path);
 
-        abort_if(!$path || !Storage::disk('public')->exists($path), 404);
+        abort_if(! $path || ! Storage::disk('public')->exists($path), 404);
 
         return Storage::disk('public')->response($path, null, [
             'Cache-Control' => 'private, max-age=86400',
@@ -194,14 +196,34 @@ class InboundController extends Controller
     {
         $filename = 'inbound-manual-template-'.now()->format('YmdHis').'.xlsx';
 
-        return Excel::download(new InboundManualTemplateExport(), $filename);
+        return Excel::download(new InboundManualTemplateExport, $filename);
     }
 
     public function receiptsTemplate()
     {
         $filename = 'penerimaan-barang-template-'.now()->format('YmdHis').'.xlsx';
 
-        return Excel::download(new InboundReceiptTemplateExport(), $filename);
+        return Excel::download(new InboundReceiptTemplateExport, $filename);
+    }
+
+    public function returnsTemplate()
+    {
+        $filename = 'retur-inbound-template-'.now()->format('YmdHis').'.xlsx';
+
+        return Excel::download(
+            new StockFlowImportTemplateExport(StockFlowImportTemplateExport::INBOUND_RETURN),
+            $filename
+        );
+    }
+
+    public function returnsItemsTemplate()
+    {
+        $filename = 'retur-inbound-item-template-'.now()->format('YmdHis').'.xlsx';
+
+        return Excel::download(
+            new StockFlowImportTemplateExport(StockFlowImportTemplateExport::INBOUND_RETURN_ITEMS),
+            $filename
+        );
     }
 
     public function receiptsExport(Request $request)
@@ -412,6 +434,9 @@ class InboundController extends Controller
                 'manual' => route('admin.inbound.manuals.items-import'),
                 default => null,
             },
+            'itemTemplateUrl' => $type === 'return'
+                ? route('admin.inbound.returns.items-template')
+                : null,
             'importTitle' => match ($type) {
                 'receipt' => 'Import Penerimaan Barang',
                 'return' => 'Import Retur Inbound',
@@ -420,16 +445,19 @@ class InboundController extends Controller
             },
             'templateUrl' => match ($type) {
                 'receipt' => route('admin.inbound.receipts.template'),
+                'return' => route('admin.inbound.returns.template'),
                 'manual' => route('admin.inbound.manuals.template'),
                 default => null,
             },
             'templateLabel' => match ($type) {
                 'receipt' => 'Download Template Penerimaan Barang',
+                'return' => 'Unduh Template Retur Inbound',
                 'manual' => 'Download Template Inbound Manual',
                 default => 'Download Template',
             },
             'templateNote' => match ($type) {
                 'receipt' => 'Header: sku, qty atau koli, supplier. Opsional: ref_no, surat_jalan_no, surat_jalan_at, note, item_note, transacted_at.',
+                'return' => 'Pilih gudang tujuan pada modal. Template menjelaskan aturan Koli dan PCS untuk setiap jenis gudang.',
                 'manual' => 'Header: sku, qty atau koli. Opsional: ref_no, surat_jalan_no, surat_jalan_at, note, item_note, transacted_at.',
                 default => null,
             },
@@ -595,7 +623,7 @@ class InboundController extends Controller
             'surat_jalan_no' => $transaction->surat_jalan_no,
             'surat_jalan_at' => $transaction->surat_jalan_at?->format('Y-m-d'),
             'surat_jalan_image_url' => $this->suratJalanImageUrl($transaction),
-            'has_surat_jalan_image' => !empty($transaction->surat_jalan_image_path),
+            'has_surat_jalan_image' => ! empty($transaction->surat_jalan_image_path),
             'note' => $transaction->note,
             'status' => $transaction->status ?? InboundScanStatus::PENDING_SCAN,
             'warehouse_id' => $transaction->warehouse_id,
@@ -631,7 +659,7 @@ class InboundController extends Controller
             ->where('input_unit', 'koli')
             ->sum(fn ($row) => (int) ($row->koli ?? 0));
         $warehouseLabel = $transaction->warehouse?->name;
-        if (!$warehouseLabel) {
+        if (! $warehouseLabel) {
             $warehouseLabel = Warehouse::where('id', WarehouseService::defaultWarehouseId())->value('name') ?? 'Gudang Besar';
         }
 
@@ -900,7 +928,7 @@ class InboundController extends Controller
                 : ['nullable', 'integer', 'exists:warehouses,id'],
         ]);
 
-        if (!$usesSupplier && $request->filled('supplier_id')) {
+        if (! $usesSupplier && $request->filled('supplier_id')) {
             throw ValidationException::withMessages([
                 'supplier_id' => 'Supplier hanya digunakan untuk inbound penerimaan barang.',
             ]);
@@ -949,14 +977,14 @@ class InboundController extends Controller
 
         $normalized = $items->map(function ($row, $index) use ($itemMap, $type, $destinationWarehouse, $pcsWarehouseCodes) {
             $item = $itemMap->get($row['item_id']);
-            if (!$item) {
+            if (! $item) {
                 throw ValidationException::withMessages([
                     "items.{$index}.item_id" => 'Item inbound tidak ditemukan.',
                 ]);
             }
 
             if ($row['input_unit'] === 'pcs') {
-                if ($type !== 'return' || !$destinationWarehouse || !in_array($destinationWarehouse->code, $pcsWarehouseCodes, true)) {
+                if ($type !== 'return' || ! $destinationWarehouse || ! in_array($destinationWarehouse->code, $pcsWarehouseCodes, true)) {
                     throw ValidationException::withMessages([
                         "items.{$index}.input_unit" => 'Input PCS hanya diperbolehkan untuk Gudang Display atau Gudang Rusak. Gudang Besar wajib menggunakan Koli.',
                     ]);
@@ -989,10 +1017,10 @@ class InboundController extends Controller
 
         $validated['items'] = $normalized;
         $validated['supplier_id'] = $usesSupplier ? (int) ($validated['supplier_id'] ?? 0) : null;
-        $validated['transacted_at'] = !empty($validated['transacted_at'])
+        $validated['transacted_at'] = ! empty($validated['transacted_at'])
             ? Carbon::parse($validated['transacted_at'])
             : null;
-        $validated['surat_jalan_at'] = !empty($validated['surat_jalan_at'])
+        $validated['surat_jalan_at'] = ! empty($validated['surat_jalan_at'])
             ? Carbon::parse($validated['surat_jalan_at'])
             : null;
 
@@ -1001,7 +1029,7 @@ class InboundController extends Controller
 
     private function suratJalanImageUrl(InboundTransaction $transaction): ?string
     {
-        if (!$transaction->surat_jalan_image_path) {
+        if (! $transaction->surat_jalan_image_path) {
             return null;
         }
 
@@ -1017,7 +1045,7 @@ class InboundController extends Controller
 
     private function storageRelativePath(?string $path): ?string
     {
-        if (!$path || !str_starts_with($path, 'storage/')) {
+        if (! $path || ! str_starts_with($path, 'storage/')) {
             return null;
         }
 
@@ -1211,6 +1239,10 @@ class InboundController extends Controller
         }
 
         try {
+            if (is_numeric($value) && (float) $value > 0) {
+                return Carbon::instance(ExcelDate::excelToDateTimeObject((float) $value));
+            }
+
             return Carbon::parse($value);
         } catch (\Throwable) {
             throw ValidationException::withMessages([
@@ -1226,7 +1258,7 @@ class InboundController extends Controller
 
         for ($attempt = 0; $attempt < 10; $attempt++) {
             $code = $prefix.'-'.now()->format('ymdHis').'-'.Str::upper(Str::random(3));
-            if (str_starts_with($prefix, 'SJ-') || !InboundTransaction::where('code', $code)->exists()) {
+            if (str_starts_with($prefix, 'SJ-') || ! InboundTransaction::where('code', $code)->exists()) {
                 return $code;
             }
         }

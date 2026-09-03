@@ -28,7 +28,7 @@
                         <path d="M11 19C6.55556 19 3 15.4444 3 11C3 6.55556 6.55556 3 11 3C15.4444 3 19 6.55556 19 11C19 15.4444 15.4444 19 11 19ZM11 5C7.53333 5 5 7.53333 5 11C5 14.4667 7.53333 17 11 17C14.4667 17 17 14.4667 17 11C17 7.53333 14.4667 5 11 5Z" fill="black" />
                     </svg>
                 </span>
-                <input type="text" class="form-control form-control-solid w-250px ps-14" placeholder="Search" data-kt-filter="search" />
+                <input type="text" class="form-control form-control-solid w-250px ps-14" placeholder="Search" data-kt-filter="search" value="{{ $initialSearch ?? '' }}" />
             </div>
         </div>
         <div class="card-toolbar">
@@ -57,19 +57,22 @@
                 @endif
                 <select class="form-select form-select-solid w-125px" id="filter_direction">
                     <option value="">Semua Arah</option>
-                    <option value="in">IN</option>
-                    <option value="out">OUT</option>
+                    <option value="in" @selected(($initialDirection ?? '') === 'in')>IN</option>
+                    <option value="out" @selected(($initialDirection ?? '') === 'out')>OUT</option>
                 </select>
                 <select class="form-select form-select-solid w-175px" id="filter_source_type">
                     <option value="">Semua Sumber</option>
                     @foreach($sourceTypes ?? [] as $sourceType)
-                        <option value="{{ $sourceType }}">{{ strtoupper(str_replace('_', ' ', $sourceType)) }}</option>
+                        <option value="{{ $sourceType }}" @selected(($initialSourceType ?? '') === $sourceType)>{{ strtoupper(str_replace('_', ' ', $sourceType)) }}</option>
                     @endforeach
                 </select>
                 <input type="text" class="form-control form-control-solid w-150px" id="filter_date_from" placeholder="Dari" value="{{ $defaultDateFrom ?? ($today ?? now()->toDateString()) }}" />
                 <input type="text" class="form-control form-control-solid w-150px" id="filter_date_to" placeholder="Sampai" value="{{ $defaultDateTo ?? ($today ?? now()->toDateString()) }}" />
                 <button type="button" class="btn btn-light" id="filter_apply">Filter</button>
                 <button type="button" class="btn btn-light" id="filter_reset">Reset</button>
+                <button type="button" class="btn btn-success text-nowrap" id="btn_export">
+                    <i class="fas fa-file-excel me-1"></i> Export Excel
+                </button>
             </div>
         </div>
     </div>
@@ -226,6 +229,7 @@
 @push('scripts')
 <script>
     const dataUrl = '{{ route('admin.inventory.stock-mutations.data') }}';
+    const exportUrl = '{{ route('admin.inventory.stock-mutations.export') }}';
     const detailUrlTpl = '{{ route('admin.inventory.stock-mutations.show', ':id') }}';
     const defaultWarehouseId = {{ !empty($defaultWarehouseId) ? (int) $defaultWarehouseId : 'null' }};
     const displayWarehouseId = {{ !empty($displayWarehouseId) ? (int) $displayWarehouseId : 'null' }};
@@ -246,6 +250,7 @@
         const dateToEl = document.getElementById('filter_date_to');
         const filterApplyBtn = document.getElementById('filter_apply');
         const filterResetBtn = document.getElementById('filter_reset');
+        const exportBtn = document.getElementById('btn_export');
         let fpFrom = null;
         let fpTo = null;
 
@@ -273,6 +278,11 @@
             warehouseFilter.value = initialWarehouseId;
             if (typeof $ !== 'undefined' && $(warehouseFilter).data('select2')) {
                 $(warehouseFilter).val(initialWarehouseId).trigger('change.select2');
+            }
+        } else if (warehouseFilter && initialItemId) {
+            warehouseFilter.value = 'all';
+            if (typeof $ !== 'undefined' && $(warehouseFilter).data('select2')) {
+                $(warehouseFilter).val('all').trigger('change.select2');
             }
         }
 
@@ -303,6 +313,23 @@
             warehouseBadgeEl.textContent = `Gudang: ${label}`;
         };
 
+        const activeFilterParams = () => {
+            const params = new URLSearchParams();
+            if (searchInput?.value) {
+                params.set('q', searchInput.value);
+                if (typeof window.resolveTableSearchMode === 'function') {
+                    params.set('search_mode', window.resolveTableSearchMode(tableEl[0]));
+                }
+            }
+            if (initialItemId) params.set('item_id', initialItemId);
+            if (warehouseFilter?.value) params.set('warehouse_id', warehouseFilter.value);
+            if (directionFilter?.value) params.set('direction', directionFilter.value);
+            if (sourceTypeFilter?.value) params.set('source_type', sourceTypeFilter.value);
+            if (dateFromEl?.value) params.set('date_from', dateFromEl.value);
+            if (dateToEl?.value) params.set('date_to', dateToEl.value);
+            return params;
+        };
+
         const dt = tableEl.DataTable({
             processing: true,
             serverSide: true,
@@ -312,13 +339,7 @@
                 url: dataUrl,
                 dataSrc: 'data',
                 data: function(params) {
-                    params.q = searchInput?.value || '';
-                    if (initialItemId) params.item_id = initialItemId;
-                    if (warehouseFilter?.value) params.warehouse_id = warehouseFilter.value;
-                    if (directionFilter?.value) params.direction = directionFilter.value;
-                    if (sourceTypeFilter?.value) params.source_type = sourceTypeFilter.value;
-                    if (dateFromEl?.value) params.date_from = dateFromEl.value;
-                    if (dateToEl?.value) params.date_to = dateToEl.value;
+                    activeFilterParams().forEach((value, key) => { params[key] = value; });
                 }
             },
             columns: [
@@ -368,14 +389,19 @@
         directionFilter?.addEventListener('change', reloadTable);
         sourceTypeFilter?.addEventListener('change', reloadTable);
         filterApplyBtn?.addEventListener('click', reloadTable);
+        exportBtn?.addEventListener('click', () => {
+            const query = activeFilterParams().toString();
+            window.location.href = exportUrl + (query ? `?${query}` : '');
+        });
         filterResetBtn?.addEventListener('click', () => {
             if (warehouseFilter) {
-                const val = defaultWarehouseId ? String(defaultWarehouseId) : 'all';
+                const val = initialItemId ? 'all' : (defaultWarehouseId ? String(defaultWarehouseId) : 'all');
                 warehouseFilter.value = val;
                 if (typeof $ !== 'undefined' && $(warehouseFilter).data('select2')) {
                     $(warehouseFilter).val(val).trigger('change.select2');
                 }
             }
+            if (searchInput) searchInput.value = '';
             updateWarehouseBadge();
             if (directionFilter) directionFilter.value = '';
             if (sourceTypeFilter) {

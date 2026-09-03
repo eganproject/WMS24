@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Exports\StockMutationsExport;
 use App\Http\Controllers\Controller;
 use App\Models\DamagedGood;
 use App\Models\DamagedAllocation;
@@ -13,9 +14,11 @@ use App\Models\StockMutation;
 use App\Models\StockOpname;
 use App\Models\StockTransfer;
 use App\Models\Warehouse;
+use App\Support\StockMutationReport;
 use App\Support\WarehouseService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Maatwebsite\Excel\Facades\Excel;
 
 class StockMutationController extends Controller
 {
@@ -35,6 +38,11 @@ class StockMutationController extends Controller
             ->distinct()
             ->orderBy('source_type')
             ->pluck('source_type');
+        $requestedSourceType = trim((string) request()->input('source_type', ''));
+        if ($requestedSourceType !== '' && !$sourceTypes->contains($requestedSourceType)) {
+            $sourceTypes->push($requestedSourceType);
+            $sourceTypes = $sourceTypes->sort()->values();
+        }
         $requestedDateFrom = request()->input('date_from');
         $requestedDateTo = request()->input('date_to');
 
@@ -50,67 +58,16 @@ class StockMutationController extends Controller
             'initialItemId' => $initialItemId,
             'initialItem' => $initialItem,
             'initialWarehouseId' => request()->input('warehouse_id'),
+            'initialDirection' => request()->input('direction'),
+            'initialSourceType' => request()->input('source_type'),
+            'initialSearch' => request()->input('q'),
             'sourceTypes' => $sourceTypes,
         ]);
     }
 
     public function data(Request $request)
     {
-        $query = StockMutation::query()
-            ->with(['item', 'referenceItem', 'creator', 'warehouse'])
-            ->where('is_void', false)
-            ->orderBy('occurred_at', 'desc')
-            ->orderBy('id', 'desc');
-
-        $search = trim((string) $request->input('q', ''));
-        if ($search !== '') {
-            $exact = $this->isExactSearch($request);
-            $query->where(function ($q) use ($search, $exact) {
-                $this->applyTextSearch($q, 'source_code', $search, $exact);
-                $this->applyTextSearch($q, 'source_type', $search, $exact, 'or');
-                $this->applyTextSearch($q, 'source_subtype', $search, $exact, 'or');
-                $q->orWhereHas('creator', function ($userQ) use ($search, $exact) {
-                    $this->applyTextSearch($userQ, 'name', $search, $exact);
-                    $this->applyTextSearch($userQ, 'email', $search, $exact, 'or');
-                })->orWhereHas('item', function ($itemQ) use ($search, $exact) {
-                    $this->applyTextSearch($itemQ, 'sku', $search, $exact);
-                    $this->applyTextSearch($itemQ, 'name', $search, $exact, 'or');
-                });
-                $this->applyTextSearch($q, 'reference_sku', $search, $exact, 'or');
-                $q->orWhereHas('warehouse', function ($whQ) use ($search, $exact) {
-                    $this->applyTextSearch($whQ, 'name', $search, $exact);
-                    $this->applyTextSearch($whQ, 'code', $search, $exact, 'or');
-                });
-            });
-        }
-
-        $this->applyDateFilter($query, $request);
-
-        $directionFilter = $request->input('direction');
-        if (in_array($directionFilter, ['in', 'out'], true)) {
-            $query->where('direction', $directionFilter);
-        }
-
-        $sourceTypeFilter = trim((string) $request->input('source_type', ''));
-        if ($sourceTypeFilter !== '') {
-            $query->where('source_type', $sourceTypeFilter);
-        }
-
-        $itemFilter = $request->input('item_id');
-        if ($itemFilter !== null && $itemFilter !== '') {
-            $query->where(function ($q) use ($itemFilter) {
-                $q->where('item_id', (int) $itemFilter)
-                  ->orWhere('reference_item_id', (int) $itemFilter);
-            });
-        }
-
-        $warehouseFilter = $request->input('warehouse_id');
-        if ($warehouseFilter === null || $warehouseFilter === '') {
-            $warehouseFilter = $itemFilter ? 'all' : WarehouseService::defaultWarehouseId();
-        }
-        if ($warehouseFilter !== 'all') {
-            $query->where('warehouse_id', (int) $warehouseFilter);
-        }
+        $query = (new StockMutationReport($request->all()))->query();
 
         $recordsTotal = StockMutation::where('is_void', false)->count();
         $recordsFiltered = (clone $query)->count();
@@ -151,23 +108,11 @@ class StockMutationController extends Controller
         ]);
     }
 
-    private function applyDateFilter($query, Request $request): void
+    public function export(Request $request)
     {
-        $dateFrom = $request->input('date_from');
-        $dateTo = $request->input('date_to');
+        $filename = 'mutasi-stok-'.now()->format('YmdHis').'.xlsx';
 
-        try {
-            if ($dateFrom) {
-                $from = Carbon::parse($dateFrom)->startOfDay();
-                $query->where('occurred_at', '>=', $from);
-            }
-            if ($dateTo) {
-                $to = Carbon::parse($dateTo)->endOfDay();
-                $query->where('occurred_at', '<=', $to);
-            }
-        } catch (\Throwable) {
-            // ignore invalid date filters
-        }
+        return Excel::download(new StockMutationsExport($request->all()), $filename);
     }
 
     public function show(int $id)

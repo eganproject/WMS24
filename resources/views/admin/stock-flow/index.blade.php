@@ -72,7 +72,9 @@
         }
 
         #stock_flow_table.return-in-table {
-            min-width: 1480px;
+            width: 100% !important;
+            min-width: 0;
+            table-layout: fixed;
             border-collapse: separate !important;
             border-spacing: 0 0.7rem !important;
         }
@@ -110,14 +112,93 @@
         }
 
         #stock_flow_table.return-in-table .stock-flow-item-column {
-            min-width: 360px;
-            width: 360px;
+            width: 32%;
+        }
+
+        #stock_flow_table.return-in-table .return-in-document-cell { width: 17%; }
+        #stock_flow_table.return-in-table .return-in-status-cell { width: 10%; }
+        #stock_flow_table.return-in-table .return-in-reference-cell { width: 18%; }
+        #stock_flow_table.return-in-table .return-in-progress-cell { width: 14%; }
+
+        #stock_flow_table.return-in-table .return-in-action-cell {
+            position: sticky;
+            right: 0;
+            z-index: 2;
+            width: 9%;
+            min-width: 92px;
+            box-shadow: -10px 0 18px -18px rgba(24, 28, 50, 0.75);
+        }
+
+        #stock_flow_table.return-in-table thead .return-in-action-cell {
+            z-index: 3;
+            background: #f8faff;
+        }
+
+        .return-in-document {
+            min-width: 0;
+        }
+
+        .return-in-document__code {
+            display: block;
+            overflow: hidden;
+            color: #181c32;
+            font-weight: 700;
+            line-height: 1.35;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .return-in-document__meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.25rem 0.55rem;
+            margin-top: 0.35rem;
+            color: #7e8299;
+            font-size: 0.72rem;
+            line-height: 1.35;
+        }
+
+        .return-in-document__note {
+            display: -webkit-box;
+            margin-top: 0.55rem;
+            overflow: hidden;
+            color: #5e6278;
+            font-size: 0.74rem;
+            line-height: 1.35;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 2;
+        }
+
+        .return-in-reference {
+            display: grid;
+            gap: 0.4rem;
+            min-width: 0;
+        }
+
+        .return-in-reference__number {
+            display: block;
+            overflow: hidden;
+            color: #3f4254;
+            font-size: 0.78rem;
+            font-weight: 600;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .return-in-reference__meta {
+            color: #7e8299;
+            font-size: 0.7rem;
+        }
+
+        .return-in-reference__image {
+            width: fit-content;
+            font-size: 0.68rem;
         }
 
         .return-in-item-card {
             display: block;
             width: 100%;
-            min-width: 330px;
+            min-width: 0;
             padding: 0;
             overflow: hidden;
             text-align: left;
@@ -288,6 +369,10 @@
             .return-in-list-card .card-toolbar > .d-flex {
                 margin-right: 0 !important;
             }
+
+            #stock_flow_table.return-in-table {
+                min-width: 850px;
+            }
         }
     </style>
     @endpush
@@ -356,12 +441,12 @@
                 <thead>
                     <tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0">
                         <th>ID</th>
-                        <th>Kode</th>
+                        <th class="{{ !empty($enhancedItemList ?? false) ? 'return-in-document-cell' : '' }}">{{ !empty($enhancedItemList ?? false) ? 'Dokumen Retur' : 'Kode' }}</th>
                         <th>Jenis</th>
-                        <th>Status</th>
+                        <th class="{{ !empty($enhancedItemList ?? false) ? 'return-in-status-cell' : '' }}">Status</th>
                         <th>Tanggal</th>
                         <th>Submit By</th>
-                        <th>Gudang</th>
+                        <th class="{{ !empty($enhancedItemList ?? false) ? 'return-in-reference-cell' : '' }}">{{ !empty($enhancedItemList ?? false) ? 'Gudang & Referensi' : 'Gudang' }}</th>
                         @if(!empty($showDeliveryNoteFields ?? false))
                             <th>{{ $deliveryNoteColumnLabel ?? 'Surat Jalan' }}</th>
                         @endif
@@ -374,10 +459,10 @@
                         <th class="stock-flow-item-column">{{ !empty($enhancedItemList ?? false) ? 'Ringkasan Item Retur' : 'Item' }}</th>
                         <th>Qty</th>
                         @if(!empty($showScanProgressColumn ?? false))
-                            <th>Progress Scan</th>
+                            <th class="{{ !empty($enhancedItemList ?? false) ? 'return-in-progress-cell' : '' }}">Progress Scan</th>
                         @endif
                         <th>Catatan</th>
-                        <th class="text-end">Aksi</th>
+                        <th class="text-end {{ !empty($enhancedItemList ?? false) ? 'return-in-action-cell' : '' }}">Aksi</th>
                     </tr>
                 </thead>
                 <tbody></tbody>
@@ -872,7 +957,7 @@
 
         const renderWarehouseBadge = (label, warehouseId) => {
             const text = label || '-';
-            return `<span class="badge ${warehouseBadgeClass(warehouseId)}">${text}</span>`;
+            return `<span class="badge ${warehouseBadgeClass(warehouseId)}">${escapeHtml(text)}</span>`;
         };
 
         const isDefaultWarehouse = (warehouseId) => defaultWarehouseId && Number(warehouseId || 0) === Number(defaultWarehouseId);
@@ -883,6 +968,51 @@
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
+
+        const formatCompactDate = (value, includeTime = false) => {
+            const text = String(value || '').trim();
+            const match = text.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}:\d{2}))?/);
+            if (!match) return text || '-';
+            return `${match[3]}/${match[2]}/${match[1]}${includeTime && match[4] ? ` ${match[4]}` : ''}`;
+        };
+
+        const renderReturnDocument = (value, renderType, row) => {
+            if (renderType !== 'display' || !enhancedItemList || row?.type !== 'return') {
+                return value || '-';
+            }
+            const note = String(row?.note || '').trim();
+            return `
+                <div class="return-in-document">
+                    <span class="return-in-document__code" title="${escapeHtml(value || '-')}">
+                        <i class="fas fa-file-alt text-primary me-2"></i>${escapeHtml(value || '-')}
+                    </span>
+                    <span class="return-in-document__meta">
+                        <span><i class="far fa-calendar-alt me-1"></i>${escapeHtml(formatCompactDate(row?.transacted_at, true))}</span>
+                        <span><i class="far fa-user me-1"></i>${escapeHtml(row?.submit_by || '-')}</span>
+                    </span>
+                    ${note ? `<span class="return-in-document__note" title="${escapeHtml(note)}"><i class="far fa-sticky-note text-warning me-1"></i>${escapeHtml(note)}</span>` : ''}
+                </div>
+            `;
+        };
+
+        const renderReturnWarehouseReference = (label, renderType, row) => {
+            if (renderType !== 'display' || !enhancedItemList || row?.type !== 'return') {
+                return renderWarehouseBadge(label, row?.warehouse_id);
+            }
+            const reference = String(row?.surat_jalan_no || '').trim();
+            const referenceDate = String(row?.surat_jalan_at || '').trim();
+            const imageUrl = String(row?.surat_jalan_image_url || '').trim();
+            return `
+                <div class="return-in-reference">
+                    <div>${renderWarehouseBadge(label, row?.warehouse_id)}</div>
+                    <span class="return-in-reference__number" title="${escapeHtml(reference || 'Tanpa referensi')}">
+                        <i class="fas fa-undo-alt text-muted me-1"></i>${escapeHtml(reference || 'Tanpa referensi')}
+                    </span>
+                    ${referenceDate ? `<span class="return-in-reference__meta">Tanggal retur: ${escapeHtml(formatCompactDate(referenceDate))}</span>` : ''}
+                    ${imageUrl ? `<a href="${escapeHtml(imageUrl)}" target="_blank" rel="noopener" class="badge badge-light-info return-in-reference__image"><i class="far fa-image me-1"></i>${escapeHtml(deliveryNoteImageLinkLabel)}</a>` : ''}
+                </div>
+            `;
+        };
 
         const renderItemSummary = (row) => {
             if (enhancedItemList && row?.type === 'return') {
@@ -1836,15 +1966,15 @@
                 }
             },
             columns: [
-                { data: 'id' },
-                { data: 'code' },
-                { data: 'type', render: (data) => typeLabelMap?.[data] || data || '-' },
-                { data: 'status', orderable:false, searchable:false, render: (data) => statusLabel(data) },
-                { data: 'transacted_at' },
-                { data: 'submit_by' },
-                { data: 'warehouse', render: (data, type, row) => renderWarehouseBadge(data, row?.warehouse_id) },
+                { data: 'id', visible: !enhancedItemList },
+                { data: 'code', className: enhancedItemList ? 'return-in-document-cell' : '', render: (data, type, row) => renderReturnDocument(data, type, row) },
+                { data: 'type', visible: !enhancedItemList, render: (data) => typeLabelMap?.[data] || data || '-' },
+                { data: 'status', className: enhancedItemList ? 'return-in-status-cell' : '', orderable:false, searchable:false, render: (data) => statusLabel(data) },
+                { data: 'transacted_at', visible: !enhancedItemList },
+                { data: 'submit_by', visible: !enhancedItemList },
+                { data: 'warehouse', className: enhancedItemList ? 'return-in-reference-cell' : '', render: (data, type, row) => renderReturnWarehouseReference(data, type, row) },
                 @if(!empty($showDeliveryNoteFields ?? false))
-                    { data: 'surat_jalan_no', orderable: false, searchable: false, render: (data, type, row) => {
+                    { data: 'surat_jalan_no', visible: !enhancedItemList, orderable: false, searchable: false, render: (data, type, row) => {
                         const no = data || '';
                         const at = row?.surat_jalan_at || '';
                         const imageUrl = row?.surat_jalan_image_url || '';
@@ -1874,13 +2004,13 @@
                         return lines.join('');
                     }},
                 @endif
-                { data: 'item', orderable: false, searchable: false, render: (data, type, row) => renderItemSummary(row) },
-                { data: 'qty', render: (data, type, row) => renderTotalQty(data, type, row) },
+                { data: 'item', className: enhancedItemList ? 'stock-flow-item-column' : '', orderable: false, searchable: false, render: (data, type, row) => renderItemSummary(row) },
+                { data: 'qty', visible: !enhancedItemList, render: (data, type, row) => renderTotalQty(data, type, row) },
                 @if(!empty($showScanProgressColumn ?? false))
-                    { data: 'scan_progress', orderable:false, searchable:false, render: (data) => renderScanProgress(data) },
+                    { data: 'scan_progress', className: enhancedItemList ? 'return-in-progress-cell' : '', orderable:false, searchable:false, render: (data) => renderScanProgress(data) },
                 @endif
-                { data: 'note', render: (data, type, row) => renderFlowNote(data, type, row) },
-                { data: 'id', orderable:false, searchable:false, className:'text-end', render: (data, type, row)=>{
+                { data: 'note', visible: !enhancedItemList, render: (data, type, row) => renderFlowNote(data, type, row) },
+                { data: 'id', orderable:false, searchable:false, className: enhancedItemList ? 'text-end return-in-action-cell' : 'text-end', render: (data, type, row)=>{
                     const rowType = row?.type || defaultTypeFilter;
                     const perms = permMap?.[rowType] || {};
                     const isLocked = Array.isArray(lockedStatuses)

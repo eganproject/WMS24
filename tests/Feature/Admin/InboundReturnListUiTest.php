@@ -25,10 +25,16 @@ class InboundReturnListUiTest extends TestCase
         $response->assertSee('return-in-list-card', false);
         $response->assertSee('return-in-table', false);
         $response->assertSee('Ringkasan Item Retur');
+        $response->assertSee('Dokumen Retur');
+        $response->assertSee('Gudang &amp; Referensi', false);
         $response->assertSee('Rincian Item Retur');
         $response->assertSee('modal-xl', false);
         $response->assertSee('const enhancedItemList = true;', false);
         $response->assertSee('return-in-item-card__body', false);
+        $response->assertSee('return-in-action-cell', false);
+        $response->assertSee("{ data: 'id', visible: !enhancedItemList }", false);
+        $response->assertSee("{ data: 'note', visible: !enhancedItemList", false);
+        $response->assertDontSee('min-width: 1480px', false);
         $response->assertSee('Buka seluruh rincian item retur');
     }
 

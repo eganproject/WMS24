@@ -9,10 +9,12 @@ use App\Models\Item;
 use App\Models\Supplier;
 use App\Models\Warehouse;
 use App\Models\StockMutation;
+use App\Exports\OutboundManualExport;
 use App\Exports\OutboundReturnTemplateExport;
 use App\Imports\OutboundReturnsImport;
 use App\Support\BundleService;
 use App\Support\OutboundManualQcStatus;
+use App\Support\OutboundManualReport;
 use App\Support\OutboundKoliExpectation;
 use App\Support\StockService;
 use App\Support\Permission;
@@ -49,6 +51,13 @@ class OutboundController extends Controller
     public function manualsData(Request $request)
     {
         return $this->data($request, 'manual');
+    }
+
+    public function manualsExport(Request $request)
+    {
+        $filename = 'outbound-manual-'.now()->format('YmdHis').'.xlsx';
+
+        return Excel::download(new OutboundManualExport($request->all()), $filename);
     }
 
     public function returnsData(Request $request)
@@ -426,6 +435,12 @@ class OutboundController extends Controller
                 ? 'Data outbound manual akan dihapus jika belum masuk tahap QC.'
                 : 'Data akan dihapus dan stok akan dikembalikan',
             'showScanProgressColumn' => $type === 'manual',
+            'exportUrl' => $type === 'manual' ? route('admin.outbound.manuals.export') : null,
+            'defaultDateFrom' => (string) request()->input('date_from', ''),
+            'defaultDateTo' => (string) request()->input('date_to', ''),
+            'initialWarehouseId' => request()->input('warehouse_id'),
+            'initialStatus' => request()->input('status'),
+            'initialSearch' => request()->input('q'),
         ]);
     }
 
@@ -495,6 +510,11 @@ class OutboundController extends Controller
         $statusFilter = $request->input('status');
         if ($statusFilter !== null && $statusFilter !== '' && $statusFilter !== 'all') {
             $query->where('outbound_transactions.status', $statusFilter);
+        }
+
+        // Pastikan tabel Outbound Manual dan file export memakai satu definisi filter.
+        if ($type === 'manual' && $baseType === 'manual') {
+            $query = (new OutboundManualReport($request->all()))->transactionQuery();
         }
 
         $recordsTotalQuery = OutboundTransaction::query();

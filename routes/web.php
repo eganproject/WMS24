@@ -396,6 +396,7 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
 
         Route::get('/manuals', [OutboundController::class, 'manuals'])->name('manuals.index');
         Route::get('/manuals/data', [OutboundController::class, 'manualsData'])->name('manuals.data');
+        Route::get('/manuals/export', [OutboundController::class, 'manualsExport'])->name('manuals.export');
         Route::post('/manuals', [OutboundController::class, 'manualsStore'])->name('manuals.store');
         Route::post('/manuals/import', [OutboundController::class, 'manualsImport'])->name('manuals.import');
         Route::get('/manuals/{id}', [OutboundController::class, 'manualsShow'])->name('manuals.show');

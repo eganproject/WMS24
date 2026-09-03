@@ -59,7 +59,7 @@
                         <path d="M11 19C6.55556 19 3 15.4444 3 11C3 6.55556 6.55556 3 11 3C15.4444 3 19 6.55556 19 11C19 15.4444 15.4444 19 11 19ZM11 5C7.53333 5 5 7.53333 5 11C5 14.4667 7.53333 17 11 17C14.4667 17 17 14.4667 17 11C17 7.53333 14.4667 5 11 5Z" fill="black" />
                     </svg>
                 </span>
-                <input type="text" class="form-control form-control-solid w-250px ps-14" placeholder="Search" data-kt-filter="search" />
+                <input type="text" class="form-control form-control-solid w-250px ps-14" placeholder="Search" data-kt-filter="search" value="{{ $initialSearch ?? '' }}" />
             </div>
         </div>
         <div class="card-toolbar">
@@ -73,14 +73,14 @@
                     <select class="form-select form-select-solid w-200px" id="filter_warehouse">
                         <option value="all">Semua Gudang</option>
                         @foreach($warehouses as $wh)
-                            <option value="{{ $wh->id }}">{{ $wh->name }}</option>
+                            <option value="{{ $wh->id }}" @selected((string) ($initialWarehouseId ?? '') === (string) $wh->id)>{{ $wh->name }}</option>
                         @endforeach
                     </select>
                 @endif
                 <select class="form-select form-select-solid w-200px" id="filter_status">
                     <option value="all">Semua Status</option>
                     @foreach(($statusFilterOptions ?? []) as $statusValue => $statusLabel)
-                        <option value="{{ $statusValue }}">{{ $statusLabel }}</option>
+                        <option value="{{ $statusValue }}" @selected((string) ($initialStatus ?? '') === (string) $statusValue)>{{ $statusLabel }}</option>
                     @endforeach
                 </select>
                 <input type="text" class="form-control form-control-solid w-150px" id="filter_date_from" placeholder="Dari" value="{{ $defaultDateFrom ?? '' }}" />
@@ -1490,6 +1490,9 @@
 
         const collectFilterParams = () => {
             const params = { q: searchInput?.value || '' };
+            if (params.q && typeof window.resolveTableSearchMode === 'function') {
+                params.search_mode = window.resolveTableSearchMode(tableEl?.[0] || null);
+            }
             if (warehouseFilter?.value) params.warehouse_id = warehouseFilter.value;
             if (statusFilter?.value) params.status = statusFilter.value;
             if (dateFromEl?.value) params.date_from = dateFromEl.value;
@@ -1626,6 +1629,7 @@
         statusFilter?.addEventListener('change', reloadTable);
         filterApplyBtn?.addEventListener('click', reloadTable);
         filterResetBtn?.addEventListener('click', () => {
+            if (searchInput) searchInput.value = '';
             if (warehouseFilter) {
                 warehouseFilter.value = 'all';
                 if (typeof $ !== 'undefined' && $(warehouseFilter).data('select2')) {
@@ -1642,14 +1646,44 @@
             reloadTable();
         });
 
-        exportBtn?.addEventListener('click', () => {
+        exportBtn?.addEventListener('click', async () => {
             if (!exportUrl) return;
             const params = new URLSearchParams();
             Object.entries(collectFilterParams()).forEach(([key, value]) => {
                 if (value !== '' && value !== null && value !== undefined) params.set(key, value);
             });
             const query = params.toString();
-            window.location.href = query ? `${exportUrl}?${query}` : exportUrl;
+            const originalContent = exportBtn.innerHTML;
+            exportBtn.disabled = true;
+            exportBtn.setAttribute('aria-busy', 'true');
+            exportBtn.innerHTML = '<span class="spinner-border spinner-border-sm align-middle me-2" role="status" aria-hidden="true"></span>Menyiapkan Excel...';
+
+            try {
+                const response = await fetch(query ? `${exportUrl}?${query}` : exportUrl, {
+                    headers: { 'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
+                });
+                if (!response.ok) {
+                    throw new Error(response.status === 504
+                        ? 'Proses export melewati batas waktu server. Persempit periode atau filter data lalu coba lagi.'
+                        : 'Gagal membuat file Excel.');
+                }
+                const filename = filenameFromDisposition(
+                    response.headers.get('Content-Disposition'),
+                    'outbound-manual.xlsx'
+                );
+                saveBlob(await response.blob(), filename);
+            } catch (error) {
+                const message = error?.message || 'Gagal membuat file Excel.';
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire('Export gagal', message, 'error');
+                } else {
+                    alert(message);
+                }
+            } finally {
+                exportBtn.disabled = false;
+                exportBtn.removeAttribute('aria-busy');
+                exportBtn.innerHTML = originalContent;
+            }
         });
 
         const filenameFromDisposition = (disposition, fallback) => {

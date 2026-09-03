@@ -2,8 +2,6 @@
 
 namespace App\Exports;
 
-use App\Models\StockMutation;
-use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromArray;
 use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithStrictNullComparison;
@@ -106,23 +104,18 @@ class StockMutationOverviewSheet extends StockMutationSheet implements FromArray
             return $this->layout;
         }
 
-        $mutations = $this->report->rows();
-        $qtyIn = (int) $mutations->where('direction', 'in')->sum('qty');
-        $qtyOut = (int) $mutations->where('direction', 'out')->sum('qty');
-        $uniqueDocuments = $mutations->map(fn (StockMutation $row) => ($row->source_type ?? '').'|'.($row->source_id ?? ''))->unique()->count();
-        $anomalies = $mutations->filter(fn (StockMutation $row) => $this->report->balanceCheck($row) === 'Perlu diperiksa')->count();
+        $totals = $this->report->totals();
+        $qtyIn = (int) ($totals->qty_in ?? 0);
+        $qtyOut = (int) ($totals->qty_out ?? 0);
+        $anomalies = (int) ($totals->anomaly_count ?? 0);
+        $itemSummary = $this->report->itemWarehouseSummary();
+        $sourceSummary = $this->report->sourceSummary();
+        $dailySummary = $this->report->dailySummary();
+        $warehouseSummary = $this->report->warehouseSummary();
 
-        $topItem = $mutations->groupBy('item_id')->map(fn (Collection $rows) => [
-            'label' => trim(($rows->first()->item?->sku ?? '').' - '.($rows->first()->item?->name ?? ''), ' -'),
-            'qty' => (int) $rows->sum('qty'),
-        ])->sortByDesc('qty')->first();
-        $topSource = $mutations->groupBy(fn (StockMutation $row) => $this->report->sourceLabel($row))->map(fn (Collection $rows, string $label) => [
-            'label' => $label ?: 'TANPA SUMBER',
-            'qty' => (int) $rows->sum('qty'),
-        ])->sortByDesc('qty')->first();
-        $busiestDay = $mutations->groupBy(fn (StockMutation $row) => $row->occurred_at?->format('Y-m-d') ?? '-')
-            ->map(fn (Collection $rows, string $date) => ['date' => $date, 'count' => $rows->count(), 'qty' => (int) $rows->sum('qty')])
-            ->sortByDesc('count')->first();
+        $topItem = $itemSummary->first();
+        $topSource = $sourceSummary->first();
+        $busiestDay = $dailySummary->sortByDesc('mutation_count')->first();
 
         $rows = [
             ['Laporan Mutasi Stok - Ringkasan Analisis'],
@@ -130,44 +123,49 @@ class StockMutationOverviewSheet extends StockMutationSheet implements FromArray
             ['Diunduh: '.now()->format('d/m/Y H:i').' | Net mutasi = Qty Masuk - Qty Keluar'],
             [''],
             ['Jumlah Mutasi', '', 'Dokumen Unik', '', 'SKU Unik', '', 'Qty Masuk', '', 'Qty Keluar', ''],
-            [$mutations->count(), '', $uniqueDocuments, '', $mutations->pluck('item_id')->unique()->count(), '', $qtyIn, '', $qtyOut, ''],
+            [(int) ($totals->mutation_count ?? 0), '', (int) ($totals->document_count ?? 0), '', (int) ($totals->sku_count ?? 0), '', $qtyIn, '', $qtyOut, ''],
             [''],
             ['SOROTAN ANALISIS'],
-            ['Item dengan aktivitas terbesar: '.($topItem ? $topItem['label'].' ('.number_format($topItem['qty'], 0, ',', '.').' pcs)' : '-')],
-            ['Sumber dengan aktivitas terbesar: '.($topSource ? $topSource['label'].' ('.number_format($topSource['qty'], 0, ',', '.').' pcs)' : '-')],
-            ['Hari tersibuk: '.($busiestDay ? $busiestDay['date'].' ('.number_format($busiestDay['count'], 0, ',', '.').' mutasi; '.number_format($busiestDay['qty'], 0, ',', '.').' pcs)' : '-')],
+            ['Item dengan aktivitas terbesar: '.($topItem ? trim(($topItem->sku ?? '').' - '.($topItem->item_name ?? ''), ' -').' ('.number_format((int) $topItem->qty_in + (int) $topItem->qty_out, 0, ',', '.').' pcs)' : '-')],
+            ['Sumber dengan aktivitas terbesar: '.($topSource ? ($this->report->formatSourceLabel($topSource->source_type, $topSource->source_subtype) ?: 'TANPA SUMBER').' ('.number_format((int) $topSource->qty_in + (int) $topSource->qty_out, 0, ',', '.').' pcs)' : '-')],
+            ['Hari tersibuk: '.($busiestDay ? $busiestDay->period_date.' ('.number_format((int) $busiestDay->mutation_count, 0, ',', '.').' mutasi; '.number_format((int) $busiestDay->qty_in + (int) $busiestDay->qty_out, 0, ',', '.').' pcs)' : '-')],
             ['Validasi saldo: '.($anomalies > 0 ? number_format($anomalies, 0, ',', '.').' mutasi perlu diperiksa' : 'tidak ditemukan anomali pada snapshot yang tersedia')],
             [''],
         ];
 
         $sections = [];
-        $daily = $mutations
-            ->groupBy(fn (StockMutation $row) => $row->occurred_at?->format('Y-m-d') ?? '-')
-            ->map(function (Collection $group, string $date) {
-                $in = (int) $group->where('direction', 'in')->sum('qty');
-                $out = (int) $group->where('direction', 'out')->sum('qty');
-                return [$date, $group->count(), $this->documentCount($group), $group->pluck('item_id')->unique()->count(), $in, $out, $in - $out, $this->anomalyCount($group)];
-            })->sortKeysDesc()->values()->all();
+        $daily = $dailySummary->map(function ($row) {
+            $in = (int) $row->qty_in;
+            $out = (int) $row->qty_out;
+
+            return [$row->period_date, (int) $row->mutation_count, (int) $row->document_count, (int) $row->sku_count, $in, $out, $in - $out, (int) $row->anomaly_count];
+        })->all();
         $this->appendSection($rows, $sections, 'daily', 'AKTIVITAS HARIAN', ['Tanggal', 'Mutasi', 'Dokumen', 'SKU Unik', 'Qty Masuk', 'Qty Keluar', 'Net Mutasi', 'Anomali'], $daily);
 
-        $sources = $mutations
-            ->groupBy(fn (StockMutation $row) => $this->report->sourceLabel($row) ?: 'TANPA SUMBER')
-            ->map(function (Collection $group, string $label) use ($qtyIn, $qtyOut) {
-                $in = (int) $group->where('direction', 'in')->sum('qty');
-                $out = (int) $group->where('direction', 'out')->sum('qty');
-                $total = $qtyIn + $qtyOut;
-                return [$label, $group->count(), $this->documentCount($group), $group->pluck('item_id')->unique()->count(), $in, $out, $in - $out, $total > 0 ? ($in + $out) / $total : 0];
-            })->sortByDesc(fn (array $row) => $row[4] + $row[5])->values()->all();
+        $sources = $sourceSummary->map(function ($row) use ($qtyIn, $qtyOut) {
+            $in = (int) $row->qty_in;
+            $out = (int) $row->qty_out;
+            $total = $qtyIn + $qtyOut;
+
+            return [
+                $this->report->formatSourceLabel($row->source_type, $row->source_subtype) ?: 'TANPA SUMBER',
+                (int) $row->mutation_count,
+                (int) $row->document_count,
+                (int) $row->sku_count,
+                $in,
+                $out,
+                $in - $out,
+                $total > 0 ? ($in + $out) / $total : 0,
+            ];
+        })->all();
         $this->appendSection($rows, $sections, 'source', 'KOMPOSISI PER SUMBER', ['Sumber', 'Mutasi', 'Dokumen', 'SKU Unik', 'Qty Masuk', 'Qty Keluar', 'Net Mutasi', 'Kontribusi'], $sources);
 
-        $warehouses = $mutations
-            ->groupBy('warehouse_id')
-            ->map(function (Collection $group) {
-                $in = (int) $group->where('direction', 'in')->sum('qty');
-                $out = (int) $group->where('direction', 'out')->sum('qty');
-                $warehouse = $group->first()->warehouse;
-                return [$warehouse?->name ?? '-', $group->count(), $this->documentCount($group), $group->pluck('item_id')->unique()->count(), $in, $out, $in - $out, $this->anomalyCount($group)];
-            })->sortByDesc(fn (array $row) => $row[4] + $row[5])->values()->all();
+        $warehouses = $warehouseSummary->map(function ($row) {
+            $in = (int) $row->qty_in;
+            $out = (int) $row->qty_out;
+
+            return [$row->warehouse_name ?? '-', (int) $row->mutation_count, (int) $row->document_count, (int) $row->sku_count, $in, $out, $in - $out, (int) $row->anomaly_count];
+        })->all();
         $this->appendSection($rows, $sections, 'warehouse', 'AKTIVITAS PER GUDANG', ['Gudang', 'Mutasi', 'Dokumen', 'SKU Unik', 'Qty Masuk', 'Qty Keluar', 'Net Mutasi', 'Anomali'], $warehouses);
 
         return $this->layout = ['rows' => $rows, 'sections' => $sections, 'last_row' => count($rows)];
@@ -189,16 +187,6 @@ class StockMutationOverviewSheet extends StockMutationSheet implements FromArray
         $rows[] = [''];
 
         $sections[$key] = ['title' => $titleRow, 'header' => $headerRow, 'last' => $lastRow];
-    }
-
-    private function documentCount(Collection $rows): int
-    {
-        return $rows->map(fn (StockMutation $row) => ($row->source_type ?? '').'|'.($row->source_id ?? ''))->unique()->count();
-    }
-
-    private function anomalyCount(Collection $rows): int
-    {
-        return $rows->filter(fn (StockMutation $row) => $this->report->balanceCheck($row) === 'Perlu diperiksa')->count();
     }
 
     private function styleTitle($sheet, int $row): void

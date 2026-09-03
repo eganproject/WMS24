@@ -59,7 +59,10 @@ abstract class StockMutationTableSheet extends StockMutationSheet
 
                 $sheet->freezePane('A'.(self::HEADER_ROW + 1));
                 $sheet->setAutoFilter($range);
-                $sheet->getStyle($range)->getBorders()->getAllBorders()
+                $borderRange = $this->rowCount() <= 5000
+                    ? $range
+                    : 'A'.self::HEADER_ROW.':'.$lastColumn.self::HEADER_ROW;
+                $sheet->getStyle($borderRange)->getBorders()->getAllBorders()
                     ->setBorderStyle(Border::BORDER_THIN)->getColor()->setRGB('E4E6EF');
                 $sheet->getStyle('A1:'.$lastColumn.$lastRow)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
                 $sheet->getStyle('A'.self::HEADER_ROW.':'.$lastColumn.self::HEADER_ROW)

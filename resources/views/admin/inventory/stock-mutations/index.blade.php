@@ -389,9 +389,59 @@
         directionFilter?.addEventListener('change', reloadTable);
         sourceTypeFilter?.addEventListener('change', reloadTable);
         filterApplyBtn?.addEventListener('click', reloadTable);
-        exportBtn?.addEventListener('click', () => {
+        exportBtn?.addEventListener('click', async () => {
+            if (exportBtn.disabled) return;
+
             const query = activeFilterParams().toString();
-            window.location.href = exportUrl + (query ? `?${query}` : '');
+            const downloadUrl = exportUrl + (query ? `?${query}` : '');
+            const originalContent = exportBtn.innerHTML;
+
+            exportBtn.disabled = true;
+            exportBtn.setAttribute('aria-busy', 'true');
+            exportBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Menyiapkan Excel...';
+
+            try {
+                const response = await fetch(downloadUrl, {
+                    headers: {
+                        'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                });
+                if (!response.ok) {
+                    throw new Error(`Export gagal dengan status ${response.status}`);
+                }
+
+                const blob = await response.blob();
+                const disposition = response.headers.get('Content-Disposition') || '';
+                const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+                const regularName = disposition.match(/filename="?([^";]+)"?/i)?.[1];
+                let filename = 'mutasi-stok.xlsx';
+                try {
+                    filename = encodedName ? decodeURIComponent(encodedName) : (regularName || filename);
+                } catch (error) {
+                    filename = regularName || filename;
+                }
+
+                const objectUrl = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = objectUrl;
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+            } catch (error) {
+                console.error(error);
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire('Export gagal', 'File Excel tidak dapat disiapkan. Silakan coba kembali.', 'error');
+                } else {
+                    window.alert('File Excel tidak dapat disiapkan. Silakan coba kembali.');
+                }
+            } finally {
+                exportBtn.disabled = false;
+                exportBtn.removeAttribute('aria-busy');
+                exportBtn.innerHTML = originalContent;
+            }
         });
         filterResetBtn?.addEventListener('click', () => {
             if (warehouseFilter) {

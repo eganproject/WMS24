@@ -33,6 +33,8 @@ class StockMutationsExportTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('id="btn_export"', false);
+        $response->assertSee('Menyiapkan Excel...', false);
+        $response->assertSee("exportBtn.setAttribute('aria-busy', 'true')", false);
         $response->assertSee('value="SKU-TEST"', false);
         $response->assertSee('value="in" selected', false);
         $response->assertSee('value="inbound" selected', false);

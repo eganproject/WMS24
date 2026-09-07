@@ -7,6 +7,9 @@
     use App\Support\Permission as Perm;
     $canCreate = Perm::can(auth()->user(), 'admin.inventory.resi-import.index', 'create');
     $canDelete = Perm::can(auth()->user(), 'admin.inventory.resi-import.index', 'delete');
+    $filterDateLabel = ($filterDateFrom ?? $today) === ($filterDateTo ?? $today)
+        ? ($filterDateFrom ?? $today)
+        : ($filterDateFrom ?? $today).' s.d. '.($filterDateTo ?? $today);
 @endphp
 
 @section('content')
@@ -83,7 +86,7 @@
             </div>
         </div>
         <div class="card-toolbar">
-            <div class="d-flex align-items-center gap-2">
+            <div class="d-flex align-items-end justify-content-end flex-wrap gap-2">
                 <select class="form-select form-select-solid w-175px" id="filter_status">
                     <option value="">Semua Status</option>
                     <option value="active" {{ ($filterStatus ?? '') === 'active' ? 'selected' : '' }}>Aktif</option>
@@ -95,7 +98,14 @@
                         <option value="{{ $option['value'] }}" {{ ($filterFlowStatus ?? '') === $option['value'] ? 'selected' : '' }}>{{ $option['label'] }}</option>
                     @endforeach
                 </select>
-                <input type="text" class="form-control form-control-solid w-150px" id="filter_date" placeholder="Tanggal" value="{{ $filterDate ?? '' }}" />
+                <div>
+                    <label class="form-label fs-8 mb-1" for="filter_date_from">Tanggal Dari</label>
+                    <input type="text" class="form-control form-control-solid w-150px" id="filter_date_from" placeholder="YYYY-MM-DD" value="{{ $filterDateFrom ?? $today }}" />
+                </div>
+                <div>
+                    <label class="form-label fs-8 mb-1" for="filter_date_to">Tanggal Sampai</label>
+                    <input type="text" class="form-control form-control-solid w-150px" id="filter_date_to" placeholder="YYYY-MM-DD" value="{{ $filterDateTo ?? $today }}" />
+                </div>
                 <button type="button" class="btn btn-light" id="filter_apply">Filter</button>
                 <button type="button" class="btn btn-light" id="filter_reset">Reset</button>
                 <button type="button" class="btn btn-light-warning" id="btn_catatan_pembeli">Catatan Pembeli</button>
@@ -108,7 +118,7 @@
             <div class="fw-bold">Jumlah Pesanan: <span id="summary_orders">{{ $summaryOrders ?? 0 }}</span></div>
             <div class="fw-bold">Jumlah SKU: <span id="summary_skus">{{ $summarySkus ?? 0 }}</span></div>
         </div>
-        <div class="fw-bold mb-3">Daftar Resi (Tanggal <span id="label_date">{{ $filterDate ?? $today }}</span>)</div>
+        <div class="fw-bold mb-3">Daftar Resi (Tanggal <span id="label_date">{{ $filterDateLabel }}</span>)</div>
         <div class="table-responsive">
             <table class="table align-middle table-row-dashed fs-6 gy-5" id="resi_table">
                 <thead>
@@ -343,7 +353,8 @@
         const cancelContextNote = document.getElementById('cancel_context_note');
         const cancelSubmitBtn = document.getElementById('btn_submit_cancel');
         const loadingOverlay = document.getElementById('import_loading_overlay');
-        const filterDateEl = document.getElementById('filter_date');
+        const filterDateFromEl = document.getElementById('filter_date_from');
+        const filterDateToEl = document.getElementById('filter_date_to');
         const filterSearchEl = document.getElementById('filter_search');
         const filterStatusEl = document.getElementById('filter_status');
         const filterFlowStatusEl = document.getElementById('filter_flow_status');
@@ -378,7 +389,8 @@
         const summarySkusEl = document.getElementById('summary_skus');
         const labelDateEl = document.getElementById('label_date');
         const tableEl = $('#resi_table');
-        let fpDate = null;
+        let fpDateFrom = null;
+        let fpDateTo = null;
         let dt = null;
         let currentCancelUrl = cancelUrl;
 
@@ -389,8 +401,50 @@
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
 
-        if (typeof flatpickr !== 'undefined' && filterDateEl) {
-            fpDate = flatpickr(filterDateEl, { dateFormat: 'Y-m-d', allowInput: true });
+        const getDateRange = () => {
+            let dateFrom = (filterDateFromEl?.value || '').trim();
+            let dateTo = (filterDateToEl?.value || '').trim();
+
+            if (!dateFrom && !dateTo) {
+                dateFrom = todayStr;
+                dateTo = todayStr;
+            } else if (!dateFrom) {
+                dateFrom = dateTo;
+            } else if (!dateTo) {
+                dateTo = dateFrom;
+            }
+
+            if (dateFrom && dateTo && dateFrom > dateTo) {
+                [dateFrom, dateTo] = [dateTo, dateFrom];
+            }
+
+            return {
+                dateFrom,
+                dateTo,
+                label: dateFrom === dateTo ? dateFrom : `${dateFrom} s.d. ${dateTo}`,
+            };
+        };
+
+        const setDateRange = (dateFrom, dateTo) => {
+            if (fpDateFrom) {
+                fpDateFrom.setDate(dateFrom, false);
+            } else if (filterDateFromEl) {
+                filterDateFromEl.value = dateFrom;
+            }
+            if (fpDateTo) {
+                fpDateTo.setDate(dateTo, false);
+            } else if (filterDateToEl) {
+                filterDateToEl.value = dateTo;
+            }
+        };
+
+        if (typeof flatpickr !== 'undefined') {
+            if (filterDateFromEl) {
+                fpDateFrom = flatpickr(filterDateFromEl, { dateFormat: 'Y-m-d', allowInput: true });
+            }
+            if (filterDateToEl) {
+                fpDateTo = flatpickr(filterDateToEl, { dateFormat: 'Y-m-d', allowInput: true });
+            }
         }
 
         if (tableEl.length && $.fn.DataTable) {
@@ -403,9 +457,11 @@
                     url: dataUrl,
                     dataSrc: 'data',
                     data: function(params) {
+                        const dateRange = getDateRange();
                         params.q = filterSearchEl?.value || '';
                         if (searchMode) params.search_mode = searchMode;
-                        params.date = filterDateEl?.value || '';
+                        params.date_from = dateRange.dateFrom;
+                        params.date_to = dateRange.dateTo;
                         params.status = filterStatusEl?.value || '';
                         params.flow_status = filterFlowStatusEl?.value || '';
                     }
@@ -478,11 +534,17 @@
                     if (summaryOrdersEl) summaryOrdersEl.textContent = json.summary.orders ?? '0';
                     if (summarySkusEl) summarySkusEl.textContent = json.summary.skus ?? '0';
                 }
+                if (json?.date_from && json?.date_to) {
+                    setDateRange(json.date_from, json.date_to);
+                    if (labelDateEl) labelDateEl.textContent = json.date_label || getDateRange().label;
+                }
             });
         }
 
         const reloadTable = () => {
-            if (labelDateEl) labelDateEl.textContent = filterDateEl?.value || todayStr || '';
+            const dateRange = getDateRange();
+            setDateRange(dateRange.dateFrom, dateRange.dateTo);
+            if (labelDateEl) labelDateEl.textContent = dateRange.label;
             dt?.ajax?.reload();
         };
 
@@ -493,11 +555,7 @@
         filterStatusEl?.addEventListener('change', reloadTable);
         filterFlowStatusEl?.addEventListener('change', reloadTable);
         filterResetBtn?.addEventListener('click', () => {
-            if (fpDate && todayStr) {
-                fpDate.setDate(todayStr, true);
-            } else if (filterDateEl && todayStr) {
-                filterDateEl.value = todayStr;
-            }
+            setDateRange(todayStr, todayStr);
             if (filterSearchEl) filterSearchEl.value = '';
             searchMode = '';
             if (filterStatusEl) filterStatusEl.value = '';
@@ -506,8 +564,8 @@
         });
 
         buyerNotesBtn?.addEventListener('click', async () => {
-            const dateValue = (filterDateEl?.value || todayStr || '').trim();
-            if (buyerNotesDateEl) buyerNotesDateEl.textContent = dateValue || '-';
+            const dateRange = getDateRange();
+            if (buyerNotesDateEl) buyerNotesDateEl.textContent = dateRange.label || '-';
             if (buyerNotesTotalEl) buyerNotesTotalEl.textContent = '0';
             if (buyerNotesBodyEl) {
                 buyerNotesBodyEl.innerHTML = `
@@ -520,7 +578,8 @@
 
             try {
                 const params = new URLSearchParams();
-                if (dateValue) params.set('date', dateValue);
+                if (dateRange.dateFrom) params.set('date_from', dateRange.dateFrom);
+                if (dateRange.dateTo) params.set('date_to', dateRange.dateTo);
                 if (filterSearchEl?.value) params.set('q', filterSearchEl.value);
                 if (filterStatusEl?.value) params.set('status', filterStatusEl.value);
                 if (filterFlowStatusEl?.value) params.set('flow_status', filterFlowStatusEl.value);
@@ -532,7 +591,7 @@
                 }
 
                 const rows = Array.isArray(json?.data) ? json.data : [];
-                if (buyerNotesDateEl) buyerNotesDateEl.textContent = json?.date || dateValue || '-';
+                if (buyerNotesDateEl) buyerNotesDateEl.textContent = json?.date || dateRange.label || '-';
                 if (buyerNotesTotalEl) buyerNotesTotalEl.textContent = json?.total ?? rows.length;
 
                 if (!rows.length) {
@@ -570,9 +629,9 @@
         });
 
         rekapBtn?.addEventListener('click', async () => {
-            const dateValue = (filterDateEl?.value || todayStr || '').trim();
+            const dateRange = getDateRange();
             const statusValue = (filterStatusEl?.value || '').trim();
-            if (rekapDateEl) rekapDateEl.textContent = dateValue || '-';
+            if (rekapDateEl) rekapDateEl.textContent = dateRange.label || '-';
             if (rekapTotalSkuEl) rekapTotalSkuEl.textContent = '0';
             if (rekapTotalQtyEl) rekapTotalQtyEl.textContent = '0';
             if (rekapBodyEl) {
@@ -589,7 +648,8 @@
             rekapModal?.show();
             try {
                 const params = new URLSearchParams();
-                if (dateValue) params.set('date', dateValue);
+                if (dateRange.dateFrom) params.set('date_from', dateRange.dateFrom);
+                if (dateRange.dateTo) params.set('date_to', dateRange.dateTo);
                 if (statusValue) params.set('status', statusValue);
                 if (filterFlowStatusEl?.value) params.set('flow_status', filterFlowStatusEl.value);
                 const res = await fetch(`${summaryUrl}?${params.toString()}`);
@@ -598,7 +658,7 @@
                     throw new Error(json?.message || 'Gagal memuat rekap.');
                 }
                 const rows = Array.isArray(json?.data) ? json.data : [];
-                if (rekapDateEl) rekapDateEl.textContent = json?.date || dateValue || '-';
+                if (rekapDateEl) rekapDateEl.textContent = json?.date || dateRange.label || '-';
                 if (rekapTotalSkuEl) rekapTotalSkuEl.textContent = json?.summary?.total_sku ?? 0;
                 if (rekapTotalQtyEl) rekapTotalQtyEl.textContent = json?.summary?.total_qty ?? 0;
                 rekapState.rows = rows;

@@ -30,16 +30,14 @@ class ResiImportController extends Controller
     public function index(Request $request)
     {
         $today = now()->toDateString();
-        $filterDate = trim((string) $request->input('date', ''));
-        if ($filterDate === '') {
-            $filterDate = $today;
-        }
+        [$filterDateFrom, $filterDateTo] = $this->resolveUploadDateRange($request);
         $search = trim((string) $request->input('q', ''));
         $searchMode = $this->isExactSearch($request) ? 'exact' : '';
         $status = $this->normalizeStatusFilter($request->input('status'));
         $flowStatus = $this->normalizeFlowStatusFilter($request->input('flow_status'));
 
-        $baseQuery = Resi::query()->whereDate('tanggal_upload', $filterDate);
+        $baseQuery = Resi::query();
+        $this->applyUploadDateRange($baseQuery, $filterDateFrom, $filterDateTo);
         $this->applySearch($baseQuery, $search, $this->isExactSearch($request));
         $this->applyStatusFilter($baseQuery, $status);
         $this->applyFlowStatusFilter($baseQuery, $flowStatus);
@@ -51,7 +49,8 @@ class ResiImportController extends Controller
             'importUrl' => route('admin.inventory.resi-import.import'),
             'dataUrl' => route('admin.inventory.resi-import.data'),
             'buyerNotesUrl' => route('admin.inventory.resi-import.buyer-notes'),
-            'filterDate' => $filterDate,
+            'filterDateFrom' => $filterDateFrom,
+            'filterDateTo' => $filterDateTo,
             'filterSearch' => $search,
             'filterSearchMode' => $searchMode,
             'filterStatus' => $status,
@@ -65,21 +64,20 @@ class ResiImportController extends Controller
 
     public function data(Request $request)
     {
-        $today = now()->toDateString();
-        $filterDate = trim((string) $request->input('date', ''));
-        if ($filterDate === '') {
-            $filterDate = $today;
-        }
+        [$filterDateFrom, $filterDateTo] = $this->resolveUploadDateRange($request);
         $search = trim((string) $request->input('q', ''));
         $status = $this->normalizeStatusFilter($request->input('status'));
         $flowStatus = $this->normalizeFlowStatusFilter($request->input('flow_status'));
 
-        $filterQuery = Resi::query()->whereDate('tanggal_upload', $filterDate);
+        $filterQuery = Resi::query();
+        $this->applyUploadDateRange($filterQuery, $filterDateFrom, $filterDateTo);
         $this->applySearch($filterQuery, $search, $this->isExactSearch($request));
         $this->applyStatusFilter($filterQuery, $status);
         $this->applyFlowStatusFilter($filterQuery, $flowStatus);
 
-        $recordsTotal = Resi::whereDate('tanggal_upload', $filterDate)->count();
+        $totalQuery = Resi::query();
+        $this->applyUploadDateRange($totalQuery, $filterDateFrom, $filterDateTo);
+        $recordsTotal = $totalQuery->count();
         $summaryOrders = (clone $filterQuery)->count();
         $summarySkus = ResiDetail::whereIn('resi_id', (clone $filterQuery)->select('id'))->count();
 
@@ -104,9 +102,9 @@ class ResiImportController extends Controller
             ->with(['details' => function ($q) {
                 $q->select(['id', 'resi_id', 'sku', 'qty']);
             }, 'kurir'])
-            ->whereDate('tanggal_upload', $filterDate)
             ->orderByDesc('id');
 
+        $this->applyUploadDateRange($query, $filterDateFrom, $filterDateTo);
         $this->applySearch($query, $search, $this->isExactSearch($request));
         $this->applyStatusFilter($query, $status);
         $this->applyFlowStatusFilter($query, $flowStatus);
@@ -161,22 +159,21 @@ class ResiImportController extends Controller
                 'orders' => $summaryOrders,
                 'skus' => $summarySkus,
             ],
+            'date_from' => $filterDateFrom,
+            'date_to' => $filterDateTo,
+            'date_label' => $this->uploadDateRangeLabel($filterDateFrom, $filterDateTo),
         ]);
     }
 
     public function summary(Request $request)
     {
-        $today = now()->toDateString();
-        $filterDate = trim((string) $request->input('date', ''));
-        if ($filterDate === '') {
-            $filterDate = $today;
-        }
+        [$filterDateFrom, $filterDateTo] = $this->resolveUploadDateRange($request);
         $status = $this->normalizeStatusFilter($request->input('status'));
         $flowStatus = $this->normalizeFlowStatusFilter($request->input('flow_status'));
 
         $baseQuery = DB::table('resi_details as rd')
-            ->join('resis as r', 'r.id', '=', 'rd.resi_id')
-            ->whereDate('r.tanggal_upload', $filterDate);
+            ->join('resis as r', 'r.id', '=', 'rd.resi_id');
+        $this->applyUploadDateRange($baseQuery, $filterDateFrom, $filterDateTo, 'r.tanggal_upload');
 
         if ($status !== '') {
             $baseQuery->where('r.status', $status);
@@ -202,7 +199,9 @@ class ResiImportController extends Controller
         });
 
         return response()->json([
-            'date' => $filterDate,
+            'date' => $this->uploadDateRangeLabel($filterDateFrom, $filterDateTo),
+            'date_from' => $filterDateFrom,
+            'date_to' => $filterDateTo,
             'status' => $status,
             'summary' => [
                 'total_sku' => $totalSku,
@@ -214,11 +213,7 @@ class ResiImportController extends Controller
 
     public function buyerNotes(Request $request)
     {
-        $today = now()->toDateString();
-        $filterDate = trim((string) $request->input('date', ''));
-        if ($filterDate === '') {
-            $filterDate = $today;
-        }
+        [$filterDateFrom, $filterDateTo] = $this->resolveUploadDateRange($request);
         $search = trim((string) $request->input('q', ''));
         $status = $this->normalizeStatusFilter($request->input('status'));
         $flowStatus = $this->normalizeFlowStatusFilter($request->input('flow_status'));
@@ -226,11 +221,11 @@ class ResiImportController extends Controller
         $query = Resi::query()
             ->select(['id', 'id_pesanan', 'no_resi', 'tanggal_pesanan', 'kurir_id', 'catatan_pembeli', 'status'])
             ->with('kurir:id,name')
-            ->whereDate('tanggal_upload', $filterDate)
             ->whereNotNull('catatan_pembeli')
             ->where('catatan_pembeli', '<>', '')
             ->orderByDesc('id');
 
+        $this->applyUploadDateRange($query, $filterDateFrom, $filterDateTo);
         $this->applySearch($query, $search, $this->isExactSearch($request));
         $this->applyStatusFilter($query, $status);
         $this->applyFlowStatusFilter($query, $flowStatus);
@@ -248,7 +243,9 @@ class ResiImportController extends Controller
         });
 
         return response()->json([
-            'date' => $filterDate,
+            'date' => $this->uploadDateRangeLabel($filterDateFrom, $filterDateTo),
+            'date_from' => $filterDateFrom,
+            'date_to' => $filterDateTo,
             'total' => $rows->count(),
             'data' => $rows,
         ]);
@@ -875,6 +872,66 @@ class ResiImportController extends Controller
         if ($exception) {
             $exception->delete();
         }
+    }
+
+    /**
+     * @return array{0:string,1:string}
+     */
+    private function resolveUploadDateRange(Request $request): array
+    {
+        $today = now()->toDateString();
+        $legacyDate = trim((string) $request->input('date', ''));
+        $dateFrom = trim((string) $request->input('date_from', ''));
+        $dateTo = trim((string) $request->input('date_to', ''));
+
+        if ($dateFrom === '' && $dateTo === '') {
+            $dateFrom = $legacyDate !== '' ? $legacyDate : $today;
+            $dateTo = $dateFrom;
+        } elseif ($dateFrom === '') {
+            $dateFrom = $dateTo;
+        } elseif ($dateTo === '') {
+            $dateTo = $dateFrom;
+        }
+
+        $dateFrom = $this->normalizeUploadDate($dateFrom);
+        $dateTo = $this->normalizeUploadDate($dateTo);
+
+        if ($dateFrom === null && $dateTo === null) {
+            $dateFrom = $today;
+            $dateTo = $today;
+        } elseif ($dateFrom === null) {
+            $dateFrom = $dateTo;
+        } elseif ($dateTo === null) {
+            $dateTo = $dateFrom;
+        }
+
+        if ($dateFrom > $dateTo) {
+            [$dateFrom, $dateTo] = [$dateTo, $dateFrom];
+        }
+
+        return [$dateFrom, $dateTo];
+    }
+
+    private function normalizeUploadDate(string $date): ?string
+    {
+        if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $date, $matches)) {
+            return null;
+        }
+
+        return checkdate((int) $matches[2], (int) $matches[3], (int) $matches[1])
+            ? $date
+            : null;
+    }
+
+    private function applyUploadDateRange($query, string $dateFrom, string $dateTo, string $column = 'tanggal_upload'): void
+    {
+        $query->whereDate($column, '>=', $dateFrom)
+            ->whereDate($column, '<=', $dateTo);
+    }
+
+    private function uploadDateRangeLabel(string $dateFrom, string $dateTo): string
+    {
+        return $dateFrom === $dateTo ? $dateFrom : $dateFrom.' s.d. '.$dateTo;
     }
 
     private function applySearch($query, string $search, bool $exact = false): void

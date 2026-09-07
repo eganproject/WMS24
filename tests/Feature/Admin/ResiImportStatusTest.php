@@ -10,6 +10,7 @@ use App\Models\ResiDetail;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Carbon;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Tests\TestCase;
@@ -17,6 +18,79 @@ use Tests\TestCase;
 class ResiImportStatusTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_resi_import_filters_uploads_by_date_range_and_defaults_to_today(): void
+    {
+        $this->travelTo(Carbon::parse('2026-05-15 10:00:00'));
+        $user = User::factory()->create();
+
+        foreach ([
+            ['2026-05-14', 'ORD-RANGE-14', 'RESI-RANGE-14', 'SKU-RANGE-14', 1],
+            ['2026-05-15', 'ORD-RANGE-15', 'RESI-RANGE-15', 'SKU-RANGE-15', 2],
+            ['2026-05-16', 'ORD-RANGE-16', 'RESI-RANGE-16', 'SKU-RANGE-16', 3],
+        ] as [$date, $orderId, $resiNo, $sku, $qty]) {
+            $resi = Resi::create([
+                'id_pesanan' => $orderId,
+                'tanggal_pesanan' => $date,
+                'tanggal_upload' => $date,
+                'no_resi' => $resiNo,
+                'catatan_pembeli' => 'Catatan '.$orderId,
+                'uploader_id' => $user->id,
+                'status' => 'active',
+            ]);
+            ResiDetail::create([
+                'resi_id' => $resi->id,
+                'sku' => $sku,
+                'qty' => $qty,
+            ]);
+        }
+
+        $range = ['date_from' => '2026-05-14', 'date_to' => '2026-05-15'];
+
+        $this->actingAs($user)
+            ->withoutMiddleware()
+            ->getJson(route('admin.inventory.resi-import.data', $range))
+            ->assertOk()
+            ->assertJsonPath('date_from', '2026-05-14')
+            ->assertJsonPath('date_to', '2026-05-15')
+            ->assertJsonPath('recordsFiltered', 2)
+            ->assertJsonPath('summary.orders', 2)
+            ->assertJsonPath('summary.skus', 2)
+            ->assertJsonFragment(['no_resi' => 'RESI-RANGE-14'])
+            ->assertJsonFragment(['no_resi' => 'RESI-RANGE-15'])
+            ->assertJsonMissing(['no_resi' => 'RESI-RANGE-16']);
+
+        $this->actingAs($user)
+            ->withoutMiddleware()
+            ->getJson(route('admin.inventory.resi-import.summary', $range))
+            ->assertOk()
+            ->assertJsonPath('summary.total_sku', 2)
+            ->assertJsonPath('summary.total_qty', 3);
+
+        $this->actingAs($user)
+            ->withoutMiddleware()
+            ->getJson(route('admin.inventory.resi-import.buyer-notes', $range))
+            ->assertOk()
+            ->assertJsonPath('total', 2);
+
+        $this->actingAs($user)
+            ->withoutMiddleware()
+            ->getJson(route('admin.inventory.resi-import.data'))
+            ->assertOk()
+            ->assertJsonPath('recordsFiltered', 1)
+            ->assertJsonPath('date_from', '2026-05-15')
+            ->assertJsonPath('date_to', '2026-05-15')
+            ->assertJsonFragment(['no_resi' => 'RESI-RANGE-15'])
+            ->assertJsonMissing(['no_resi' => 'RESI-RANGE-14']);
+
+        $this->actingAs($user)
+            ->withoutMiddleware()
+            ->get(route('admin.inventory.resi-import.index', ['date' => '2026-05-14']))
+            ->assertOk()
+            ->assertSee('id="filter_date_from"', false)
+            ->assertSee('id="filter_date_to"', false)
+            ->assertSee('value="2026-05-14"', false);
+    }
 
     public function test_import_resi_with_dibatalkan_status_becomes_canceled_and_skips_picking_list(): void
     {

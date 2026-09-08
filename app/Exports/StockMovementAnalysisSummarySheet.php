@@ -12,7 +12,7 @@ use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 
-class StockMovementAnalysisSummarySheet extends StockMovementAnalysisSheet implements FromArray, WithTitle, WithEvents, WithStrictNullComparison, WithCustomValueBinder
+class StockMovementAnalysisSummarySheet extends StockMovementAnalysisSheet implements FromArray, WithCustomValueBinder, WithEvents, WithStrictNullComparison, WithTitle
 {
     public function title(): string
     {
@@ -70,7 +70,7 @@ class StockMovementAnalysisSummarySheet extends StockMovementAnalysisSheet imple
                 foreach ([1, 2, 3, 8, 16, 23] as $row) {
                     $sheet->mergeCells('A'.$row.':H'.$row);
                 }
-                foreach ([[1, 18], [2, 18], [3, 18], [8, 18], [16, 18], [23, 18]] as [$row]) {
+                foreach ([1, 2, 3, 8, 16, 23] as $row) {
                     $sheet->getStyle('A'.$row)->getAlignment()->setWrapText(true);
                 }
 

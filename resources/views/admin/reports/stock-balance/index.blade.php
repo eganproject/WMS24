@@ -154,11 +154,16 @@
                 </div>
                 <div class="movement-table-toolbar mb-4">
                     <div><h3 class="fw-bolder mb-1">Analisis Pergerakan per SKU</h3><div class="text-muted fs-8" id="movement_scope">0 SKU dianalisis</div></div>
-                    <div class="w-225px">
-                        <label class="text-muted fs-7 mb-1">Kategori Pergerakan</label>
-                        <select class="form-select form-select-solid" id="filter_movement_category">
-                            <option value="">Semua Kategori</option><option value="fast">Fast Moving</option><option value="medium">Medium Moving</option><option value="slow">Slow Moving</option><option value="dead_stock">Dead Stock</option><option value="no_stock">Tanpa Stok</option>
-                        </select>
+                    <div class="d-flex align-items-end gap-3 flex-wrap">
+                        <div class="w-225px">
+                            <label class="text-muted fs-7 mb-1">Kategori Pergerakan</label>
+                            <select class="form-select form-select-solid" id="filter_movement_category">
+                                <option value="">Semua Kategori</option><option value="fast">Fast Moving</option><option value="medium">Medium Moving</option><option value="slow">Slow Moving</option><option value="dead_stock">Dead Stock</option><option value="no_stock">Tanpa Stok</option>
+                            </select>
+                        </div>
+                        <button type="button" class="btn btn-light-success" id="btn_export_stock_movement">
+                            <i class="fas fa-file-excel me-1"></i> Export Analisis
+                        </button>
                     </div>
                 </div>
                 <div class="table-responsive">
@@ -183,6 +188,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const fields = {
         search: document.getElementById('report_search'), warehouse: document.getElementById('filter_warehouse'), dateFrom: document.getElementById('filter_date_from'),
         dateTo: document.getElementById('filter_date_to'), category: document.getElementById('filter_movement_category'), export: document.getElementById('btn_export_stock_balance'),
+        movementExport: document.getElementById('btn_export_stock_movement'),
     };
     const numberFormat = new Intl.NumberFormat('id-ID');
     const decimalFormat = new Intl.NumberFormat('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -312,6 +318,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!validatePeriod()) return;
         const params = new URLSearchParams(); params.set('date_from', fields.dateFrom.value); params.set('date_to', fields.dateTo.value);
         selectedWarehouseIds().forEach((value) => params.append('warehouse_ids[]', value)); if (fields.search.value.trim()) params.set('q', fields.search.value.trim());
+        window.location.href = `${exportUrl}?${params.toString()}`;
+    });
+    fields.movementExport.addEventListener('click', () => {
+        if (!validatePeriod()) return;
+        const params = new URLSearchParams(); params.set('analysis', 'movement'); params.set('date_from', fields.dateFrom.value); params.set('date_to', fields.dateTo.value);
+        selectedWarehouseIds().forEach((value) => params.append('warehouse_ids[]', value));
+        if (fields.search.value.trim()) params.set('q', fields.search.value.trim());
+        if (fields.category.value) params.set('movement_category', fields.category.value);
         window.location.href = `${exportUrl}?${params.toString()}`;
     });
 });

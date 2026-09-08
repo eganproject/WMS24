@@ -9,9 +9,7 @@ class StockMovementAnalysisExport implements WithMultipleSheets
 {
     private ?array $sheets = null;
 
-    public function __construct(private array $filters)
-    {
-    }
+    public function __construct(private array $filters) {}
 
     public function sheets(): array
     {

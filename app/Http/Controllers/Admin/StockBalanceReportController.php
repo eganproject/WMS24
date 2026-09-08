@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Exports\StockBalanceReportExport;
+use App\Exports\StockMovementAnalysisExport;
 use App\Http\Controllers\Controller;
 use App\Models\Warehouse;
 use App\Support\Permission;
@@ -204,6 +205,18 @@ class StockBalanceReportController extends Controller
     public function export(Request $request)
     {
         $filters = $this->validatedFilters($request);
+
+        if ($request->input('analysis') === 'movement') {
+            $filename = sprintf(
+                'analisis-pergerakan-stok-%s-sd-%s-%s.xlsx',
+                $filters['date_from'],
+                $filters['date_to'],
+                now()->format('His')
+            );
+
+            return Excel::download(new StockMovementAnalysisExport($filters), $filename);
+        }
+
         $filename = sprintf(
             'laporan-saldo-stok-%s-sd-%s-%s.xlsx',
             $filters['date_from'],

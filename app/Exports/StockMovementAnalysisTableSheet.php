@@ -20,7 +20,7 @@ use PhpOffice\PhpSpreadsheet\Style\Conditional;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-class StockMovementAnalysisTableSheet extends StockMovementAnalysisSheet implements FromCollection, WithHeadings, WithTitle, WithCustomStartCell, WithStyles, WithEvents, WithStrictNullComparison, WithCustomValueBinder
+class StockMovementAnalysisTableSheet extends StockMovementAnalysisSheet implements FromCollection, WithCustomStartCell, WithCustomValueBinder, WithEvents, WithHeadings, WithStrictNullComparison, WithStyles, WithTitle
 {
     private ?Collection $rows = null;
 

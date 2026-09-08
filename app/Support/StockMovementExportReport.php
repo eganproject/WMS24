@@ -10,9 +10,7 @@ class StockMovementExportReport
 {
     private ?Collection $rows = null;
 
-    public function __construct(private array $filters)
-    {
-    }
+    public function __construct(private array $filters) {}
 
     public function rows(): Collection
     {

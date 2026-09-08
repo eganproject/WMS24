@@ -9,9 +9,7 @@ use PhpOffice\PhpSpreadsheet\Cell\DataType;
 
 abstract class StockMovementAnalysisSheet extends DefaultValueBinder
 {
-    public function __construct(protected StockMovementExportReport $report)
-    {
-    }
+    public function __construct(protected StockMovementExportReport $report) {}
 
     public function bindValue(Cell $cell, $value)
     {

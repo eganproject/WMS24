@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Exports\StockMovementAnalysisExport;
 use App\Models\Item;
 use App\Models\ItemStock;
 use App\Models\Menu;
@@ -12,6 +13,9 @@ use App\Models\Warehouse;
 use Database\Seeders\StockBalanceReportMenuSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Maatwebsite\Excel\Excel as ExcelWriter;
+use Maatwebsite\Excel\Facades\Excel;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 use Tests\TestCase;
 
 class StockBalanceReportTest extends TestCase
@@ -122,6 +126,8 @@ class StockBalanceReportTest extends TestCase
             ->assertSee('Analisis Pergerakan')
             ->assertSee('Fast Moving')
             ->assertSee('Dead Stock')
+            ->assertSee('id="btn_export_stock_movement"', false)
+            ->assertSee('Export Analisis')
             ->assertSee('Seluruh Gudang')
             ->assertSee('Gudang (bisa pilih beberapa)');
 
@@ -211,6 +217,50 @@ class StockBalanceReportTest extends TestCase
         ]))->assertOk()
             ->assertJsonPath('recordsFiltered', 1)
             ->assertJsonPath('data.0.sku', 'MOVE-DEAD');
+    }
+
+    public function test_movement_export_downloads_a_clean_analysis_workbook(): void
+    {
+        $user = $this->adminUser();
+        $warehouse = Warehouse::query()->where('code', config('inventory.default_warehouse_code'))->firstOrFail();
+        $item = Item::create([
+            'sku' => 'MOVE-EXPORT',
+            'name' => 'Barang Export Analisis',
+            'item_type' => Item::TYPE_SINGLE,
+            'status' => Item::STATUS_ACTIVE,
+        ]);
+        ItemStock::create(['item_id' => $item->id, 'warehouse_id' => $warehouse->id, 'stock' => 7]);
+        $this->mutation($item, $warehouse, 'out', 28, '2026-08-15 09:00:00', 501, false, 'outbound', 'manual');
+
+        $filters = [
+            'analysis' => 'movement',
+            'date_from' => '2026-08-01',
+            'date_to' => '2026-08-28',
+            'warehouse_ids' => [$warehouse->id],
+        ];
+
+        $this->freezeTime();
+        $this->actingAs($user)
+            ->get(route('admin.reports.stock-balance.export', $filters))
+            ->assertOk()
+            ->assertDownload('analisis-pergerakan-stok-2026-08-01-sd-2026-08-28-'.now()->format('His').'.xlsx');
+
+        unset($filters['analysis']);
+        $binary = Excel::raw(new StockMovementAnalysisExport($filters), ExcelWriter::XLSX);
+        $path = tempnam(sys_get_temp_dir(), 'stock-movement-export').'.xlsx';
+        file_put_contents($path, $binary);
+
+        try {
+            $workbook = IOFactory::load($path);
+            $this->assertSame(['Ringkasan Analisis', 'Detail Semua SKU', 'Fokus Tindak Lanjut'], $workbook->getSheetNames());
+            $this->assertSame('Laporan Analisis Pergerakan Stok', $workbook->getSheetByName('Ringkasan Analisis')->getCell('A1')->getValue());
+            $this->assertSame('MOVE-EXPORT', $workbook->getSheetByName('Detail Semua SKU')->getCell('B6')->getValue());
+            $this->assertSame('Fast Moving', $workbook->getSheetByName('Detail Semua SKU')->getCell('E6')->getValue());
+            $this->assertSame(28, $workbook->getSheetByName('Detail Semua SKU')->getCell('G6')->getValue());
+            $this->assertSame('MOVE-EXPORT', $workbook->getSheetByName('Fokus Tindak Lanjut')->getCell('B6')->getValue());
+        } finally {
+            @unlink($path);
+        }
     }
 
     public function test_menu_seeder_does_not_overwrite_existing_production_menus_or_permissions(): void

@@ -5,6 +5,7 @@ namespace App\Support;
 use App\Models\Item;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class StockBalanceReportService
 {
@@ -40,9 +41,12 @@ class StockBalanceReportService
                 "SUM(CASE WHEN occurred_at BETWEEN ? AND ? AND direction = 'out' THEN qty ELSE 0 END) AS period_out",
                 [$dateFrom, $dateTo]
             )
-            ->where('is_void', false)
             ->where('occurred_at', '>=', $dateFrom)
             ->groupBy('item_id', 'warehouse_id');
+
+        if (Schema::hasColumn('stock_mutations', 'is_void')) {
+            $movements->where('is_void', false);
+        }
 
         if ($warehouseIds !== []) {
             $movements->whereIn('warehouse_id', $warehouseIds);

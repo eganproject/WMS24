@@ -119,6 +119,9 @@ class StockBalanceReportTest extends TestCase
             ->assertOk()
             ->assertSee('Laporan Saldo Stok')
             ->assertSee('Stok Awal')
+            ->assertSee('Analisis Pergerakan')
+            ->assertSee('Fast Moving')
+            ->assertSee('Dead Stock')
             ->assertSee('Seluruh Gudang')
             ->assertSee('Gudang (bisa pilih beberapa)');
 
@@ -130,6 +133,84 @@ class StockBalanceReportTest extends TestCase
             ]))
             ->assertOk()
             ->assertDownload();
+    }
+
+    public function test_movement_analysis_classifies_actual_demand_and_ignores_internal_mutations(): void
+    {
+        $user = $this->adminUser();
+        $warehouse = Warehouse::query()->where('code', config('inventory.default_warehouse_code'))->firstOrFail();
+        $items = collect([
+            'FAST' => ['stock' => 72, 'qty' => 28],
+            'MEDIUM' => ['stock' => 46, 'qty' => 4],
+            'SLOW' => ['stock' => 19, 'qty' => 1],
+            'DEAD' => ['stock' => 10, 'qty' => 0],
+            'EMPTY' => ['stock' => 0, 'qty' => 0],
+        ])->map(function (array $data, string $sku) use ($warehouse) {
+            $item = Item::create([
+                'sku' => 'MOVE-'.$sku,
+                'name' => 'Barang '.$sku,
+                'item_type' => Item::TYPE_SINGLE,
+                'status' => Item::STATUS_ACTIVE,
+            ]);
+            ItemStock::create(['item_id' => $item->id, 'warehouse_id' => $warehouse->id, 'stock' => $data['stock']]);
+
+            return ['item' => $item, ...$data];
+        });
+
+        $sourceId = 100;
+        foreach (['FAST', 'MEDIUM', 'SLOW'] as $key) {
+            $this->mutation(
+                $items[$key]['item'],
+                $warehouse,
+                'out',
+                $items[$key]['qty'],
+                '2026-08-15 09:00:00',
+                $sourceId++,
+                false,
+                'outbound',
+                'manual'
+            );
+        }
+
+        // Transfer mengurangi saldo, tetapi tidak boleh dianggap sebagai demand.
+        $this->mutation($items['DEAD']['item'], $warehouse, 'out', 5, '2026-08-16 09:00:00', $sourceId, false, 'transfer');
+
+        $response = $this->actingAs($user)->getJson(route('admin.reports.stock-balance.data', [
+            'analysis' => 'movement',
+            'date_from' => '2026-08-01',
+            'date_to' => '2026-08-28',
+            'warehouse_ids' => [$warehouse->id],
+            'draw' => 1,
+            'start' => 0,
+            'length' => 25,
+        ]));
+
+        $response->assertOk()
+            ->assertJsonPath('recordsFiltered', 5)
+            ->assertJsonPath('period.days', 28)
+            ->assertJsonPath('summary.fast_items', 1)
+            ->assertJsonPath('summary.medium_items', 1)
+            ->assertJsonPath('summary.slow_items', 1)
+            ->assertJsonPath('summary.dead_stock_items', 1)
+            ->assertJsonPath('summary.no_stock_items', 1)
+            ->assertJsonPath('summary.demand_out', 33);
+
+        $categories = collect($response->json('data'))->pluck('movement_category', 'sku');
+        $this->assertSame('fast', $categories['MOVE-FAST']);
+        $this->assertSame('medium', $categories['MOVE-MEDIUM']);
+        $this->assertSame('slow', $categories['MOVE-SLOW']);
+        $this->assertSame('dead_stock', $categories['MOVE-DEAD']);
+        $this->assertSame('no_stock', $categories['MOVE-EMPTY']);
+
+        $this->actingAs($user)->getJson(route('admin.reports.stock-balance.data', [
+            'analysis' => 'movement',
+            'date_from' => '2026-08-01',
+            'date_to' => '2026-08-28',
+            'warehouse_ids' => [$warehouse->id],
+            'movement_category' => 'dead_stock',
+        ]))->assertOk()
+            ->assertJsonPath('recordsFiltered', 1)
+            ->assertJsonPath('data.0.sku', 'MOVE-DEAD');
     }
 
     public function test_menu_seeder_does_not_overwrite_existing_production_menus_or_permissions(): void
@@ -204,7 +285,9 @@ class StockBalanceReportTest extends TestCase
         int $qty,
         string $occurredAt,
         int $sourceId,
-        bool $isVoid = false
+        bool $isVoid = false,
+        string $sourceType = 'report_test',
+        ?string $sourceSubtype = null
     ): void {
         StockMutation::create([
             'item_id' => $item->id,
@@ -213,8 +296,8 @@ class StockBalanceReportTest extends TestCase
             'warehouse_id' => $warehouse->id,
             'direction' => $direction,
             'qty' => $qty,
-            'source_type' => 'report_test',
-            'source_subtype' => 'row_'.$sourceId,
+            'source_type' => $sourceType,
+            'source_subtype' => $sourceSubtype ?? 'row_'.$sourceId,
             'source_id' => $sourceId,
             'source_code' => 'TEST-'.$sourceId,
             'occurred_at' => $occurredAt,

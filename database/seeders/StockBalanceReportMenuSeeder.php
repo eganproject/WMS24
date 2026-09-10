@@ -31,7 +31,7 @@ class StockBalanceReportMenuSeeder extends Seeder
 
         if (!$menuId) {
             $menuId = DB::table('menus')->insertGetId([
-                'name' => 'Laporan Saldo Stok',
+                'name' => 'Laporan Stok',
                 'slug' => 'report-stock-balance',
                 'route' => 'admin.reports.stock-balance.index',
                 'icon' => 'fas fa-balance-scale',

@@ -28,6 +28,7 @@ use App\Http\Controllers\Admin\QcScanExceptionController;
 use App\Http\Controllers\Admin\ScanOutWorkbenchController;
 use App\Http\Controllers\Admin\ScanOutHistoryController;
 use App\Http\Controllers\Admin\ScanOutReportController;
+use App\Http\Controllers\Admin\QcScanReportController;
 use App\Http\Controllers\Admin\LowStockReportController;
 use App\Http\Controllers\Admin\LowStockSnapshotController;
 use App\Http\Controllers\Admin\DailyStockForecastController;
@@ -480,6 +481,9 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/scan-out-reports', [ScanOutReportController::class, 'index'])->name('scan-out-reports.index');
         Route::get('/scan-out-reports/data', [ScanOutReportController::class, 'data'])->name('scan-out-reports.data');
         Route::get('/scan-out-reports/export', [ScanOutReportController::class, 'export'])->name('scan-out-reports.export');
+        Route::get('/qc-scan', [QcScanReportController::class, 'index'])->name('qc-scan.index');
+        Route::get('/qc-scan/data', [QcScanReportController::class, 'data'])->name('qc-scan.data');
+        Route::get('/qc-scan/export', [QcScanReportController::class, 'export'])->name('qc-scan.export');
         Route::get('/low-stock', [LowStockReportController::class, 'index'])->name('low-stock.index');
         Route::get('/low-stock/data', [LowStockReportController::class, 'data'])->name('low-stock.data');
         Route::get('/daily-stock-forecast', [DailyStockForecastController::class, 'index'])->name('daily-stock-forecast.index');

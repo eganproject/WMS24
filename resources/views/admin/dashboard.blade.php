@@ -74,7 +74,7 @@
     /* ── Filter strip ───────────────────────────────────────────────────── */
     .filter-strip {
         display: flex;
-        align-items: center;
+        align-items: flex-end;
         gap: 8px;
         flex-wrap: wrap;
     }
@@ -354,7 +354,10 @@
 
 @section('content')
 @php
-    $isToday = ($today ?? '') === ($currentDate ?? '');
+    $isToday = ($dateFrom ?? '') === ($currentDate ?? '') && ($dateTo ?? '') === ($currentDate ?? '');
+    $operationalPeriod = ($dateFrom ?? '') === ($dateTo ?? '')
+        ? ($dateFrom ?? '-')
+        : (($dateFrom ?? '-').' s.d. '.($dateTo ?? '-'));
     $totalActive = ($totalResi ?? 0);
     $totalCanceledVal = ($totalCanceled ?? 0);
     $totalScanVal = ($totalScanOut ?? 0);
@@ -376,21 +379,33 @@
         <h2 class="fw-bolder fs-3 mb-1">Dashboard</h2>
         <div class="text-muted fs-7">
             <i class="fas fa-calendar-alt me-1"></i>
-            Menampilkan data tanggal <strong>{{ $today ?? '-' }}</strong>
+            Menampilkan data periode <strong>{{ $operationalPeriod }}</strong>
         </div>
     </div>
 
     <div class="filter-strip">
         <span class="date-badge">
             <i class="fas fa-circle fs-9"></i>
-            {{ $isToday ? 'Hari Ini' : 'Tanggal Dipilih' }}
+            {{ $isToday ? 'Hari Ini' : 'Periode Dipilih' }}
         </span>
-        <input type="text"
-               class="form-control form-control-solid form-control-sm"
-               id="filter_date"
-               placeholder="Pilih tanggal"
-               value="{{ $today ?? '' }}"
-               style="width: 140px;" />
+        <div>
+            <label for="filter_date_from" class="text-muted fs-9 d-block mb-1">Dari</label>
+            <input type="text"
+                   class="form-control form-control-solid form-control-sm"
+                   id="filter_date_from"
+                   placeholder="Tanggal dari"
+                   value="{{ $dateFrom ?? '' }}"
+                   style="width: 140px;" />
+        </div>
+        <div>
+            <label for="filter_date_to" class="text-muted fs-9 d-block mb-1">Sampai</label>
+            <input type="text"
+                   class="form-control form-control-solid form-control-sm"
+                   id="filter_date_to"
+                   placeholder="Tanggal sampai"
+                   value="{{ $dateTo ?? '' }}"
+                   style="width: 140px;" />
+        </div>
         <button type="button" class="btn btn-primary btn-sm" id="filter_date_apply">
             <i class="fas fa-filter me-1"></i>Filter
         </button>
@@ -544,7 +559,7 @@
             <div class="dashboard-action-title">Audit Double Resi</div>
             <div class="dashboard-action-sub">
                 Ditemukan {{ number_format($duplicateResiGroupCountVal) }} no resi ganda
-                dengan total {{ number_format($duplicateResiTotalVal) }} baris pada tanggal {{ $today ?? '-' }}.
+                dengan total {{ number_format($duplicateResiTotalVal) }} baris pada periode {{ $operationalPeriod }}.
             </div>
             <div class="d-flex flex-wrap gap-2 mt-3">
                 @foreach(($duplicateResiRows ?? collect()) as $duplicateResi)
@@ -564,7 +579,7 @@
 <div class="row g-6">
     <div class="col-xl-6">
         <div class="card h-100">
-            <div class="card-header border-0 pt-6 pb-2"><div class="card-title flex-column"><span class="dash-section-title">Per Kurir</span><span class="dash-section-sub mt-1">Resi aktif dan scan out — {{ $today ?? '-' }}</span></div></div>
+            <div class="card-header border-0 pt-6 pb-2"><div class="card-title flex-column"><span class="dash-section-title">Per Kurir</span><span class="dash-section-sub mt-1">Resi aktif dan scan out — {{ $operationalPeriod }}</span></div></div>
             <div class="card-body pt-2">
                 @if(isset($kurirs) && $kurirs->count())
                     <div class="table-responsive"><table class="table kurir-table align-middle mb-0">
@@ -579,13 +594,13 @@
                                 <td class="text-end fw-semibold {{ $kurir['remaining'] > 0 ? 'text-warning' : 'text-success' }}">{{ number_format($kurir['remaining']) }}</td>
                                 <td class="text-end fw-semibold {{ ($kurir['canceled_total'] ?? 0) > 0 ? 'text-danger' : 'text-muted' }}">{{ number_format($kurir['canceled_total'] ?? 0) }}</td>
                                 <td class="kurir-table-progress"><div class="d-flex justify-content-between mb-1"><small class="text-muted">Selesai</small><small class="fw-bold">{{ $kPct }}%</small></div><div class="kurir-progress-track"><div class="kurir-progress-fill {{ $kPct >= 100 ? 'is-complete' : '' }}" style="width: {{ $kPct }}%;"></div></div></td>
-                                <td class="text-end"><button type="button" class="btn btn-sm btn-icon btn-light-primary btn-kurir-detail" title="Lihat detail resi" data-kurir-id="{{ $kurir['id'] }}" data-kurir-name="{{ $kurir['name'] }}" data-date="{{ $today ?? '' }}"><i class="fas fa-chevron-right"></i></button></td>
+                                <td class="text-end"><button type="button" class="btn btn-sm btn-icon btn-light-primary btn-kurir-detail" title="Lihat detail resi" data-kurir-id="{{ $kurir['id'] }}" data-kurir-name="{{ $kurir['name'] }}" data-date-from="{{ $dateFrom ?? '' }}" data-date-to="{{ $dateTo ?? '' }}"><i class="fas fa-chevron-right"></i></button></td>
                             </tr>
                         @endforeach
                         </tbody>
                     </table></div>
                 @else
-                    <div class="dash-empty"><i class="fas fa-truck"></i><p>Belum ada data kurir untuk tanggal ini.</p></div>
+                    <div class="dash-empty"><i class="fas fa-truck"></i><p>Belum ada data kurir untuk periode ini.</p></div>
                 @endif
             </div>
         </div>
@@ -603,10 +618,10 @@
                 <div class="attention-list">
                     <div class="attention-row"><div><div class="fw-bold fs-7">Selisih Scan Out</div><div class="text-muted fs-8">Lebih {{ number_format($scanOutOverCount ?? 0) }} · Kurang {{ number_format($scanOutUnderCount ?? 0) }}</div></div><span class="badge {{ (($scanOutOverCount ?? 0) + ($scanOutUnderCount ?? 0)) > 0 ? 'badge-light-warning' : 'badge-light-success' }}">{{ number_format(($scanOutOverCount ?? 0) + ($scanOutUnderCount ?? 0)) }}</span></div>
                     <div class="attention-row"><div><div class="fw-bold fs-7">Resi Dibatalkan</div><div class="text-muted fs-8">Tidak termasuk dalam target aktif</div></div><span class="badge badge-light-danger">{{ number_format($totalCanceledVal) }}</span></div>
-                    <div class="attention-row"><div><div class="fw-bold fs-7">Double Resi</div><div class="text-muted fs-8">Nomor resi ganda pada tanggal dipilih</div></div><span class="badge {{ $duplicateResiGroupCountVal > 0 ? 'badge-light-warning' : 'badge-light-success' }}">{{ number_format($duplicateResiGroupCountVal) }}</span></div>
+                    <div class="attention-row"><div><div class="fw-bold fs-7">Double Resi</div><div class="text-muted fs-8">Nomor resi ganda pada periode dipilih</div></div><span class="badge {{ $duplicateResiGroupCountVal > 0 ? 'badge-light-warning' : 'badge-light-success' }}">{{ number_format($duplicateResiGroupCountVal) }}</span></div>
                 </div>
                 <div class="d-flex align-items-center justify-content-between mt-6 mb-3">
-                    <div><div class="dash-section-title">Outbound Manual</div><div class="dash-section-sub">Transaksi pada {{ $today ?? '-' }}</div></div>
+                    <div><div class="dash-section-title">Outbound Manual</div><div class="dash-section-sub">Transaksi periode {{ $operationalPeriod }}</div></div>
                     <a href="{{ $manualOutbound['url'] ?? route('admin.outbound.manuals.index') }}" class="btn btn-sm btn-light-primary">Lihat Data</a>
                 </div>
                 <div class="operational-summary">
@@ -939,39 +954,47 @@
     const kurirDetailUrl  = '{{ route('admin.dashboard.kurir-detail') }}';
     const scanDiscrepancyUrl = '{{ route('admin.dashboard.scan-out-discrepancy') }}';
     const resiReportUrl = '{{ route('admin.dashboard.resi-report') }}';
-    const selectedDateStr = '{{ $today ?? '' }}';
-    const currentDateStr  = '{{ $currentDate ?? '' }}';
+    const selectedDateFromStr = '{{ $dateFrom ?? '' }}';
+    const selectedDateToStr = '{{ $dateTo ?? '' }}';
+    const currentDateStr = '{{ $currentDate ?? '' }}';
 
     document.addEventListener('DOMContentLoaded', () => {
         // ── Date filter ──────────────────────────────────────────────────
-        const filterDateEl   = document.getElementById('filter_date');
+        const filterDateFromEl = document.getElementById('filter_date_from');
+        const filterDateToEl = document.getElementById('filter_date_to');
         const filterApplyBtn = document.getElementById('filter_date_apply');
         const filterResetBtn = document.getElementById('filter_date_reset');
-        let fpFilterDate = null;
+        let fpFilterDateFrom = null;
+        let fpFilterDateTo = null;
 
-        if (typeof flatpickr !== 'undefined' && filterDateEl) {
-            fpFilterDate = flatpickr(filterDateEl, { dateFormat: 'Y-m-d', allowInput: true });
-            if (selectedDateStr && !filterDateEl.value) {
-                fpFilterDate.setDate(selectedDateStr, true);
-            }
+        if (typeof flatpickr !== 'undefined') {
+            if (filterDateFromEl) fpFilterDateFrom = flatpickr(filterDateFromEl, { dateFormat: 'Y-m-d', allowInput: true });
+            if (filterDateToEl) fpFilterDateTo = flatpickr(filterDateToEl, { dateFormat: 'Y-m-d', allowInput: true });
         }
 
-        const applyDateFilter = (dateValue) => {
+        const applyDateFilter = (dateFrom, dateTo) => {
+            if (!dateFrom || !dateTo || dateFrom > dateTo) {
+                window.alert('Tanggal dari dan sampai wajib diisi, serta tanggal dari tidak boleh melewati tanggal sampai.');
+                return;
+            }
             const url = new URL(window.location.href);
-            if (dateValue) { url.searchParams.set('date', dateValue); }
-            else            { url.searchParams.delete('date'); }
+            url.searchParams.set('date_from', dateFrom);
+            url.searchParams.set('date_to', dateTo);
+            url.searchParams.delete('date');
             window.location.href = url.toString();
         };
 
         filterApplyBtn?.addEventListener('click', () => {
-            applyDateFilter(filterDateEl?.value || '');
+            applyDateFilter(filterDateFromEl?.value || '', filterDateToEl?.value || '');
         });
 
         filterResetBtn?.addEventListener('click', () => {
             const resetDate = currentDateStr || '';
-            if (fpFilterDate && resetDate) { fpFilterDate.setDate(resetDate, true); }
-            else if (filterDateEl)         { filterDateEl.value = resetDate; }
-            applyDateFilter(resetDate);
+            if (fpFilterDateFrom && resetDate) fpFilterDateFrom.setDate(resetDate, true);
+            else if (filterDateFromEl) filterDateFromEl.value = resetDate;
+            if (fpFilterDateTo && resetDate) fpFilterDateTo.setDate(resetDate, true);
+            else if (filterDateToEl) filterDateToEl.value = resetDate;
+            applyDateFilter(resetDate, resetDate);
         });
 
         // ── Laporan resi per periode ────────────────────────────────────
@@ -1047,7 +1070,8 @@
         let activeDetailRequest = {
             kurirId: null,
             kurirName: '-',
-            date: '',
+            dateFrom: '',
+            dateTo: '',
             type: 'remaining',
             search: '',
         };
@@ -1100,7 +1124,7 @@
                     <tr>
                         <td colspan="7" class="text-center text-muted py-8">
                             <i class="fas fa-check-circle text-success fs-2 mb-3 d-block"></i>
-                            Tidak ada data ${type === 'over' ? 'lebih scan out' : 'kurang scan out'} untuk tanggal ini.
+                            Tidak ada data ${type === 'over' ? 'lebih scan out' : 'kurang scan out'} untuk periode ini.
                         </td>
                     </tr>`;
                 return;
@@ -1130,7 +1154,10 @@
             setScanDiscrepancyLoading();
 
             try {
-                const params = new URLSearchParams({ date: selectedDateStr || currentDateStr || '' });
+                const params = new URLSearchParams({
+                    date_from: selectedDateFromStr || currentDateStr || '',
+                    date_to: selectedDateToStr || currentDateStr || '',
+                });
                 const response = await fetch(`${scanDiscrepancyUrl}?${params.toString()}`);
                 const payload = await response.json();
 
@@ -1146,7 +1173,8 @@
                     const diffLabel = difference > 0
                         ? `${difference.toLocaleString('id-ID')} lebih scan out`
                         : (difference < 0 ? `${Math.abs(difference).toLocaleString('id-ID')} kurang scan out` : 'tidak ada selisih');
-                    scanDiscrepancySubtitle.textContent = `Tanggal ${payload?.meta?.date || selectedDateStr || '-'} - ${diffLabel}.`;
+                    const period = payload?.meta?.period || `${selectedDateFromStr || '-'} s.d. ${selectedDateToStr || '-'}`;
+                    scanDiscrepancySubtitle.textContent = `Periode ${period} - ${diffLabel}.`;
                 }
                 setScanDiscrepancyActiveType(overTotal > 0 ? 'over' : 'under');
                 renderScanDiscrepancyRows(activeScanDiscrepancyType);
@@ -1168,9 +1196,10 @@
             });
         };
 
-        const setLoadingState = (kurirName, date, type) => {
+        const setLoadingState = (kurirName, dateFrom, dateTo, type) => {
             setActiveDetailType(type);
-            if (detailSubtitle) detailSubtitle.textContent = `${kurirName || '-'} · ${date || '-'} · ${detailTypeLabels[type] || 'Detail'}`;
+            const period = dateFrom === dateTo ? dateFrom : `${dateFrom || '-'} s.d. ${dateTo || '-'}`;
+            if (detailSubtitle) detailSubtitle.textContent = `${kurirName || '-'} · ${period} · ${detailTypeLabels[type] || 'Detail'}`;
             [detailTotal, detailScanned, detailRemaining, detailCanceled]
                 .forEach(el => { if (el) el.textContent = '–'; });
             if (detailBody) detailBody.innerHTML = `
@@ -1224,14 +1253,14 @@
                 </tr>`).join('');
         };
 
-        const loadKurirDetail = async ({ kurirId, kurirName = '-', date = '', type = 'remaining', search = '' }) => {
+        const loadKurirDetail = async ({ kurirId, kurirName = '-', dateFrom = '', dateTo = '', type = 'remaining', search = '' }) => {
             if (!kurirId || !detailModal) return;
 
-            activeDetailRequest = { kurirId, kurirName, date, type, search };
-            setLoadingState(kurirName, date, type);
+            activeDetailRequest = { kurirId, kurirName, dateFrom, dateTo, type, search };
+            setLoadingState(kurirName, dateFrom, dateTo, type);
 
             try {
-                const params = new URLSearchParams({ kurir_id: kurirId, date, type });
+                const params = new URLSearchParams({ kurir_id: kurirId, date_from: dateFrom, date_to: dateTo, type });
                 if (search.trim()) params.set('search', search.trim());
                 const response = await fetch(`${kurirDetailUrl}?${params.toString()}`);
                 const payload  = await response.json();
@@ -1242,7 +1271,7 @@
                 const activeType = meta.type || type;
                 setActiveDetailType(activeType);
                 if (detailSubtitle) {
-                    detailSubtitle.textContent = `${meta.kurir_name || kurirName} · ${meta.date || date || '-'} · ${detailTypeLabels[activeType] || 'Detail'}`;
+                    detailSubtitle.textContent = `${meta.kurir_name || kurirName} · ${meta.period || '-'} · ${detailTypeLabels[activeType] || 'Detail'}`;
                 }
                 if (detailTotal)     detailTotal.textContent     = Number(meta.total_resi     || 0).toLocaleString('id-ID');
                 if (detailScanned)   detailScanned.textContent   = Number(meta.scanned_total  || 0).toLocaleString('id-ID');
@@ -1286,14 +1315,15 @@
             button.addEventListener('click', () => {
                 const kurirId   = button.getAttribute('data-kurir-id');
                 const kurirName = button.getAttribute('data-kurir-name') || '-';
-                const date      = button.getAttribute('data-date') || '';
+                const dateFrom = button.getAttribute('data-date-from') || '';
+                const dateTo = button.getAttribute('data-date-to') || '';
 
                 if (!kurirId || !detailModal) return;
 
                 detailModal.show();
                 if (detailSearchInput) detailSearchInput.value = '';
                 setSearchSummary();
-                loadKurirDetail({ kurirId, kurirName, date, type: 'remaining' });
+                loadKurirDetail({ kurirId, kurirName, dateFrom, dateTo, type: 'remaining' });
             });
         });
 

@@ -45,12 +45,12 @@ class DashboardScanOutDiscrepancyTest extends TestCase
         $this->createScanOut($underOtherDate, $user, $kurir, '2026-06-20 08:00:00');
 
         $this->actingAs($user)
-            ->get(route('admin.dashboard', ['date' => '2026-06-19']))
+            ->get(route('admin.dashboard', ['date_from' => '2026-06-19', 'date_to' => '2026-06-19']))
             ->assertOk()
             ->assertSee('Lebih: 2, Kurang: 2.');
 
         $this->actingAs($user)
-            ->getJson(route('admin.dashboard.scan-out-discrepancy', ['date' => '2026-06-19']))
+            ->getJson(route('admin.dashboard.scan-out-discrepancy', ['date_from' => '2026-06-19', 'date_to' => '2026-06-19']))
             ->assertOk()
             ->assertJsonPath('meta.date', '2026-06-19')
             ->assertJsonPath('meta.over_total', 2)
@@ -59,24 +59,24 @@ class DashboardScanOutDiscrepancyTest extends TestCase
             ->assertJsonFragment([
                 'type' => 'over',
                 'no_resi' => 'RESI-OLD',
-                'reason' => 'Tanggal upload bukan 2026-06-19',
+                'reason' => 'Tanggal upload di luar 2026-06-19',
                 'sku' => 'SKU-OLD (2)',
             ])
             ->assertJsonFragment([
                 'type' => 'over',
                 'no_resi' => 'RESI-CANCELED',
-                'reason' => 'Resi canceled tetapi ada scan out tanggal ini',
+                'reason' => 'Resi canceled tetapi ada scan out pada periode ini',
             ])
             ->assertJsonFragment([
                 'type' => 'under',
                 'no_resi' => 'RESI-NO-SCAN',
-                'reason' => 'Belum ada scan out tanggal 2026-06-19',
+                'reason' => 'Belum ada scan out pada 2026-06-19',
                 'sku' => 'SKU-NO-SCAN (3)',
             ])
             ->assertJsonFragment([
                 'type' => 'under',
                 'no_resi' => 'RESI-OTHER-DATE',
-                'reason' => 'Scan out tercatat di tanggal lain',
+                'reason' => 'Scan out tercatat di luar periode',
                 'scanned_at' => '2026-06-20 08:00',
             ])
             ->assertJsonMissing(['no_resi' => 'RESI-MATCH']);
@@ -95,14 +95,67 @@ class DashboardScanOutDiscrepancyTest extends TestCase
         $this->createResi($user->id, $kurir->id, 'ORD-NORMAL', 'RESI-NORMAL-001', '2026-06-19');
 
         $this->actingAs($user)
-            ->get(route('admin.dashboard', ['date' => '2026-06-19']))
+            ->get(route('admin.dashboard', ['date_from' => '2026-06-19', 'date_to' => '2026-06-19']))
             ->assertOk()
             ->assertSee('Audit Double Resi')
             ->assertSee('RESI-DUP-001')
-            ->assertSee('/admin/inventory/resi-import?date=2026-06-19', false)
+            ->assertSee('/admin/inventory/resi-import?date_from=2026-06-19', false)
+            ->assertSee('date_to=2026-06-19', false)
             ->assertSee('q=RESI-DUP-001', false)
             ->assertSee('search_mode=exact', false)
             ->assertDontSee('RESI-NORMAL-001');
+    }
+
+    public function test_operational_dashboard_uses_date_range_and_defaults_both_dates_to_today(): void
+    {
+        $this->withoutMiddleware(AuthorizeMenuPermission::class);
+        $this->travelTo(Carbon::parse('2026-06-19 10:00:00'));
+
+        $user = $this->createUserWithRole('admin');
+        $kurir = Kurir::create(['name' => 'JNT']);
+        $first = $this->createResi($user->id, $kurir->id, 'ORD-RANGE-1', 'RESI-RANGE-1', '2026-06-18');
+        $this->createScanOut($first, $user, $kurir, '2026-06-18 09:00:00');
+        $this->createResi($user->id, $kurir->id, 'ORD-RANGE-2', 'RESI-RANGE-2', '2026-06-19');
+
+        $this->actingAs($user)
+            ->get(route('admin.dashboard'))
+            ->assertOk()
+            ->assertSee('id="filter_date_from"', false)
+            ->assertSee('id="filter_date_to"', false)
+            ->assertSee('value="2026-06-19"', false);
+
+        $this->actingAs($user)
+            ->get(route('admin.dashboard', ['date_from' => '2026-06-18', 'date_to' => '2026-06-19']))
+            ->assertOk()
+            ->assertSee('Menampilkan data periode')
+            ->assertSee('2026-06-18 s.d. 2026-06-19')
+            ->assertSee('Lebih: 0, Kurang: 1.');
+
+        $this->actingAs($user)
+            ->getJson(route('admin.dashboard.kurir-detail', [
+                'kurir_id' => $kurir->id,
+                'date_from' => '2026-06-18',
+                'date_to' => '2026-06-19',
+                'type' => 'total',
+            ]))
+            ->assertOk()
+            ->assertJsonPath('meta.date_from', '2026-06-18')
+            ->assertJsonPath('meta.date_to', '2026-06-19')
+            ->assertJsonPath('meta.total_resi', 2)
+            ->assertJsonPath('meta.scanned_total', 1)
+            ->assertJsonPath('meta.remaining_total', 1)
+            ->assertJsonCount(2, 'data');
+
+        $this->actingAs($user)
+            ->getJson(route('admin.dashboard.scan-out-discrepancy', [
+                'date_from' => '2026-06-18',
+                'date_to' => '2026-06-19',
+            ]))
+            ->assertOk()
+            ->assertJsonPath('meta.period', '2026-06-18 s.d. 2026-06-19')
+            ->assertJsonPath('meta.over_total', 0)
+            ->assertJsonPath('meta.under_total', 1)
+            ->assertJsonPath('data.under.0.no_resi', 'RESI-RANGE-2');
     }
 
     private function createUserWithRole(string $slug): User
@@ -117,6 +170,7 @@ class DashboardScanOutDiscrepancyTest extends TestCase
 
         $user = User::factory()->create([
             'email_verified_at' => now(),
+            'is_active' => true,
         ]);
         $user->roles()->attach($role);
 

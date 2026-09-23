@@ -23,65 +23,65 @@ class DashboardController extends Controller
     public function index(Request $request)
     {
         $currentDate = now()->toDateString();
-        $selectedDate = $this->parseDate($request->input('date')) ?: $currentDate;
+        [$dateFrom, $dateTo] = $this->dashboardDateRange($request);
 
-        $activeResiQuery = Resi::whereDate('tanggal_upload', $selectedDate)
+        $activeResiQuery = $this->applyDateRange(Resi::query(), 'tanggal_upload', $dateFrom, $dateTo)
             ->where(function ($q) {
                 $q->whereNull('status')
                     ->orWhere('status', '!=', 'canceled');
             });
         $totalResi = (clone $activeResiQuery)->count();
-        $totalCanceled = Resi::whereDate('tanggal_upload', $selectedDate)
+        $totalCanceled = $this->applyDateRange(Resi::query(), 'tanggal_upload', $dateFrom, $dateTo)
             ->where('status', 'canceled')
             ->count();
         $totalQcScan = QcResiScan::where('status', 'passed')
-            ->whereHas('resi', function ($q) use ($selectedDate) {
-                $q->whereDate('tanggal_upload', $selectedDate)
+            ->whereHas('resi', function ($q) use ($dateFrom, $dateTo) {
+                $this->applyDateRange($q, 'tanggal_upload', $dateFrom, $dateTo)
                     ->where(function ($resiQuery) {
                         $resiQuery->whereNull('status')
                             ->orWhere('status', '!=', 'canceled');
                     });
             })
             ->count();
-        $totalScanOut = ShipmentScanOut::whereDate('scan_date', $selectedDate)->count();
+        $totalScanOut = $this->applyDateRange(ShipmentScanOut::query(), 'scan_date', $dateFrom, $dateTo)->count();
         $totalResiUpdatedAt = (clone $activeResiQuery)->max('updated_at');
-        $totalCanceledUpdatedAt = Resi::whereDate('tanggal_upload', $selectedDate)
+        $totalCanceledUpdatedAt = $this->applyDateRange(Resi::query(), 'tanggal_upload', $dateFrom, $dateTo)
             ->where('status', 'canceled')
             ->max('canceled_at');
         $totalQcUpdatedAt = QcResiScan::where('status', 'passed')
-            ->whereHas('resi', function ($q) use ($selectedDate) {
-                $q->whereDate('tanggal_upload', $selectedDate)
+            ->whereHas('resi', function ($q) use ($dateFrom, $dateTo) {
+                $this->applyDateRange($q, 'tanggal_upload', $dateFrom, $dateTo)
                     ->where(function ($resiQuery) {
                         $resiQuery->whereNull('status')
                             ->orWhere('status', '!=', 'canceled');
                     });
             })
             ->max('completed_at');
-        $totalScanUpdatedAt = ShipmentScanOut::whereDate('scan_date', $selectedDate)->max('scanned_at');
-        $totalResiUpdated = $totalResiUpdatedAt ? Carbon::parse($totalResiUpdatedAt)->format('H:i') : '-';
-        $totalCanceledUpdated = $totalCanceledUpdatedAt ? Carbon::parse($totalCanceledUpdatedAt)->format('H:i') : '-';
-        $totalQcUpdated = $totalQcUpdatedAt ? Carbon::parse($totalQcUpdatedAt)->format('H:i') : '-';
-        $totalScanUpdated = $totalScanUpdatedAt ? Carbon::parse($totalScanUpdatedAt)->format('H:i') : '-';
-        $scanOutOverCount = $this->scanOutOverQuery($selectedDate)->count();
-        $scanOutUnderCount = $this->scanOutUnderQuery($selectedDate)->count();
+        $totalScanUpdatedAt = $this->applyDateRange(ShipmentScanOut::query(), 'scan_date', $dateFrom, $dateTo)->max('scanned_at');
+        $totalResiUpdated = $this->formatOperationalUpdate($totalResiUpdatedAt, $dateFrom, $dateTo);
+        $totalCanceledUpdated = $this->formatOperationalUpdate($totalCanceledUpdatedAt, $dateFrom, $dateTo);
+        $totalQcUpdated = $this->formatOperationalUpdate($totalQcUpdatedAt, $dateFrom, $dateTo);
+        $totalScanUpdated = $this->formatOperationalUpdate($totalScanUpdatedAt, $dateFrom, $dateTo);
+        $scanOutOverCount = $this->scanOutOverQuery($dateFrom, $dateTo)->count();
+        $scanOutUnderCount = $this->scanOutUnderQuery($dateFrom, $dateTo)->count();
         $scanOutDifference = $totalScanOut - $totalResi;
-        $duplicateResiRows = $this->duplicateResiRows($selectedDate);
+        $duplicateResiRows = $this->duplicateResiRows($dateFrom, $dateTo);
         $duplicateResiGroupCount = $duplicateResiRows->count();
         $duplicateResiTotal = (int) $duplicateResiRows->sum('total');
 
         $manualOutboundQuery = OutboundTransaction::query()
-            ->where('type', 'manual')
-            ->whereDate('transacted_at', $selectedDate);
+            ->where('type', 'manual');
+        $this->applyDateRange($manualOutboundQuery, 'transacted_at', $dateFrom, $dateTo);
         $manualOutboundStatusCounts = (clone $manualOutboundQuery)
             ->select('status', DB::raw('count(*) as total'))
             ->groupBy('status')
             ->pluck('total', 'status');
         $manualOutboundTotal = (clone $manualOutboundQuery)->count();
-        $manualOutboundQty = (int) DB::table('outbound_items as oi')
+        $manualOutboundQty = DB::table('outbound_items as oi')
             ->join('outbound_transactions as ot', 'ot.id', '=', 'oi.outbound_transaction_id')
-            ->where('ot.type', 'manual')
-            ->whereDate('ot.transacted_at', $selectedDate)
-            ->sum('oi.qty');
+            ->where('ot.type', 'manual');
+        $this->applyDateRange($manualOutboundQty, 'ot.transacted_at', $dateFrom, $dateTo);
+        $manualOutboundQty = (int) $manualOutboundQty->sum('oi.qty');
         $manualOutboundCompleted = (int) ($manualOutboundStatusCounts['approved'] ?? 0);
         $manualOutboundSummary = [
             'total' => $manualOutboundTotal,
@@ -92,45 +92,45 @@ class DashboardController extends Controller
             'completed' => $manualOutboundCompleted,
             'outstanding' => max(0, $manualOutboundTotal - $manualOutboundCompleted),
             'url' => route('admin.outbound.manuals.index', [
-                'date_from' => $selectedDate,
-                'date_to' => $selectedDate,
+                'date_from' => $dateFrom,
+                'date_to' => $dateTo,
             ]),
         ];
 
         $resiCounts = Resi::select('kurir_id', DB::raw('count(*) as total'))
-            ->whereDate('tanggal_upload', $selectedDate)
             ->groupBy('kurir_id')
-            ->pluck('total', 'kurir_id')
-            ->toArray();
+            ->orderBy('kurir_id');
+        $this->applyDateRange($resiCounts, 'tanggal_upload', $dateFrom, $dateTo);
+        $resiCounts = $resiCounts->pluck('total', 'kurir_id')->toArray();
 
         $scanCounts = ShipmentScanOut::select('kurir_id', DB::raw('count(*) as total'))
-            ->whereDate('scan_date', $selectedDate)
             ->groupBy('kurir_id')
-            ->pluck('total', 'kurir_id')
-            ->toArray();
+            ->orderBy('kurir_id');
+        $this->applyDateRange($scanCounts, 'scan_date', $dateFrom, $dateTo);
+        $scanCounts = $scanCounts->pluck('total', 'kurir_id')->toArray();
 
         $resiLatest = Resi::select('kurir_id', DB::raw('max(updated_at) as latest'))
-            ->whereDate('tanggal_upload', $selectedDate)
             ->groupBy('kurir_id')
-            ->pluck('latest', 'kurir_id')
-            ->toArray();
+            ->orderBy('kurir_id');
+        $this->applyDateRange($resiLatest, 'tanggal_upload', $dateFrom, $dateTo);
+        $resiLatest = $resiLatest->pluck('latest', 'kurir_id')->toArray();
 
         $resiCanceledCounts = Resi::select('kurir_id', DB::raw('count(*) as total'))
-            ->whereDate('tanggal_upload', $selectedDate)
             ->where('status', 'canceled')
             ->groupBy('kurir_id')
-            ->pluck('total', 'kurir_id')
-            ->toArray();
+            ->orderBy('kurir_id');
+        $this->applyDateRange($resiCanceledCounts, 'tanggal_upload', $dateFrom, $dateTo);
+        $resiCanceledCounts = $resiCanceledCounts->pluck('total', 'kurir_id')->toArray();
 
         $scanLatest = ShipmentScanOut::select('kurir_id', DB::raw('max(scanned_at) as latest'))
-            ->whereDate('scan_date', $selectedDate)
             ->groupBy('kurir_id')
-            ->pluck('latest', 'kurir_id')
-            ->toArray();
+            ->orderBy('kurir_id');
+        $this->applyDateRange($scanLatest, 'scan_date', $dateFrom, $dateTo);
+        $scanLatest = $scanLatest->pluck('latest', 'kurir_id')->toArray();
 
         $kurirs = Kurir::orderBy('name')
             ->get(['id', 'name'])
-            ->map(function ($kurir) use ($resiCounts, $scanCounts, $resiLatest, $scanLatest, $resiCanceledCounts) {
+            ->map(function ($kurir) use ($resiCounts, $scanCounts, $resiLatest, $scanLatest, $resiCanceledCounts, $dateFrom, $dateTo) {
                 $resiTotal = (int) ($resiCounts[$kurir->id] ?? 0);
                 $scanTotal = (int) ($scanCounts[$kurir->id] ?? 0);
                 $canceledTotal = (int) ($resiCanceledCounts[$kurir->id] ?? 0);
@@ -140,7 +140,7 @@ class DashboardController extends Controller
                 $latestRaw = $latestResi && $latestScan
                     ? (Carbon::parse($latestResi)->greaterThan(Carbon::parse($latestScan)) ? $latestResi : $latestScan)
                     : ($latestResi ?: $latestScan);
-                $latestTime = $latestRaw ? Carbon::parse($latestRaw)->format('H:i') : '-';
+                $latestTime = $this->formatOperationalUpdate($latestRaw, $dateFrom, $dateTo);
                 return [
                     'id' => $kurir->id,
                     'name' => $kurir->name,
@@ -162,7 +162,8 @@ class DashboardController extends Controller
             ->values();
 
         return view('admin.dashboard', [
-            'today' => $selectedDate,
+            'dateFrom' => $dateFrom,
+            'dateTo' => $dateTo,
             'currentDate' => $currentDate,
             'totalResi' => $totalResi,
             'totalCanceled' => $totalCanceled,
@@ -238,28 +239,30 @@ class DashboardController extends Controller
         ]);
     }
 
-    private function duplicateResiRows(string $date)
+    private function duplicateResiRows(string $dateFrom, string $dateTo)
     {
-        return Resi::query()
+        $query = Resi::query()
             ->select([
                 'no_resi',
                 DB::raw('COUNT(*) as total'),
                 DB::raw('MAX(updated_at) as latest_update'),
             ])
-            ->whereDate('tanggal_upload', $date)
             ->whereNotNull('no_resi')
             ->where('no_resi', '<>', '')
             ->groupBy('no_resi')
             ->havingRaw('COUNT(*) > 1')
             ->orderByDesc('total')
             ->orderByDesc('latest_update')
-            ->limit(10)
-            ->get()
-            ->map(function ($row) use ($date) {
-                $idPesananList = Resi::query()
-                    ->whereDate('tanggal_upload', $date)
+            ->limit(10);
+        $this->applyDateRange($query, 'tanggal_upload', $dateFrom, $dateTo);
+
+        return $query->get()
+            ->map(function ($row) use ($dateFrom, $dateTo) {
+                $resiQuery = Resi::query()
                     ->where('no_resi', $row->no_resi)
-                    ->orderBy('id')
+                    ->orderBy('id');
+                $this->applyDateRange($resiQuery, 'tanggal_upload', $dateFrom, $dateTo);
+                $idPesananList = $resiQuery
                     ->pluck('id_pesanan')
                     ->implode(', ');
 
@@ -268,7 +271,8 @@ class DashboardController extends Controller
                     'total' => (int) $row->total,
                     'id_pesanan_list' => $idPesananList !== '' ? $idPesananList : '-',
                     'url' => route('admin.inventory.resi-import.index', [
-                        'date' => $date,
+                        'date_from' => $dateFrom,
+                        'date_to' => $dateTo,
                         'q' => $row->no_resi,
                         'search_mode' => 'exact',
                     ]),
@@ -465,22 +469,23 @@ class DashboardController extends Controller
 
     public function scanOutDiscrepancy(Request $request)
     {
-        $date = $this->parseDate($request->input('date')) ?: now()->toDateString();
+        [$dateFrom, $dateTo] = $this->dashboardDateRange($request);
+        $period = $this->periodLabel($dateFrom, $dateTo);
 
-        $overRows = $this->scanOutOverQuery($date)
+        $overRows = $this->scanOutOverQuery($dateFrom, $dateTo)
             ->with(['resi.kurir:id,name', 'resi.details:id,resi_id,sku,qty'])
             ->orderByDesc('scanned_at')
             ->orderByDesc('id')
             ->get()
-            ->map(function (ShipmentScanOut $scanOut) use ($date) {
+            ->map(function (ShipmentScanOut $scanOut) use ($dateFrom, $dateTo, $period) {
                 $resi = $scanOut->resi;
                 $tanggalUpload = $resi?->tanggal_upload
                     ? Carbon::parse($resi->tanggal_upload)->format('Y-m-d')
                     : '-';
                 $isCanceled = ($resi?->status ?? 'active') === 'canceled';
                 $reason = $isCanceled
-                    ? 'Resi canceled tetapi ada scan out tanggal ini'
-                    : 'Tanggal upload bukan '.$date;
+                    ? 'Resi canceled tetapi ada scan out pada periode ini'
+                    : 'Tanggal upload di luar '.$period;
 
                 return $this->formatDiscrepancyRow($resi, [
                     'type' => 'over',
@@ -494,17 +499,17 @@ class DashboardController extends Controller
             })
             ->values();
 
-        $underRows = $this->scanOutUnderQuery($date)
+        $underRows = $this->scanOutUnderQuery($dateFrom, $dateTo)
             ->with(['kurir:id,name', 'details:id,resi_id,sku,qty', 'scanOut'])
             ->orderBy('tanggal_upload')
             ->orderByDesc('updated_at')
             ->orderByDesc('id')
             ->get(['id', 'id_pesanan', 'no_resi', 'kurir_id', 'tanggal_upload', 'status', 'updated_at'])
-            ->map(function (Resi $resi) use ($date) {
+            ->map(function (Resi $resi) use ($period) {
                 $otherScanOut = $resi->scanOut;
                 $reason = $otherScanOut
-                    ? 'Scan out tercatat di tanggal lain'
-                    : 'Belum ada scan out tanggal '.$date;
+                    ? 'Scan out tercatat di luar periode'
+                    : 'Belum ada scan out pada '.$period;
 
                 return $this->formatDiscrepancyRow($resi, [
                     'type' => 'under',
@@ -519,7 +524,10 @@ class DashboardController extends Controller
 
         return response()->json([
             'meta' => [
-                'date' => $date,
+                'date' => $dateFrom === $dateTo ? $dateFrom : null,
+                'date_from' => $dateFrom,
+                'date_to' => $dateTo,
+                'period' => $period,
                 'over_total' => $overRows->count(),
                 'under_total' => $underRows->count(),
                 'difference' => $overRows->count() - $underRows->count(),
@@ -536,27 +544,30 @@ class DashboardController extends Controller
         $validated = $request->validate([
             'kurir_id' => ['required', 'integer', 'exists:kurirs,id'],
             'date' => ['nullable', 'date'],
+            'date_from' => ['nullable', 'date'],
+            'date_to' => ['nullable', 'date', 'after_or_equal:date_from'],
             'type' => ['nullable', 'in:total,scanned,remaining,canceled'],
             'search' => ['nullable', 'string', 'max:10000'],
         ]);
 
-        $date = Carbon::parse($validated['date'] ?? now())->toDateString();
+        [$dateFrom, $dateTo] = $this->dashboardDateRange($request);
         $type = $validated['type'] ?? 'remaining';
         $kurir = Kurir::query()->findOrFail((int) $validated['kurir_id'], ['id', 'name']);
 
         $resis = Resi::query()
             ->with(['details:id,resi_id,sku,qty'])
             ->where('kurir_id', $kurir->id)
-            ->whereDate('tanggal_upload', $date)
             ->orderByDesc('updated_at')
-            ->orderByDesc('id')
-            ->get(['id', 'id_pesanan', 'no_resi', 'tanggal_upload', 'status']);
+            ->orderByDesc('id');
+        $this->applyDateRange($resis, 'tanggal_upload', $dateFrom, $dateTo);
+        $resis = $resis->get(['id', 'id_pesanan', 'no_resi', 'tanggal_upload', 'status']);
 
         $scanOuts = ShipmentScanOut::query()
             ->with(['scanner:id,name', 'resi.details:id,resi_id,sku,qty'])
-            ->whereDate('scan_date', $date)
             ->where('kurir_id', $kurir->id)
-            ->orderByDesc('scanned_at')
+            ->orderByDesc('scanned_at');
+        $this->applyDateRange($scanOuts, 'scan_date', $dateFrom, $dateTo);
+        $scanOuts = $scanOuts
             ->get(['id', 'resi_id', 'scan_type', 'scan_code', 'scanned_at', 'scanned_by'])
             ->unique('resi_id')
             ->values();
@@ -633,7 +644,10 @@ class DashboardController extends Controller
         return response()->json([
             'meta' => [
                 'kurir_name' => $kurir->name,
-                'date' => $date,
+                'date' => $dateFrom === $dateTo ? $dateFrom : null,
+                'date_from' => $dateFrom,
+                'date_to' => $dateTo,
+                'period' => $this->periodLabel($dateFrom, $dateTo),
                 'type' => $type,
                 'total_resi' => $activeResis->count(),
                 'scanned_total' => $scannedResis->count(),
@@ -660,31 +674,36 @@ class DashboardController extends Controller
             ->all();
     }
 
-    private function scanOutOverQuery(string $date)
+    private function scanOutOverQuery(string $dateFrom, string $dateTo)
     {
-        return ShipmentScanOut::query()
-            ->whereDate('scan_date', $date)
+        $query = ShipmentScanOut::query()
             ->whereHas('resi')
-            ->where(function ($q) use ($date) {
+            ->where(function ($q) use ($dateFrom, $dateTo) {
                 $q->whereHas('resi', function ($resiQuery) {
                     $resiQuery->where('status', 'canceled');
-                })->orWhereHas('resi', function ($resiQuery) use ($date) {
-                    $resiQuery->whereDate('tanggal_upload', '!=', $date);
+                })->orWhereHas('resi', function ($resiQuery) use ($dateFrom, $dateTo) {
+                    $resiQuery->where(function ($outsideRange) use ($dateFrom, $dateTo) {
+                        $outsideRange->whereDate('tanggal_upload', '<', $dateFrom)
+                            ->orWhereDate('tanggal_upload', '>', $dateTo);
+                    });
                 });
             });
+
+        return $this->applyDateRange($query, 'scan_date', $dateFrom, $dateTo);
     }
 
-    private function scanOutUnderQuery(string $date)
+    private function scanOutUnderQuery(string $dateFrom, string $dateTo)
     {
-        return Resi::query()
-            ->whereDate('tanggal_upload', $date)
+        $query = Resi::query()
             ->where(function ($q) {
                 $q->whereNull('status')
                     ->orWhere('status', '!=', 'canceled');
             })
-            ->whereDoesntHave('scanOut', function ($q) use ($date) {
-                $q->whereDate('scan_date', $date);
+            ->whereDoesntHave('scanOut', function ($q) use ($dateFrom, $dateTo) {
+                $this->applyDateRange($q, 'scan_date', $dateFrom, $dateTo);
             });
+
+        return $this->applyDateRange($query, 'tanggal_upload', $dateFrom, $dateTo);
     }
 
     private function formatDiscrepancyRow(?Resi $resi, array $extra): array
@@ -718,6 +737,41 @@ class DashboardController extends Controller
             ->implode(', ');
 
         return $skuSummary ?: '-';
+    }
+
+    private function dashboardDateRange(Request $request): array
+    {
+        $currentDate = now()->toDateString();
+        $legacyDate = $this->parseDate($request->input('date'));
+        $dateFrom = $this->parseDate($request->input('date_from')) ?: $legacyDate ?: $currentDate;
+        $dateTo = $this->parseDate($request->input('date_to')) ?: $legacyDate ?: $currentDate;
+
+        if ($dateFrom > $dateTo) {
+            [$dateFrom, $dateTo] = [$dateTo, $dateFrom];
+        }
+
+        return [$dateFrom, $dateTo];
+    }
+
+    private function applyDateRange($query, string $column, string $dateFrom, string $dateTo)
+    {
+        return $query
+            ->whereDate($column, '>=', $dateFrom)
+            ->whereDate($column, '<=', $dateTo);
+    }
+
+    private function periodLabel(string $dateFrom, string $dateTo): string
+    {
+        return $dateFrom === $dateTo ? $dateFrom : $dateFrom.' s.d. '.$dateTo;
+    }
+
+    private function formatOperationalUpdate(mixed $value, string $dateFrom, string $dateTo): string
+    {
+        if (!$value) {
+            return '-';
+        }
+
+        return Carbon::parse($value)->format($dateFrom === $dateTo ? 'H:i' : 'Y-m-d H:i');
     }
 
     private function parseDate(?string $value): ?string

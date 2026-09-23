@@ -29,6 +29,7 @@ use App\Http\Controllers\Admin\ScanOutWorkbenchController;
 use App\Http\Controllers\Admin\ScanOutHistoryController;
 use App\Http\Controllers\Admin\ScanOutReportController;
 use App\Http\Controllers\Admin\QcScanReportController;
+use App\Http\Controllers\Admin\InboundLeadTimeReportController;
 use App\Http\Controllers\Admin\LowStockReportController;
 use App\Http\Controllers\Admin\LowStockSnapshotController;
 use App\Http\Controllers\Admin\DailyStockForecastController;
@@ -484,6 +485,9 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/qc-scan', [QcScanReportController::class, 'index'])->name('qc-scan.index');
         Route::get('/qc-scan/data', [QcScanReportController::class, 'data'])->name('qc-scan.data');
         Route::get('/qc-scan/export', [QcScanReportController::class, 'export'])->name('qc-scan.export');
+        Route::get('/inbound-lead-time', [InboundLeadTimeReportController::class, 'index'])->name('inbound-lead-time.index');
+        Route::get('/inbound-lead-time/data', [InboundLeadTimeReportController::class, 'data'])->name('inbound-lead-time.data');
+        Route::get('/inbound-lead-time/export', [InboundLeadTimeReportController::class, 'export'])->name('inbound-lead-time.export');
         Route::get('/low-stock', [LowStockReportController::class, 'index'])->name('low-stock.index');
         Route::get('/low-stock/data', [LowStockReportController::class, 'data'])->name('low-stock.data');
         Route::get('/daily-stock-forecast', [DailyStockForecastController::class, 'index'])->name('daily-stock-forecast.index');

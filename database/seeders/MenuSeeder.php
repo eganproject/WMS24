@@ -35,7 +35,7 @@ class MenuSeeder extends Seeder
             ['name' => 'Import Resi', 'slug' => 'resi-import', 'route' => 'admin.inventory.resi-import.index', 'icon' => 'fas fa-file-import', 'parent_slug' => 'inventory', 'sort_order' => 13.5],
             ['name' => 'Retur Customer', 'slug' => 'customer-returns', 'route' => 'admin.inventory.customer-returns.index', 'icon' => 'fas fa-box-open', 'parent_slug' => 'inventory', 'sort_order' => 14],
             ['name' => 'Picking List', 'slug' => 'picking-list', 'route' => 'admin.inventory.picking-list.index', 'icon' => 'fas fa-tasks', 'parent_slug' => 'inventory', 'sort_order' => 14.5],
-            ['name' => 'Stores', 'slug' => 'stores', 'route' => 'admin.masterdata.stores.index', 'icon' => 'fas fa-store', 'parent_slug' => 'master-data', 'sort_order' => 21.7],
+            ['name' => 'Toko & Channel', 'slug' => 'stores', 'route' => 'admin.masterdata.stores.index', 'icon' => 'fas fa-store', 'parent_slug' => 'master-data', 'sort_order' => 21.7],
             ['name' => 'Menus', 'slug' => 'menus', 'route' => 'admin.masterdata.menus.index', 'icon' => 'fas fa-bars', 'parent_slug' => 'master-data', 'sort_order' => 22],
             ['name' => 'Permissions', 'slug' => 'permissions', 'route' => 'admin.masterdata.permissions.index', 'icon' => 'fas fa-lock', 'parent_slug' => 'master-data', 'sort_order' => 23],
             ['name' => 'Penerimaan Barang', 'slug' => 'inbound-receiving', 'route' => 'admin.inbound.receipts.index', 'icon' => 'fas fa-dolly', 'parent_slug' => 'inbound', 'sort_order' => 10],
@@ -79,10 +79,10 @@ class MenuSeeder extends Seeder
 
         foreach ($menuRows as $menu) {
             if ($menu['parent_slug'] === null) {
-                DB::table('menus')->updateOrInsert(
-                    ['slug' => $menu['slug']],
-                    [
+                if (!DB::table('menus')->where('slug', $menu['slug'])->exists()) {
+                    DB::table('menus')->insert([
                         'name' => $menu['name'],
+                        'slug' => $menu['slug'],
                         'route' => $menu['route'],
                         'icon' => $menu['icon'],
                         'parent_id' => null,
@@ -90,18 +90,18 @@ class MenuSeeder extends Seeder
                         'is_active' => $menu['is_active'] ?? true,
                         'updated_at' => now(),
                         'created_at' => now(),
-                    ]
-                );
+                    ]);
+                }
             }
         }
 
         foreach ($menuRows as $menu) {
             if ($menu['parent_slug'] !== null) {
                 $parent = DB::table('menus')->where('slug', $menu['parent_slug'])->first();
-                DB::table('menus')->updateOrInsert(
-                    ['slug' => $menu['slug']],
-                    [
+                if (!DB::table('menus')->where('slug', $menu['slug'])->exists()) {
+                    DB::table('menus')->insert([
                         'name' => $menu['name'],
+                        'slug' => $menu['slug'],
                         'route' => $menu['route'],
                         'icon' => $menu['icon'],
                         'parent_id' => $parent?->id,
@@ -109,8 +109,8 @@ class MenuSeeder extends Seeder
                         'is_active' => $menu['is_active'] ?? true,
                         'updated_at' => now(),
                         'created_at' => now(),
-                    ]
-                );
+                    ]);
+                }
             }
         }
 
@@ -118,17 +118,23 @@ class MenuSeeder extends Seeder
         if ($adminRole) {
             $menus = DB::table('menus')->get();
             foreach ($menus as $m) {
-                DB::table('permission_menu')->updateOrInsert(
-                    ['role_id' => $adminRole->id, 'menu_id' => $m->id],
-                    [
+                $permissionExists = DB::table('permission_menu')
+                    ->where('role_id', $adminRole->id)
+                    ->where('menu_id', $m->id)
+                    ->exists();
+
+                if (!$permissionExists) {
+                    DB::table('permission_menu')->insert([
+                        'role_id' => $adminRole->id,
+                        'menu_id' => $m->id,
                         'can_view' => true,
                         'can_create' => true,
                         'can_update' => true,
                         'can_delete' => true,
                         'updated_at' => now(),
                         'created_at' => now(),
-                    ]
-                );
+                    ]);
+                }
             }
         }
     }

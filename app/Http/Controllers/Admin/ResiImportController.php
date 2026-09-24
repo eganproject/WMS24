@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Imports\ResiImport;
+use App\Models\Channel;
 use App\Models\Item;
 use App\Models\Kurir;
 use App\Models\PickingList;
@@ -13,6 +14,7 @@ use App\Models\Resi;
 use App\Models\ResiDetail;
 use App\Models\ShipmentScanOut;
 use App\Models\StockMutation;
+use App\Models\Store;
 use App\Support\BundleService;
 use App\Support\PickingListBalanceService;
 use App\Support\QcTransitStatus;
@@ -82,7 +84,7 @@ class ResiImportController extends Controller
         $summarySkus = ResiDetail::whereIn('resi_id', (clone $filterQuery)->select('id'))->count();
 
         $query = Resi::query()
-            ->select(['id', 'id_pesanan', 'no_resi', 'tanggal_pesanan', 'kurir_id', 'status', 'cancel_reason'])
+            ->select(['id', 'id_pesanan', 'no_resi', 'tanggal_pesanan', 'kurir_id', 'store_id', 'channel_id', 'status', 'cancel_reason'])
             ->selectSub(function ($sub) {
                 $sub->from('shipment_scan_outs')
                     ->selectRaw('count(1)')
@@ -101,7 +103,7 @@ class ResiImportController extends Controller
             }, 'qc_passed_count')
             ->with(['details' => function ($q) {
                 $q->select(['id', 'resi_id', 'sku', 'qty']);
-            }, 'kurir'])
+            }, 'kurir', 'store:id,name', 'channel:id,name'])
             ->orderByDesc('id');
 
         $this->applyUploadDateRange($query, $filterDateFrom, $filterDateTo);
@@ -139,6 +141,8 @@ class ResiImportController extends Controller
                 'no_resi' => $row->no_resi ?? '-',
                 'id_pesanan' => $row->id_pesanan ?? '-',
                 'kurir' => $row->kurir?->name ?? '-',
+                'nama_toko' => $row->store?->name ?? '-',
+                'channel' => $row->channel?->name ?? '-',
                 'sku' => $skuList,
                 'tanggal_pesanan' => $tanggalOrder,
                 'status' => $row->status ?? 'active',
@@ -273,6 +277,8 @@ class ResiImportController extends Controller
             $createdDetails = 0;
             $today = now()->toDateString();
             $defaultKurirId = $this->resolveDefaultKurirId();
+            $storeIdsByName = $this->masterNameMap(Store::query()->get(['id', 'name']));
+            $channelIdsByName = $this->masterNameMap(Channel::query()->get(['id', 'name']));
 
             foreach ($groups as $group) {
                 $existing = Resi::where('id_pesanan', $group['id_pesanan'])->first();
@@ -326,6 +332,14 @@ class ResiImportController extends Controller
                 $kurirId = $this->resolveKurirId($group['kurir'] ?? null, $defaultKurirId);
                 if ($kurirId) {
                     $payload['kurir_id'] = $kurirId;
+                }
+                $storeId = $this->resolveStoreId($group['nama_toko'] ?? null, $storeIdsByName);
+                if ($storeId !== null) {
+                    $payload['store_id'] = $storeId;
+                }
+                $channelId = $this->resolveChannelId($group['channel'] ?? null, $channelIdsByName);
+                if ($channelId !== null) {
+                    $payload['channel_id'] = $channelId;
                 }
                 $noResi = isset($group['no_resi']) ? trim((string) $group['no_resi']) : '';
                 if ($noResi !== '') {
@@ -944,6 +958,10 @@ class ResiImportController extends Controller
             $this->applyTextSearch($sub, 'id_pesanan', $search, $exact, 'or');
             $sub->orWhereHas('kurir', function ($kurirQ) use ($search, $exact) {
                 $this->applyTextSearch($kurirQ, 'name', $search, $exact);
+            })->orWhereHas('store', function ($storeQ) use ($search, $exact) {
+                $this->applyTextSearch($storeQ, 'name', $search, $exact);
+            })->orWhereHas('channel', function ($channelQ) use ($search, $exact) {
+                $this->applyTextSearch($channelQ, 'name', $search, $exact);
             })->orWhereHas('details', function ($detailQ) use ($search, $exact) {
                 $this->applyTextSearch($detailQ, 'sku', $search, $exact);
             });
@@ -1023,5 +1041,64 @@ class ResiImportController extends Controller
 
         $kurir = Kurir::firstOrCreate(['name' => $name]);
         return $kurir->id ?? $defaultId;
+    }
+
+    /**
+     * @param iterable<int,object{id:int,name:string}> $rows
+     * @return array<string,int>
+     */
+    private function masterNameMap(iterable $rows): array
+    {
+        $map = [];
+        foreach ($rows as $row) {
+            $map[$this->normalizeMasterName($row->name)] ??= (int) $row->id;
+        }
+
+        return $map;
+    }
+
+    /** @param array<string,int> $knownIds */
+    private function resolveStoreId($rawName, array &$knownIds): ?int
+    {
+        $name = $this->cleanMasterName($rawName);
+        if ($name === '') {
+            return null;
+        }
+
+        $key = $this->normalizeMasterName($name);
+        if (isset($knownIds[$key])) {
+            return $knownIds[$key];
+        }
+
+        $store = Store::create(['name' => $name]);
+        return $knownIds[$key] = (int) $store->id;
+    }
+
+    /** @param array<string,int> $knownIds */
+    private function resolveChannelId($rawName, array &$knownIds): ?int
+    {
+        $name = $this->cleanMasterName($rawName);
+        if ($name === '') {
+            return null;
+        }
+
+        $key = $this->normalizeMasterName($name);
+        if (isset($knownIds[$key])) {
+            return $knownIds[$key];
+        }
+
+        $channel = Channel::create(['name' => $name]);
+        return $knownIds[$key] = (int) $channel->id;
+    }
+
+    private function cleanMasterName($name): string
+    {
+        $name = trim((string) $name);
+        return preg_replace('/\s+/u', ' ', $name) ?: $name;
+    }
+
+    private function normalizeMasterName($name): string
+    {
+        return mb_strtolower($this->cleanMasterName($name));
     }
 }

@@ -51,6 +51,7 @@ use App\Http\Controllers\Admin\PermissionController;
 use App\Http\Controllers\Admin\AreaController;
 use App\Http\Controllers\Admin\LocationController;
 use App\Http\Controllers\Admin\KurirController;
+use App\Http\Controllers\Admin\ChannelController;
 use App\Http\Controllers\Admin\SupplierController;
 use App\Http\Controllers\Admin\EmployeeUserAuditController;
 use App\Http\Controllers\Admin\StockApiAllowedIpController;
@@ -209,6 +210,10 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         // Stores
         Route::get('/stores/data', [\App\Http\Controllers\Admin\StoreController::class, 'data'])->name('stores.data');
         Route::resource('stores', \App\Http\Controllers\Admin\StoreController::class)->except(['create','show','edit'])->names('stores');
+        Route::get('/stores-channels/data', [ChannelController::class, 'data'])->name('stores.channels.data');
+        Route::post('/stores-channels', [ChannelController::class, 'store'])->name('stores.channels.store');
+        Route::put('/stores-channels/{channel}', [ChannelController::class, 'update'])->name('stores.channels.update');
+        Route::delete('/stores-channels/{channel}', [ChannelController::class, 'destroy'])->name('stores.channels.destroy');
 
         // Permissions management
         Route::get('/permissions', [PermissionController::class, 'index'])->name('permissions.index');

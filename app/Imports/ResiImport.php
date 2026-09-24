@@ -10,7 +10,7 @@ use Maatwebsite\Excel\Concerns\WithHeadingRow;
 
 class ResiImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
 {
-    /** @var array<string,array{id_pesanan:string,no_resi:?string,kurir:?string,tanggal_pesanan:string,catatan_pembeli:?string,status:?string,status_raw:?string,items:array<string,array{sku:string,qty:int}>}> */
+    /** @var array<string,array{id_pesanan:string,no_resi:?string,kurir:?string,nama_toko:?string,channel:?string,tanggal_pesanan:string,catatan_pembeli:?string,status:?string,status_raw:?string,items:array<string,array{sku:string,qty:int}>}> */
     public array $groups = [];
     /** @var array<int,string> */
     private array $requiredHeaders = [
@@ -36,7 +36,7 @@ class ResiImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             $detected = implode(', ', array_filter($headers));
             throw ValidationException::withMessages([
                 'file' => 'Header wajib: ID Pesanan, SKU, Jumlah, Tanggal Pembuatan. '
-                    .'AWB/No. Tracking dan Kurir opsional. Pastikan header berada di baris pertama. '
+                    .'AWB/No. Tracking, Kurir, Nama Toko, dan Channel opsional. Pastikan header berada di baris pertama. '
                     .($detected !== '' ? 'Header terdeteksi: '.$detected : ''),
             ]);
         }
@@ -49,6 +49,8 @@ class ResiImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             $idPesanan = trim((string) ($rowData['id_pesanan'] ?? ''));
             $noResi = trim((string) ($rowData['awb_no_tracking'] ?? ''));
             $kurir = trim((string) ($rowData['kurir'] ?? ''));
+            $namaToko = $this->cleanName((string) ($rowData['nama_toko'] ?? ''));
+            $channel = $this->cleanName((string) ($rowData['channel'] ?? ''));
             $catatanPembeli = trim((string) ($rowData['catatan_pembeli'] ?? ''));
             $statusRaw = trim((string) ($rowData['status'] ?? ''));
             $status = $this->normalizeStatus($statusRaw);
@@ -66,12 +68,19 @@ class ResiImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
                 continue;
             }
 
+            if (mb_strlen($namaToko) > 150 || mb_strlen($channel) > 150) {
+                $errors[] = "Baris {$rowIndex}: Nama Toko dan Channel maksimal 150 karakter";
+                continue;
+            }
+
             $groupKey = $idPesanan;
             if (!isset($this->groups[$groupKey])) {
                 $this->groups[$groupKey] = [
                     'id_pesanan' => $idPesanan,
                     'no_resi' => $noResi !== '' ? $noResi : null,
                     'kurir' => $kurir !== '' ? $kurir : null,
+                    'nama_toko' => $namaToko !== '' ? $namaToko : null,
+                    'channel' => $channel !== '' ? $channel : null,
                     'tanggal_pesanan' => $tanggalPesanan,
                     'catatan_pembeli' => $catatanPembeli !== '' ? $catatanPembeli : null,
                     'status' => $status,
@@ -83,6 +92,12 @@ class ResiImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             }
             if ($this->groups[$groupKey]['kurir'] === null && $kurir !== '') {
                 $this->groups[$groupKey]['kurir'] = $kurir;
+            }
+            if ($this->groups[$groupKey]['nama_toko'] === null && $namaToko !== '') {
+                $this->groups[$groupKey]['nama_toko'] = $namaToko;
+            }
+            if ($this->groups[$groupKey]['channel'] === null && $channel !== '') {
+                $this->groups[$groupKey]['channel'] = $channel;
             }
             if ($this->groups[$groupKey]['catatan_pembeli'] === null && $catatanPembeli !== '') {
                 $this->groups[$groupKey]['catatan_pembeli'] = $catatanPembeli;
@@ -162,6 +177,12 @@ class ResiImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
         if (in_array($key, ['kurir', 'courier', 'ekspedisi', 'expedisi', 'jasa_kurir'], true)) {
             return 'kurir';
         }
+        if (in_array($key, ['nama_toko', 'toko', 'store', 'store_name', 'shop', 'shop_name'], true)) {
+            return 'nama_toko';
+        }
+        if (in_array($key, ['channel', 'kanal', 'sales_channel', 'marketplace'], true)) {
+            return 'channel';
+        }
         if (in_array($key, ['catatan_pembeli', 'buyer_note', 'buyer_notes', 'buyer_remark', 'customer_note', 'customer_notes', 'note_pembeli'], true)) {
             return 'catatan_pembeli';
         }
@@ -169,6 +190,11 @@ class ResiImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             return 'status';
         }
         return $key;
+    }
+
+    private function cleanName(string $name): string
+    {
+        return preg_replace('/\s+/u', ' ', trim($name)) ?: trim($name);
     }
 
     private function normalizeStatus(string $status): ?string

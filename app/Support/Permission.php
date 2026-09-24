@@ -11,6 +11,10 @@ class Permission
 {
     public static function resolveBaseRoute(string $routeName): string
     {
+        if (str_starts_with($routeName, 'admin.masterdata.stores.channels.')) {
+            return 'admin.masterdata.stores.index';
+        }
+
         $base = preg_replace('/\.(create|store|edit|update|destroy|show|data|export|import|detail|print|approve|finalize|lookup)$/', '.index', $routeName);
         return $base;
     }

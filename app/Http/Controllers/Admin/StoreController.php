@@ -4,10 +4,12 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Store;
+use App\Models\Resi;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 
 class StoreController extends Controller
 {
@@ -67,8 +69,9 @@ class StoreController extends Controller
 
     public function store(Request $request)
     {
+        $request->merge(['name' => $this->cleanName((string) $request->input('name'))]);
         $validated = $request->validate([
-            'name' => ['required', 'string', 'max:150'],
+            'name' => ['required', 'string', 'max:150', 'unique:stores,name'],
             'pic_id' => ['nullable', 'integer', 'exists:users,id'],
             'logo' => ['nullable', 'image', 'mimes:jpg,jpeg,png', 'max:2048'],
             'address' => ['nullable', 'string'],
@@ -115,8 +118,9 @@ class StoreController extends Controller
 
     public function update(Request $request, Store $store)
     {
+        $request->merge(['name' => $this->cleanName((string) $request->input('name'))]);
         $validated = $request->validate([
-            'name' => ['required', 'string', 'max:150'],
+            'name' => ['required', 'string', 'max:150', Rule::unique('stores', 'name')->ignore($store->id)],
             'pic_id' => ['nullable', 'integer', 'exists:users,id'],
             'logo' => ['nullable', 'image', 'mimes:jpg,jpeg,png', 'max:2048'],
             'address' => ['nullable', 'string'],
@@ -177,6 +181,7 @@ class StoreController extends Controller
 
         DB::beginTransaction();
         try {
+            Resi::where('store_id', $store->id)->update(['store_id' => null]);
             $store->delete();
             DB::commit();
 
@@ -192,5 +197,10 @@ class StoreController extends Controller
                 'error' => $e->getMessage(),
             ], 500);
         }
+    }
+
+    private function cleanName(string $name): string
+    {
+        return preg_replace('/\s+/u', ' ', trim($name)) ?: trim($name);
     }
 }

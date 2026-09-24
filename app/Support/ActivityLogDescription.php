@@ -120,6 +120,7 @@ class ActivityLogDescription
             'admin.masterdata.menus' => 'Menu Aplikasi',
             'admin.masterdata.categories' => 'Kategori Item',
             'admin.masterdata.items' => 'Master Item',
+            'admin.masterdata.stores.channels' => 'Channel',
             'admin.masterdata.stores' => 'Toko',
             'admin.masterdata.permissions' => 'Hak Akses',
             'admin.inventory.item-stocks' => 'Stok Item',

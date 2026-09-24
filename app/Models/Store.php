@@ -21,6 +21,11 @@ class Store extends Model
         return $this->belongsTo(User::class, 'pic_id');
     }
 
+    public function resis()
+    {
+        return $this->hasMany(Resi::class, 'store_id');
+    }
+
     public function getLogoUrlAttribute(): string
     {
         if ($this->logo) {

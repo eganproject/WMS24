@@ -11,6 +11,8 @@ class OutboundTransaction extends Model
 
     protected $fillable = [
         'code',
+        'api_external_id',
+        'api_request_hash',
         'type',
         'ref_no',
         'supplier_id',
@@ -26,6 +28,10 @@ class OutboundTransaction extends Model
         'approved_at',
         'created_by',
         'approved_by',
+    ];
+
+    protected $hidden = [
+        'api_request_hash',
     ];
 
     protected $casts = [

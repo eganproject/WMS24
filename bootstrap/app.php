@@ -1,13 +1,21 @@
 <?php
 
-use Illuminate\Foundation\Application;
-use Illuminate\Foundation\Configuration\Exceptions;
-use Illuminate\Foundation\Configuration\Middleware;
+use App\Console\Commands\BackfillStockApiRecords;
 use App\Console\Commands\PurgeAttendanceWebhookLogs;
 use App\Console\Commands\RecalculatePoLineFulfillment;
 use App\Console\Commands\ReconcileCanceledTransferMutations;
 use App\Console\Commands\TelegramSetWebhook;
-use App\Console\Commands\BackfillStockApiRecords;
+use App\Http\Middleware\AuthorizeMenuPermission;
+use App\Http\Middleware\EnsureUserIsActive;
+use App\Http\Middleware\LogUserActivity;
+use App\Http\Middleware\OutboundManualApiAccess;
+use App\Http\Middleware\RestrictMobileAccess;
+use App\Http\Middleware\StockApiAccess;
+use Illuminate\Foundation\Application;
+use Illuminate\Foundation\Configuration\Exceptions;
+use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Request;
+use Illuminate\Session\TokenMismatchException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -25,11 +33,12 @@ return Application::configure(basePath: dirname(__DIR__))
     ])
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
-            'activity.log' => \App\Http\Middleware\LogUserActivity::class,
-            'user.active' => \App\Http\Middleware\EnsureUserIsActive::class,
-            'menu.permission' => \App\Http\Middleware\AuthorizeMenuPermission::class,
-            'restrict.mobile' => \App\Http\Middleware\RestrictMobileAccess::class,
-            'stock.api.access' => \App\Http\Middleware\StockApiAccess::class,
+            'activity.log' => LogUserActivity::class,
+            'user.active' => EnsureUserIsActive::class,
+            'menu.permission' => AuthorizeMenuPermission::class,
+            'restrict.mobile' => RestrictMobileAccess::class,
+            'stock.api.access' => StockApiAccess::class,
+            'outbound.manual.api.access' => OutboundManualApiAccess::class,
         ]);
 
         $middleware->validateCsrfTokens(except: [
@@ -41,7 +50,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->appendToGroup('web', 'activity.log');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        $exceptions->render(function (\Illuminate\Session\TokenMismatchException $_, \Illuminate\Http\Request $request) {
+        $exceptions->render(function (TokenMismatchException $_, Request $request) {
             if ($request->expectsJson()) {
                 return response()->json(['message' => 'Sesi habis. Silakan login kembali.'], 419);
             }

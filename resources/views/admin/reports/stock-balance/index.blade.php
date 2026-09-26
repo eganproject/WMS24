@@ -317,8 +317,14 @@ document.addEventListener('DOMContentLoaded', () => {
     fields.warehouse.addEventListener('change', () => { normalizeWarehouseSelection(); reload(); });
     let searchTimer = null; fields.search.addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(reload, 450); });
     [fields.dateFrom, fields.dateTo].forEach((input) => input.addEventListener('change', reload));
-    fields.category.addEventListener('change', () => { if (movementTable && validatePeriod()) movementTable.ajax.reload(); });
-    fields.daysCover.addEventListener('change', () => { if (movementTable && validatePeriod()) movementTable.ajax.reload(); });
+    const reloadMovementTable = () => { if (movementTable && validatePeriod()) movementTable.ajax.reload(); };
+    if (typeof $ !== 'undefined' && $.fn.select2) {
+        $(fields.category).on('change', reloadMovementTable);
+        $(fields.daysCover).on('change', reloadMovementTable);
+    } else {
+        fields.category.addEventListener('change', reloadMovementTable);
+        fields.daysCover.addEventListener('change', reloadMovementTable);
+    }
     document.querySelectorAll('[data-movement-filter]').forEach((card) => card.addEventListener('click', () => {
         fields.category.value = fields.category.value === card.dataset.movementFilter ? '' : card.dataset.movementFilter;
         if (typeof $ !== 'undefined' && $.fn.select2) $(fields.category).trigger('change.select2');

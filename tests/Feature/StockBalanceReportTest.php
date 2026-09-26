@@ -223,6 +223,27 @@ class StockBalanceReportTest extends TestCase
         ]))->assertOk()
             ->assertJsonPath('recordsFiltered', 1)
             ->assertJsonPath('data.0.sku', 'MOVE-NON');
+
+        $daysCoverResponse = $this->actingAs($user)->getJson(route('admin.reports.stock-balance.data', [
+            'analysis' => 'movement',
+            'date_from' => '2026-08-01',
+            'date_to' => '2026-08-28',
+            'days_cover' => '31_to_60',
+        ]));
+
+        $daysCoverResponse->assertOk()
+            ->assertJsonPath('recordsFiltered', 5)
+            ->assertJsonPath('summary.total_items', 5);
+        $this->assertTrue(collect($daysCoverResponse->json('data'))->every(fn (array $row) => $row['stock_coverage_days'] > 30 && $row['stock_coverage_days'] <= 60));
+
+        $this->actingAs($user)->getJson(route('admin.reports.stock-balance.data', [
+            'analysis' => 'movement',
+            'date_from' => '2026-08-01',
+            'date_to' => '2026-08-28',
+            'days_cover' => 'unavailable',
+        ]))->assertOk()
+            ->assertJsonPath('recordsFiltered', 1)
+            ->assertJsonPath('data.0.sku', 'MOVE-NON');
     }
 
     public function test_movement_export_downloads_a_clean_analysis_workbook(): void

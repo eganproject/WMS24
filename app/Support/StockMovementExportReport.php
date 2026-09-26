@@ -82,6 +82,15 @@ class StockMovementExportReport
         $warehouse = 'Gudang Besar + Gudang Display';
         $search = trim((string) ($this->filters['q'] ?? ''));
         $category = trim((string) ($this->filters['movement_category'] ?? ''));
+        $daysCover = match (trim((string) ($this->filters['days_cover'] ?? ''))) {
+            'up_to_7' => '≤ 7 hari',
+            '8_to_14' => '8–14 hari',
+            '15_to_30' => '15–30 hari',
+            '31_to_60' => '31–60 hari',
+            'over_60' => '> 60 hari',
+            'unavailable' => 'Tidak tersedia',
+            default => 'Semua Days Cover',
+        };
 
         return sprintf(
             'Periode %s s.d. %s (%s hari) | Gudang: %s | Kategori: %s%s',

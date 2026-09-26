@@ -169,6 +169,18 @@
                                 <option value="">Semua Klasifikasi</option><option value="fast">Fast Moving</option><option value="medium">Medium Moving</option><option value="slow">Slow Moving</option><option value="non_moving">Non Moving</option>
                             </select>
                         </div>
+                        <div class="w-200px">
+                            <label class="text-muted fs-7 mb-1">Days Cover</label>
+                            <select class="form-select form-select-solid" id="filter_days_cover">
+                                <option value="">Semua Days Cover</option>
+                                <option value="up_to_7">≤ 7 hari</option>
+                                <option value="8_to_14">8–14 hari</option>
+                                <option value="15_to_30">15–30 hari</option>
+                                <option value="31_to_60">31–60 hari</option>
+                                <option value="over_60">&gt; 60 hari</option>
+                                <option value="unavailable">Tidak tersedia</option>
+                            </select>
+                        </div>
                         <button type="button" class="btn btn-light-success" id="btn_export_stock_movement">
                             <i class="fas fa-file-excel me-1"></i> Export Analisis
                         </button>
@@ -195,7 +207,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const defaults = { warehouseValues: ['all'], dateFrom: @json($defaultDateFrom), dateTo: @json($defaultDateTo) };
     const fields = {
         search: document.getElementById('report_search'), warehouse: document.getElementById('filter_warehouse'), dateFrom: document.getElementById('filter_date_from'),
-        dateTo: document.getElementById('filter_date_to'), category: document.getElementById('filter_movement_category'), export: document.getElementById('btn_export_stock_balance'),
+        dateTo: document.getElementById('filter_date_to'), category: document.getElementById('filter_movement_category'), daysCover: document.getElementById('filter_days_cover'), export: document.getElementById('btn_export_stock_balance'),
         movementExport: document.getElementById('btn_export_stock_movement'),
     };
     const numberFormat = new Intl.NumberFormat('id-ID');
@@ -224,6 +236,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof $ !== 'undefined' && $.fn.select2) {
         $(fields.warehouse).select2({ width: '100%', placeholder: 'Pilih gudang', closeOnSelect: false });
         $(fields.category).select2({ width: '100%', minimumResultsForSearch: Infinity });
+        $(fields.daysCover).select2({ width: '100%', minimumResultsForSearch: Infinity });
     }
     let previousWarehouseValues = ['all'];
     const normalizeWarehouseSelection = () => {
@@ -283,7 +296,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (movementTable) return movementTable;
         movementTable = $('#stock_movement_table').DataTable({
             processing: true, serverSide: true, pageLength: 25, lengthMenu: [[10, 25, 50, 100], [10, 25, 50, 100]], dom: 'rt<"d-flex flex-stack flex-wrap pt-5"lip>', order: [[3, 'desc']],
-            ajax: { url: dataUrl, data: (params) => { params.date_from = fields.dateFrom.value; params.date_to = fields.dateTo.value; params.q = fields.search.value.trim(); params.analysis = 'movement'; params.movement_category = fields.category.value; }, dataSrc: (json) => { updateMovementSummary(json.summary || {}, json.period || {}); return json.data || []; }, error: (xhr) => { if (typeof toastr !== 'undefined') toastr.error(xhr.responseJSON?.message || 'Analisis pergerakan gagal dimuat.'); } },
+            ajax: { url: dataUrl, data: (params) => { params.date_from = fields.dateFrom.value; params.date_to = fields.dateTo.value; params.q = fields.search.value.trim(); params.analysis = 'movement'; params.movement_category = fields.category.value; params.days_cover = fields.daysCover.value; }, dataSrc: (json) => { updateMovementSummary(json.summary || {}, json.period || {}); return json.data || []; }, error: (xhr) => { if (typeof toastr !== 'undefined') toastr.error(xhr.responseJSON?.message || 'Analisis pergerakan gagal dimuat.'); } },
             columns: [
                 { data: null, orderable: false, searchable: false, render: (data, type, row, meta) => meta.row + meta.settings._iDisplayStart + 1 },
                 { data: 'sku', render: (value, type, row) => `<div class="fw-bolder text-gray-900">${escapeHtml(value || '-')}</div><div class="movement-item-name">${escapeHtml(row.item_name || '-')}</div>${row.item_status === 'inactive' ? '<span class="badge badge-light-secondary mt-1">Nonaktif</span>' : ''}` },
@@ -305,6 +318,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let searchTimer = null; fields.search.addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(reload, 450); });
     [fields.dateFrom, fields.dateTo].forEach((input) => input.addEventListener('change', reload));
     fields.category.addEventListener('change', () => { if (movementTable && validatePeriod()) movementTable.ajax.reload(); });
+    fields.daysCover.addEventListener('change', () => { if (movementTable && validatePeriod()) movementTable.ajax.reload(); });
     document.querySelectorAll('[data-movement-filter]').forEach((card) => card.addEventListener('click', () => {
         fields.category.value = fields.category.value === card.dataset.movementFilter ? '' : card.dataset.movementFilter;
         if (typeof $ !== 'undefined' && $.fn.select2) $(fields.category).trigger('change.select2');
@@ -312,8 +326,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }));
     document.getElementById('filter_reset').addEventListener('click', () => {
         fields.search.value = ''; Array.from(fields.warehouse.options).forEach((option) => { option.selected = defaults.warehouseValues.includes(option.value); });
-        previousWarehouseValues = [...defaults.warehouseValues]; fields.dateFrom.value = defaults.dateFrom; fields.dateTo.value = defaults.dateTo; fields.category.value = '';
-        if (typeof $ !== 'undefined' && $.fn.select2) { $(fields.warehouse).trigger('change.select2'); $(fields.category).trigger('change.select2'); }
+        previousWarehouseValues = [...defaults.warehouseValues]; fields.dateFrom.value = defaults.dateFrom; fields.dateTo.value = defaults.dateTo; fields.category.value = ''; fields.daysCover.value = '';
+        if (typeof $ !== 'undefined' && $.fn.select2) { $(fields.warehouse).trigger('change.select2'); $(fields.category).trigger('change.select2'); $(fields.daysCover).trigger('change.select2'); }
         reload();
     });
     document.querySelectorAll('#stock_report_tabs [data-bs-toggle="tab"]').forEach((tab) => tab.addEventListener('shown.bs.tab', (event) => {
@@ -332,6 +346,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const params = new URLSearchParams(); params.set('analysis', 'movement'); params.set('date_from', fields.dateFrom.value); params.set('date_to', fields.dateTo.value);
         if (fields.search.value.trim()) params.set('q', fields.search.value.trim());
         if (fields.category.value) params.set('movement_category', fields.category.value);
+        if (fields.daysCover.value) params.set('days_cover', fields.daysCover.value);
         window.location.href = `${exportUrl}?${params.toString()}`;
     });
 });

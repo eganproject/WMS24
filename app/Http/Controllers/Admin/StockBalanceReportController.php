@@ -238,6 +238,7 @@ class StockBalanceReportController extends Controller
             'warehouse_id' => ['nullable', 'integer', 'exists:warehouses,id'],
             'q' => ['nullable', 'string', 'max:150'],
             'movement_category' => ['nullable', 'string', 'in:fast,medium,slow,non_moving'],
+            'days_cover' => ['nullable', 'string', 'in:up_to_7,8_to_14,15_to_30,31_to_60,over_60,unavailable'],
         ], [
             'date_from.required' => 'Tanggal awal wajib diisi.',
             'date_to.required' => 'Tanggal akhir wajib diisi.',
@@ -261,6 +262,7 @@ class StockBalanceReportController extends Controller
             'warehouse_ids' => $warehouseIds->all(),
             'q' => trim((string) ($validated['q'] ?? '')),
             'movement_category' => trim((string) ($validated['movement_category'] ?? '')),
+            'days_cover' => trim((string) ($validated['days_cover'] ?? '')),
         ];
     }
 }

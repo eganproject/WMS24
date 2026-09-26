@@ -145,6 +145,27 @@ class StockMovementAnalysisService
             $query->where('movement_analysis.movement_category', $category);
         }
 
+        $daysCover = trim((string) ($filters['days_cover'] ?? ''));
+        match ($daysCover) {
+            'up_to_7' => $query
+                ->whereNotNull('movement_analysis.stock_coverage_days')
+                ->where('movement_analysis.stock_coverage_days', '<=', 7),
+            '8_to_14' => $query
+                ->where('movement_analysis.stock_coverage_days', '>', 7)
+                ->where('movement_analysis.stock_coverage_days', '<=', 14),
+            '15_to_30' => $query
+                ->where('movement_analysis.stock_coverage_days', '>', 14)
+                ->where('movement_analysis.stock_coverage_days', '<=', 30),
+            '31_to_60' => $query
+                ->where('movement_analysis.stock_coverage_days', '>', 30)
+                ->where('movement_analysis.stock_coverage_days', '<=', 60),
+            'over_60' => $query
+                ->where('movement_analysis.stock_coverage_days', '>', 60),
+            'unavailable' => $query
+                ->whereNull('movement_analysis.stock_coverage_days'),
+            default => null,
+        };
+
         return $query;
     }
 

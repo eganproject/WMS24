@@ -46,8 +46,8 @@ class StockMovementAnalysisTableSheet extends StockMovementAnalysisSheet impleme
     {
         return [
             'No', 'SKU', 'Nama Item', 'Status Item', 'Kategori', 'Prioritas', 'Keluar Aktual',
-            'Dokumen', 'Rata-rata / Hari', 'Stok Awal', 'Total Masuk', 'Total Keluar',
-            'Saldo Akhir', 'Turnover', 'Ketahanan Stok (Hari)', 'Terakhir Keluar', 'Rekomendasi',
+            'Frequency', 'Rata-rata / Hari', 'Kontribusi (%)', 'Stok Awal', 'Total Masuk', 'Total Keluar',
+            'Saldo Akhir', 'Turnover', 'Days Cover', 'Terakhir Keluar', 'Rekomendasi',
         ];
     }
 
@@ -69,6 +69,7 @@ class StockMovementAnalysisTableSheet extends StockMovementAnalysisSheet impleme
             (int) $row->demand_out,
             (int) $row->demand_documents,
             round((float) $row->average_daily_out, 2),
+            round((float) $row->contribution_percentage, 2),
             (int) $row->opening_stock,
             (int) $row->stock_in,
             (int) $row->stock_out,
@@ -82,9 +83,9 @@ class StockMovementAnalysisTableSheet extends StockMovementAnalysisSheet impleme
 
     public function styles(Worksheet $sheet): array
     {
-        $sheet->mergeCells('A1:Q1');
-        $sheet->mergeCells('A2:Q2');
-        $sheet->mergeCells('A3:Q3');
+        $sheet->mergeCells('A1:R1');
+        $sheet->mergeCells('A2:R2');
+        $sheet->mergeCells('A3:R3');
         $sheet->setCellValue('A1', $this->attentionOnly
             ? 'Analisis Pergerakan Stok - Fokus Tindak Lanjut'
             : 'Analisis Pergerakan Stok - Detail Seluruh SKU');
@@ -93,7 +94,7 @@ class StockMovementAnalysisTableSheet extends StockMovementAnalysisSheet impleme
             'Total baris: %s | Diunduh: %s%s',
             number_format($this->collection()->count(), 0, ',', '.'),
             now()->format('d/m/Y H:i'),
-            $this->attentionOnly ? ' | Fokus: dead/slow stock, tanpa stok, atau ketahanan maksimal 14 hari' : ''
+            $this->attentionOnly ? ' | Fokus: non moving/slow moving, atau ketahanan maksimal 14 hari' : ''
         ));
 
         return [
@@ -113,35 +114,35 @@ class StockMovementAnalysisTableSheet extends StockMovementAnalysisSheet impleme
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
                 $lastRow = max(5, 5 + $this->collection()->count());
-                $range = 'A5:Q'.$lastRow;
+                $range = 'A5:R'.$lastRow;
 
                 $sheet->freezePane('A6');
                 $sheet->setAutoFilter($range);
-                $borderRange = $this->collection()->count() <= 5000 ? $range : 'A5:Q5';
+                $borderRange = $this->collection()->count() <= 5000 ? $range : 'A5:R5';
                 $sheet->getStyle($borderRange)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setRGB('E4E6EF');
-                $sheet->getStyle('A1:Q'.$lastRow)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
-                $sheet->getStyle('A5:Q5')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setWrapText(true);
+                $sheet->getStyle('A1:R'.$lastRow)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+                $sheet->getStyle('A5:R5')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setWrapText(true);
                 $sheet->getRowDimension(5)->setRowHeight(36);
 
                 if ($lastRow > 5) {
-                    foreach (['A', 'G', 'H', 'J', 'K', 'L', 'M'] as $column) {
+                    foreach (['A', 'G', 'H', 'K', 'L', 'M', 'N'] as $column) {
                         $sheet->getStyle($column.'6:'.$column.$lastRow)->getNumberFormat()->setFormatCode('#,##0');
                         $sheet->getStyle($column.'6:'.$column.$lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
                     }
-                    foreach (['I', 'N'] as $column) {
+                    foreach (['I', 'J', 'O'] as $column) {
                         $sheet->getStyle($column.'6:'.$column.$lastRow)->getNumberFormat()->setFormatCode('#,##0.00');
                     }
-                    $sheet->getStyle('O6:O'.$lastRow)->getNumberFormat()->setFormatCode('#,##0.0');
+                    $sheet->getStyle('P6:P'.$lastRow)->getNumberFormat()->setFormatCode('#,##0.0');
                     $sheet->getStyle('C6:C'.$lastRow)->getAlignment()->setWrapText(true);
-                    $sheet->getStyle('Q6:Q'.$lastRow)->getAlignment()->setWrapText(true);
+                    $sheet->getStyle('R6:R'.$lastRow)->getAlignment()->setWrapText(true);
                     $this->addCategoryFormatting($sheet, $lastRow);
                     $this->addPriorityFormatting($sheet, $lastRow);
                 }
 
                 foreach ([
                     'A' => 7, 'B' => 20, 'C' => 38, 'D' => 13, 'E' => 18, 'F' => 13,
-                    'G' => 16, 'H' => 12, 'I' => 17, 'J' => 14, 'K' => 14, 'L' => 14,
-                    'M' => 14, 'N' => 13, 'O' => 20, 'P' => 20, 'Q' => 55,
+                    'G' => 16, 'H' => 12, 'I' => 17, 'J' => 17, 'K' => 14, 'L' => 14, 'M' => 14,
+                    'N' => 14, 'O' => 13, 'P' => 16, 'Q' => 20, 'R' => 55,
                 ] as $column => $width) {
                     $sheet->getColumnDimension($column)->setWidth($width);
                 }
@@ -159,8 +160,7 @@ class StockMovementAnalysisTableSheet extends StockMovementAnalysisSheet impleme
             ['Fast Moving', 'E8FFF3', '00875A'],
             ['Medium Moving', 'EAF4FF', '0063B1'],
             ['Slow Moving', 'FFF8DD', '946200'],
-            ['Dead Stock', 'FFF0F3', 'C9284E'],
-            ['Tanpa Stok', 'F1F1F2', '5E6278'],
+            ['Non Moving', 'F1F1F2', '5E6278'],
         ] as [$value, $fill, $font]) {
             $condition = new Conditional;
             $condition->setConditionType(Conditional::CONDITION_CELLIS)->setOperatorType(Conditional::OPERATOR_EQUAL)->addCondition('"'.$value.'"');

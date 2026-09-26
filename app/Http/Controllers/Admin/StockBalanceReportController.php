@@ -130,15 +130,15 @@ class StockBalanceReportController extends Controller
 
         $sortColumns = [
             1 => 'movement_analysis.sku',
-            2 => 'movement_analysis.item_name',
-            3 => 'movement_analysis.movement_category',
-            4 => 'movement_analysis.demand_out',
-            5 => 'movement_analysis.average_daily_out',
-            6 => 'movement_analysis.ending_stock',
+            2 => 'movement_analysis.movement_category',
+            3 => 'movement_analysis.demand_out',
+            4 => 'movement_analysis.average_daily_out',
+            5 => 'movement_analysis.contribution_percentage',
+            6 => 'movement_analysis.demand_documents',
             7 => 'movement_analysis.stock_coverage_days',
             8 => 'movement_analysis.last_out_at',
         ];
-        $orderColumn = (int) $request->input('order.0.column', 5);
+        $orderColumn = (int) $request->input('order.0.column', 3);
         $orderDirection = strtolower((string) $request->input('order.0.dir', 'desc')) === 'asc' ? 'asc' : 'desc';
 
         if (isset($sortColumns[$orderColumn])) {
@@ -164,6 +164,8 @@ class StockBalanceReportController extends Controller
             'movement_category' => $row->movement_category,
             'demand_out' => (int) $row->demand_out,
             'demand_documents' => (int) $row->demand_documents,
+            'contribution_percentage' => round((float) $row->contribution_percentage, 2),
+            'cumulative_contribution_percentage' => round((float) $row->cumulative_contribution_percentage, 2),
             'average_daily_out' => round((float) $row->average_daily_out, 2),
             'ending_stock' => (int) $row->ending_stock,
             'turnover_rate' => $row->turnover_rate !== null ? round((float) $row->turnover_rate, 2) : null,
@@ -193,8 +195,7 @@ class StockBalanceReportController extends Controller
                 'fast_items' => (int) ($summary->fast_items ?? 0),
                 'medium_items' => (int) ($summary->medium_items ?? 0),
                 'slow_items' => (int) ($summary->slow_items ?? 0),
-                'dead_stock_items' => (int) ($summary->dead_stock_items ?? 0),
-                'no_stock_items' => (int) ($summary->no_stock_items ?? 0),
+                'non_moving_items' => (int) ($summary->non_moving_items ?? 0),
                 'demand_out' => (int) ($summary->demand_out ?? 0),
                 'ending_stock' => (int) ($summary->ending_stock ?? 0),
             ],
@@ -236,7 +237,7 @@ class StockBalanceReportController extends Controller
             'warehouse_ids.*' => ['integer', 'distinct', 'exists:warehouses,id'],
             'warehouse_id' => ['nullable', 'integer', 'exists:warehouses,id'],
             'q' => ['nullable', 'string', 'max:150'],
-            'movement_category' => ['nullable', 'string', 'in:fast,medium,slow,dead_stock,no_stock'],
+            'movement_category' => ['nullable', 'string', 'in:fast,medium,slow,non_moving'],
         ], [
             'date_from.required' => 'Tanggal awal wajib diisi.',
             'date_to.required' => 'Tanggal akhir wajib diisi.',

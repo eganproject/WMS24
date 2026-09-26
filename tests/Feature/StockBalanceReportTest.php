@@ -125,7 +125,7 @@ class StockBalanceReportTest extends TestCase
             ->assertSee('Stok Awal')
             ->assertSee('Analisis Pergerakan')
             ->assertSee('Fast Moving')
-            ->assertSee('Dead Stock')
+            ->assertSee('Non Moving')
             ->assertSee('id="btn_export_stock_movement"', false)
             ->assertSee('Export Analisis')
             ->assertSee('Seluruh Gudang')
@@ -144,79 +144,85 @@ class StockBalanceReportTest extends TestCase
     public function test_movement_analysis_classifies_actual_demand_and_ignores_internal_mutations(): void
     {
         $user = $this->adminUser();
-        $warehouse = Warehouse::query()->where('code', config('inventory.default_warehouse_code'))->firstOrFail();
+        $mainWarehouse = Warehouse::query()->where('code', config('inventory.default_warehouse_code'))->firstOrFail();
+        $displayWarehouse = Warehouse::query()->where('code', config('inventory.display_warehouse_code'))->firstOrFail();
+        $otherWarehouse = Warehouse::create(['code' => 'IGNORED_MOVEMENT', 'name' => 'Gudang Tidak Dianalisis']);
         $items = collect([
-            'FAST' => ['stock' => 72, 'qty' => 28],
-            'MEDIUM' => ['stock' => 46, 'qty' => 4],
-            'SLOW' => ['stock' => 19, 'qty' => 1],
-            'DEAD' => ['stock' => 10, 'qty' => 0],
-            'EMPTY' => ['stock' => 0, 'qty' => 0],
-        ])->map(function (array $data, string $sku) use ($warehouse) {
+            'FAST-A' => ['stock' => 60, 'qty' => 40],
+            'FAST-B' => ['stock' => 40, 'qty' => 30],
+            'MEDIUM-A' => ['stock' => 30, 'qty' => 15],
+            'SLOW-A' => ['stock' => 20, 'qty' => 10],
+            'SLOW-B' => ['stock' => 10, 'qty' => 5],
+            'NON' => ['stock' => 8, 'qty' => 0],
+        ])->map(function (array $data, string $sku) use ($mainWarehouse) {
             $item = Item::create([
                 'sku' => 'MOVE-'.$sku,
                 'name' => 'Barang '.$sku,
                 'item_type' => Item::TYPE_SINGLE,
                 'status' => Item::STATUS_ACTIVE,
             ]);
-            ItemStock::create(['item_id' => $item->id, 'warehouse_id' => $warehouse->id, 'stock' => $data['stock']]);
+            ItemStock::create(['item_id' => $item->id, 'warehouse_id' => $mainWarehouse->id, 'stock' => $data['stock']]);
 
             return ['item' => $item, ...$data];
         });
 
+        ItemStock::create(['item_id' => $items['FAST-A']['item']->id, 'warehouse_id' => $displayWarehouse->id, 'stock' => 20]);
+        ItemStock::create(['item_id' => $items['FAST-A']['item']->id, 'warehouse_id' => $otherWarehouse->id, 'stock' => 999]);
+
         $sourceId = 100;
-        foreach (['FAST', 'MEDIUM', 'SLOW'] as $key) {
-            $this->mutation(
-                $items[$key]['item'],
-                $warehouse,
-                'out',
-                $items[$key]['qty'],
-                '2026-08-15 09:00:00',
-                $sourceId++,
-                false,
-                'outbound',
-                'manual'
-            );
+        $this->mutation($items['FAST-A']['item'], $mainWarehouse, 'out', 30, '2026-08-15 09:00:00', $sourceId++, false, 'outbound', 'manual');
+        $this->mutation($items['FAST-A']['item'], $displayWarehouse, 'out', 10, '2026-08-15 10:00:00', $sourceId++, false, 'outbound', 'manual');
+        foreach (['FAST-B', 'MEDIUM-A', 'SLOW-A', 'SLOW-B'] as $key) {
+            $this->mutation($items[$key]['item'], $mainWarehouse, 'out', $items[$key]['qty'], '2026-08-15 09:00:00', $sourceId++, false, 'outbound', 'manual');
         }
+        $this->mutation($items['FAST-A']['item'], $otherWarehouse, 'out', 999, '2026-08-15 11:00:00', $sourceId++, false, 'outbound', 'manual');
 
         // Transfer mengurangi saldo, tetapi tidak boleh dianggap sebagai demand.
-        $this->mutation($items['DEAD']['item'], $warehouse, 'out', 5, '2026-08-16 09:00:00', $sourceId, false, 'transfer');
+        $this->mutation($items['NON']['item'], $mainWarehouse, 'out', 5, '2026-08-16 09:00:00', $sourceId, false, 'transfer');
 
         $response = $this->actingAs($user)->getJson(route('admin.reports.stock-balance.data', [
             'analysis' => 'movement',
             'date_from' => '2026-08-01',
             'date_to' => '2026-08-28',
-            'warehouse_ids' => [$warehouse->id],
+            'warehouse_ids' => [$otherWarehouse->id],
             'draw' => 1,
             'start' => 0,
             'length' => 25,
         ]));
 
         $response->assertOk()
-            ->assertJsonPath('recordsFiltered', 5)
+            ->assertJsonPath('recordsFiltered', 6)
             ->assertJsonPath('period.days', 28)
-            ->assertJsonPath('summary.fast_items', 1)
+            ->assertJsonPath('summary.fast_items', 2)
             ->assertJsonPath('summary.medium_items', 1)
-            ->assertJsonPath('summary.slow_items', 1)
-            ->assertJsonPath('summary.dead_stock_items', 1)
-            ->assertJsonPath('summary.no_stock_items', 1)
-            ->assertJsonPath('summary.demand_out', 33);
+            ->assertJsonPath('summary.slow_items', 2)
+            ->assertJsonPath('summary.non_moving_items', 1)
+            ->assertJsonPath('summary.demand_out', 100);
 
         $categories = collect($response->json('data'))->pluck('movement_category', 'sku');
-        $this->assertSame('fast', $categories['MOVE-FAST']);
-        $this->assertSame('medium', $categories['MOVE-MEDIUM']);
-        $this->assertSame('slow', $categories['MOVE-SLOW']);
-        $this->assertSame('dead_stock', $categories['MOVE-DEAD']);
-        $this->assertSame('no_stock', $categories['MOVE-EMPTY']);
+        $this->assertSame('fast', $categories['MOVE-FAST-A']);
+        $this->assertSame('fast', $categories['MOVE-FAST-B']);
+        $this->assertSame('medium', $categories['MOVE-MEDIUM-A']);
+        $this->assertSame('slow', $categories['MOVE-SLOW-A']);
+        $this->assertSame('slow', $categories['MOVE-SLOW-B']);
+        $this->assertSame('non_moving', $categories['MOVE-NON']);
+
+        $fastRow = collect($response->json('data'))->firstWhere('sku', 'MOVE-FAST-A');
+        $this->assertSame(40, $fastRow['demand_out']);
+        $this->assertSame(2, $fastRow['demand_documents']);
+        $this->assertEquals(40.0, $fastRow['contribution_percentage']);
+        $this->assertSame(80, $fastRow['ending_stock']);
+        $this->assertEquals(56.0, $fastRow['stock_coverage_days']);
 
         $this->actingAs($user)->getJson(route('admin.reports.stock-balance.data', [
             'analysis' => 'movement',
             'date_from' => '2026-08-01',
             'date_to' => '2026-08-28',
-            'warehouse_ids' => [$warehouse->id],
-            'movement_category' => 'dead_stock',
+            'warehouse_ids' => [$otherWarehouse->id],
+            'movement_category' => 'non_moving',
         ]))->assertOk()
             ->assertJsonPath('recordsFiltered', 1)
-            ->assertJsonPath('data.0.sku', 'MOVE-DEAD');
+            ->assertJsonPath('data.0.sku', 'MOVE-NON');
     }
 
     public function test_movement_export_downloads_a_clean_analysis_workbook(): void

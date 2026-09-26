@@ -46,16 +46,15 @@ class StockMovementAnalysisSummarySheet extends StockMovementAnalysisSheet imple
 
         $rows[] = [''];
         $rows[] = ['DEFINISI KLASIFIKASI'];
-        $rows[] = ['Fast Moving', 'Rata-rata keluar minimal 1 unit per hari pada periode terpilih.'];
-        $rows[] = ['Medium Moving', 'Rata-rata keluar minimal 1 unit per minggu, tetapi kurang dari 1 unit per hari.'];
-        $rows[] = ['Slow Moving', 'Masih memiliki permintaan keluar, tetapi kurang dari 1 unit per minggu.'];
-        $rows[] = ['Dead Stock', 'Tidak memiliki permintaan keluar selama periode dan saldo akhir masih tersedia.'];
-        $rows[] = ['Tanpa Stok', 'Tidak memiliki permintaan keluar selama periode dan saldo akhir nol atau negatif.'];
+        $rows[] = ['Fast Moving', 'Kontribusi kumulatif awal hingga 70% dari seluruh qty keluar.'];
+        $rows[] = ['Medium Moving', 'Lapisan kontribusi kumulatif di atas 70% hingga 90% qty keluar.'];
+        $rows[] = ['Slow Moving', 'Sisa kontribusi kumulatif setelah 90% qty keluar.'];
+        $rows[] = ['Non Moving', 'Tidak memiliki barang keluar operasional selama periode terpilih.'];
         $rows[] = [''];
         $rows[] = ['INDIKATOR TINDAK LANJUT'];
         $rows[] = ['SKU demand aktif tanpa stok', $summary->demand_items_without_stock, 'Prioritaskan pengecekan replenishment.'];
         $rows[] = ['SKU dengan ketahanan ≤ 14 hari', $summary->low_coverage_items, 'Siapkan pembelian atau transfer stok sesuai lead time.'];
-        $rows[] = ['Unit tertahan pada Dead Stock', $summary->dead_stock_units, 'Evaluasi promo, redistribusi, atau retur supplier.'];
+        $rows[] = ['Unit stok pada Non Moving', $summary->non_moving_stock_units, 'Evaluasi kebutuhan stok, promo, atau penghentian pembelian.'];
         $rows[] = ['Unit pada Slow Moving', $summary->slow_stock_units, 'Review pembelian dan strategi penjualan.'];
 
         return $rows;
@@ -67,16 +66,16 @@ class StockMovementAnalysisSummarySheet extends StockMovementAnalysisSheet imple
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
 
-                foreach ([1, 2, 3, 8, 16, 23] as $row) {
+                foreach ([1, 2, 3, 8, 15, 21] as $row) {
                     $sheet->mergeCells('A'.$row.':H'.$row);
                 }
-                foreach ([1, 2, 3, 8, 16, 23] as $row) {
+                foreach ([1, 2, 3, 8, 15, 21] as $row) {
                     $sheet->getStyle('A'.$row)->getAlignment()->setWrapText(true);
                 }
 
                 $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(18)->getColor()->setRGB('181C32');
                 $sheet->getStyle('A2:A3')->getFont()->getColor()->setRGB('7E8299');
-                foreach ([8, 16, 23] as $row) {
+                foreach ([8, 15, 21] as $row) {
                     $sheet->getStyle('A'.$row.':H'.$row)->applyFromArray([
                         'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
                         'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '3F4254']],
@@ -104,23 +103,23 @@ class StockMovementAnalysisSummarySheet extends StockMovementAnalysisSheet imple
                     'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '1B84FF']],
                     'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
                 ]);
-                $sheet->getStyle('A9:E14')->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setRGB('E4E6EF');
-                $sheet->getStyle('C10:C14')->getNumberFormat()->setFormatCode('0.00%');
-                $sheet->getStyle('B10:B14')->getNumberFormat()->setFormatCode('#,##0');
-                $sheet->getStyle('D10:E14')->getNumberFormat()->setFormatCode('#,##0');
+                $sheet->getStyle('A9:E13')->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setRGB('E4E6EF');
+                $sheet->getStyle('C10:C13')->getNumberFormat()->setFormatCode('0.00%');
+                $sheet->getStyle('B10:B13')->getNumberFormat()->setFormatCode('#,##0');
+                $sheet->getStyle('D10:E13')->getNumberFormat()->setFormatCode('#,##0');
 
-                $sheet->getStyle('A17:B21')->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setRGB('E4E6EF');
-                $sheet->getStyle('A17:A21')->getFont()->setBold(true);
-                $sheet->getStyle('B17:B21')->getAlignment()->setWrapText(true);
-                $sheet->getStyle('A24:C27')->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setRGB('E4E6EF');
-                $sheet->getStyle('A24:A27')->getFont()->setBold(true);
-                $sheet->getStyle('B24:B27')->getNumberFormat()->setFormatCode('#,##0');
-                $sheet->getStyle('C24:C27')->getAlignment()->setWrapText(true);
+                $sheet->getStyle('A16:B19')->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setRGB('E4E6EF');
+                $sheet->getStyle('A16:A19')->getFont()->setBold(true);
+                $sheet->getStyle('B16:B19')->getAlignment()->setWrapText(true);
+                $sheet->getStyle('A22:C25')->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setRGB('E4E6EF');
+                $sheet->getStyle('A22:A25')->getFont()->setBold(true);
+                $sheet->getStyle('B22:B25')->getNumberFormat()->setFormatCode('#,##0');
+                $sheet->getStyle('C22:C25')->getAlignment()->setWrapText(true);
 
                 foreach (['A' => 31, 'B' => 20, 'C' => 27, 'D' => 18, 'E' => 18, 'F' => 14, 'G' => 20, 'H' => 14] as $column => $width) {
                     $sheet->getColumnDimension($column)->setWidth($width);
                 }
-                $sheet->getStyle('A1:H27')->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+                $sheet->getStyle('A1:H25')->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
                 $sheet->getPageSetup()->setOrientation('landscape')->setFitToWidth(1)->setFitToHeight(0);
                 $sheet->freezePane('A5');
                 $sheet->setSelectedCell('A1');

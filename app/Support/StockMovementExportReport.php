@@ -2,7 +2,6 @@
 
 namespace App\Support;
 
-use App\Models\Warehouse;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -20,7 +19,7 @@ class StockMovementExportReport
 
         return $this->rows = app(StockMovementAnalysisService::class)
             ->query($this->filters)
-            ->orderByRaw("CASE movement_category WHEN 'fast' THEN 1 WHEN 'medium' THEN 2 WHEN 'slow' THEN 3 WHEN 'dead_stock' THEN 4 ELSE 5 END")
+            ->orderByRaw("CASE movement_category WHEN 'fast' THEN 1 WHEN 'medium' THEN 2 WHEN 'slow' THEN 3 ELSE 4 END")
             ->orderByDesc('demand_out')
             ->orderBy('sku')
             ->get();
@@ -32,7 +31,7 @@ class StockMovementExportReport
             $category = (string) $row->movement_category;
             $coverageDays = $row->stock_coverage_days !== null ? (float) $row->stock_coverage_days : null;
 
-            return in_array($category, ['slow', 'dead_stock', 'no_stock'], true)
+            return in_array($category, ['slow', 'non_moving'], true)
                 || (int) $row->ending_stock <= 0
                 || ($coverageDays !== null && $coverageDays <= 14);
         })->values();
@@ -66,7 +65,7 @@ class StockMovementExportReport
             'demand_out' => (int) $rows->sum('demand_out'),
             'ending_stock' => (int) $rows->sum('ending_stock'),
             'attention_items' => $this->attentionRows()->count(),
-            'dead_stock_units' => (int) $rows->where('movement_category', 'dead_stock')->sum('ending_stock'),
+            'non_moving_stock_units' => (int) $rows->where('movement_category', 'non_moving')->sum('ending_stock'),
             'slow_stock_units' => (int) $rows->where('movement_category', 'slow')->sum('ending_stock'),
             'demand_items_without_stock' => $rows
                 ->whereIn('movement_category', ['fast', 'medium', 'slow'])
@@ -80,13 +79,7 @@ class StockMovementExportReport
 
     public function filterSummary(): string
     {
-        $warehouseIds = array_values(array_filter(array_map(
-            'intval',
-            (array) ($this->filters['warehouse_ids'] ?? [])
-        )));
-        $warehouse = $warehouseIds === []
-            ? 'Seluruh Gudang'
-            : Warehouse::query()->whereIn('id', $warehouseIds)->orderBy('name')->pluck('name')->implode(', ');
+        $warehouse = 'Gudang Besar + Gudang Display';
         $search = trim((string) ($this->filters['q'] ?? ''));
         $category = trim((string) ($this->filters['movement_category'] ?? ''));
 
@@ -113,8 +106,7 @@ class StockMovementExportReport
             'fast' => 'Fast Moving',
             'medium' => 'Medium Moving',
             'slow' => 'Slow Moving',
-            'dead_stock' => 'Dead Stock',
-            'no_stock' => 'Tanpa Stok',
+            'non_moving' => 'Non Moving',
             default => $category,
         };
     }
@@ -131,14 +123,11 @@ class StockMovementExportReport
         if (in_array($category, ['fast', 'medium'], true) && $coverageDays !== null && $coverageDays <= 14) {
             return 'Prioritaskan restock; estimasi ketahanan stok maksimal 14 hari.';
         }
-        if ($category === 'dead_stock') {
-            return 'Evaluasi promo, redistribusi, retur supplier, atau penghentian pembelian.';
+        if ($category === 'non_moving') {
+            return 'Tidak ada pengeluaran operasional pada periode; evaluasi kebutuhan stok dan pembelian.';
         }
         if ($category === 'slow') {
             return 'Review jumlah pembelian dan pertimbangkan promosi untuk mempercepat perputaran.';
-        }
-        if ($category === 'no_stock') {
-            return 'Validasi status item dan tentukan apakah perlu replenishment atau dinonaktifkan.';
         }
 
         return 'Pertahankan ketersediaan dan pantau ketahanan stok secara berkala.';
@@ -155,10 +144,10 @@ class StockMovementExportReport
         if (in_array($category, ['fast', 'medium'], true) && $coverageDays !== null && $coverageDays <= 14) {
             return 'Tinggi';
         }
-        if ($category === 'dead_stock') {
+        if ($category === 'non_moving') {
             return 'Tinggi';
         }
-        if (in_array($category, ['slow', 'no_stock'], true)) {
+        if ($category === 'slow') {
             return 'Menengah';
         }
 

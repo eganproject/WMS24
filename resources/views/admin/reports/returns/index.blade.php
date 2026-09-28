@@ -206,6 +206,34 @@
     <div class="card-header border-0 pt-6">
         <div class="card-title">
             <div>
+                <h3 class="fw-bolder mb-1">Analisis Qty per SKU</h3>
+                <div class="text-muted fs-7">Identifikasi SKU dominan, penyumbang exception, serta perbandingan target dan aktual. Maksimal 50 SKU berdasarkan volume.</div>
+            </div>
+        </div>
+    </div>
+    <div class="card-body pt-2">
+        <div class="d-flex flex-wrap gap-2 mb-5" id="sku_summary"></div>
+        <div class="table-responsive">
+            <table class="table align-middle table-row-dashed fs-6 gy-4">
+                <thead><tr class="text-gray-500 fw-bold fs-7 text-uppercase">
+                    <th>SKU / Item</th>
+                    <th class="text-end">Dokumen</th>
+                    <th class="text-end" id="sku_target_label">Target</th>
+                    <th class="text-end" id="sku_actual_label">Aktual</th>
+                    <th class="text-end">Selisih</th>
+                    <th class="text-end" id="sku_exception_label">Exception</th>
+                    <th>Kontribusi Volume</th>
+                </tr></thead>
+                <tbody id="sku_analytics_rows"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-6">
+    <div class="card-header border-0 pt-6">
+        <div class="card-title">
+            <div>
                 <h3 class="fw-bolder mb-1">Performa PIC</h3>
                 <div class="text-muted fs-7">Perbandingan volume kerja, keberhasilan proses, lead time, dan exception.</div>
             </div>
@@ -359,7 +387,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!parts.length) return '<span class="text-muted">Tidak ada item.</span>';
         const visible = parts.slice(0, 4).map(part => `<div class="report-item-chip">${escapeHtml(part)}</div>`).join('');
         const more = parts.length > 4 ? `<div class="text-muted fs-8">+${parts.length - 4} item lainnya</div>` : '';
-        return `<div class="report-item-list">${visible}${more}</div>`;
+        const skuCount = Number(row.sku_count ?? parts.length);
+        return `<div class="report-item-list"><div><span class="badge badge-light-info">${number.format(skuCount)} SKU</span></div>${visible}${more}</div>`;
     };
     const statusBadge = row => `<span class="badge ${escapeHtml(row.status_badge || 'badge-light-secondary')}">${escapeHtml(row.status_label || '-')}</span>`;
     const renderPic = row => `
@@ -493,6 +522,38 @@ document.addEventListener('DOMContentLoaded', () => {
             breakdownChart.render(); charts.push(breakdownChart);
         } else emptyChart('chart_return_breakdown');
     };
+    const renderSkuAnalytics = (analytics = {}) => {
+        const skuAnalytics = analytics.sku_analytics || {};
+        const labels = skuAnalytics.labels || {};
+        document.getElementById('sku_target_label').textContent = labels.target || 'Target';
+        document.getElementById('sku_actual_label').textContent = labels.actual || 'Aktual';
+        document.getElementById('sku_exception_label').textContent = labels.exception || 'Exception';
+        document.getElementById('sku_summary').innerHTML = [
+            ['SKU Unik', skuAnalytics.total_unique || 0, 'primary'],
+            ['Baris SKU', skuAnalytics.total_lines || 0, 'info'],
+            ['Rata-rata SKU/Dokumen', decimal.format(Number(skuAnalytics.avg_per_document || 0)), 'success'],
+            [labels.target || 'Target', skuAnalytics.total_target_qty || 0, 'primary'],
+            [labels.actual || 'Aktual', skuAnalytics.total_actual_qty || 0, 'success'],
+            [labels.exception || 'Exception', skuAnalytics.total_exception_qty || 0, 'danger'],
+        ].map(([label, value, tone]) => `<span class="badge badge-light-${tone} fs-7 px-3 py-2">${escapeHtml(label)}: ${typeof value === 'string' ? escapeHtml(value) : number.format(value)}</span>`).join('');
+
+        const rows = skuAnalytics.rows || [];
+        document.getElementById('sku_analytics_rows').innerHTML = rows.length ? rows.map(row => {
+            const variance = Number(row.variance_qty || 0);
+            const contribution = Math.max(0, Math.min(100, Number(row.contribution_rate || 0)));
+            const exceptionRate = Number(row.exception_rate || 0);
+            return `<tr>
+                <td><div class="fw-bolder text-gray-900">${escapeHtml(row.sku)}</div><div class="text-muted fs-8">${escapeHtml(row.name || '-')}</div></td>
+                <td class="text-end">${number.format(row.documents || 0)}</td>
+                <td class="text-end">${number.format(row.target_qty || 0)}</td>
+                <td class="text-end fw-bold">${number.format(row.actual_qty || 0)}</td>
+                <td class="text-end ${variance === 0 ? 'text-success' : 'text-danger fw-bold'}">${variance > 0 ? '+' : ''}${number.format(variance)}</td>
+                <td class="text-end ${Number(row.exception_qty) > 0 ? 'text-danger fw-bold' : ''}">${number.format(row.exception_qty || 0)} <span class="text-muted fs-8">(${decimal.format(exceptionRate)}%)</span></td>
+                <td><div class="d-flex justify-content-between gap-3 fs-8"><span>${number.format(row.volume_qty || 0)} qty</span><span>${decimal.format(contribution)}%</span></div><div class="progress h-4px mt-1"><div class="progress-bar bg-info" style="width:${contribution}%"></div></div></td>
+            </tr>`;
+        }).join('') : '<tr><td colspan="7" class="text-center text-muted py-8">Belum ada data SKU pada filter ini.</td></tr>';
+    };
+
     const renderPerformance = (analytics = {}) => {
         const labels = analytics.performance_labels || {};
         document.getElementById('performance_role_label').textContent = labels.role || 'PIC';
@@ -514,6 +575,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const renderAnalytics = analytics => {
         renderMetrics(analytics);
         renderCharts(analytics);
+        renderSkuAnalytics(analytics);
         renderPerformance(analytics);
     };
     const makeTable = source => {

@@ -99,7 +99,7 @@ class ReturnReportController extends Controller
                 $outboundRows
             ),
             'data' => $data->map(function (array $row) {
-                unset($row['sort_at'], $row['_items']);
+                unset($row['sort_at'], $row['_items'], $row['_sku_items']);
 
                 return $row;
             })->values(),
@@ -273,6 +273,21 @@ class ReturnReportController extends Controller
         $qtyPackagingDamaged = (int) $items->sum('packaging_damaged_qty');
         $qtyDamaged = (int) $items->sum('damaged_qty');
         $qtyLost = (int) $items->sum(fn (CustomerReturnItem $item) => max((int) $item->expected_qty - (int) $item->received_qty, 0));
+        $skuItems = $items->map(function (CustomerReturnItem $item) use ($row) {
+            $target = (int) $item->expected_qty;
+            $actual = (int) $item->received_qty;
+
+            return [
+                'document_key' => 'customer-'.$row->id,
+                'sku' => trim((string) ($item->item?->sku ?? '')),
+                'name' => trim((string) ($item->item?->name ?? '')),
+                'target_qty' => $target,
+                'actual_qty' => $actual,
+                'exception_qty' => (int) ($item->packaging_damaged_qty ?? 0)
+                    + (int) $item->damaged_qty
+                    + max($target - $actual, 0),
+            ];
+        });
 
         return [
             'row_key' => 'customer-'.$row->id,
@@ -296,6 +311,7 @@ class ReturnReportController extends Controller
             'status_badge' => 'badge-light-'.$row->statusBadgeClass(),
             'matched' => (bool) $row->resi_id,
             'item_summary' => $this->buildCustomerItemSummary($items),
+            'sku_count' => $skuItems->pluck('sku')->filter()->unique()->count(),
             'qty_expected' => $qtyExpected,
             'qty_received' => $qtyReceived,
             'qty_good' => $qtyGood,
@@ -322,6 +338,7 @@ class ReturnReportController extends Controller
             'detail_url' => route('admin.inventory.customer-returns.show', $row->id),
             'detail_label' => 'Detail',
             '_items' => $items,
+            '_sku_items' => $skuItems,
         ];
     }
 
@@ -347,6 +364,23 @@ class ReturnReportController extends Controller
         $startedAt = $row->scanSession?->started_at;
         $completedAt = $row->scanSession?->completed_at ?? $row->approved_at;
         $variance = $qtyScanned - $qtyExpected;
+        $scanItemsByItem = $scanItems->keyBy('item_id');
+        $skuItems = $items->map(function (InboundItem $item) use ($row, $scanItems, $scanItemsByItem, $status) {
+            $target = (int) $item->qty;
+            $scanItem = $scanItemsByItem->get($item->item_id);
+            $actual = $scanItem
+                ? (int) $scanItem->scanned_qty
+                : ($status === InboundScanStatus::COMPLETED && $scanItems->isEmpty() ? $target : 0);
+
+            return [
+                'document_key' => 'inbound-'.$row->id,
+                'sku' => trim((string) ($item->item?->sku ?? '')),
+                'name' => trim((string) ($item->item?->name ?? '')),
+                'target_qty' => $target,
+                'actual_qty' => $actual,
+                'exception_qty' => abs($actual - $target),
+            ];
+        });
 
         return [
             'row_key' => 'inbound-'.$row->id,
@@ -374,6 +408,7 @@ class ReturnReportController extends Controller
             },
             'matched' => null,
             'item_summary' => $this->buildInboundItemSummary($items),
+            'sku_count' => $skuItems->pluck('sku')->filter()->unique()->count(),
             'qty_expected' => $qtyExpected,
             'qty_received' => $qtyScanned,
             'qty_good' => 0,
@@ -404,6 +439,7 @@ class ReturnReportController extends Controller
             'note' => $row->note ?? '',
             'detail_url' => route('admin.inbound.returns.detail', $row->id),
             'detail_label' => 'Detail',
+            '_sku_items' => $skuItems,
         ];
     }
 
@@ -412,6 +448,18 @@ class ReturnReportController extends Controller
         $items = $row->items ?? collect();
         $qtyTotal = (int) $items->sum('qty');
         $approved = ($row->status ?? 'pending') === 'approved';
+        $skuItems = $items->map(function ($item) use ($row, $approved) {
+            $qty = (int) ($item->qty ?? 0);
+
+            return [
+                'document_key' => 'outbound-'.$row->id,
+                'sku' => trim((string) ($item->item?->sku ?? '')),
+                'name' => trim((string) ($item->item?->name ?? '')),
+                'target_qty' => $qty,
+                'actual_qty' => $approved ? $qty : 0,
+                'exception_qty' => $approved ? 0 : $qty,
+            ];
+        });
 
         return [
             'row_key' => 'outbound-'.$row->id,
@@ -435,6 +483,7 @@ class ReturnReportController extends Controller
             'status_badge' => $approved ? 'badge-light-success' : 'badge-light-warning',
             'matched' => null,
             'item_summary' => $this->buildOutboundItemSummary($items),
+            'sku_count' => $skuItems->pluck('sku')->filter()->unique()->count(),
             'qty_expected' => 0,
             'qty_received' => 0,
             'qty_good' => 0,
@@ -458,6 +507,7 @@ class ReturnReportController extends Controller
             'note' => $row->note ?? '',
             'detail_url' => route('admin.outbound.returns.detail', $row->id),
             'detail_label' => 'Detail',
+            '_sku_items' => $skuItems,
         ];
     }
 
@@ -532,6 +582,7 @@ class ReturnReportController extends Controller
                 'label' => $label,
                 'total' => (int) $group->sum('received_qty'),
             ])->sortByDesc('total')->values()->all();
+        $skuAnalytics = $this->skuAnalytics($rows, 'Qty Resi', 'Qty Diterima', 'Qty Rusak/Hilang');
 
         return $this->analyticsPayload(
             'customer',
@@ -552,6 +603,8 @@ class ReturnReportController extends Controller
                 $this->metric('Root Cause Lengkap', $this->rate($rootCauseFilled, $items->count()), 'percent', 'info'),
                 $this->metric('Rata-rata Finalisasi', $this->average($finalized->pluck('lead_minutes')), 'duration', 'primary'),
                 $this->metric('Open > 24 Jam', $rows->filter(fn (array $row) => ($row['aging_minutes'] ?? 0) > 1440)->count(), 'number', 'danger'),
+                $this->metric('SKU Unik', $skuAnalytics['total_unique'], 'number', 'primary'),
+                $this->metric('Rata-rata SKU/Dokumen', $skuAnalytics['avg_per_document'], 'decimal', 'info'),
             ],
             $this->dailyAnalytics($rows, 'qty_received', 'qty_damaged_total'),
             $this->statusAnalytics($rows),
@@ -564,7 +617,8 @@ class ReturnReportController extends Controller
                 $rows,
                 'qty_received',
                 fn (array $row) => (int) $row['qty_damaged_total'] + (int) $row['qty_lost']
-            )
+            ),
+            $skuAnalytics
         );
     }
 
@@ -580,6 +634,7 @@ class ReturnReportController extends Controller
                 'label' => $label,
                 'total' => (int) $group->sum('qty_received'),
             ])->sortByDesc('total')->values()->all();
+        $skuAnalytics = $this->skuAnalytics($rows, 'Qty Target', 'Qty Discan', 'Selisih Absolut');
 
         return $this->analyticsPayload(
             'inbound',
@@ -600,6 +655,8 @@ class ReturnReportController extends Controller
                 $this->metric('Rata-rata Proses Scan', $this->average($completed->pluck('scan_minutes')), 'duration', 'primary'),
                 $this->metric('Rata-rata Total Lead', $this->average($completed->pluck('lead_minutes')), 'duration', 'info'),
                 $this->metric('Open > 24 Jam', $rows->filter(fn (array $row) => ($row['aging_minutes'] ?? 0) > 1440)->count(), 'number', 'danger'),
+                $this->metric('SKU Unik', $skuAnalytics['total_unique'], 'number', 'primary'),
+                $this->metric('Rata-rata SKU/Dokumen', $skuAnalytics['avg_per_document'], 'decimal', 'info'),
             ],
             $this->dailyAnalytics($rows, 'qty_received', fn (array $row) => abs((int) $row['qty_variance'])),
             $this->statusAnalytics($rows),
@@ -608,7 +665,8 @@ class ReturnReportController extends Controller
             'Operator Scan',
             'Qty Discan',
             'Dokumen Selisih',
-            $this->performanceAnalytics($rows, 'qty_received', fn (array $row) => $row['has_exception'] ? 1 : 0)
+            $this->performanceAnalytics($rows, 'qty_received', fn (array $row) => $row['has_exception'] ? 1 : 0),
+            $skuAnalytics
         );
     }
 
@@ -622,6 +680,7 @@ class ReturnReportController extends Controller
                 'label' => $label,
                 'total' => (int) $group->sum('qty_total'),
             ])->sortByDesc('total')->values()->all();
+        $skuAnalytics = $this->skuAnalytics($rows, 'Qty Retur', 'Qty Disetujui', 'Qty Pending Approval');
 
         return $this->analyticsPayload(
             'outbound',
@@ -642,6 +701,8 @@ class ReturnReportController extends Controller
                 $this->metric('Supplier Terlibat', $rows->pluck('ref_primary_value')->filter(fn ($value) => $value !== '-')->unique()->count(), 'number', 'primary'),
                 $this->metric('Rata-rata Qty/Dokumen', $rows->isNotEmpty() ? round($rows->sum('qty_total') / $rows->count(), 2) : 0, 'decimal', 'info'),
                 $this->metric('PIC Approval Aktif', $approved->pluck('performance_operator')->filter()->unique()->count(), 'number', 'primary'),
+                $this->metric('SKU Unik', $skuAnalytics['total_unique'], 'number', 'primary'),
+                $this->metric('Rata-rata SKU/Dokumen', $skuAnalytics['avg_per_document'], 'decimal', 'info'),
             ],
             $this->dailyAnalytics($rows, 'qty_total', fn (array $row) => $row['is_success'] ? (int) $row['qty_total'] : 0),
             $this->statusAnalytics($rows),
@@ -650,7 +711,8 @@ class ReturnReportController extends Controller
             'Approver',
             'Qty Dokumen',
             'Masih Pending',
-            $this->performanceAnalytics($rows, 'qty_total', fn (array $row) => $row['is_success'] ? 0 : 1)
+            $this->performanceAnalytics($rows, 'qty_total', fn (array $row) => $row['is_success'] ? 0 : 1),
+            $skuAnalytics
         );
     }
 
@@ -667,7 +729,8 @@ class ReturnReportController extends Controller
         string $performanceRole,
         string $performanceQtyLabel,
         string $performanceExceptionLabel,
-        array $performance
+        array $performance,
+        array $skuAnalytics
     ): array {
         return [
             'module' => $module,
@@ -687,6 +750,56 @@ class ReturnReportController extends Controller
                 'qty' => $performanceQtyLabel,
                 'exceptions' => $performanceExceptionLabel,
             ],
+            'sku_analytics' => $skuAnalytics,
+        ];
+    }
+
+    private function skuAnalytics(Collection $rows, string $targetLabel, string $actualLabel, string $exceptionLabel): array
+    {
+        $items = $rows
+            ->flatMap(fn (array $row) => $row['_sku_items'] ?? collect())
+            ->filter(fn (array $item) => trim((string) ($item['sku'] ?? '')) !== '')
+            ->values();
+        $totalVolume = (int) $items->sum(fn (array $item) => max(
+            (int) ($item['target_qty'] ?? 0),
+            (int) ($item['actual_qty'] ?? 0)
+        ));
+        $skuRows = $items->groupBy('sku')->map(function (Collection $group, string $sku) use ($totalVolume) {
+            $target = (int) $group->sum('target_qty');
+            $actual = (int) $group->sum('actual_qty');
+            $exception = (int) $group->sum('exception_qty');
+            $volume = (int) $group->sum(fn (array $item) => max(
+                (int) ($item['target_qty'] ?? 0),
+                (int) ($item['actual_qty'] ?? 0)
+            ));
+
+            return [
+                'sku' => $sku,
+                'name' => $group->pluck('name')->filter()->first() ?: '-',
+                'documents' => $group->pluck('document_key')->unique()->count(),
+                'target_qty' => $target,
+                'actual_qty' => $actual,
+                'variance_qty' => $actual - $target,
+                'exception_qty' => $exception,
+                'exception_rate' => $this->rate($exception, $volume),
+                'volume_qty' => $volume,
+                'contribution_rate' => $this->rate($volume, $totalVolume),
+            ];
+        })->sortByDesc('volume_qty')->values();
+
+        return [
+            'total_unique' => $skuRows->count(),
+            'total_lines' => $items->count(),
+            'avg_per_document' => $rows->isNotEmpty() ? round((float) $rows->avg('sku_count'), 2) : 0,
+            'total_target_qty' => (int) $items->sum('target_qty'),
+            'total_actual_qty' => (int) $items->sum('actual_qty'),
+            'total_exception_qty' => (int) $items->sum('exception_qty'),
+            'labels' => [
+                'target' => $targetLabel,
+                'actual' => $actualLabel,
+                'exception' => $exceptionLabel,
+            ],
+            'rows' => $skuRows->take(50)->values()->all(),
         ];
     }
 

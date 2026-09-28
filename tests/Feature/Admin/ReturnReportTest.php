@@ -154,7 +154,16 @@ class ReturnReportTest extends TestCase
             ->assertJsonPath('summary.customer_damaged_qty', 1)
             ->assertJsonPath('summary.customer_lost_qty', 1)
             ->assertJsonPath('summary.outbound_qty', 7)
-            ->assertJsonPath('summary.unmatched_resi', 1);
+            ->assertJsonPath('summary.unmatched_resi', 1)
+            ->assertJsonPath('analytics.sku_analytics.total_unique', 1)
+            ->assertJsonPath('analytics.sku_analytics.total_lines', 2)
+            ->assertJsonPath('analytics.sku_analytics.avg_per_document', 1)
+            ->assertJsonPath('analytics.sku_analytics.total_target_qty', 5)
+            ->assertJsonPath('analytics.sku_analytics.total_actual_qty', 6)
+            ->assertJsonPath('analytics.sku_analytics.total_exception_qty', 2)
+            ->assertJsonPath('analytics.sku_analytics.rows.0.sku', 'SKU-RET-CUST')
+            ->assertJsonPath('analytics.sku_analytics.rows.0.documents', 2)
+            ->assertJsonPath('analytics.sku_analytics.rows.0.contribution_rate', 100);
 
         $rows = Collection::make($response->json('data'))->keyBy('code');
 
@@ -195,7 +204,13 @@ class ReturnReportTest extends TestCase
             ->assertJsonPath('summary.total_documents', 1)
             ->assertJsonPath('summary.customer_documents', 0)
             ->assertJsonPath('summary.outbound_documents', 1)
-            ->assertJsonPath('data.0.code', 'OUT-RET-001');
+            ->assertJsonPath('data.0.code', 'OUT-RET-001')
+            ->assertJsonPath('data.0.sku_count', 1)
+            ->assertJsonPath('analytics.sku_analytics.total_unique', 1)
+            ->assertJsonPath('analytics.sku_analytics.total_target_qty', 7)
+            ->assertJsonPath('analytics.sku_analytics.total_actual_qty', 7)
+            ->assertJsonPath('analytics.sku_analytics.total_exception_qty', 0)
+            ->assertJsonPath('analytics.sku_analytics.rows.0.sku', 'SKU-RET-OUT');
 
         $this->withoutMiddleware()
             ->get(route('admin.reports.returns.export', ['source' => 'customer']))
@@ -369,7 +384,17 @@ class ReturnReportTest extends TestCase
             ->assertJsonPath('data.0.qty_variance', -2)
             ->assertJsonPath('data.0.reset_count', 1)
             ->assertJsonPath('data.0.secondary_by', 'Scanner Retur Inbound')
-            ->assertJsonPath('data.0.tertiary_by', 'Scanner Retur Inbound');
+            ->assertJsonPath('data.0.tertiary_by', 'Scanner Retur Inbound')
+            ->assertJsonPath('data.0.sku_count', 1)
+            ->assertJsonPath('analytics.sku_analytics.total_unique', 1)
+            ->assertJsonPath('analytics.sku_analytics.total_lines', 1)
+            ->assertJsonPath('analytics.sku_analytics.avg_per_document', 1)
+            ->assertJsonPath('analytics.sku_analytics.total_target_qty', 10)
+            ->assertJsonPath('analytics.sku_analytics.total_actual_qty', 8)
+            ->assertJsonPath('analytics.sku_analytics.total_exception_qty', 2)
+            ->assertJsonPath('analytics.sku_analytics.rows.0.sku', 'SKU-RET-INBOUND')
+            ->assertJsonPath('analytics.sku_analytics.rows.0.variance_qty', -2)
+            ->assertJsonPath('analytics.sku_analytics.rows.0.exception_rate', 20);
 
         $this->withoutMiddleware()
             ->get(route('admin.reports.returns.export', ['source' => 'inbound']))

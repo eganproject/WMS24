@@ -25,7 +25,7 @@
             </div>
         </div>
         <div class="card-toolbar">
-            <div class="d-flex justify-content-end align-items-center gap-2" data-kt-user-table-toolbar="base">
+            <div class="d-flex flex-wrap justify-content-end align-items-center gap-2" data-kt-user-table-toolbar="base">
                 <select class="form-select form-select-solid w-100px" id="filter_items_limit" aria-label="Limit">
                     <option value="10" selected>10</option>
                     <option value="25">25</option>
@@ -70,6 +70,9 @@
                         </div>
                     </div>
                 </div>
+                @if($canUpdate)
+                    <button type="button" class="btn btn-light-dark me-3" id="btn_update_items_excel" data-bs-toggle="modal" data-bs-target="#modal_update_items_excel">Update Data Items</button>
+                @endif
                 @if($canCreate)
                     <button type="button" class="btn btn-light-primary me-3" id="btn_import_items" data-bs-toggle="modal" data-bs-target="#modal_import_items">Import Items</button>
                     <button type="button" class="btn btn-light-success me-3" id="btn_import_barcodes" data-bs-toggle="modal" data-bs-target="#modal_import_barcodes">Import Barcode Alias</button>
@@ -323,6 +326,105 @@
 </div>
 <!--end::Import Modal-->
 
+<!--begin::Update Items Excel Modal-->
+<div class="modal fade" id="modal_update_items_excel" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered mw-900px">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h2 class="fw-bolder mb-1">Update Data Items via Excel</h2>
+                    <div class="text-muted fs-7">Pilih field, unduh template yang sesuai, lalu unggah hasil perubahannya.</div>
+                </div>
+                <div class="btn btn-icon btn-sm btn-active-icon-primary" data-bs-dismiss="modal">
+                    <span class="svg-icon svg-icon-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+                            <rect opacity="0.5" x="6" y="17.3137" width="16" height="2" rx="1" transform="rotate(-45 6 17.3137)" fill="black" />
+                            <rect x="7.41422" y="6.34315" width="16" height="2" rx="1" transform="rotate(45 7.41422 6.34315)" fill="black" />
+                        </svg>
+                    </span>
+                </div>
+            </div>
+            <div class="modal-body scroll-y px-10 py-8">
+                <div class="alert alert-light-danger border border-danger border-dashed d-flex align-items-start p-5 mb-8">
+                    <i class="fas fa-lock text-danger fs-2 me-4 mt-1"></i>
+                    <div>
+                        <div class="fw-bold text-gray-900 mb-1">Field yang dikunci</div>
+                        <div class="text-gray-700 fs-7">SKU hanya dipakai untuk mencari item. SKU, tipe item, isi koli, data bundle, barcode, dan jumlah stok tidak dapat diubah dari fitur ini.</div>
+                    </div>
+                </div>
+
+                <div class="d-flex align-items-center mb-4">
+                    <span class="badge badge-circle badge-primary me-3">1</span>
+                    <div>
+                        <div class="fw-bold text-gray-900">Pilih field yang akan diperbarui</div>
+                        <div class="text-muted fs-7">Import hanya akan menyentuh field yang dicentang.</div>
+                    </div>
+                </div>
+                <div class="row g-4 mb-5" id="item_update_fields">
+                    @foreach($itemUpdateFields as $field => $definition)
+                        <div class="col-md-6">
+                            <label class="border border-gray-300 border-dashed rounded-3 p-4 d-flex align-items-start h-100 item-update-field-card" for="item_update_field_{{ $field }}">
+                                <span class="form-check form-check-custom form-check-solid me-4 mt-1">
+                                    <input
+                                        class="form-check-input item-update-field"
+                                        type="checkbox"
+                                        value="{{ $field }}"
+                                        data-label="{{ $definition['label'] }}"
+                                        id="item_update_field_{{ $field }}"
+                                        @checked($field === 'name')
+                                    />
+                                </span>
+                                <span>
+                                    <span class="fw-bold text-gray-900 d-block mb-1">{{ $definition['label'] }}</span>
+                                    <span class="text-muted fs-7">{{ $definition['description'] }}</span>
+                                </span>
+                            </label>
+                        </div>
+                    @endforeach
+                </div>
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 bg-light-primary rounded-3 p-4 mb-8">
+                    <div>
+                        <div class="text-muted fs-8 text-uppercase fw-bold mb-2">Kolom template</div>
+                        <div class="d-flex flex-wrap gap-2" id="item_update_field_summary"></div>
+                    </div>
+                    <div class="d-flex flex-wrap gap-2">
+                        <button type="button" class="btn btn-sm btn-light" id="btn_clear_item_update_fields">Kosongkan</button>
+                        <button type="button" class="btn btn-sm btn-light-primary" id="btn_select_all_item_update_fields">Pilih Semua</button>
+                        <button type="button" class="btn btn-primary" id="btn_download_item_update_template">
+                            <i class="fas fa-file-excel me-2"></i>Download Template
+                        </button>
+                    </div>
+                </div>
+
+                <div class="separator separator-dashed mb-8"></div>
+
+                <div class="d-flex align-items-center mb-4">
+                    <span class="badge badge-circle badge-success me-3">2</span>
+                    <div>
+                        <div class="fw-bold text-gray-900">Unggah template yang sudah diedit</div>
+                        <div class="text-muted fs-7">Jangan mengubah header atau menambahkan kolom di luar template.</div>
+                    </div>
+                </div>
+                <div class="alert alert-light-info py-4 mb-5 fs-7">
+                    Sel kosong akan mengosongkan kategori, alamat, dan deskripsi. Untuk stok pengaman, sel kosong menjadi <strong>0</strong>. Nama dan status tidak boleh kosong.
+                </div>
+                <div class="mb-7">
+                    <label class="required fs-6 fw-bold form-label mb-2">File Excel</label>
+                    <input type="file" class="form-control form-control-solid" id="item_update_file" accept=".xlsx,.xls" />
+                    <div class="invalid-feedback d-block" id="item_update_error"></div>
+                </div>
+                <div class="text-end">
+                    <button type="button" class="btn btn-light me-3" data-bs-dismiss="modal">Batal</button>
+                    <button type="button" class="btn btn-success" id="btn_submit_item_update">
+                        <i class="fas fa-upload me-2"></i>Proses Update
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<!--end::Update Items Excel Modal-->
+
 <!--begin::Import Barcode Modal-->
 <div class="modal fade" id="modal_import_barcodes" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered mw-650px">
@@ -507,6 +609,8 @@
     const updateTpl = '{{ route('admin.masterdata.items.update', ':id') }}';
     const deleteTpl = '{{ route('admin.masterdata.items.destroy', ':id') }}';
     const importUrl = '{{ route('admin.masterdata.items.import') }}';
+    const itemUpdateTemplateUrl = '{{ route('admin.masterdata.items.update-template') }}';
+    const itemUpdateImportUrl = '{{ route('admin.masterdata.items.update-import') }}';
     const barcodeImportUrl = '{{ route('admin.masterdata.items.barcode-import') }}';
     const barcodeMissesDataUrl = '{{ route('admin.masterdata.items.barcode-misses.data') }}';
     const barcodeMissResolveTpl = '{{ route('admin.masterdata.items.barcode-misses.resolve', ':id') }}';
@@ -568,6 +672,13 @@
         const importInput = document.getElementById('import_items_file');
         const importError = document.getElementById('error_import_file');
         const importSubmit = document.getElementById('btn_import_items_submit');
+        const itemUpdateModalEl = document.getElementById('modal_update_items_excel');
+        const itemUpdateModal = itemUpdateModalEl ? new bootstrap.Modal(itemUpdateModalEl) : null;
+        const itemUpdateFile = document.getElementById('item_update_file');
+        const itemUpdateError = document.getElementById('item_update_error');
+        const itemUpdateSubmit = document.getElementById('btn_submit_item_update');
+        const itemUpdateDownload = document.getElementById('btn_download_item_update_template');
+        const itemUpdateFieldEls = Array.from(document.querySelectorAll('.item-update-field'));
         const barcodeImportModalEl = document.getElementById('modal_import_barcodes');
         const barcodeImportModal = barcodeImportModalEl ? new bootstrap.Modal(barcodeImportModalEl) : null;
         const barcodeImportInput = document.getElementById('import_barcodes_file');
@@ -665,6 +776,37 @@
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
+
+        const selectedItemUpdateFields = () => itemUpdateFieldEls
+            .filter((input) => input.checked)
+            .map((input) => input.value);
+
+        const refreshItemUpdateFieldState = () => {
+            const selected = selectedItemUpdateFields();
+            itemUpdateFieldEls.forEach((input) => {
+                const card = input.closest('.item-update-field-card');
+                card?.classList.toggle('border-primary', input.checked);
+                card?.classList.toggle('bg-light-primary', input.checked);
+            });
+
+            const summary = document.getElementById('item_update_field_summary');
+            if (summary) {
+                const fieldBadges = itemUpdateFieldEls
+                    .filter((input) => input.checked)
+                    .map((input) => `<span class="badge badge-light-primary">${escapeHtml(input.dataset.label || input.value)}</span>`)
+                    .join('');
+                summary.innerHTML = `<span class="badge badge-light-dark"><i class="fas fa-lock me-1"></i>SKU</span>${fieldBadges || '<span class="text-danger fs-7">Pilih minimal satu field</span>'}`;
+            }
+
+            if (itemUpdateDownload) itemUpdateDownload.disabled = selected.length === 0;
+            if (itemUpdateSubmit) itemUpdateSubmit.disabled = selected.length === 0;
+        };
+
+        const itemUpdateUrlWithFields = (baseUrl, fields) => {
+            const params = new URLSearchParams();
+            fields.forEach((field) => params.append('fields[]', field));
+            return `${baseUrl}?${params.toString()}`;
+        };
 
         const createExternalBarcodeRow = (barcode = {}) => {
             if (!externalBarcodesContainer) return null;
@@ -998,6 +1140,99 @@
             if (importInput) importInput.value = '';
             if (importError) importError.textContent = '';
         });
+
+        document.getElementById('btn_update_items_excel')?.addEventListener('click', () => {
+            if (itemUpdateFile) itemUpdateFile.value = '';
+            if (itemUpdateError) itemUpdateError.textContent = '';
+            refreshItemUpdateFieldState();
+        });
+
+        itemUpdateFieldEls.forEach((input) => input.addEventListener('change', () => {
+            if (itemUpdateError) itemUpdateError.textContent = '';
+            refreshItemUpdateFieldState();
+        }));
+
+        document.getElementById('btn_select_all_item_update_fields')?.addEventListener('click', () => {
+            itemUpdateFieldEls.forEach((input) => { input.checked = true; });
+            refreshItemUpdateFieldState();
+        });
+
+        document.getElementById('btn_clear_item_update_fields')?.addEventListener('click', () => {
+            itemUpdateFieldEls.forEach((input) => { input.checked = false; });
+            refreshItemUpdateFieldState();
+        });
+
+        itemUpdateDownload?.addEventListener('click', () => {
+            const fields = selectedItemUpdateFields();
+            if (!fields.length) {
+                if (itemUpdateError) itemUpdateError.textContent = 'Pilih minimal satu field terlebih dahulu.';
+                return;
+            }
+            window.location.assign(itemUpdateUrlWithFields(itemUpdateTemplateUrl, fields));
+        });
+
+        itemUpdateSubmit?.addEventListener('click', async () => {
+            if (itemUpdateError) itemUpdateError.textContent = '';
+            const fields = selectedItemUpdateFields();
+            const file = itemUpdateFile?.files?.[0];
+            if (!fields.length) {
+                if (itemUpdateError) itemUpdateError.textContent = 'Pilih minimal satu field yang akan diperbarui.';
+                return;
+            }
+            if (!file) {
+                if (itemUpdateError) itemUpdateError.textContent = 'Pilih file Excel hasil template terlebih dahulu.';
+                return;
+            }
+
+            const confirmed = await confirmAction();
+            if (!confirmed) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+            fields.forEach((field) => formData.append('fields[]', field));
+
+            try {
+                const res = await fetch(itemUpdateImportUrl, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Accept': 'application/json',
+                    },
+                    body: formData,
+                });
+                const text = await res.text();
+                let json;
+                try {
+                    json = JSON.parse(text);
+                } catch (error) {
+                    console.error('Invalid JSON', text);
+                    closeSwal();
+                    notifyError('Respons server tidak valid.');
+                    return;
+                }
+
+                closeSwal();
+                if (!res.ok) {
+                    const message = json?.errors
+                        ? Object.values(json.errors).flat().join(', ')
+                        : json?.message;
+                    if (itemUpdateError) itemUpdateError.textContent = message || 'Gagal update data items.';
+                    notifyError(message || 'Gagal update data items.');
+                    return;
+                }
+
+                notifySuccess(`${json.message || 'Update selesai'} Diproses: ${json.processed}, berubah: ${json.updated}, tetap: ${json.unchanged}.`);
+                if (itemUpdateFile) itemUpdateFile.value = '';
+                itemUpdateModal?.hide();
+                reloadTable();
+            } catch (error) {
+                console.error(error);
+                closeSwal();
+                notifyError('Gagal update data items.');
+            }
+        });
+
+        refreshItemUpdateFieldState();
 
         document.getElementById('btn_import_barcodes')?.addEventListener('click', () => {
             if (barcodeImportInput) barcodeImportInput.value = '';

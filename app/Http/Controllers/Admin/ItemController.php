@@ -13,13 +13,16 @@ use App\Models\ItemStock;
 use App\Models\Area;
 use App\Exports\ItemBarcodeTemplateExport;
 use App\Exports\ItemBundleTemplateExport;
+use App\Exports\ItemUpdatesTemplateExport;
 use App\Exports\ItemsTemplateExport;
 use App\Imports\ItemBarcodesImport;
 use App\Imports\ItemBundleImport;
+use App\Imports\ItemUpdatesImport;
 use App\Imports\ItemsImport;
 use App\Models\ItemBundleComponent;
 use App\Support\BundleService;
 use App\Support\ItemBarcodeResolver;
+use App\Support\ItemUpdateFields;
 use App\Support\ItemQrCodeService;
 use App\Support\LocationService;
 use App\Support\StockService;
@@ -45,7 +48,8 @@ class ItemController extends Controller
             ->orderBy('sku')
             ->get(['id', 'sku', 'name']);
 
-        return view('admin.masterdata.items.index', compact('categories', 'areas', 'componentItems'));
+        $itemUpdateFields = ItemUpdateFields::definitions();
+        return view('admin.masterdata.items.index', compact('categories', 'areas', 'componentItems', 'itemUpdateFields'));
     }
 
     public function data(Request $request)
@@ -453,6 +457,56 @@ class ItemController extends Controller
             'created' => $created,
             'updated' => $updated,
         ]);
+    }
+
+    public function updateTemplate(Request $request)
+    {
+        $fields = $this->validatedItemUpdateFields($request);
+        $filename = 'items-update-'.implode('-', $fields).'-'.now()->format('YmdHis').'.xlsx';
+
+        return Excel::download(new ItemUpdatesTemplateExport($fields), $filename);
+    }
+
+    public function updateImport(Request $request)
+    {
+        $fields = $this->validatedItemUpdateFields($request);
+        $request->validate([
+            'file' => ['required', 'file', 'mimes:xlsx,xls', 'max:5120'],
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $import = new ItemUpdatesImport($fields);
+            Excel::import($import, $request->file('file'));
+            DB::commit();
+        } catch (ValidationException $e) {
+            DB::rollBack();
+            throw $e;
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return response()->json(['message' => 'Gagal update data items: '.$e->getMessage()], 500);
+        }
+
+        return response()->json([
+            'message' => 'Update data items selesai.',
+            'processed' => $import->processed,
+            'updated' => $import->updated,
+            'unchanged' => $import->unchanged,
+        ]);
+    }
+
+    private function validatedItemUpdateFields(Request $request): array
+    {
+        $validated = $request->validate([
+            'fields' => ['required', 'array', 'min:1'],
+            'fields.*' => ['required', 'string', 'distinct', Rule::in(ItemUpdateFields::keys())],
+        ], [
+            'fields.required' => 'Pilih minimal satu field yang akan diperbarui.',
+            'fields.min' => 'Pilih minimal satu field yang akan diperbarui.',
+            'fields.*.in' => 'Terdapat field update yang tidak diizinkan.',
+        ]);
+
+        return ItemUpdateFields::normalize($validated['fields']);
     }
 
     public function barcodeTemplate()

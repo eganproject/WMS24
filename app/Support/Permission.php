@@ -11,6 +11,10 @@ class Permission
 {
     public static function resolveBaseRoute(string $routeName): string
     {
+        if (in_array($routeName, ['admin.masterdata.items.update-template', 'admin.masterdata.items.update-import'], true)) {
+            return 'admin.masterdata.items.index';
+        }
+
         if (str_starts_with($routeName, 'admin.masterdata.stores.channels.')) {
             return 'admin.masterdata.stores.index';
         }
@@ -21,6 +25,9 @@ class Permission
 
     public static function actionFromRoute(string $routeName): string
     {
+        if (in_array($routeName, ['admin.masterdata.items.update-template', 'admin.masterdata.items.update-import'], true)) {
+            return 'update';
+        }
         if (preg_match('/\.(create|store|import)$/', $routeName)) return 'create';
         if (preg_match('/\.(edit|update|approve|finalize)$/', $routeName)) return 'update';
         if (preg_match('/\.(destroy)$/', $routeName)) return 'delete';

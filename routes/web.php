@@ -197,6 +197,8 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         // Items
         Route::get('/items/data', [\App\Http\Controllers\Admin\ItemController::class, 'data'])->name('items.data');
         Route::get('/items/template', [\App\Http\Controllers\Admin\ItemController::class, 'template'])->name('items.template');
+        Route::get('/items/update-template', [\App\Http\Controllers\Admin\ItemController::class, 'updateTemplate'])->name('items.update-template');
+        Route::post('/items/update-import', [\App\Http\Controllers\Admin\ItemController::class, 'updateImport'])->name('items.update-import');
         Route::get('/items/barcode-template', [\App\Http\Controllers\Admin\ItemController::class, 'barcodeTemplate'])->name('items.barcode-template');
         Route::post('/items/barcode-import', [\App\Http\Controllers\Admin\ItemController::class, 'barcodeImport'])->name('items.barcode-import');
         Route::get('/items/barcode-misses/data', [\App\Http\Controllers\Admin\ItemController::class, 'barcodeMissesData'])->name('items.barcode-misses.data');

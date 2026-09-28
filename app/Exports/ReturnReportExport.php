@@ -4,8 +4,11 @@ namespace App\Exports;
 
 use App\Models\CustomerReturn;
 use App\Models\CustomerReturnItem;
+use App\Models\InboundItem;
+use App\Models\InboundTransaction;
 use App\Models\OutboundItem;
 use App\Models\OutboundTransaction;
+use App\Support\InboundScanStatus;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
@@ -21,18 +24,17 @@ use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-class ReturnReportExport implements FromCollection, WithHeadings, WithTitle, WithCustomStartCell, ShouldAutoSize, WithStyles, WithEvents
+class ReturnReportExport implements FromCollection, ShouldAutoSize, WithCustomStartCell, WithEvents, WithHeadings, WithStyles, WithTitle
 {
     private ?Collection $rows = null;
 
-    public function __construct(private array $filters = [])
-    {
-    }
+    public function __construct(private array $filters = []) {}
 
     public function title(): string
     {
         return match (trim((string) ($this->filters['source'] ?? ''))) {
             'customer' => 'Retur Customer',
+            'inbound' => 'Retur Inbound',
             'outbound' => 'Retur Outbound',
             default => 'Laporan Retur',
         };
@@ -57,6 +59,12 @@ class ReturnReportExport implements FromCollection, WithHeadings, WithTitle, Wit
             return $this->rows;
         }
 
+        if ($source === 'inbound') {
+            $this->rows = $this->withoutSortColumn($this->inboundRows());
+
+            return $this->rows;
+        }
+
         if ($source === 'outbound') {
             $this->rows = $this->withoutSortColumn($this->outboundRows());
 
@@ -65,6 +73,7 @@ class ReturnReportExport implements FromCollection, WithHeadings, WithTitle, Wit
 
         $this->rows = $this->customerRows()
             ->concat($this->outboundRows())
+            ->concat($this->inboundRows())
             ->sortByDesc(fn (array $row) => $row['_sort_at'] ?? 0)
             ->map(function (array $row) {
                 unset($row['_sort_at']);
@@ -88,8 +97,8 @@ class ReturnReportExport implements FromCollection, WithHeadings, WithTitle, Wit
             'Status',
             'SKU',
             'Nama Item',
-            'Qty Resi',
-            'Qty Diterima',
+            'Qty Target / Resi',
+            'Qty Aktual / Diterima',
             'Qty Bagus',
             'Qty Rusak',
             'Qty Hilang',
@@ -171,7 +180,7 @@ class ReturnReportExport implements FromCollection, WithHeadings, WithTitle, Wit
                     $expectedQty,
                     $receivedQty,
                     (int) ($itemRow?->good_qty ?? 0),
-                    (int) ($itemRow?->damaged_qty ?? 0),
+                    (int) ($itemRow?->packaging_damaged_qty ?? 0) + (int) ($itemRow?->damaged_qty ?? 0),
                     max($expectedQty - $receivedQty, 0),
                     0,
                     $row->creator?->name ?? '',
@@ -179,6 +188,46 @@ class ReturnReportExport implements FromCollection, WithHeadings, WithTitle, Wit
                     $row->finalizer?->name ?? '',
                     $row->note ?? '',
                     $itemRow?->rootCauseLabel() ?? '',
+                    $itemRow?->note ?? '',
+                ];
+            });
+        })->values();
+    }
+
+    private function inboundRows(): Collection
+    {
+        return $this->inboundQuery()->get()->flatMap(function (InboundTransaction $row) {
+            $scanItems = $row->scanSession?->items?->keyBy('item_id') ?? collect();
+            $items = $row->items->isNotEmpty() ? $row->items : collect([null]);
+
+            return $items->map(function (?InboundItem $itemRow) use ($row, $scanItems) {
+                $expectedQty = (int) ($itemRow?->qty ?? 0);
+                $scanItem = $itemRow ? $scanItems->get($itemRow->item_id) : null;
+                $completed = in_array((string) $row->status, [InboundScanStatus::COMPLETED, 'approved'], true);
+                $scannedQty = $scanItem ? (int) $scanItem->scanned_qty : ($completed ? $expectedQty : 0);
+
+                return [
+                    '_sort_at' => $row->transacted_at?->timestamp ?? 0,
+                    'Retur Inbound',
+                    $row->transacted_at?->format('Y-m-d H:i') ?? '',
+                    $row->code,
+                    $row->ref_no ?: '',
+                    $row->surat_jalan_no ?: '',
+                    $row->warehouse?->name ?: '',
+                    InboundScanStatus::label((string) $row->status === 'approved' ? InboundScanStatus::COMPLETED : (string) $row->status),
+                    $itemRow?->item?->sku ?? '',
+                    $itemRow?->item?->name ?? '',
+                    $expectedQty,
+                    $scannedQty,
+                    0,
+                    0,
+                    max($expectedQty - $scannedQty, 0),
+                    0,
+                    $row->creator?->name ?? '',
+                    $row->scanSession?->starter?->name ?? '',
+                    $row->scanSession?->completer?->name ?? $row->approver?->name ?? '',
+                    $row->note ?? '',
+                    '',
                     $itemRow?->note ?? '',
                 ];
             });
@@ -244,8 +293,44 @@ class ReturnReportExport implements FromCollection, WithHeadings, WithTitle, Wit
             $query->whereNull('resi_id');
         }
 
+        $resiSource = trim((string) ($this->filters['resi_source'] ?? ''));
+        if (in_array($resiSource, array_keys(CustomerReturn::resiSourceLabels()), true)) {
+            $query->where('resi_source', $resiSource);
+        }
+
         $this->applyDateFilter($query, 'customer_returns.received_at');
         $this->applyCustomerSearch($query);
+
+        return $query;
+    }
+
+    private function inboundQuery()
+    {
+        $query = InboundTransaction::query()
+            ->with([
+                'items.item',
+                'warehouse',
+                'creator',
+                'approver',
+                'scanSession.items',
+                'scanSession.starter:id,name',
+                'scanSession.completer:id,name',
+            ])
+            ->where('type', 'return')
+            ->orderByDesc('transacted_at')
+            ->orderByDesc('id');
+
+        $status = trim((string) ($this->filters['status'] ?? ''));
+        if ($status === InboundScanStatus::COMPLETED) {
+            $query->whereIn('status', [InboundScanStatus::COMPLETED, 'approved']);
+        } elseif (in_array($status, [InboundScanStatus::PENDING_SCAN, InboundScanStatus::SCANNING], true)) {
+            $query->where('status', $status);
+        } elseif ($status !== '') {
+            $query->whereRaw('1 = 0');
+        }
+
+        $this->applyDateFilter($query, 'inbound_transactions.transacted_at');
+        $this->applyInboundSearch($query);
 
         return $query;
     }
@@ -274,10 +359,10 @@ class ReturnReportExport implements FromCollection, WithHeadings, WithTitle, Wit
     private function applyDateFilter($query, string $column): void
     {
         try {
-            if (!empty($this->filters['date_from'])) {
+            if (! empty($this->filters['date_from'])) {
                 $query->where($column, '>=', Carbon::parse($this->filters['date_from'])->startOfDay());
             }
-            if (!empty($this->filters['date_to'])) {
+            if (! empty($this->filters['date_to'])) {
                 $query->where($column, '<=', Carbon::parse($this->filters['date_to'])->endOfDay());
             }
         } catch (\Throwable) {
@@ -300,6 +385,27 @@ class ReturnReportExport implements FromCollection, WithHeadings, WithTitle, Wit
                 ->orWhere('customer_returns.note', $operator, $value)
                 ->orWhereHas('damagedGood', fn ($damagedQ) => $damagedQ->where('code', $operator, $value))
                 ->orWhereHas('items', fn ($itemQ) => $itemQ->where('root_cause', $operator, $value))
+                ->orWhereHas('items.item', function ($itemQ) use ($operator, $value) {
+                    $itemQ->where('sku', $operator, $value)
+                        ->orWhere('name', $operator, $value);
+                });
+        });
+    }
+
+    private function applyInboundSearch($query): void
+    {
+        $search = trim((string) ($this->filters['q'] ?? ''));
+        if ($search === '') {
+            return;
+        }
+
+        [$operator, $value] = $this->searchOperatorAndValue($search);
+        $query->where(function ($q) use ($operator, $value) {
+            $q->where('inbound_transactions.code', $operator, $value)
+                ->orWhere('inbound_transactions.ref_no', $operator, $value)
+                ->orWhere('inbound_transactions.surat_jalan_no', $operator, $value)
+                ->orWhere('inbound_transactions.note', $operator, $value)
+                ->orWhereHas('warehouse', fn ($warehouseQ) => $warehouseQ->where('name', $operator, $value))
                 ->orWhereHas('items.item', function ($itemQ) use ($operator, $value) {
                     $itemQ->where('sku', $operator, $value)
                         ->orWhere('name', $operator, $value);
@@ -350,19 +456,23 @@ class ReturnReportExport implements FromCollection, WithHeadings, WithTitle, Wit
         $source = trim((string) ($this->filters['source'] ?? ''));
         $parts[] = 'Jenis: '.match ($source) {
             'customer' => 'Retur Customer',
+            'inbound' => 'Retur Inbound',
             'outbound' => 'Retur Outbound',
             default => 'Gabungan',
         };
-        if (!empty($this->filters['q'])) {
+        if (! empty($this->filters['q'])) {
             $parts[] = 'Pencarian: '.$this->filters['q'];
         }
-        if (!empty($this->filters['status'])) {
+        if (! empty($this->filters['status'])) {
             $parts[] = 'Status: '.$this->statusFilterLabel((string) $this->filters['status']);
         }
-        if ($source === 'customer' && !empty($this->filters['match_state'])) {
+        if ($source === 'customer' && ! empty($this->filters['match_state'])) {
             $parts[] = 'Status Resi: '.($this->filters['match_state'] === 'matched' ? 'Resi Ditemukan' : 'Input Manual');
         }
-        if (!empty($this->filters['date_from']) || !empty($this->filters['date_to'])) {
+        if ($source === 'customer' && ! empty($this->filters['resi_source'])) {
+            $parts[] = 'Jenis Resi: '.(CustomerReturn::resiSourceLabels()[$this->filters['resi_source']] ?? $this->filters['resi_source']);
+        }
+        if (! empty($this->filters['date_from']) || ! empty($this->filters['date_to'])) {
             $parts[] = 'Periode: '.($this->filters['date_from'] ?? '-').' s/d '.($this->filters['date_to'] ?? '-');
         }
 
@@ -375,6 +485,8 @@ class ReturnReportExport implements FromCollection, WithHeadings, WithTitle, Wit
             CustomerReturn::STATUS_COMPLETED => 'Selesai',
             CustomerReturn::STATUS_NO_RECEIVED => 'Tidak Diterima',
             CustomerReturn::STATUS_INSPECTED => 'Belum Finalisasi',
+            InboundScanStatus::PENDING_SCAN => 'Menunggu Scan',
+            InboundScanStatus::SCANNING => 'Sedang Scan',
             'approved' => 'Disetujui',
             'pending' => 'Menunggu Approval',
             default => $status,

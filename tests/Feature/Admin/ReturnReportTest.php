@@ -5,6 +5,10 @@ namespace Tests\Feature\Admin;
 use App\Models\CustomerReturn;
 use App\Models\CustomerReturnItem;
 use App\Models\DamagedGood;
+use App\Models\InboundItem;
+use App\Models\InboundScanSession;
+use App\Models\InboundScanSessionItem;
+use App\Models\InboundTransaction;
 use App\Models\Item;
 use App\Models\OutboundItem;
 use App\Models\OutboundTransaction;
@@ -274,5 +278,102 @@ class ReturnReportTest extends TestCase
             ->assertJsonPath('data.0.code', 'CRT-FILTER-OK')
             ->assertJsonPath('data.0.status', CustomerReturn::STATUS_COMPLETED)
             ->assertJsonPath('data.0.matched', true);
+    }
+
+    public function test_return_report_separates_inbound_returns_and_exposes_operational_analytics(): void
+    {
+        $creator = User::factory()->create(['name' => 'Input Retur Inbound']);
+        $scanner = User::factory()->create(['name' => 'Scanner Retur Inbound']);
+        $warehouse = Warehouse::firstOrCreate(
+            ['code' => 'GUDANG_RETUR_INBOUND'],
+            ['name' => 'Gudang Retur Inbound', 'type' => 'main']
+        );
+        $item = Item::create([
+            'sku' => 'SKU-RET-INBOUND',
+            'name' => 'Item Retur Inbound',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+            'koli_qty' => 10,
+        ]);
+
+        $transaction = InboundTransaction::create([
+            'code' => 'INB-RET-001',
+            'type' => 'return',
+            'ref_no' => 'REF-INB-RET-001',
+            'surat_jalan_no' => 'SJ-INB-RET-001',
+            'warehouse_id' => $warehouse->id,
+            'transacted_at' => now()->subHours(3),
+            'note' => 'Retur inbound dari toko',
+            'created_by' => $creator->id,
+            'approved_by' => $scanner->id,
+            'approved_at' => now()->subHour(),
+            'status' => 'completed',
+        ]);
+
+        InboundItem::create([
+            'inbound_transaction_id' => $transaction->id,
+            'item_id' => $item->id,
+            'qty' => 10,
+            'koli' => 1,
+            'input_unit' => 'koli',
+            'note' => 'Target sepuluh pcs',
+        ]);
+
+        $session = InboundScanSession::create([
+            'inbound_transaction_id' => $transaction->id,
+            'started_by' => $scanner->id,
+            'started_at' => now()->subHours(2),
+            'last_scanned_by' => $scanner->id,
+            'last_scanned_at' => now()->subHour(),
+            'completed_by' => $scanner->id,
+            'completed_at' => now()->subHour(),
+            'reset_count' => 1,
+        ]);
+
+        InboundScanSessionItem::create([
+            'inbound_scan_session_id' => $session->id,
+            'item_id' => $item->id,
+            'sku' => $item->sku,
+            'item_name' => $item->name,
+            'input_unit' => 'koli',
+            'qty_per_koli' => 10,
+            'expected_qty' => 10,
+            'expected_koli' => 1,
+            'scanned_qty' => 8,
+            'scanned_koli' => 1,
+        ]);
+
+        $response = $this->withoutMiddleware()->getJson(route('admin.reports.returns.data', [
+            'draw' => 4,
+            'start' => 0,
+            'length' => 25,
+            'source' => 'inbound',
+        ]));
+
+        $response->assertOk()
+            ->assertJsonPath('summary.total_documents', 1)
+            ->assertJsonPath('summary.customer_documents', 0)
+            ->assertJsonPath('summary.inbound_documents', 1)
+            ->assertJsonPath('summary.outbound_documents', 0)
+            ->assertJsonPath('summary.inbound_expected_qty', 10)
+            ->assertJsonPath('summary.inbound_scanned_qty', 8)
+            ->assertJsonPath('analytics.module', 'inbound')
+            ->assertJsonPath('analytics.headline.1.value', 100)
+            ->assertJsonPath('analytics.headline.2.value', 80)
+            ->assertJsonPath('analytics.headline.3.value', 1)
+            ->assertJsonPath('analytics.secondary.3.value', 1)
+            ->assertJsonPath('data.0.code', 'INB-RET-001')
+            ->assertJsonPath('data.0.status', 'completed')
+            ->assertJsonPath('data.0.qty_expected', 10)
+            ->assertJsonPath('data.0.qty_received', 8)
+            ->assertJsonPath('data.0.qty_variance', -2)
+            ->assertJsonPath('data.0.reset_count', 1)
+            ->assertJsonPath('data.0.secondary_by', 'Scanner Retur Inbound')
+            ->assertJsonPath('data.0.tertiary_by', 'Scanner Retur Inbound');
+
+        $this->withoutMiddleware()
+            ->get(route('admin.reports.returns.export', ['source' => 'inbound']))
+            ->assertOk()
+            ->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     }
 }

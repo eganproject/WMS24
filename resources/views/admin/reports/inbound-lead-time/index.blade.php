@@ -15,6 +15,17 @@
     .lead-time-tooltip { color: #a1a5b7; margin-left: .35rem; }
     .tooltip-inner { max-width: 320px; text-align: left; }
     #report_content[aria-busy="true"] { opacity: .65; pointer-events: none; }
+    .report-loading-indicator {
+        position: fixed;
+        inset: 0;
+        z-index: 1090;
+        background: rgba(24, 28, 50, .18);
+        backdrop-filter: blur(1px);
+    }
+    .report-loading-indicator .loading-card {
+        min-width: 250px;
+        box-shadow: 0 1rem 3rem rgba(24, 28, 50, .18);
+    }
 </style>
 @endpush
 
@@ -66,6 +77,12 @@
 </div>
 
 <div id="report_alert" class="alert alert-danger d-none mb-6"></div>
+<div id="report_loading" class="report-loading-indicator d-none align-items-center justify-content-center" role="status" aria-live="polite" aria-label="Sedang mengambil data laporan">
+    <div class="loading-card bg-white rounded-3 p-6 d-flex align-items-center gap-4">
+        <span class="spinner-border text-primary" aria-hidden="true"></span>
+        <div><div class="fw-bold text-gray-900">Mengambil data laporan…</div><div class="text-muted fs-8">Mohon tunggu sebentar.</div></div>
+    </div>
+</div>
 <div id="report_context" class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
     <div class="text-muted fs-7"><i class="fas fa-calendar-alt me-2"></i><span id="active_filter_label">Memuat periode laporan...</span></div>
     <div class="d-flex gap-2"><span class="badge badge-light-success">Selesai</span><span class="badge badge-light-warning">Belum selesai</span></div>
@@ -165,7 +182,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const els = {
         from: document.getElementById('filter_date_from'), to: document.getElementById('filter_date_to'), role: document.getElementById('filter_role'),
         status: document.getElementById('filter_status'), search: document.getElementById('filter_search'), alert: document.getElementById('report_alert'),
-        content: document.getElementById('report_content'), filterLabel: document.getElementById('active_filter_label'),
+        content: document.getElementById('report_content'), loading: document.getElementById('report_loading'), filterLabel: document.getElementById('active_filter_label'),
     };
     const tableLanguage = { lengthMenu: 'Tampilkan _MENU_', info: 'Menampilkan _START_–_END_ dari _TOTAL_', infoEmpty: 'Tidak ada data', paginate: { previous: 'Sebelumnya', next: 'Berikutnya' } };
     let charts = [];
@@ -279,7 +296,8 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const load = async () => {
-        els.alert.classList.add('d-none'); els.content.setAttribute('aria-busy', 'true'); renderFilterLabel();
+        els.alert.classList.add('d-none'); els.content.setAttribute('aria-busy', 'true');
+        els.loading.classList.remove('d-none'); els.loading.classList.add('d-flex'); renderFilterLabel();
         const button = document.getElementById('filter_apply'); button.disabled = true; button.setAttribute('data-kt-indicator', 'on');
         try {
             const response = await fetch(`${dataUrl}?${new URLSearchParams(filters())}`, { headers: { Accept: 'application/json' } });
@@ -292,6 +310,7 @@ document.addEventListener('DOMContentLoaded', () => {
             els.alert.textContent = error.message || 'Gagal memuat laporan lead time operasional.'; els.alert.classList.remove('d-none');
         } finally {
             button.disabled = false; button.removeAttribute('data-kt-indicator'); els.content.setAttribute('aria-busy', 'false');
+            els.loading.classList.add('d-none'); els.loading.classList.remove('d-flex');
         }
     };
 

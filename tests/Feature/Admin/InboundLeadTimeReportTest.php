@@ -50,7 +50,9 @@ class InboundLeadTimeReportTest extends TestCase
         $this->withoutMiddleware()->get(route('admin.reports.inbound-lead-time.index'))
             ->assertOk()
             ->assertSee('Analisis Lead Time per Role dan Jabatan')
-            ->assertSee('Export Excel');
+            ->assertSee('Export Excel')
+            ->assertSee('Analisis Detail')
+            ->assertSee('data-bs-toggle="tooltip"', false);
 
         $response = $this->withoutMiddleware()->getJson(route('admin.reports.inbound-lead-time.data', [
             'date_from' => '2026-09-23',

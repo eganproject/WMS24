@@ -442,6 +442,7 @@
                         <span class="fw-bolder text-gray-900">${escapeHtml(row.code || '-')}</span>
                         ${statusBadgeHtml(row.status)}
                         ${matchBadgeHtml(row.matched)}
+                        ${row.resi_source_label ? `<span class="badge badge-light-info">${escapeHtml(row.resi_source_label)}</span>` : ''}
                     </div>
                     <div class="customer-return-doc-meta">
                         <span class="customer-return-meta-label">Resi</span>

@@ -64,6 +64,36 @@ class CustomerReturnFlowTest extends TestCase
             ->assertJsonPath('missing_skus.0.expected_qty', 1);
     }
 
+    public function test_store_requires_resi_source_for_new_return(): void
+    {
+        $this->createWarehouseFixtures();
+
+        $item = Item::create([
+            'sku' => 'SKU-RET-SOURCE',
+            'name' => 'Item Retur Sumber Resi',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+        ]);
+
+        $response = $this->withoutMiddleware()->postJson(route('admin.inventory.customer-returns.store'), [
+            'resi_no' => 'RESI-SOURCE-REQUIRED',
+            'received_at' => now()->format('Y-m-d H:i'),
+            'items' => [
+                [
+                    'item_id' => $item->id,
+                    'expected_qty' => 1,
+                    'received_qty' => 1,
+                    'good_qty' => 1,
+                    'damaged_qty' => 0,
+                ],
+            ],
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['resi_source']);
+        $this->assertDatabaseCount('customer_returns', 0);
+    }
+
     public function test_store_rejects_when_good_and_damaged_qty_do_not_match_received_qty(): void
     {
         $this->createWarehouseFixtures();
@@ -77,6 +107,7 @@ class CustomerReturnFlowTest extends TestCase
 
         $response = $this->withoutMiddleware()->postJson(route('admin.inventory.customer-returns.store'), [
             'resi_no' => 'RESI-INVALID-001',
+            'resi_source' => CustomerReturn::RESI_SOURCE_COD,
             'received_at' => now()->format('Y-m-d H:i'),
             'items' => [
                 [
@@ -127,6 +158,7 @@ class CustomerReturnFlowTest extends TestCase
 
         $response = $this->withoutMiddleware()->postJson(route('admin.inventory.customer-returns.store'), [
             'resi_no' => $resi->no_resi,
+            'resi_source' => CustomerReturn::RESI_SOURCE_NON_COD,
             'resi_id' => $resi->id,
             'received_at' => now()->format('Y-m-d H:i'),
             'note' => 'Isi fisik tidak sama dengan expected resi',
@@ -154,6 +186,7 @@ class CustomerReturnFlowTest extends TestCase
 
         $customerReturn = CustomerReturn::with('items')->firstOrFail();
         $this->assertSame($resi->id, $customerReturn->resi_id);
+        $this->assertSame(CustomerReturn::RESI_SOURCE_NON_COD, $customerReturn->resi_source);
         $this->assertCount(2, $customerReturn->items);
         $this->assertDatabaseHas('customer_return_items', [
             'customer_return_id' => $customerReturn->id,
@@ -216,6 +249,7 @@ class CustomerReturnFlowTest extends TestCase
 
         $storeResponse = $this->withoutMiddleware()->postJson(route('admin.inventory.customer-returns.store'), [
             'resi_no' => $resi->no_resi,
+            'resi_source' => CustomerReturn::RESI_SOURCE_COD,
             'received_at' => now()->format('Y-m-d H:i'),
             'note' => 'Barang dari resi tidak ada di paket',
             'items' => [
@@ -285,6 +319,7 @@ class CustomerReturnFlowTest extends TestCase
 
         $storeResponse = $this->withoutMiddleware()->postJson(route('admin.inventory.customer-returns.store'), [
             'resi_no' => $resi->no_resi,
+            'resi_source' => CustomerReturn::RESI_SOURCE_COD,
             'received_at' => now()->format('Y-m-d H:i'),
             'note' => 'Paket dibuka untuk inspeksi',
             'items' => [
@@ -376,6 +411,7 @@ class CustomerReturnFlowTest extends TestCase
 
         $storeResponse = $this->withoutMiddleware()->postJson(route('admin.inventory.customer-returns.store'), [
             'resi_no' => 'RESI-RET-PACK',
+            'resi_source' => CustomerReturn::RESI_SOURCE_NON_COD,
             'received_at' => now()->format('Y-m-d H:i'),
             'items' => [
                 [
@@ -461,7 +497,10 @@ class CustomerReturnFlowTest extends TestCase
             ->assertSee('CRT-TEST-DOC')
             ->assertSee('Dokumen retur customer untuk inspeksi dan finalisasi stok.')
             ->assertSee('SKU-RET-DOC')
-            ->assertSee('Catatan dokumen retur');
+            ->assertSee('Catatan dokumen retur')
+            ->assertSee('Sumber Resi');
+
+        $this->assertNull($customerReturn->resi_source);
     }
 
     public function test_customer_return_data_can_be_filtered_by_received_date_range(): void

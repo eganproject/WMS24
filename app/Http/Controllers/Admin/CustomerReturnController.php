@@ -158,6 +158,8 @@ class CustomerReturnController extends Controller
                 'id' => $row->id,
                 'code' => $row->code,
                 'resi_no' => $row->resi_no,
+                'resi_source' => $row->resi_source,
+                'resi_source_label' => $row->resiSourceLabel(),
                 'order_ref' => $row->order_ref ?? '-',
                 'status' => $row->status,
                 'status_label' => $row->statusLabel(),
@@ -231,7 +233,7 @@ class CustomerReturnController extends Controller
 
     public function store(Request $request)
     {
-        $validated = $this->validatePayload($request);
+        $validated = $this->validatePayload($request, requireResiSource: true);
         $storedItemImage = null;
 
         DB::beginTransaction();
@@ -244,6 +246,7 @@ class CustomerReturnController extends Controller
                 'code' => $this->generateCode('CRT'),
                 'resi_id' => $validated['resi_id'],
                 'resi_no' => $validated['resi_no'],
+                'resi_source' => $validated['resi_source'],
                 'order_ref' => $validated['order_ref'],
                 'received_at' => $validated['received_at'],
                 'inspected_at' => $validated['received_at'],
@@ -348,7 +351,7 @@ class CustomerReturnController extends Controller
 
     public function update(Request $request, int $id)
     {
-        $validated = $this->validatePayload($request);
+        $validated = $this->validatePayload($request, requireResiSource: false);
         $newItemImage = null;
         $oldItemImage = null;
 
@@ -376,6 +379,7 @@ class CustomerReturnController extends Controller
             $customerReturn->update([
                 'resi_id' => $validated['resi_id'],
                 'resi_no' => $validated['resi_no'],
+                'resi_source' => $validated['resi_source'] ?? $customerReturn->resi_source,
                 'order_ref' => $validated['order_ref'],
                 'received_at' => $validated['received_at'],
                 'inspected_at' => $validated['received_at'],
@@ -728,10 +732,15 @@ class CustomerReturnController extends Controller
         }
     }
 
-    private function validatePayload(Request $request): array
+    private function validatePayload(Request $request, bool $requireResiSource): array
     {
         $validated = $request->validate([
             'resi_no' => ['required', 'string', 'max:100'],
+            'resi_source' => [
+                $requireResiSource ? 'required' : 'nullable',
+                'string',
+                Rule::in(array_keys(CustomerReturn::resiSourceLabels())),
+            ],
             'resi_id' => ['nullable', 'integer', 'exists:resis,id'],
             'order_ref' => ['nullable', 'string', 'max:100'],
             'received_at' => ['required', 'date'],
@@ -747,6 +756,9 @@ class CustomerReturnController extends Controller
             'items.*.damaged_qty' => ['required', 'integer', 'min:0'],
             'items.*.root_cause' => ['nullable', 'string', Rule::in(array_keys(CustomerReturnItem::rootCauseLabels()))],
             'items.*.note' => ['nullable', 'string'],
+        ], [
+            'resi_source.required' => 'Sumber resi wajib dipilih.',
+            'resi_source.in' => 'Sumber resi harus COD atau Non COD.',
         ]);
 
         $rows = collect($validated['items'] ?? [])
@@ -902,6 +914,8 @@ class CustomerReturnController extends Controller
             'code' => $customerReturn->code,
             'resi_id' => $customerReturn->resi_id,
             'resi_no' => $customerReturn->resi_no,
+            'resi_source' => $customerReturn->resi_source,
+            'resi_source_label' => $customerReturn->resiSourceLabel(),
             'order_ref' => $customerReturn->order_ref,
             'status' => $customerReturn->status,
             'received_at' => $customerReturn->received_at?->format('Y-m-d H:i'),
@@ -953,6 +967,7 @@ class CustomerReturnController extends Controller
             'lookupUrl' => route('admin.inventory.customer-returns.lookup'),
             'items' => $items,
             'rootCauseLabels' => CustomerReturnItem::rootCauseLabels(),
+            'resiSourceLabels' => CustomerReturn::resiSourceLabels(),
             'displayWarehouseLabel' => $this->displayWarehouseLabel(),
             'damagedWarehouseLabel' => $this->damagedWarehouseLabel(),
             'itemImageUrl' => $customerReturn ? $this->itemImageUrl($customerReturn) : null,

@@ -13,11 +13,15 @@ class CustomerReturn extends Model
     public const STATUS_COMPLETED = 'completed';
     public const STATUS_NO_RECEIVED = 'no_received';
 
+    public const RESI_SOURCE_COD = 'cod';
+    public const RESI_SOURCE_NON_COD = 'non_cod';
+
     protected $fillable = [
         'code',
         'resi_id',
         'damaged_good_id',
         'resi_no',
+        'resi_source',
         'order_ref',
         'received_at',
         'inspected_at',
@@ -92,5 +96,18 @@ class CustomerReturn extends Model
             self::STATUS_NO_RECEIVED => 'secondary',
             default => 'warning',
         };
+    }
+
+    public static function resiSourceLabels(): array
+    {
+        return [
+            self::RESI_SOURCE_COD => 'COD',
+            self::RESI_SOURCE_NON_COD => 'Non COD',
+        ];
+    }
+
+    public function resiSourceLabel(): ?string
+    {
+        return self::resiSourceLabels()[(string) $this->resi_source] ?? null;
     }
 }

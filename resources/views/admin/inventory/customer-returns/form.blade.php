@@ -26,6 +26,7 @@
 
     $resiIdValue = old('resi_id', $customerReturn?->resi_id);
     $resiNoValue = old('resi_no', $customerReturn?->resi_no ?? '');
+    $resiSourceValue = old('resi_source', $customerReturn?->resi_source ?? '');
     $orderRefValue = old('order_ref', $customerReturn?->order_ref ?? '');
     $receivedAtValue = old('received_at', $customerReturn?->received_at?->format('Y-m-d H:i') ?? '');
     $noteValue = old('note', $customerReturn?->note ?? '');
@@ -209,6 +210,28 @@
                             <div class="text-muted fs-7">Tarik data SKU dari resi marketplace lebih dulu sebagai acuan pemeriksaan paket.</div>
                         </div>
                         <span class="badge badge-light-primary">Langkah 1</span>
+                    </div>
+
+                    <div class="mb-5">
+                        <label class="required fs-6 fw-bold form-label mb-2" for="customer_return_resi_source">Sumber Resi</label>
+                        <select
+                            class="form-select form-select-solid @error('resi_source') is-invalid @enderror"
+                            name="resi_source"
+                            id="customer_return_resi_source"
+                            @disabled($readOnlyMode)
+                            @required(!$isEditMode)
+                        >
+                            <option value="">Pilih sumber resi</option>
+                            @foreach($resiSourceLabels as $value => $label)
+                                <option value="{{ $value }}" @selected($resiSourceValue === $value)>{{ $label }}</option>
+                            @endforeach
+                        </select>
+                        @error('resi_source')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
+                        @if($isEditMode && !$customerReturn?->resi_source)
+                            <div class="form-text">Data lama boleh tetap kosong karena sumber resinya belum tercatat.</div>
+                        @else
+                            <div class="form-text">Pilih apakah resi retur berasal dari transaksi COD atau Non COD.</div>
+                        @endif
                     </div>
 
                     <div class="mb-5">

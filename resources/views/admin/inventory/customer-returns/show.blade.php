@@ -417,6 +417,10 @@
                             <div class="customer-return-document-meta-value">{{ $customerReturn->resi_no }}</div>
                         </div>
                         <div class="customer-return-document-meta-item">
+                            <div class="customer-return-document-meta-label">Sumber Resi</div>
+                            <div class="customer-return-document-meta-value">{{ $customerReturn->resiSourceLabel() ?: '-' }}</div>
+                        </div>
+                        <div class="customer-return-document-meta-item">
                             <div class="customer-return-document-meta-label">Order Ref</div>
                             <div class="customer-return-document-meta-value">{{ $customerReturn->order_ref ?: '-' }}</div>
                         </div>

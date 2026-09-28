@@ -49,7 +49,7 @@ class InboundLeadTimeReportTest extends TestCase
 
         $this->withoutMiddleware()->get(route('admin.reports.inbound-lead-time.index'))
             ->assertOk()
-            ->assertSee('Tracking Dokumen sampai Completed')
+            ->assertSee('Analisis Lead Time per Role dan Jabatan')
             ->assertSee('Export Excel');
 
         $response = $this->withoutMiddleware()->getJson(route('admin.reports.inbound-lead-time.data', [
@@ -97,6 +97,111 @@ class InboundLeadTimeReportTest extends TestCase
         ]))->assertOk()->assertDownload();
 
         $this->assertNotNull($pending);
+    }
+
+    public function test_operational_report_compares_picker_packer_inbound_and_customer_return(): void
+    {
+        Carbon::setTestNow('2026-09-23 12:00:00');
+        $inputter = User::factory()->create(['name' => 'Admin Resi']);
+        $qcUser = User::factory()->create(['name' => 'Picker Satu']);
+        $scanOutUser = User::factory()->create(['name' => 'Admin Scan Out']);
+        $inboundUser = User::factory()->create(['name' => 'Inbound Satu']);
+        $returnCreator = User::factory()->create(['name' => 'Admin Retur']);
+        $returnFinalizer = User::factory()->create(['name' => 'Retur Satu']);
+
+        $positionIds = [];
+        foreach (['Picker', 'Packer', 'Inbound', 'Retur Customer'] as $position) {
+            $positionIds[$position] = DB::table('employee_positions')->insertGetId([
+                'name' => $position, 'is_active' => true, 'created_at' => now(), 'updated_at' => now(),
+            ]);
+        }
+        $employee = function (?User $user, string $code, string $name, string $position) use ($positionIds): int {
+            return DB::table('employees')->insertGetId([
+                'user_id' => $user?->id, 'position_id' => $positionIds[$position],
+                'employee_code' => $code, 'name' => $name, 'position' => $position,
+                'employment_status' => 'active', 'created_at' => now(), 'updated_at' => now(),
+            ]);
+        };
+        $employee($qcUser, 'EMP-PICKER-1', 'Picker Satu', 'Picker');
+        $packerEmployeeId = $employee(null, 'EMP-PACKER-1', 'Packer Satu', 'Packer');
+        $employee($inboundUser, 'EMP-INBOUND-1', 'Inbound Satu', 'Inbound');
+        $employee($returnFinalizer, 'EMP-RETURN-1', 'Retur Satu', 'Retur Customer');
+
+        $resiId = DB::table('resis')->insertGetId([
+            'id_pesanan' => 'ORDER-OPS-001', 'tanggal_pesanan' => '2026-09-23',
+            'tanggal_upload' => '2026-09-23', 'no_resi' => 'RESI-OPS-001',
+            'uploader_id' => $inputter->id, 'status' => 'active',
+            'created_at' => '2026-09-23 08:00:00', 'updated_at' => '2026-09-23 08:00:00',
+        ]);
+        DB::table('resi_details')->insert([
+            'resi_id' => $resiId, 'sku' => 'SKU-OPS-001', 'qty' => 5,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('qc_resi_scans')->insert([
+            'resi_id' => $resiId, 'scan_type' => 'no_resi', 'scan_code' => 'RESI-OPS-001',
+            'status' => 'passed', 'started_at' => '2026-09-23 09:00:00',
+            'completed_at' => '2026-09-23 10:00:00', 'scanned_by' => $qcUser->id,
+            'completed_by' => $qcUser->id, 'last_scanned_by' => $qcUser->id,
+            'last_scanned_at' => '2026-09-23 10:00:00', 'reset_count' => 0,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('shipment_scan_outs')->insert([
+            'resi_id' => $resiId, 'scan_type' => 'no_resi', 'scan_code' => 'RESI-OPS-001',
+            'scan_date' => '2026-09-23', 'scanned_at' => '2026-09-23 10:45:00',
+            'scanned_by' => $scanOutUser->id, 'packed_employee_id' => $packerEmployeeId,
+            'packed_at' => '2026-09-23 10:45:00', 'packing_confirmed_by' => $scanOutUser->id,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $warehouse = Warehouse::firstOrCreate(['code' => 'OPS'], ['name' => 'Gudang Operasional', 'type' => 'main']);
+        $supplier = Supplier::create(['name' => 'Supplier Operasional']);
+        $item = Item::create(['sku' => 'INB-OPS-001', 'name' => 'Item Inbound Ops', 'category_id' => 0, 'koli_qty' => 10]);
+        $inbound = $this->transaction($inboundUser, $warehouse, $supplier, $item, 'RCV-OPS-001', 'completed', '2026-09-23 08:00:00', 10, 1);
+        $this->makeScanSession($inbound, $inboundUser, $item, '2026-09-23 09:00:00', '2026-09-23 10:30:00', 10, 10, 1, 1);
+
+        DB::table('customer_returns')->insert([
+            'code' => 'CRT-OPS-001', 'resi_no' => 'RESI-RETUR-001', 'order_ref' => 'ORDER-RETUR-001',
+            'received_at' => '2026-09-23 08:00:00', 'inspected_at' => '2026-09-23 09:00:00',
+            'finalized_at' => '2026-09-23 11:00:00', 'status' => 'completed',
+            'created_by' => $returnCreator->id, 'inspected_by' => $returnFinalizer->id,
+            'finalized_by' => $returnFinalizer->id, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $response = $this->withoutMiddleware()->getJson(route('admin.reports.inbound-lead-time.data', [
+            'date_from' => '2026-09-23', 'date_to' => '2026-09-23',
+        ]));
+        $response->assertOk()
+            ->assertJsonPath('summary.total_documents', 4)
+            ->assertJsonPath('summary.completed_documents', 4)
+            ->assertJsonPath('summary.avg_lead_minutes', 123.75)
+            ->assertJsonPath('summary.median_lead_minutes', 120)
+            ->assertJsonPath('summary.p90_lead_minutes', 180)
+            ->assertJsonPath('summary.missing_position_documents', 0)
+            ->assertJsonCount(4, 'roles')
+            ->assertJsonCount(4, 'details');
+
+        $roleMetrics = collect($response->json('roles'))->keyBy('key');
+        $this->assertSame(120.0, (float) $roleMetrics['picker']['avg_lead_minutes']);
+        $this->assertSame(45.0, (float) $roleMetrics['packer']['avg_lead_minutes']);
+        $this->assertSame(150.0, (float) $roleMetrics['inbound']['avg_lead_minutes']);
+        $this->assertSame(180.0, (float) $roleMetrics['customer_return']['avg_lead_minutes']);
+        $this->assertSame(['Inbound', 'Packer', 'Picker', 'Retur Customer'], collect($response->json('positions'))->pluck('position')->sort()->values()->all());
+
+        $this->withoutMiddleware()->getJson(route('admin.reports.inbound-lead-time.data', [
+            'date_from' => '2026-09-23', 'date_to' => '2026-09-23',
+            'role' => 'packer', 'status' => 'completed', 'q' => 'Packer Satu',
+        ]))->assertOk()
+            ->assertJsonPath('summary.total_documents', 1)
+            ->assertJsonPath('details.0.role', 'packer')
+            ->assertJsonPath('details.0.pic', 'Packer Satu')
+            ->assertJsonPath('details.0.lead_minutes', 45);
+
+        $this->withoutMiddleware()->getJson(route('admin.reports.inbound-lead-time.data', [
+            'date_from' => '2026-09-23', 'date_to' => '2026-09-23', 'type' => 'receipt',
+        ]))->assertOk()
+            ->assertJsonPath('period.role', 'inbound')
+            ->assertJsonPath('summary.total_documents', 1)
+            ->assertJsonPath('details.0.role', 'inbound');
     }
 
     public function test_menu_seeder_is_additive_and_preserves_production_changes(): void

@@ -11,12 +11,12 @@ class InboundLeadTimeReportMenuSeeder extends Seeder
     /** Seeder aditif: tidak dipanggil DatabaseSeeder dan tidak menimpa konfigurasi production. */
     public function run(): void
     {
-        if (!Schema::hasTable('menus')) {
+        if (! Schema::hasTable('menus')) {
             return;
         }
 
         $reportsMenuId = DB::table('menus')->where('slug', 'reports')->value('id');
-        if (!$reportsMenuId) {
+        if (! $reportsMenuId) {
             $this->command?->warn('Menu induk Laporan tidak ditemukan; tidak ada data yang diubah.');
 
             return;
@@ -25,9 +25,9 @@ class InboundLeadTimeReportMenuSeeder extends Seeder
         $now = now();
         $menuId = DB::table('menus')->where('slug', 'report-inbound-lead-time')->value('id');
 
-        if (!$menuId) {
+        if (! $menuId) {
             $menuId = DB::table('menus')->insertGetId([
-                'name' => 'Lead Time Inbound',
+                'name' => 'Lead Time Operasional',
                 'slug' => 'report-inbound-lead-time',
                 'route' => 'admin.reports.inbound-lead-time.index',
                 'icon' => 'fas fa-stopwatch',
@@ -39,7 +39,7 @@ class InboundLeadTimeReportMenuSeeder extends Seeder
             ]);
         }
 
-        if (!Schema::hasTable('roles') || !Schema::hasTable('permission_menu')) {
+        if (! Schema::hasTable('roles') || ! Schema::hasTable('permission_menu')) {
             return;
         }
 
@@ -49,7 +49,7 @@ class InboundLeadTimeReportMenuSeeder extends Seeder
                 ->where('menu_id', $menuId)
                 ->exists();
 
-            if (!$exists) {
+            if (! $exists) {
                 DB::table('permission_menu')->insert([
                     'role_id' => $roleId,
                     'menu_id' => $menuId,

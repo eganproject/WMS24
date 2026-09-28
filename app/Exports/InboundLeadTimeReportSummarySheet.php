@@ -10,49 +10,48 @@ use Maatwebsite\Excel\Events\AfterSheet;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 
-class InboundLeadTimeReportSummarySheet implements FromArray, WithTitle, WithEvents
+class InboundLeadTimeReportSummarySheet implements FromArray, WithEvents, WithTitle
 {
     use SanitizesSpreadsheetText;
 
-    public function __construct(private array $report)
-    {
-    }
+    public function __construct(private array $report) {}
 
     public function title(): string
     {
-        return 'Ringkasan';
+        return 'Ringkasan Operasional';
     }
 
     public function array(): array
     {
         $summary = $this->report['summary'];
-        $period = $this->report['period'];
         $rows = [
-            ['LAPORAN LEAD TIME INBOUND'],
-            [$this->periodLabel($period)],
+            ['LAPORAN LEAD TIME OPERASIONAL'],
+            [$this->periodLabel($this->report['period'])],
             [],
-            ['INDIKATOR', 'NILAI'],
-            ['Total dokumen dibuat', $summary['total_documents']],
-            ['Dokumen selesai', $summary['completed_documents']],
-            ['Menunggu scan', $summary['pending_documents']],
-            ['Sedang scan', $summary['scanning_documents']],
+            ['INDIKATOR KESELURUHAN', 'NILAI'],
+            ['Total proses', $summary['total_documents']],
+            ['Proses selesai', $summary['completed_documents']],
+            ['Proses belum selesai', $summary['open_documents']],
             ['Completion rate (%)', $summary['completion_rate']],
-            ['Rata-rata menunggu scan (menit)', $summary['avg_waiting_minutes']],
-            ['Rata-rata proses scan (menit)', $summary['avg_scan_minutes']],
-            ['Rata-rata dibuat sampai selesai (menit)', $summary['avg_lead_minutes']],
+            ['Rata-rata lead time (menit)', $summary['avg_lead_minutes']],
+            ['Median lead time (menit)', $summary['median_lead_minutes']],
+            ['P90 lead time (menit)', $summary['p90_lead_minutes']],
             ['Lead time terlama (menit)', $summary['max_lead_minutes']],
-            ['Aging dokumen terbuka terlama (menit)', $summary['oldest_open_minutes']],
-            ['Total qty dokumen', $summary['total_expected_qty']],
-            ['Total qty hasil scan', $summary['total_scanned_qty']],
-            ['Dokumen selesai berselisih', $summary['variance_documents']],
-            ['Total reset scan', $summary['reset_count']],
+            ['Backlog terlama (menit)', $summary['oldest_open_minutes']],
+            ['Proses tanpa PIC', $summary['missing_pic_documents']],
+            ['Proses tanpa jabatan terhubung', $summary['missing_position_documents']],
             [],
-            ['RINGKASAN PER TANGGAL DIBUAT'],
-            ['Tanggal', 'Dibuat', 'Selesai', 'Belum Selesai', 'Rata-rata Lead Time (menit)'],
+            ['RINGKASAN PER ROLE'],
+            ['Role', 'Definisi', 'Proses', 'Selesai', 'Terbuka', 'Completion (%)', 'Rata-rata (menit)', 'Median (menit)', 'P90 (menit)', 'Maksimum (menit)', 'Backlog Terlama (menit)'],
         ];
-
-        foreach ($this->report['charts']['daily'] as $row) {
-            $rows[] = [$row['date'], $row['created'], $row['completed'], $row['open'], $row['avg_lead_minutes']];
+        foreach ($this->report['roles'] as $role) {
+            $rows[] = [$role['label'], $role['definition'], $role['total'], $role['completed'], $role['open'], $role['completion_rate'], $role['avg_lead_minutes'], $role['median_lead_minutes'], $role['p90_lead_minutes'], $role['max_lead_minutes'], $role['oldest_open_minutes']];
+        }
+        $rows[] = [];
+        $rows[] = ['RINGKASAN PER JABATAN'];
+        $rows[] = ['Role', 'Jabatan', 'Proses', 'Selesai', 'Terbuka', 'Completion (%)', 'Rata-rata (menit)', 'Median (menit)', 'P90 (menit)', 'Maksimum (menit)', 'Backlog Terlama (menit)'];
+        foreach ($this->report['positions'] as $position) {
+            $rows[] = [$position['role_label'], $position['position'], $position['total'], $position['completed'], $position['open'], $position['completion_rate'], $position['avg_lead_minutes'], $position['median_lead_minutes'], $position['p90_lead_minutes'], $position['max_lead_minutes'], $position['oldest_open_minutes']];
         }
 
         return $rows;
@@ -62,23 +61,26 @@ class InboundLeadTimeReportSummarySheet implements FromArray, WithTitle, WithEve
     {
         return [AfterSheet::class => function (AfterSheet $event) {
             $sheet = $event->sheet->getDelegate();
-            $lastRow = max(21, 21 + count($this->report['charts']['daily']));
-            $sheet->mergeCells('A1:E1');
-            $sheet->mergeCells('A2:E2');
-            $sheet->mergeCells('A20:E20');
-            $sheet->getStyle('A1:E1')->getFont()->setBold(true)->setSize(16);
-            $sheet->getStyle('A2:E2')->getFont()->getColor()->setRGB('7E8299');
-            $sheet->getStyle('A20:E20')->getFont()->setBold(true)->setSize(13);
-            foreach ([4, 21] as $headerRow) {
-                $sheet->getStyle("A{$headerRow}:E{$headerRow}")->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
-                $sheet->getStyle("A{$headerRow}:E{$headerRow}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('1B84FF');
+            $roleEnd = 18 + count($this->report['roles']);
+            $positionTitle = $roleEnd + 2;
+            $positionHeader = $positionTitle + 1;
+            $lastRow = max($positionHeader, $positionHeader + count($this->report['positions']));
+            foreach ([1, 17, $positionTitle] as $row) {
+                $sheet->mergeCells("A{$row}:K{$row}");
+                $sheet->getStyle("A{$row}:K{$row}")->getFont()->setBold(true)->setSize($row === 1 ? 16 : 13);
             }
-            $sheet->getStyle('A4:B18')->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setRGB('E4E6EF');
-            $sheet->getStyle("A21:E{$lastRow}")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setRGB('E4E6EF');
-            $sheet->getStyle("B5:E{$lastRow}")->getNumberFormat()->setFormatCode('#,##0.00');
-            $sheet->freezePane('A22');
-            $sheet->setAutoFilter("A21:E{$lastRow}");
-            foreach (range('A', 'E') as $column) {
+            $sheet->mergeCells('A2:K2');
+            $sheet->getStyle('A2:K2')->getFont()->getColor()->setRGB('7E8299');
+            foreach ([4, 18, $positionHeader] as $row) {
+                $sheet->getStyle("A{$row}:K{$row}")->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
+                $sheet->getStyle("A{$row}:K{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('1B84FF');
+            }
+            $sheet->getStyle('A4:B15')->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setRGB('E4E6EF');
+            $sheet->getStyle("A18:K{$roleEnd}")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setRGB('E4E6EF');
+            $sheet->getStyle("A{$positionHeader}:K{$lastRow}")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setRGB('E4E6EF');
+            $sheet->getStyle("B5:K{$lastRow}")->getNumberFormat()->setFormatCode('#,##0.00');
+            $sheet->freezePane('A18');
+            foreach (range('A', 'K') as $column) {
                 $sheet->getColumnDimension($column)->setAutoSize(true);
             }
         }];
@@ -88,10 +90,10 @@ class InboundLeadTimeReportSummarySheet implements FromArray, WithTitle, WithEve
     {
         $from = $period['date_from'] ?: 'Semua tanggal';
         $to = $period['date_to'] ?: 'Semua tanggal';
-        $type = $period['type'] ?: 'Semua jenis';
+        $role = $period['role'] ?: 'Semua role';
         $status = $period['status'] ?: 'Semua status';
         $search = $period['search'] ? ' | Pencarian: '.$this->spreadsheetText($period['search']) : '';
 
-        return "Tanggal dokumen dibuat: {$from} s.d. {$to} | Jenis: {$type} | Status: {$status}{$search}";
+        return "Waktu mulai proses: {$from} s.d. {$to} | Role: {$role} | Status: {$status}{$search}";
     }
 }

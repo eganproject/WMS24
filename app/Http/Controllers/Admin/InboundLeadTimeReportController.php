@@ -16,7 +16,8 @@ class InboundLeadTimeReportController extends Controller
         return view('admin.reports.inbound-lead-time.index', [
             'dataUrl' => route('admin.reports.inbound-lead-time.data'),
             'exportUrl' => route('admin.reports.inbound-lead-time.export'),
-            'today' => now()->toDateString(),
+            'dateFrom' => now()->subDays(29)->toDateString(),
+            'dateTo' => now()->toDateString(),
         ]);
     }
 
@@ -31,7 +32,7 @@ class InboundLeadTimeReportController extends Controller
 
         return Excel::download(
             new InboundLeadTimeReportExport($data),
-            'laporan-lead-time-inbound-'.now()->format('Ymd_His').'.xlsx'
+            'laporan-lead-time-operasional-'.now()->format('Ymd_His').'.xlsx'
         );
     }
 
@@ -40,8 +41,9 @@ class InboundLeadTimeReportController extends Controller
         return $request->validate([
             'date_from' => ['nullable', 'date'],
             'date_to' => ['nullable', 'date', 'after_or_equal:date_from'],
+            'role' => ['nullable', Rule::in(['picker', 'packer', 'inbound', 'customer_return'])],
             'type' => ['nullable', Rule::in(['receipt', 'return', 'manual', 'opening'])],
-            'status' => ['nullable', Rule::in(['pending_scan', 'scanning', 'completed'])],
+            'status' => ['nullable', Rule::in(['open', 'completed', 'pending_scan', 'scanning'])],
             'q' => ['nullable', 'string', 'max:120'],
         ]);
     }

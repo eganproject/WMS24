@@ -161,6 +161,12 @@ class ReturnReportTest extends TestCase
             ->assertJsonPath('analytics.sku_analytics.total_target_qty', 5)
             ->assertJsonPath('analytics.sku_analytics.total_actual_qty', 6)
             ->assertJsonPath('analytics.sku_analytics.total_exception_qty', 2)
+            ->assertJsonPath('analytics.sku_analytics.total_damaged_qty', 1)
+            ->assertJsonPath('analytics.sku_analytics.total_lost_qty', 1)
+            ->assertJsonPath('analytics.sku_analytics.rows.0.damaged_qty', 1)
+            ->assertJsonPath('analytics.sku_analytics.rows.0.lost_qty', 1)
+            ->assertJsonPath('analytics.sku_analytics.rows.0.damaged_rate', 14.29)
+            ->assertJsonPath('analytics.sku_analytics.rows.0.lost_rate', 14.29)
             ->assertJsonPath('analytics.sku_analytics.rows.0.sku', 'SKU-RET-CUST')
             ->assertJsonPath('analytics.sku_analytics.rows.0.documents', 2)
             ->assertJsonPath('analytics.sku_analytics.rows.0.contribution_rate', 100);
@@ -210,6 +216,10 @@ class ReturnReportTest extends TestCase
             ->assertJsonPath('analytics.sku_analytics.total_target_qty', 7)
             ->assertJsonPath('analytics.sku_analytics.total_actual_qty', 7)
             ->assertJsonPath('analytics.sku_analytics.total_exception_qty', 0)
+            ->assertJsonPath('analytics.sku_analytics.total_damaged_qty', 0)
+            ->assertJsonPath('analytics.sku_analytics.total_lost_qty', 0)
+            ->assertJsonPath('analytics.sku_analytics.rows.0.damaged_qty', 0)
+            ->assertJsonPath('analytics.sku_analytics.rows.0.lost_qty', 0)
             ->assertJsonPath('analytics.sku_analytics.rows.0.sku', 'SKU-RET-OUT');
 
         $this->withoutMiddleware()
@@ -392,6 +402,11 @@ class ReturnReportTest extends TestCase
             ->assertJsonPath('analytics.sku_analytics.total_target_qty', 10)
             ->assertJsonPath('analytics.sku_analytics.total_actual_qty', 8)
             ->assertJsonPath('analytics.sku_analytics.total_exception_qty', 2)
+            ->assertJsonPath('analytics.sku_analytics.total_damaged_qty', 0)
+            ->assertJsonPath('analytics.sku_analytics.total_lost_qty', 2)
+            ->assertJsonPath('analytics.sku_analytics.rows.0.damaged_qty', 0)
+            ->assertJsonPath('analytics.sku_analytics.rows.0.lost_qty', 2)
+            ->assertJsonPath('analytics.sku_analytics.rows.0.lost_rate', 20)
             ->assertJsonPath('analytics.sku_analytics.rows.0.sku', 'SKU-RET-INBOUND')
             ->assertJsonPath('analytics.sku_analytics.rows.0.variance_qty', -2)
             ->assertJsonPath('analytics.sku_analytics.rows.0.exception_rate', 20);

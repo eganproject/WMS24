@@ -207,7 +207,7 @@
         <div class="card-title">
             <div>
                 <h3 class="fw-bolder mb-1">Analisis Qty per SKU</h3>
-                <div class="text-muted fs-7">Identifikasi SKU dominan, penyumbang exception, serta perbandingan target dan aktual. Maksimal 50 SKU berdasarkan volume.</div>
+                <div class="text-muted fs-7">Identifikasi SKU dominan, qty rusak, qty hilang, serta perbandingan target dan aktual. Maksimal 50 SKU berdasarkan volume.</div>
             </div>
         </div>
     </div>
@@ -221,11 +221,30 @@
                     <th class="text-end" id="sku_target_label">Target</th>
                     <th class="text-end" id="sku_actual_label">Aktual</th>
                     <th class="text-end">Selisih</th>
-                    <th class="text-end" id="sku_exception_label">Exception</th>
+                    <th class="text-end">Qty Rusak</th>
+                    <th class="text-end">Qty Hilang</th>
                     <th>Kontribusi Volume</th>
                 </tr></thead>
                 <tbody id="sku_analytics_rows"></tbody>
             </table>
+        </div>
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mt-4">
+            <div class="d-flex align-items-center gap-2 text-muted fs-7">
+                <span>Tampilkan</span>
+                <select id="sku_page_size" class="form-select form-select-sm w-80px">
+                    <option value="10" selected>10</option>
+                    <option value="25">25</option>
+                    <option value="50">50</option>
+                </select>
+                <span>SKU per halaman</span>
+            </div>
+            <div class="d-flex align-items-center gap-3">
+                <span class="text-muted fs-7" id="sku_pagination_info">0 SKU</span>
+                <div class="btn-group">
+                    <button type="button" class="btn btn-sm btn-light" id="sku_page_prev">Sebelumnya</button>
+                    <button type="button" class="btn btn-sm btn-light" id="sku_page_next">Berikutnya</button>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -330,6 +349,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const moduleTitles = { customer: 'Retur Customer', inbound: 'Retur Inbound', outbound: 'Retur Outbound' };
     const tables = {};
     let activeSource = 'customer';
+    let skuRows = [];
+    let skuPage = 1;
+    let skuPageSize = 10;
     let charts = [];
     let fromPicker = null;
     let toPicker = null;
@@ -522,36 +544,54 @@ document.addEventListener('DOMContentLoaded', () => {
             breakdownChart.render(); charts.push(breakdownChart);
         } else emptyChart('chart_return_breakdown');
     };
-    const renderSkuAnalytics = (analytics = {}) => {
-        const skuAnalytics = analytics.sku_analytics || {};
-        const labels = skuAnalytics.labels || {};
-        document.getElementById('sku_target_label').textContent = labels.target || 'Target';
-        document.getElementById('sku_actual_label').textContent = labels.actual || 'Aktual';
-        document.getElementById('sku_exception_label').textContent = labels.exception || 'Exception';
-        document.getElementById('sku_summary').innerHTML = [
-            ['SKU Unik', skuAnalytics.total_unique || 0, 'primary'],
-            ['Baris SKU', skuAnalytics.total_lines || 0, 'info'],
-            ['Rata-rata SKU/Dokumen', decimal.format(Number(skuAnalytics.avg_per_document || 0)), 'success'],
-            [labels.target || 'Target', skuAnalytics.total_target_qty || 0, 'primary'],
-            [labels.actual || 'Aktual', skuAnalytics.total_actual_qty || 0, 'success'],
-            [labels.exception || 'Exception', skuAnalytics.total_exception_qty || 0, 'danger'],
-        ].map(([label, value, tone]) => `<span class="badge badge-light-${tone} fs-7 px-3 py-2">${escapeHtml(label)}: ${typeof value === 'string' ? escapeHtml(value) : number.format(value)}</span>`).join('');
+    const renderSkuPage = () => {
+        const total = skuRows.length;
+        const totalPages = Math.max(1, Math.ceil(total / skuPageSize));
+        skuPage = Math.min(Math.max(1, skuPage), totalPages);
+        const start = (skuPage - 1) * skuPageSize;
+        const pageRows = skuRows.slice(start, start + skuPageSize);
 
-        const rows = skuAnalytics.rows || [];
-        document.getElementById('sku_analytics_rows').innerHTML = rows.length ? rows.map(row => {
+        document.getElementById('sku_analytics_rows').innerHTML = pageRows.length ? pageRows.map(row => {
             const variance = Number(row.variance_qty || 0);
+            const damaged = Number(row.damaged_qty || 0);
+            const lost = Number(row.lost_qty || 0);
             const contribution = Math.max(0, Math.min(100, Number(row.contribution_rate || 0)));
-            const exceptionRate = Number(row.exception_rate || 0);
             return `<tr>
                 <td><div class="fw-bolder text-gray-900">${escapeHtml(row.sku)}</div><div class="text-muted fs-8">${escapeHtml(row.name || '-')}</div></td>
                 <td class="text-end">${number.format(row.documents || 0)}</td>
                 <td class="text-end">${number.format(row.target_qty || 0)}</td>
                 <td class="text-end fw-bold">${number.format(row.actual_qty || 0)}</td>
                 <td class="text-end ${variance === 0 ? 'text-success' : 'text-danger fw-bold'}">${variance > 0 ? '+' : ''}${number.format(variance)}</td>
-                <td class="text-end ${Number(row.exception_qty) > 0 ? 'text-danger fw-bold' : ''}">${number.format(row.exception_qty || 0)} <span class="text-muted fs-8">(${decimal.format(exceptionRate)}%)</span></td>
+                <td class="text-end ${damaged > 0 ? 'text-danger fw-bold' : ''}">${number.format(damaged)} <span class="text-muted fs-8">(${decimal.format(row.damaged_rate || 0)}%)</span></td>
+                <td class="text-end ${lost > 0 ? 'text-warning fw-bold' : ''}">${number.format(lost)} <span class="text-muted fs-8">(${decimal.format(row.lost_rate || 0)}%)</span></td>
                 <td><div class="d-flex justify-content-between gap-3 fs-8"><span>${number.format(row.volume_qty || 0)} qty</span><span>${decimal.format(contribution)}%</span></div><div class="progress h-4px mt-1"><div class="progress-bar bg-info" style="width:${contribution}%"></div></div></td>
             </tr>`;
-        }).join('') : '<tr><td colspan="7" class="text-center text-muted py-8">Belum ada data SKU pada filter ini.</td></tr>';
+        }).join('') : '<tr><td colspan="8" class="text-center text-muted py-8">Belum ada data SKU pada filter ini.</td></tr>';
+
+        const end = Math.min(start + skuPageSize, total);
+        document.getElementById('sku_pagination_info').textContent = total
+            ? `Menampilkan ${number.format(start + 1)}-${number.format(end)} dari ${number.format(total)} SKU · Halaman ${skuPage}/${totalPages}`
+            : '0 SKU';
+        document.getElementById('sku_page_prev').disabled = skuPage <= 1 || total === 0;
+        document.getElementById('sku_page_next').disabled = skuPage >= totalPages || total === 0;
+    };
+    const renderSkuAnalytics = (analytics = {}) => {
+        const skuAnalytics = analytics.sku_analytics || {};
+        const labels = skuAnalytics.labels || {};
+        document.getElementById('sku_target_label').textContent = labels.target || 'Target';
+        document.getElementById('sku_actual_label').textContent = labels.actual || 'Aktual';
+        document.getElementById('sku_summary').innerHTML = [
+            ['SKU Unik', skuAnalytics.total_unique || 0, 'primary'],
+            ['Baris SKU', skuAnalytics.total_lines || 0, 'info'],
+            ['Rata-rata SKU/Dokumen', decimal.format(Number(skuAnalytics.avg_per_document || 0)), 'success'],
+            [labels.target || 'Target', skuAnalytics.total_target_qty || 0, 'primary'],
+            [labels.actual || 'Aktual', skuAnalytics.total_actual_qty || 0, 'success'],
+            ['Qty Rusak', skuAnalytics.total_damaged_qty || 0, 'danger'],
+            ['Qty Hilang', skuAnalytics.total_lost_qty || 0, 'warning'],
+        ].map(([label, value, tone]) => `<span class="badge badge-light-${tone} fs-7 px-3 py-2">${escapeHtml(label)}: ${typeof value === 'string' ? escapeHtml(value) : number.format(value)}</span>`).join('');
+        skuRows = skuAnalytics.rows || [];
+        skuPage = 1;
+        renderSkuPage();
     };
 
     const renderPerformance = (analytics = {}) => {
@@ -615,6 +655,18 @@ document.addEventListener('DOMContentLoaded', () => {
         fromPicker = flatpickr(els.from, { dateFormat: 'Y-m-d', allowInput: true });
         toPicker = flatpickr(els.to, { dateFormat: 'Y-m-d', allowInput: true });
     }
+    document.getElementById('sku_page_size').addEventListener('change', event => {
+        skuPageSize = Number(event.target.value) || 10;
+        skuPage = 1;
+        renderSkuPage();
+    });
+    document.getElementById('sku_page_prev').addEventListener('click', () => {
+        if (skuPage > 1) { skuPage -= 1; renderSkuPage(); }
+    });
+    document.getElementById('sku_page_next').addEventListener('click', () => {
+        const totalPages = Math.max(1, Math.ceil(skuRows.length / skuPageSize));
+        if (skuPage < totalPages) { skuPage += 1; renderSkuPage(); }
+    });
     setStatusOptions();
     reloadActive();
 

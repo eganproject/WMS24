@@ -283,6 +283,8 @@ class ReturnReportController extends Controller
                 'name' => trim((string) ($item->item?->name ?? '')),
                 'target_qty' => $target,
                 'actual_qty' => $actual,
+                'damaged_qty' => (int) ($item->packaging_damaged_qty ?? 0) + (int) $item->damaged_qty,
+                'lost_qty' => max($target - $actual, 0),
                 'exception_qty' => (int) ($item->packaging_damaged_qty ?? 0)
                     + (int) $item->damaged_qty
                     + max($target - $actual, 0),
@@ -378,6 +380,8 @@ class ReturnReportController extends Controller
                 'name' => trim((string) ($item->item?->name ?? '')),
                 'target_qty' => $target,
                 'actual_qty' => $actual,
+                'damaged_qty' => 0,
+                'lost_qty' => $status === InboundScanStatus::COMPLETED ? max($target - $actual, 0) : 0,
                 'exception_qty' => abs($actual - $target),
             ];
         });
@@ -457,6 +461,8 @@ class ReturnReportController extends Controller
                 'name' => trim((string) ($item->item?->name ?? '')),
                 'target_qty' => $qty,
                 'actual_qty' => $approved ? $qty : 0,
+                'damaged_qty' => 0,
+                'lost_qty' => 0,
                 'exception_qty' => $approved ? 0 : $qty,
             ];
         });
@@ -768,6 +774,8 @@ class ReturnReportController extends Controller
             $target = (int) $group->sum('target_qty');
             $actual = (int) $group->sum('actual_qty');
             $exception = (int) $group->sum('exception_qty');
+            $damaged = (int) $group->sum('damaged_qty');
+            $lost = (int) $group->sum('lost_qty');
             $volume = (int) $group->sum(fn (array $item) => max(
                 (int) ($item['target_qty'] ?? 0),
                 (int) ($item['actual_qty'] ?? 0)
@@ -780,6 +788,10 @@ class ReturnReportController extends Controller
                 'target_qty' => $target,
                 'actual_qty' => $actual,
                 'variance_qty' => $actual - $target,
+                'damaged_qty' => $damaged,
+                'damaged_rate' => $this->rate($damaged, $volume),
+                'lost_qty' => $lost,
+                'lost_rate' => $this->rate($lost, $volume),
                 'exception_qty' => $exception,
                 'exception_rate' => $this->rate($exception, $volume),
                 'volume_qty' => $volume,
@@ -793,6 +805,8 @@ class ReturnReportController extends Controller
             'avg_per_document' => $rows->isNotEmpty() ? round((float) $rows->avg('sku_count'), 2) : 0,
             'total_target_qty' => (int) $items->sum('target_qty'),
             'total_actual_qty' => (int) $items->sum('actual_qty'),
+            'total_damaged_qty' => (int) $items->sum('damaged_qty'),
+            'total_lost_qty' => (int) $items->sum('lost_qty'),
             'total_exception_qty' => (int) $items->sum('exception_qty'),
             'labels' => [
                 'target' => $targetLabel,

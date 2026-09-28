@@ -421,7 +421,9 @@ class InboundController extends Controller
                 ? route('admin.masterdata.suppliers.index')
                 : null,
             'importRequiresSupplier' => $this->usesSupplier($type),
-            'deleteWarningText' => 'Data akan dihapus sebelum proses scan inbound.',
+            'deleteWarningText' => $type === 'return'
+                ? 'Retur inbound dan sesi scan kosongnya akan dihapus permanen. Pastikan belum ada qty yang discan.'
+                : 'Data akan dihapus sebelum proses scan inbound.',
             'importUrl' => match ($type) {
                 'receipt' => route('admin.inbound.receipts.import'),
                 'return' => route('admin.inbound.returns.import'),
@@ -561,6 +563,13 @@ class InboundController extends Controller
                 : (int) ($item->koli ?? 0));
             $scannedQty = (int) $scanItems->sum('scanned_qty');
             $scannedKoli = (int) $scanItems->sum('scanned_koli');
+            $status = $row->status ?? InboundScanStatus::PENDING_SCAN;
+            $hasScanSession = (bool) $row->scanSession;
+            $canDelete = $status === InboundScanStatus::PENDING_SCAN && ! $hasScanSession;
+            if ($row->type === 'return' && $status === InboundScanStatus::SCANNING && $hasScanSession) {
+                $canDelete = $scannedQty === 0 && $scannedKoli === 0;
+            }
+
             $itemDetails = $items->map(function (InboundItem $item) {
                 return [
                     'sku' => $item->item?->sku ?? '-',
@@ -596,7 +605,8 @@ class InboundController extends Controller
                 'surat_jalan_at' => $row->surat_jalan_at?->format('Y-m-d') ?? '',
                 'surat_jalan_image_url' => $this->suratJalanImageUrl($row),
                 'type' => $row->type,
-                'status' => $row->status ?? InboundScanStatus::PENDING_SCAN,
+                'status' => $status,
+                'can_delete' => $canDelete,
             ];
         });
 
@@ -851,15 +861,28 @@ class InboundController extends Controller
     {
         DB::beginTransaction();
         try {
-            $transaction = InboundTransaction::with('scanSession')
+            $transaction = InboundTransaction::with('scanSession.items')
                 ->where('type', $type)
+                ->lockForUpdate()
                 ->findOrFail($id);
 
-            if (($transaction->status ?? InboundScanStatus::PENDING_SCAN) !== InboundScanStatus::PENDING_SCAN || $transaction->scanSession) {
+            $status = $transaction->status ?? InboundScanStatus::PENDING_SCAN;
+            $scannedQty = (int) ($transaction->scanSession?->items?->sum('scanned_qty') ?? 0);
+            $scannedKoli = (int) ($transaction->scanSession?->items?->sum('scanned_koli') ?? 0);
+            $canDeletePending = $status === InboundScanStatus::PENDING_SCAN && ! $transaction->scanSession;
+            $canDeleteEmptyReturnScan = $type === 'return'
+                && $status === InboundScanStatus::SCANNING
+                && $transaction->scanSession
+                && $scannedQty === 0
+                && $scannedKoli === 0;
+
+            if (! $canDeletePending && ! $canDeleteEmptyReturnScan) {
                 DB::rollBack();
 
                 return response()->json([
-                    'message' => 'Inbound yang sudah mulai discan tidak bisa dihapus.',
+                    'message' => $type === 'return' && $status === InboundScanStatus::SCANNING
+                        ? 'Retur inbound hanya dapat dihapus saat sedang scan apabila belum ada qty yang discan.'
+                        : 'Inbound yang sudah mulai discan tidak bisa dihapus.',
                 ], 422);
             }
 

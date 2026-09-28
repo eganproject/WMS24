@@ -2029,6 +2029,9 @@
                     const isDeleteLocked = Array.isArray(deleteLockedStatuses)
                         ? deleteLockedStatuses.includes(row?.status)
                         : row?.status === 'approved';
+                    const canDelete = typeof row?.can_delete === 'boolean'
+                        ? row.can_delete
+                        : !isDeleteLocked;
                     const detailItem = `<div class="menu-item px-3"><a href="${resolveRoute(rowType, 'detail').replace(':id', data)}" class="menu-link px-3">Detail</a></div>`;
                     const deliveryNoteRoute = resolveRoute(rowType, 'delivery_note');
                     const deliveryNotePrintRoute = resolveRoute(rowType, 'delivery_note_print');
@@ -2054,7 +2057,7 @@
                     const editItem = (!isLocked && perms.update)
                         ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-edit" data-id="${data}" data-type="${rowType}">Edit</a></div>`
                         : '';
-                    const delItem = (!isDeleteLocked && perms.delete)
+                    const delItem = (canDelete && perms.delete)
                         ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 text-danger btn-delete" data-id="${data}" data-type="${rowType}">Hapus</a></div>`
                         : '';
                     const actions = `${detailItem}${deliveryNoteItem}${deliveryNotePrintItem}${qrPdfItem}${approveItem}${editItem}${delItem}`;

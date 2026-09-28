@@ -3,6 +3,8 @@
 namespace Tests\Feature\Admin;
 
 use App\Models\InboundItem;
+use App\Models\InboundScanSession;
+use App\Models\InboundScanSessionItem;
 use App\Models\InboundTransaction;
 use App\Models\Item;
 use App\Models\User;
@@ -36,6 +38,7 @@ class InboundReturnListUiTest extends TestCase
         $response->assertSee("{ data: 'note', visible: !enhancedItemList", false);
         $response->assertDontSee('min-width: 1480px', false);
         $response->assertSee('Buka seluruh rincian item retur');
+        $response->assertSee("typeof row?.can_delete === 'boolean'", false);
     }
 
     public function test_enhanced_list_is_scoped_to_inbound_returns(): void
@@ -96,7 +99,129 @@ class InboundReturnListUiTest extends TestCase
             ->assertJsonPath('data.0.item_details.0.qty', 24)
             ->assertJsonPath('data.0.item_details.0.note', 'Dus penyok')
             ->assertJsonPath('data.0.item_details.1.input_unit', 'pcs')
-            ->assertJsonPath('data.0.item_details.1.qty', 5);
+            ->assertJsonPath('data.0.item_details.1.qty', 5)
+            ->assertJsonPath('data.0.can_delete', true);
+    }
+
+    public function test_scanning_return_with_zero_scanned_qty_can_be_deleted(): void
+    {
+        [$transaction, $session, $scanItem] = $this->scanningTransaction('return', 0);
+
+        $this->withoutMiddleware()
+            ->getJson(route('admin.inbound.returns.data', ['start' => 0, 'length' => 10]))
+            ->assertOk()
+            ->assertJsonPath('data.0.status', InboundScanStatus::SCANNING)
+            ->assertJsonPath('data.0.scan_progress.scanned_qty', 0)
+            ->assertJsonPath('data.0.can_delete', true);
+
+        $this->withoutMiddleware()
+            ->deleteJson(route('admin.inbound.returns.destroy', $transaction->id))
+            ->assertOk()
+            ->assertJsonPath('message', 'Inbound berhasil dihapus.');
+
+        $this->assertDatabaseMissing('inbound_transactions', ['id' => $transaction->id]);
+        $this->assertDatabaseMissing('inbound_scan_sessions', ['id' => $session->id]);
+        $this->assertDatabaseMissing('inbound_scan_session_items', ['id' => $scanItem->id]);
+    }
+
+    public function test_scanning_return_with_scanned_qty_cannot_be_deleted(): void
+    {
+        [$transaction, $session, $scanItem] = $this->scanningTransaction('return', 1);
+
+        $this->withoutMiddleware()
+            ->getJson(route('admin.inbound.returns.data', ['start' => 0, 'length' => 10]))
+            ->assertOk()
+            ->assertJsonPath('data.0.scan_progress.scanned_qty', 1)
+            ->assertJsonPath('data.0.can_delete', false);
+
+        $this->withoutMiddleware()
+            ->deleteJson(route('admin.inbound.returns.destroy', $transaction->id))
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Retur inbound hanya dapat dihapus saat sedang scan apabila belum ada qty yang discan.');
+
+        $this->assertDatabaseHas('inbound_transactions', ['id' => $transaction->id]);
+        $this->assertDatabaseHas('inbound_scan_sessions', ['id' => $session->id]);
+        $this->assertDatabaseHas('inbound_scan_session_items', ['id' => $scanItem->id, 'scanned_qty' => 1]);
+    }
+
+    public function test_completed_return_with_zero_scanned_qty_cannot_be_deleted(): void
+    {
+        [$transaction] = $this->scanningTransaction('return', 0);
+        $transaction->update(['status' => InboundScanStatus::COMPLETED]);
+
+        $this->withoutMiddleware()
+            ->getJson(route('admin.inbound.returns.data', ['start' => 0, 'length' => 10]))
+            ->assertOk()
+            ->assertJsonPath('data.0.can_delete', false);
+
+        $this->withoutMiddleware()
+            ->deleteJson(route('admin.inbound.returns.destroy', $transaction->id))
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Inbound yang sudah mulai discan tidak bisa dihapus.');
+
+        $this->assertDatabaseHas('inbound_transactions', [
+            'id' => $transaction->id,
+            'status' => InboundScanStatus::COMPLETED,
+        ]);
+    }
+
+    public function test_zero_scan_delete_exception_does_not_apply_to_receipt_module(): void
+    {
+        [$transaction, $session] = $this->scanningTransaction('receipt', 0);
+
+        $this->withoutMiddleware()
+            ->getJson(route('admin.inbound.receipts.data', ['start' => 0, 'length' => 10]))
+            ->assertOk()
+            ->assertJsonPath('data.0.can_delete', false);
+
+        $this->withoutMiddleware()
+            ->deleteJson(route('admin.inbound.receipts.destroy', $transaction->id))
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Inbound yang sudah mulai discan tidak bisa dihapus.');
+
+        $this->assertDatabaseHas('inbound_transactions', ['id' => $transaction->id, 'type' => 'receipt']);
+        $this->assertDatabaseHas('inbound_scan_sessions', ['id' => $session->id]);
+    }
+
+    private function scanningTransaction(string $type, int $scannedQty): array
+    {
+        $warehouse = Warehouse::firstOrCreate(['code' => 'GUDANG_BESAR'], [
+            'name' => 'Gudang Besar',
+            'type' => 'main',
+        ]);
+        $item = $this->item('SKU-SCAN-DELETE', 'Produk Scan Delete', 5);
+        $transaction = InboundTransaction::create([
+            'code' => strtoupper($type).'-SCAN-DELETE',
+            'type' => $type,
+            'warehouse_id' => $warehouse->id,
+            'transacted_at' => now(),
+            'status' => InboundScanStatus::SCANNING,
+        ]);
+        InboundItem::create([
+            'inbound_transaction_id' => $transaction->id,
+            'item_id' => $item->id,
+            'input_unit' => 'koli',
+            'koli' => 1,
+            'qty' => 5,
+        ]);
+        $session = InboundScanSession::create([
+            'inbound_transaction_id' => $transaction->id,
+            'started_at' => now(),
+        ]);
+        $scanItem = InboundScanSessionItem::create([
+            'inbound_scan_session_id' => $session->id,
+            'item_id' => $item->id,
+            'sku' => $item->sku,
+            'item_name' => $item->name,
+            'input_unit' => 'koli',
+            'qty_per_koli' => 5,
+            'expected_qty' => 5,
+            'expected_koli' => 1,
+            'scanned_qty' => $scannedQty,
+            'scanned_koli' => $scannedQty > 0 ? 1 : 0,
+        ]);
+
+        return [$transaction, $session, $scanItem];
     }
 
     private function item(string $sku, string $name, int $koliQty): Item

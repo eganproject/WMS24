@@ -39,6 +39,19 @@ class QcScanWorkbenchTest extends TestCase
             'employment_status' => 'active',
             'position_id' => $pickerPosition->id,
         ]);
+        $qcPosition = EmployeePosition::create(["name" => "Quality Control", "is_active" => true]);
+        Employee::create([
+            "employee_code" => "EMP-ACTIVE-PAGE",
+            "name" => "Karyawan Aktif Lain",
+            "employment_status" => "active",
+            "position_id" => $qcPosition->id,
+        ]);
+        Employee::create([
+            "employee_code" => "EMP-INACTIVE-PAGE",
+            "name" => "Karyawan Nonaktif Page",
+            "employment_status" => "inactive",
+            "position_id" => $qcPosition->id,
+        ]);
 
         $this->actingAs($user)
             ->get(route('admin.outbound.qc-scan.index'))
@@ -47,6 +60,9 @@ class QcScanWorkbenchTest extends TestCase
             ->assertSee('Picker Aktif')
             ->assertSee('Cukup dipilih sekali per sesi kerja')
             ->assertSee('Picker Pertama')
+            ->assertSee("Karyawan Aktif Lain")
+            ->assertDontSee("Karyawan Nonaktif Page")
+            ->assertSee("Cari karyawan aktif")
             ->assertSee('Scan Resi')
             ->assertSee('Scan SKU');
     }
@@ -62,10 +78,10 @@ class QcScanWorkbenchTest extends TestCase
         $pickerPosition = EmployeePosition::create(['name' => 'Picker', 'is_active' => true]);
         $qcPosition = EmployeePosition::create(['name' => 'Quality Control', 'is_active' => true]);
         $picker = Employee::create([
-            'employee_code' => 'PCK-VALID',
-            'name' => 'Picker Valid',
+            'employee_code' => 'EMP-ACTIVE',
+            'name' => 'Karyawan Aktif QC',
             'employment_status' => 'active',
-            'position_id' => $pickerPosition->id,
+            'position_id' => $qcPosition->id,
         ]);
         $otherPicker = Employee::create([
             'employee_code' => 'PCK-OTHER',
@@ -73,10 +89,10 @@ class QcScanWorkbenchTest extends TestCase
             'employment_status' => 'active',
             'position_id' => $pickerPosition->id,
         ]);
-        $notPicker = Employee::create([
+        $inactiveEmployee = Employee::create([
             'employee_code' => 'QC-001',
-            'name' => 'Bukan Picker',
-            'employment_status' => 'active',
+            'name' => 'Karyawan Nonaktif',
+            'employment_status' => 'inactive',
             'position_id' => $qcPosition->id,
         ]);
 
@@ -103,7 +119,7 @@ class QcScanWorkbenchTest extends TestCase
             ->postJson(route('admin.outbound.qc-scan.scan'), [
                 'type' => 'no_resi',
                 'code' => $resi->no_resi,
-                'picker_employee_id' => $notPicker->id,
+                'picker_employee_id' => $inactiveEmployee->id,
             ])
             ->assertUnprocessable()
             ->assertJsonValidationErrors('picker_employee_id');
@@ -115,8 +131,8 @@ class QcScanWorkbenchTest extends TestCase
                 'picker_employee_id' => $picker->id,
             ])
             ->assertOk()
-            ->assertJsonPath('qc.audit.picker_name', 'Picker Valid')
-            ->assertJsonPath('qc.audit.picker_code', 'PCK-VALID');
+            ->assertJsonPath('qc.audit.picker_name', 'Karyawan Aktif QC')
+            ->assertJsonPath('qc.audit.picker_code', 'EMP-ACTIVE');
 
         $this->assertDatabaseHas('qc_resi_scans', [
             'resi_id' => $resi->id,
@@ -140,7 +156,7 @@ class QcScanWorkbenchTest extends TestCase
                 'date_to' => now()->toDateString(),
             ]))
             ->assertOk()
-            ->assertJsonPath('data.0.picker', 'Picker Valid')
-            ->assertJsonPath('data.0.picker_code', 'PCK-VALID');
+            ->assertJsonPath('data.0.picker', 'Karyawan Aktif QC')
+            ->assertJsonPath('data.0.picker_code', 'EMP-ACTIVE');
     }
 }

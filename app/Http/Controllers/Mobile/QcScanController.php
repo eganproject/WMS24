@@ -767,7 +767,7 @@ class QcScanController extends Controller
 
         if (!$exists) {
             throw ValidationException::withMessages([
-                'picker_employee_id' => 'Picker tidak valid, tidak aktif, atau jabatan karyawan bukan picker/picking.',
+                'picker_employee_id' => 'Picker tidak valid atau karyawan sudah tidak aktif.',
             ]);
         }
 
@@ -776,15 +776,7 @@ class QcScanController extends Controller
 
     protected function pickerEmployeeQuery()
     {
-        return Employee::query()
-            ->active()
-            ->where(function ($query) {
-                $query->whereHas('positionRelation', function ($positionQuery) {
-                    $positionQuery->whereRaw('LOWER(name) LIKE ?', ['%picker%'])
-                        ->orWhereRaw('LOWER(name) LIKE ?', ['%picking%']);
-                })->orWhereRaw('LOWER(COALESCE(position, "")) LIKE ?', ['%picker%'])
-                    ->orWhereRaw('LOWER(COALESCE(position, "")) LIKE ?', ['%picking%']);
-            });
+        return Employee::query()->active();
     }
 
     private function loadQcRelations(QcResiScan $qc): QcResiScan

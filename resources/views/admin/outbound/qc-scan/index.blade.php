@@ -154,6 +154,33 @@
         padding-top: 15px;
         padding-bottom: 15px;
     }
+    #resi_scan_section .select2-container {
+        width: 100% !important;
+    }
+    #resi_scan_section .select2-container .select2-selection--single {
+        min-height: 52px;
+        border: 1px solid #cbd5e1;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+    }
+    #resi_scan_section .select2-container .select2-selection__rendered {
+        color: #0f172a;
+        font-size: 15px;
+        font-weight: 700;
+        line-height: 1.35;
+        padding-left: 18px;
+        padding-right: 42px;
+    }
+    #resi_scan_section .select2-container .select2-selection__arrow {
+        height: 50px;
+        right: 10px;
+    }
+    #resi_scan_section .select2-container--open .select2-selection--single,
+    #resi_scan_section .select2-container--focus .select2-selection--single {
+        border-color: #0f766e;
+        box-shadow: 0 0 0 5px rgba(15, 118, 110, 0.14);
+    }
     .qc-number {
         font-size: 20px;
         text-align: center;
@@ -629,7 +656,7 @@
                 <div class="qc-field-grid" id="resi_scan_section">
                     <div>
                         <label class="qc-field-label" for="picker_employee_id">Picker Aktif <span class="text-danger">*</span></label>
-                        <select class="qc-select" id="picker_employee_id">
+                        <select class="qc-select" id="picker_employee_id" data-placeholder="Cari karyawan aktif">
                             <option value="">Pilih sekali sebelum mulai QC</option>
                             @foreach($pickers as $picker)
                                 <option value="{{ $picker->id }}">
@@ -637,7 +664,7 @@
                                 </option>
                             @endforeach
                         </select>
-                        <div class="text-muted fs-8 mt-2">Cukup dipilih sekali per sesi kerja dan otomatis dipakai untuk resi berikutnya.</div>
+                        <div class="text-muted fs-8 mt-2">Menampilkan seluruh karyawan aktif. Cukup dipilih sekali per sesi kerja dan otomatis dipakai untuk resi berikutnya.</div>
                     </div>
 
                     <div>
@@ -1069,6 +1096,10 @@
         if (isScannerFocusPaused()) return;
         window.setTimeout(() => {
             if (isScannerFocusPaused()) return;
+            if (typeof window.jQuery !== "undefined" && window.jQuery.fn?.select2 && window.jQuery(el.pickerEmployee).hasClass("select2-hidden-accessible")) {
+                window.jQuery(el.pickerEmployee).select2("open");
+                return;
+            }
             el.pickerEmployee?.focus();
         }, 30);
     };
@@ -1106,6 +1137,31 @@
             el.pickerEmployee.value = availableOptions[0].value;
             savePickerForSession();
         }
+    };
+
+    const initPickerSelect2 = () => {
+        if (!el.pickerEmployee || typeof window.jQuery === "undefined" || !window.jQuery.fn?.select2) return;
+
+        const pickerSelect = window.jQuery(el.pickerEmployee);
+        if (pickerSelect.hasClass("select2-hidden-accessible")) return;
+
+        pickerSelect
+            .select2({
+                placeholder: el.pickerEmployee.dataset.placeholder || "Cari karyawan aktif",
+                allowClear: true,
+                width: "100%",
+            })
+            .on("select2:opening select2:open", () => {
+                scannerSelectActive = true;
+                pauseScannerFocus(60000);
+            })
+            .on("select2:select select2:clear", savePickerForSession)
+            .on("select2:close", () => {
+                pauseScannerFocus(120);
+                resumeScannerFocus(() => {
+                    if (el.pickerEmployee.value) focusResi();
+                }, 150);
+            });
     };
 
     const focusResi = () => {
@@ -1456,7 +1512,7 @@
                 type: 'error',
                 tone: 'error',
             });
-            el.pickerEmployee?.focus();
+            focusPicker();
             return;
         }
 
@@ -1819,13 +1875,13 @@
 
     document.addEventListener('click', (event) => {
         if (isScannerFocusPaused()) return;
-        const interactive = event.target.closest('button, a, select, input, textarea, [contenteditable="true"], .swal2-container, [data-kt-menu-trigger], .menu-link, .menu-sub');
+        const interactive = event.target.closest('button, a, select, input, textarea, [contenteditable="true"], .select2-container, .select2-dropdown, .swal2-container, [data-kt-menu-trigger], .menu-link, .menu-sub');
         if (interactive) return;
         preferredScanFocus();
     });
 
     document.addEventListener('pointerdown', (event) => {
-        if (event.target.closest('#picker_employee_id, #resi_type')) {
+        if (event.target.closest('#picker_employee_id, .select2-container, .select2-dropdown, #resi_type')) {
             scannerSelectActive = true;
             pauseScannerFocus(1600);
             return;
@@ -1873,6 +1929,7 @@
 
     el.pickerEmployee?.addEventListener('change', () => {
         savePickerForSession();
+        if (typeof window.jQuery !== "undefined" && window.jQuery(el.pickerEmployee).hasClass("select2-hidden-accessible")) return;
         resumeScannerFocus(el.pickerEmployee.value ? focusResi : focusPicker, 120);
     });
 
@@ -1924,6 +1981,7 @@
     }
 
     restorePickerForSession();
+    initPickerSelect2();
     renderQc();
     renderPanels();
     renderActivityLog();

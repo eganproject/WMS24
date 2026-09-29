@@ -182,7 +182,7 @@ class QcHistoryController extends Controller
     public function data(Request $request)
     {
         $baseQuery = QcResiScan::query()
-            ->with(['resi', 'scanner', 'items', 'substitutions.creator', 'completer', 'lastScanner', 'resetter'])
+            ->with(['resi', 'pickerEmployee', 'scanner', 'items', 'substitutions.creator', 'completer', 'lastScanner', 'resetter'])
             ->select('qc_resi_scans.*')
             ->selectSub(function ($q) {
                 $q->from('qc_resi_scan_items')
@@ -242,6 +242,9 @@ class QcHistoryController extends Controller
                 })->orWhereHas('resetter', function ($userQ) use ($search, $exact) {
                     $this->applyTextSearch($userQ, 'name', $search, $exact);
                     $this->applyTextSearch($userQ, 'email', $search, $exact, 'or');
+                })->orWhereHas('pickerEmployee', function ($employeeQ) use ($search, $exact) {
+                    $this->applyTextSearch($employeeQ, 'name', $search, $exact);
+                    $this->applyTextSearch($employeeQ, 'employee_code', $search, $exact, 'or');
                 });
             });
         }
@@ -285,6 +288,8 @@ class QcHistoryController extends Controller
                 'started_at' => $row->started_at?->format('Y-m-d H:i') ?? '-',
                 'completed_at' => $row->completed_at?->format('Y-m-d H:i') ?? '-',
                 'scanner' => $row->scanner?->name ?? '-',
+                'picker' => $row->pickerEmployee?->name ?? '-',
+                'picker_code' => $row->pickerEmployee?->employee_code ?? '-',
                 'status' => $row->status ?? 'draft',
                 'status_label' => QcTransitStatus::scanStatusLabel($row->status),
                 'status_badge' => QcTransitStatus::scanStatusBadgeClass($row->status),

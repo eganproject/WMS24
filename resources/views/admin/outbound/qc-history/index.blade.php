@@ -59,6 +59,7 @@
                                 <th>Mulai</th>
                                 <th>Selesai</th>
                                 <th>Mulai Oleh</th>
+                                <th>Picker</th>
                                 <th>Status</th>
                                 <th>Audit</th>
                                 <th>Jenis Scan</th>
@@ -184,6 +185,10 @@
                 { data: 'started_at' },
                 { data: 'completed_at' },
                 { data: 'scanner' },
+                { data: 'picker', render: (data, type, row) => {
+                    const code = row.picker_code && row.picker_code !== '-' ? `<div class="text-muted">${escapeHtml(row.picker_code)}</div>` : '';
+                    return `${escapeHtml(data || '-')}${code}`;
+                }},
                 { data: 'status', render: (data, type, row) => {
                     const label = row.status_label || '-';
                     const badge = row.status_badge || 'badge-light';

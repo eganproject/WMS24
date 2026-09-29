@@ -19,6 +19,12 @@ class QcScanWorkbenchController extends BaseQcScanController
                 'history' => route('admin.outbound.qc-history.index'),
                 'scanOutHistory' => route('admin.outbound.scan-out-history.index'),
             ],
+            'pickers' => $this->pickerOptions(),
         ]);
+    }
+
+    protected function pickerSelectionRequired(): bool
+    {
+        return true;
     }
 }

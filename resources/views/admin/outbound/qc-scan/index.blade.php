@@ -628,6 +628,19 @@
             <div class="qc-panel-body">
                 <div class="qc-field-grid" id="resi_scan_section">
                     <div>
+                        <label class="qc-field-label" for="picker_employee_id">Picker Aktif <span class="text-danger">*</span></label>
+                        <select class="qc-select" id="picker_employee_id">
+                            <option value="">Pilih sekali sebelum mulai QC</option>
+                            @foreach($pickers as $picker)
+                                <option value="{{ $picker->id }}">
+                                    {{ $picker->employee_code ? $picker->employee_code.' - ' : '' }}{{ $picker->name }}
+                                </option>
+                            @endforeach
+                        </select>
+                        <div class="text-muted fs-8 mt-2">Cukup dipilih sekali per sesi kerja dan otomatis dipakai untuk resi berikutnya.</div>
+                    </div>
+
+                    <div>
                         <label class="qc-field-label" for="resi_type">Jenis Pencarian Resi</label>
                         <select class="qc-select" id="resi_type">
                             <option value="no_resi">No Resi</option>
@@ -745,10 +758,12 @@
 <script>
     const routes = @json($routes);
     const csrfToken = '{{ csrf_token() }}';
+    const pickerSessionKey = "wms24.qcScan.pickerEmployeeId";
 
     const el = {
         resiSection: document.getElementById('resi_scan_section'),
         skuSection: document.getElementById('sku_scan_section'),
+        pickerEmployee: document.getElementById('picker_employee_id'),
         resiType: document.getElementById('resi_type'),
         resiCode: document.getElementById('resi_code'),
         btnScanResi: document.getElementById('btn_scan_resi'),
@@ -1050,8 +1065,55 @@
         return !!target?.closest('a, [data-kt-menu-trigger], #kt_header_menu, #kt_header_nav, #kt_header, .menu-link, .menu-sub');
     };
 
+    const focusPicker = () => {
+        if (isScannerFocusPaused()) return;
+        window.setTimeout(() => {
+            if (isScannerFocusPaused()) return;
+            el.pickerEmployee?.focus();
+        }, 30);
+    };
+
+    const savePickerForSession = () => {
+        try {
+            if (el.pickerEmployee?.value) {
+                window.sessionStorage.setItem(pickerSessionKey, el.pickerEmployee.value);
+            } else {
+                window.sessionStorage.removeItem(pickerSessionKey);
+            }
+        } catch (error) {
+            // Penyimpanan browser bersifat opsional; alur QC tetap dapat digunakan.
+        }
+    };
+
+    const restorePickerForSession = () => {
+        if (!el.pickerEmployee) return;
+
+        const availableOptions = Array.from(el.pickerEmployee.options).filter((option) => option.value);
+        let savedPickerId = "";
+
+        try {
+            savedPickerId = window.sessionStorage.getItem(pickerSessionKey) || "";
+        } catch (error) {
+            savedPickerId = "";
+        }
+
+        if (savedPickerId && availableOptions.some((option) => option.value === savedPickerId)) {
+            el.pickerEmployee.value = savedPickerId;
+            return;
+        }
+
+        if (availableOptions.length === 1) {
+            el.pickerEmployee.value = availableOptions[0].value;
+            savePickerForSession();
+        }
+    };
+
     const focusResi = () => {
         if (isScannerFocusPaused()) return;
+        if ((!qcState.id || qcState.status === 'passed') && !el.pickerEmployee?.value) {
+            focusPicker();
+            return;
+        }
         window.setTimeout(() => {
             if (isScannerFocusPaused()) return;
             el.resiCode.focus();
@@ -1290,6 +1352,9 @@
         el.summaryStatus.textContent = hasQc ? badgeLabel(qc.status) : '-';
 
         const auditLine = [];
+        if (audit.picker_name && audit.picker_name !== '-') {
+            auditLine.push(`Picker: ${audit.picker_name}`);
+        }
         if (audit.started_by && audit.started_by !== '-') auditLine.push(`Mulai: ${audit.started_by}`);
         if (audit.last_scanned_by && audit.last_scanned_by !== '-' && audit.last_scanned_at) {
             auditLine.push(`Scan terakhir: ${audit.last_scanned_by} @ ${audit.last_scanned_at}`);
@@ -1341,6 +1406,7 @@
             : '';
 
         el.detailAudit.innerHTML = hasQc ? `
+            <div class="qc-audit-item"><strong>Picker:</strong> ${escapeHtml(audit.picker_name || '-')}${audit.picker_code && audit.picker_code !== '-' ? ` (${escapeHtml(audit.picker_code)})` : ''}</div>
             <div class="qc-audit-item"><strong>Mulai oleh:</strong> ${audit.started_by || '-'}</div>
             <div class="qc-audit-item"><strong>Scan terakhir:</strong> ${(audit.last_scanned_by || '-')}${audit.last_scanned_at ? ` @ ${audit.last_scanned_at}` : ''}</div>
             <div class="qc-audit-item"><strong>Hold:</strong> ${audit.hold_reason || '-'}</div>
@@ -1380,6 +1446,20 @@
     const submitResi = async () => {
         if (resiBusy) return;
 
+        const pickerEmployeeId = parseInt(el.pickerEmployee?.value || '0', 10);
+        if (!pickerEmployeeId) {
+            const message = 'Pilih nama picker sebelum scan resi.';
+            setStatusBox(el.resiStatus, message, 'error');
+            notify({
+                label: 'Picker',
+                title: message,
+                type: 'error',
+                tone: 'error',
+            });
+            el.pickerEmployee?.focus();
+            return;
+        }
+
         const code = el.resiCode.value.trim();
         if (!code) {
             const message = 'Masukkan atau scan resi terlebih dahulu.';
@@ -1403,6 +1483,7 @@
             const payload = await fetchJson(routes.scanResi, {
                 type: el.resiType.value,
                 code,
+                picker_employee_id: pickerEmployeeId,
                 _token: csrfToken,
             });
 
@@ -1708,6 +1789,10 @@
             return;
         }
         if (!event.ctrlKey && !event.altKey && !event.metaKey && event.key.length === 1 && !isTextEntryTarget(event.target)) {
+            if ((!qcState.id || qcState.status === 'passed') && !el.pickerEmployee?.value) {
+                focusPicker();
+                return;
+            }
             event.preventDefault();
             const target = qcState.id && qcState.status !== 'passed' ? el.skuCode : el.resiCode;
             target.focus();
@@ -1740,7 +1825,7 @@
     });
 
     document.addEventListener('pointerdown', (event) => {
-        if (event.target.closest('#resi_type')) {
+        if (event.target.closest('#picker_employee_id, #resi_type')) {
             scannerSelectActive = true;
             pauseScannerFocus(1600);
             return;
@@ -1771,6 +1856,24 @@
     el.skuCode.addEventListener('blur', () => {
         if (isScannerFocusPaused()) return;
         if (qcState.id && qcState.status !== 'passed' && !isTextEntryTarget(document.activeElement)) focusSku();
+    });
+
+    el.pickerEmployee?.addEventListener('focus', () => {
+        scannerSelectActive = true;
+        pauseScannerFocus(1600);
+    });
+
+    el.pickerEmployee?.addEventListener('blur', () => {
+        resumeScannerFocus(() => {
+            if ((!qcState.id || qcState.status === 'passed') && el.pickerEmployee.value) {
+                focusResi();
+            }
+        }, 80);
+    });
+
+    el.pickerEmployee?.addEventListener('change', () => {
+        savePickerForSession();
+        resumeScannerFocus(el.pickerEmployee.value ? focusResi : focusPicker, 120);
     });
 
     el.resiType.addEventListener('focus', () => {
@@ -1820,6 +1923,7 @@
         });
     }
 
+    restorePickerForSession();
     renderQc();
     renderPanels();
     renderActivityLog();

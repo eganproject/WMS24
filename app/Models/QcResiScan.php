@@ -11,6 +11,7 @@ class QcResiScan extends Model
 
     protected $fillable = [
         'resi_id',
+        'picker_employee_id',
         'scan_type',
         'scan_code',
         'status',
@@ -40,6 +41,11 @@ class QcResiScan extends Model
     public function resi()
     {
         return $this->belongsTo(Resi::class, 'resi_id');
+    }
+
+    public function pickerEmployee()
+    {
+        return $this->belongsTo(Employee::class, 'picker_employee_id');
     }
 
     public function scanner()

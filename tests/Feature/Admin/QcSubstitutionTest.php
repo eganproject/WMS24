@@ -3,6 +3,8 @@
 namespace Tests\Feature\Admin;
 
 use App\Http\Middleware\AuthorizeMenuPermission;
+use App\Models\Employee;
+use App\Models\EmployeePosition;
 use App\Models\Item;
 use App\Models\ItemStock;
 use App\Models\Kurir;
@@ -26,6 +28,13 @@ class QcSubstitutionTest extends TestCase
         $this->withoutMiddleware(AuthorizeMenuPermission::class);
 
         $user = $this->createUserWithRole('admin');
+        $pickerPosition = EmployeePosition::create(['name' => 'Picker', 'is_active' => true]);
+        $picker = Employee::create([
+            'employee_code' => 'PCK-SUB-001',
+            'name' => 'Picker Substitusi',
+            'employment_status' => 'active',
+            'position_id' => $pickerPosition->id,
+        ]);
         $display = Warehouse::firstOrCreate(['code' => 'GUDANG_DISPLAY'], ['name' => 'Gudang Display']);
         Warehouse::firstOrCreate(['code' => 'GUDANG_BESAR'], ['name' => 'Gudang Besar']);
         $kurir = Kurir::create(['name' => 'JNE']);
@@ -57,6 +66,7 @@ class QcSubstitutionTest extends TestCase
             ->postJson(route('admin.outbound.qc-scan.scan'), [
                 'type' => 'no_resi',
                 'code' => 'RESI-SUB-001',
+                'picker_employee_id' => $picker->id,
             ])
             ->assertOk()
             ->assertJsonPath('resi.catatan_pembeli', 'Tolong ganti 1 pcs KAB2 dengan KAB3')

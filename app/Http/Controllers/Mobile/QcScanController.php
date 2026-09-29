@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Mobile;
 
 use App\Http\Controllers\Controller;
+use App\Models\Employee;
 use App\Models\Item;
 use App\Models\QcResiScan;
 use App\Models\QcResiScanDuplicateAttempt;
@@ -47,10 +48,14 @@ class QcScanController extends Controller
         $validated = $request->validate([
             'type' => ['required', 'in:id_pesanan,no_resi'],
             'code' => ['required', 'string'],
+            'picker_employee_id' => [$this->pickerSelectionRequired() ? 'required' : 'nullable', 'integer'],
+        ], [
+            'picker_employee_id.required' => 'Pilih nama picker sebelum scan resi.',
         ]);
 
         $type = $validated['type'];
         $code = trim((string) $validated['code']);
+        $pickerEmployeeId = $this->validatePickerEmployeeId($validated['picker_employee_id'] ?? null);
         if ($code === '') {
             return response()->json([
                 'message' => 'Kode tidak boleh kosong.',
@@ -128,9 +133,22 @@ class QcScanController extends Controller
                 ], 422);
             }
 
+            if ($qc && $pickerEmployeeId !== null && $qc->picker_employee_id !== null && (int) $qc->picker_employee_id !== $pickerEmployeeId) {
+                $existingPickerName = Employee::query()->whereKey($qc->picker_employee_id)->value('name') ?: 'picker sebelumnya';
+
+                DB::rollBack();
+                return response()->json([
+                    'message' => "QC resi ini sudah tercatat untuk {$existingPickerName}. Pilih picker yang sama agar atribusi tidak berubah.",
+                    'errors' => [
+                        'picker_employee_id' => ['Picker tidak sama dengan atribusi QC yang sudah tersimpan.'],
+                    ],
+                ], 422);
+            }
+
             if (!$qc) {
                 $qc = QcResiScan::create([
                     'resi_id' => $resi->id,
+                    'picker_employee_id' => $pickerEmployeeId,
                     'scan_type' => $type,
                     'scan_code' => $code,
                     'status' => QcTransitStatus::DRAFT,
@@ -159,6 +177,9 @@ class QcScanController extends Controller
                             'scanned_qty' => 0,
                         ]);
                     }
+                }
+                if ($pickerEmployeeId !== null && $qc->picker_employee_id === null) {
+                    $qc->picker_employee_id = $pickerEmployeeId;
                 }
 
                 $qc->last_scanned_by = auth()->id();
@@ -554,6 +575,13 @@ class QcScanController extends Controller
                 ]);
             }
 
+            if ($this->pickerSelectionRequired() && !$qc->picker_employee_id) {
+                DB::rollBack();
+                return response()->json([
+                    'message' => 'Picker belum dipilih. Scan ulang resi dan pilih picker sebelum menyelesaikan QC.',
+                ], 422);
+            }
+
             if (ShipmentScanOut::where('resi_id', $qc->resi_id)->exists()) {
                 DB::rollBack();
                 return response()->json([
@@ -714,12 +742,58 @@ class QcScanController extends Controller
         ]);
     }
 
+    protected function pickerSelectionRequired(): bool
+    {
+        return false;
+    }
+
+    protected function pickerOptions()
+    {
+        return $this->pickerEmployeeQuery()
+            ->with('positionRelation:id,name')
+            ->orderBy('name')
+            ->get(['id', 'employee_code', 'name', 'position', 'position_id']);
+    }
+
+    protected function validatePickerEmployeeId(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $exists = $this->pickerEmployeeQuery()
+            ->whereKey((int) $value)
+            ->exists();
+
+        if (!$exists) {
+            throw ValidationException::withMessages([
+                'picker_employee_id' => 'Picker tidak valid, tidak aktif, atau jabatan karyawan bukan picker/picking.',
+            ]);
+        }
+
+        return (int) $value;
+    }
+
+    protected function pickerEmployeeQuery()
+    {
+        return Employee::query()
+            ->active()
+            ->where(function ($query) {
+                $query->whereHas('positionRelation', function ($positionQuery) {
+                    $positionQuery->whereRaw('LOWER(name) LIKE ?', ['%picker%'])
+                        ->orWhereRaw('LOWER(name) LIKE ?', ['%picking%']);
+                })->orWhereRaw('LOWER(COALESCE(position, "")) LIKE ?', ['%picker%'])
+                    ->orWhereRaw('LOWER(COALESCE(position, "")) LIKE ?', ['%picking%']);
+            });
+    }
+
     private function loadQcRelations(QcResiScan $qc): QcResiScan
     {
         return $qc->load([
             'items',
             'substitutions.creator:id,name',
             'resi:id,id_pesanan,no_resi,tanggal_pesanan,catatan_pembeli',
+            'pickerEmployee:id,employee_code,name',
             'scanner:id,name',
             'completer:id,name',
             'lastScanner:id,name',
@@ -791,6 +865,9 @@ class QcScanController extends Controller
                 'remaining' => max(0, $totalExpected - $totalScanned),
             ],
             'audit' => [
+                'picker_employee_id' => $qc->picker_employee_id,
+                'picker_name' => $qc->pickerEmployee?->name ?? '-',
+                'picker_code' => $qc->pickerEmployee?->employee_code ?? '-',
                 'started_by' => $qc->scanner?->name ?? '-',
                 'completed_by' => $qc->completer?->name ?? '-',
                 'last_scanned_by' => $qc->lastScanner?->name ?? '-',

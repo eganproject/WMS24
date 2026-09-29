@@ -786,6 +786,7 @@
     const routes = @json($routes);
     const csrfToken = '{{ csrf_token() }}';
     const pickerSessionKey = "wms24.qcScan.pickerEmployeeId";
+    const reasonOptions = @json($reasonOptions);
 
     const el = {
         resiSection: document.getElementById('resi_scan_section'),
@@ -920,9 +921,47 @@
         });
     };
 
-    const askReason = async (title, placeholder, confirmButtonText) => {
+    const reasonFieldsHtml = (action, placeholder) => {
+        const options = Object.entries(reasonOptions[action] || {})
+            .map(([code, label]) => `<option value="${escapeHtml(code)}">${escapeHtml(label)}</option>`)
+            .join('');
+
+        return `
+            <label class="form-label fw-bold">Kategori alasan</label>
+            <select id="reason_code_input" class="form-select mb-3">
+                <option value="">Pilih kategori</option>
+                ${options}
+            </select>
+            <label class="form-label fw-bold">Catatan <span class="text-muted fw-normal">(wajib bila Lainnya)</span></label>
+            <input id="reason_note_input" class="form-control" maxlength="400" placeholder="${escapeHtml(placeholder)}" autocomplete="off">
+        `;
+    };
+
+    const readReasonFields = () => {
+        const reasonCode = document.getElementById('reason_code_input')?.value || '';
+        const note = (document.getElementById('reason_note_input')?.value || '').trim();
+
+        if (!reasonCode) {
+            Swal.showValidationMessage('Pilih kategori alasan.');
+            return null;
+        }
+        if (reasonCode === 'other' && !note) {
+            Swal.showValidationMessage('Catatan wajib diisi bila memilih alasan Lainnya.');
+            return null;
+        }
+
+        return { reason_code: reasonCode, reason: note };
+    };
+
+    const reasonSummary = (action, form) => {
+        const label = reasonOptions[action]?.[form.reason_code] || form.reason_code;
+        return form.reason ? `${label} - ${form.reason}` : label;
+    };
+
+    const askReason = async (action, title, placeholder, confirmButtonText) => {
         if (typeof Swal === 'undefined') {
-            return (window.prompt(title) || '').trim();
+            const note = (window.prompt(`${title} (alasan)`) || '').trim();
+            return note ? { reason_code: 'other', reason: note } : null;
         }
 
         scannerFocusPaused = true;
@@ -930,22 +969,14 @@
         try {
             result = await Swal.fire({
                 title,
-                input: 'text',
-                inputPlaceholder: placeholder,
-                inputAttributes: { maxlength: '500' },
+                html: `<div class="text-start">${reasonFieldsHtml(action, placeholder)}</div>`,
                 showCancelButton: true,
                 confirmButtonText,
                 cancelButtonText: 'Batal',
                 didOpen: () => {
-                    const input = Swal.getInput();
-                    if (input) input.focus();
+                    document.getElementById('reason_code_input')?.focus();
                 },
-                inputValidator: (value) => {
-                    if (!value || !value.trim()) {
-                        return 'Alasan wajib diisi.';
-                    }
-                    return null;
-                },
+                preConfirm: () => readReasonFields() || false,
             });
         } finally {
             scannerFocusPaused = false;
@@ -955,7 +986,7 @@
             return null;
         }
 
-        return (result.value || '').trim();
+        return result.value;
     };
 
     const askSubstitution = async () => {
@@ -983,6 +1014,7 @@
                 original_sku: (window.prompt('SKU asal') || '').trim(),
                 replacement_sku: (window.prompt('SKU pengganti') || '').trim(),
                 qty: parseInt(window.prompt('Qty substitusi') || '1', 10),
+                reason_code: 'other',
                 reason: (window.prompt('Alasan substitusi') || '').trim(),
             };
         }
@@ -1008,8 +1040,7 @@
                         <input id="sub_replacement_sku" class="form-control mb-3" placeholder="Contoh: KAB3" autocomplete="off">
                         <label class="form-label fw-bold">Qty</label>
                         <input id="sub_qty" type="number" min="1" value="1" class="form-control mb-3">
-                        <label class="form-label fw-bold">Alasan</label>
-                        <input id="sub_reason" class="form-control" placeholder="Contoh: sesuai catatan pembeli" autocomplete="off">
+                        ${reasonFieldsHtml('substitution', 'Contoh: sesuai catatan pembeli')}
                     </div>
                 `,
                 showCancelButton: true,
@@ -1022,11 +1053,10 @@
                     const original = document.getElementById('sub_original_sku')?.value || '';
                     const replacement = (document.getElementById('sub_replacement_sku')?.value || '').trim();
                     const qty = parseInt(document.getElementById('sub_qty')?.value || '0', 10);
-                    const reason = (document.getElementById('sub_reason')?.value || '').trim();
                     const source = rows.find((row) => row.sku === original);
 
-                    if (!original || !replacement || !qty || qty <= 0 || !reason) {
-                        Swal.showValidationMessage('SKU asal, SKU pengganti, qty, dan alasan wajib diisi.');
+                    if (!original || !replacement || !qty || qty <= 0) {
+                        Swal.showValidationMessage('SKU asal, SKU pengganti, dan qty wajib diisi.');
                         return false;
                     }
                     if (source && qty > source.remaining) {
@@ -1038,11 +1068,14 @@
                         return false;
                     }
 
+                    const reasonFields = readReasonFields();
+                    if (!reasonFields) return false;
+
                     return {
                         original_sku: original,
                         replacement_sku: replacement,
                         qty,
-                        reason,
+                        ...reasonFields,
                     };
                 },
             });
@@ -1680,8 +1713,9 @@
     const holdQc = async () => {
         if (!qcState.id || actionBusy) return;
 
-        const reason = await askReason('Simpan dan tunda QC', 'Contoh: pemeriksaan fisik belum lengkap', 'Simpan');
-        if (!reason) return;
+        const reasonForm = await askReason('hold', 'Simpan dan tunda QC', 'Contoh: rak A3 kosong', 'Simpan');
+        if (!reasonForm) return;
+        const reason = reasonSummary('hold', reasonForm);
 
         actionBusy = true;
         renderQc();
@@ -1690,7 +1724,7 @@
         try {
             const payload = await fetchJson(routes.hold, {
                 qc_id: qcState.id,
-                reason,
+                ...reasonForm,
                 _token: csrfToken,
             });
 
@@ -1733,6 +1767,7 @@
                 original_sku: form.original_sku,
                 replacement_sku: form.replacement_sku,
                 qty: form.qty,
+                reason_code: form.reason_code,
                 reason: form.reason,
                 _token: csrfToken,
             });
@@ -1744,7 +1779,7 @@
                 title: payload.message || 'Substitusi berhasil disimpan.',
                 message: `${form.original_sku} -> ${form.replacement_sku}`,
                 type: 'success',
-                detail: `Qty ${form.qty} | ${form.reason}`,
+                detail: `Qty ${form.qty} | ${reasonSummary('substitution', form)}`,
                 tone: 'success',
             });
             focusSku();
@@ -1761,8 +1796,9 @@
     const resetQc = async () => {
         if (!qcState.id || actionBusy) return;
 
-        const reason = await askReason('Reset QC aktif', 'Contoh: resi salah / scan ganda', 'Reset');
-        if (!reason) return;
+        const reasonForm = await askReason('reset', 'Reset QC aktif', 'Contoh: SKU A tertukar dengan SKU B', 'Reset');
+        if (!reasonForm) return;
+        const reason = reasonSummary('reset', reasonForm);
 
         actionBusy = true;
         renderQc();
@@ -1771,7 +1807,7 @@
         try {
             const payload = await fetchJson(routes.reset, {
                 qc_id: qcState.id,
-                reason,
+                ...reasonForm,
                 _token: csrfToken,
             });
 

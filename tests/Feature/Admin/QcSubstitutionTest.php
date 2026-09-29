@@ -80,12 +80,24 @@ class QcSubstitutionTest extends TestCase
                 'original_sku' => 'KAB2',
                 'replacement_sku' => 'KAB3',
                 'qty' => 1,
+                'reason_code' => 'buyer_request',
                 'reason' => 'Sesuai catatan pembeli',
             ])
             ->assertOk()
             ->assertJsonPath('qc.summary.total_expected', 2)
             ->assertJsonPath('qc.substitutions.0.original_sku', 'KAB2')
             ->assertJsonPath('qc.substitutions.0.replacement_sku', 'KAB3');
+
+        $this->assertDatabaseHas('qc_resi_scan_events', [
+            'qc_resi_scan_id' => $qc->id,
+            'picker_employee_id' => $picker->id,
+            'event_type' => 'substitution',
+            'sku' => 'KAB3',
+            'expected_sku' => 'KAB2',
+            'qty' => 1,
+            'reason_code' => 'buyer_request',
+            'reason' => 'Permintaan pembeli - Sesuai catatan pembeli',
+        ]);
 
         $this->assertDatabaseHas('resi_details', [
             'resi_id' => $resi->id,

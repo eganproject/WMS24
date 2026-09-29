@@ -198,8 +198,20 @@
 
     <div class="card">
         <div class="section-title">Scan Resi QC</div>
-        <div class="muted">Scan resi terlebih dahulu untuk mengambil daftar SKU.</div>
+        <div class="muted">Pilih picker, lalu scan resi untuk mengambil daftar SKU.</div>
         <div class="scan-actions">
+            <div>
+                <label class="section-title" for="picker_employee_id" style="display:block; font-size:12px; margin-bottom:4px;">Picker <span style="color:#b91c1c;">*</span></label>
+                <select class="input" id="picker_employee_id" data-placeholder="Cari nama picker">
+                    <option value="">Pilih picker</option>
+                    @foreach($pickers as $picker)
+                        <option value="{{ $picker->id }}">
+                            {{ $picker->employee_code ? $picker->employee_code.' - ' : '' }}{{ $picker->name }}
+                        </option>
+                    @endforeach
+                </select>
+                <div class="status-line">Cukup dipilih sekali, otomatis dipakai untuk resi berikutnya.</div>
+            </div>
             <select class="input" id="resi_type">
                 <option value="no_resi">No Resi</option>
                 <option value="id_pesanan">ID Pesanan</option>
@@ -269,6 +281,8 @@
 <script>
     const routes = @json($routes);
     const csrfToken = '{{ csrf_token() }}';
+    const pickerSessionKey = 'wms24.qcScan.pickerEmployeeId';
+    const reasonOptions = @json($reasonOptions);
 
     const unlockScanSound = () => window.AppScanSound?.unlock?.();
     const playScanSound = () => window.AppScanSound?.success?.();
@@ -277,6 +291,7 @@
     const playErrorSound = () => window.AppScanSound?.error?.();
 
     const el = {
+        pickerEmployee: document.getElementById('picker_employee_id'),
         resiType: document.getElementById('resi_type'),
         resiCode: document.getElementById('resi_code'),
         btnScanResi: document.getElementById('btn_scan_resi'),
@@ -500,6 +515,9 @@
         const summary = qc.summary || { total_expected: 0, total_scanned: 0, remaining: 0 };
         const audit = qc.audit || {};
         const auditBits = [];
+        if (audit.picker_name && audit.picker_name !== '-') {
+            auditBits.push(`Picker: ${audit.picker_name}`);
+        }
         if (audit.started_by && audit.started_by !== '-') {
             auditBits.push(`Mulai: ${audit.started_by}`);
         }
@@ -560,8 +578,62 @@
         }
     };
 
+    const savePickerForSession = () => {
+        try {
+            if (el.pickerEmployee.value) {
+                window.sessionStorage.setItem(pickerSessionKey, el.pickerEmployee.value);
+            } else {
+                window.sessionStorage.removeItem(pickerSessionKey);
+            }
+        } catch (error) {
+            // Penyimpanan browser bersifat opsional; alur QC tetap dapat digunakan.
+        }
+    };
+
+    const restorePickerForSession = () => {
+        let savedPickerId = '';
+        try {
+            savedPickerId = window.sessionStorage.getItem(pickerSessionKey) || '';
+        } catch (error) {
+            savedPickerId = '';
+        }
+
+        const hasOption = Array.from(el.pickerEmployee.options).some((option) => option.value && option.value === savedPickerId);
+        if (hasOption) {
+            el.pickerEmployee.value = savedPickerId;
+        }
+    };
+
+    const initPickerSelect2 = () => {
+        if (typeof window.jQuery === 'undefined' || !window.jQuery.fn?.select2) return;
+
+        window.jQuery(el.pickerEmployee)
+            .select2({
+                placeholder: el.pickerEmployee.dataset.placeholder || 'Cari nama picker',
+                allowClear: true,
+                width: '100%',
+            })
+            .on('select2:select select2:clear', savePickerForSession);
+    };
+
+    const focusPicker = () => {
+        if (typeof window.jQuery !== 'undefined' && window.jQuery(el.pickerEmployee).hasClass('select2-hidden-accessible')) {
+            window.jQuery(el.pickerEmployee).select2('open');
+            return;
+        }
+        el.pickerEmployee.focus();
+    };
+
     const submitResi = async () => {
         unlockScanSound();
+        const pickerEmployeeId = parseInt(el.pickerEmployee.value || '0', 10);
+        if (!pickerEmployeeId) {
+            playErrorSound();
+            setStatus(el.resiStatus, 'Pilih nama picker sebelum scan resi.', 'error');
+            focusPicker();
+            return;
+        }
+
         const type = el.resiType.value;
         const code = el.resiCode.value.trim();
         if (!code) {
@@ -578,7 +650,7 @@
             const data = await fetchJson(routes.scanResi, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code, type, _token: csrfToken }),
+                body: JSON.stringify({ code, type, picker_employee_id: pickerEmployeeId, _token: csrfToken }),
             });
 
             qcState = {
@@ -659,41 +731,57 @@
         }
     };
 
+    const askReason = async (action, title, placeholder, confirmButtonText) => {
+        if (typeof Swal === 'undefined') {
+            const note = (window.prompt(`${title} (alasan):`) || '').trim();
+            return note ? { reason_code: 'other', reason: note } : null;
+        }
+
+        const options = Object.entries(reasonOptions[action] || {})
+            .map(([code, label]) => `<option value="${escapeHtml(code)}">${escapeHtml(label)}</option>`)
+            .join('');
+
+        const result = await Swal.fire({
+            title,
+            html: `
+                <div style="text-align:left; display:grid; gap:8px;">
+                    <label style="font-size:12px; font-weight:700;" for="reason_code_input">Kategori alasan</label>
+                    <select id="reason_code_input" class="input">
+                        <option value="">Pilih kategori</option>
+                        ${options}
+                    </select>
+                    <label style="font-size:12px; font-weight:700;" for="reason_note_input">Catatan (wajib bila Lainnya)</label>
+                    <input id="reason_note_input" class="input" maxlength="400" placeholder="${escapeHtml(placeholder)}" autocomplete="off" />
+                </div>
+            `,
+            showCancelButton: true,
+            confirmButtonText,
+            cancelButtonText: 'Batal',
+            preConfirm: () => {
+                const reasonCode = document.getElementById('reason_code_input')?.value || '';
+                const note = (document.getElementById('reason_note_input')?.value || '').trim();
+                if (!reasonCode) {
+                    Swal.showValidationMessage('Pilih kategori alasan.');
+                    return false;
+                }
+                if (reasonCode === 'other' && !note) {
+                    Swal.showValidationMessage('Catatan wajib diisi bila memilih alasan Lainnya.');
+                    return false;
+                }
+                return { reason_code: reasonCode, reason: note };
+            },
+        });
+
+        return result.isConfirmed ? result.value : null;
+    };
+
     const holdQc = async () => {
         if (!qcState.id || qcActionBusy) return;
 
-        let reason = '';
-        if (typeof Swal !== 'undefined') {
-            const result = await Swal.fire({
-                title: 'Simpan & Lewatkan',
-                text: 'Masukkan alasan penundaan untuk audit.',
-                input: 'text',
-                inputPlaceholder: 'Contoh: transit SKU belum cukup',
-                inputAttributes: {
-                    maxlength: '500',
-                },
-                showCancelButton: true,
-                confirmButtonText: 'Simpan',
-                cancelButtonText: 'Batal',
-                inputValidator: (value) => {
-                    if (!value || !value.trim()) {
-                        return 'Alasan simpan & lewatkan wajib diisi.';
-                    }
-                    return null;
-                },
-            });
-
-            if (!result.isConfirmed) {
-                return;
-            }
-
-            reason = (result.value || '').trim();
-        } else {
-            reason = (window.prompt('Alasan simpan & lewatkan:') || '').trim();
-            if (!reason) {
-                setStatus(el.qcStatus, 'Simpan & lewatkan dibatalkan. Alasan wajib diisi.', 'error');
-                return;
-            }
+        const reasonForm = await askReason('hold', 'Simpan & Lewatkan', 'Contoh: rak A3 kosong', 'Simpan');
+        if (!reasonForm) {
+            setStatus(el.qcStatus, 'Simpan & lewatkan dibatalkan.', 'muted');
+            return;
         }
 
         qcActionBusy = true;
@@ -704,7 +792,7 @@
             const data = await fetchJson(routes.hold, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ qc_id: qcState.id, reason, _token: csrfToken }),
+                body: JSON.stringify({ qc_id: qcState.id, ...reasonForm, _token: csrfToken }),
             });
 
             qcState = {
@@ -763,38 +851,10 @@
     const resetQc = async () => {
         if (!qcState.id || qcActionBusy) return;
 
-        let reason = '';
-        if (typeof Swal !== 'undefined') {
-            const result = await Swal.fire({
-                title: 'Reset QC',
-                text: 'Masukkan alasan reset untuk audit.',
-                input: 'text',
-                inputPlaceholder: 'Contoh: scan ganda / resi salah',
-                inputAttributes: {
-                    maxlength: '500',
-                },
-                showCancelButton: true,
-                confirmButtonText: 'Reset',
-                cancelButtonText: 'Batal',
-                inputValidator: (value) => {
-                    if (!value || !value.trim()) {
-                        return 'Alasan reset wajib diisi.';
-                    }
-                    return null;
-                },
-            });
-
-            if (!result.isConfirmed) {
-                return;
-            }
-
-            reason = (result.value || '').trim();
-        } else {
-            reason = (window.prompt('Alasan reset QC:') || '').trim();
-            if (!reason) {
-                setStatus(el.qcStatus, 'Reset dibatalkan. Alasan wajib diisi.', 'error');
-                return;
-            }
+        const reasonForm = await askReason('reset', 'Reset QC', 'Contoh: SKU A tertukar dengan SKU B', 'Reset');
+        if (!reasonForm) {
+            setStatus(el.qcStatus, 'Reset dibatalkan.', 'muted');
+            return;
         }
 
         qcActionBusy = true;
@@ -805,7 +865,7 @@
             const data = await fetchJson(routes.reset, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ qc_id: qcState.id, reason, _token: csrfToken }),
+                body: JSON.stringify({ qc_id: qcState.id, ...reasonForm, _token: csrfToken }),
             });
 
             qcState = {
@@ -1090,6 +1150,10 @@
         }
     });
 
+    el.pickerEmployee.addEventListener('change', savePickerForSession);
+
+    restorePickerForSession();
+    initPickerSelect2();
     updateScanAvailability();
 </script>
 @endsection

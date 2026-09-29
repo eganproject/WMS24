@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Outbound;
 
+use App\Models\Employee;
 use App\Models\Item;
 use App\Models\ItemBarcode;
 use App\Models\ItemStock;
@@ -52,6 +53,7 @@ class QcOutboundFlowTest extends TestCase
             ->postJson(route('mobile.qc.scan'), [
                 'type' => 'no_resi',
                 'code' => 'RESI-001',
+                'picker_employee_id' => $this->pickerId(),
             ])
             ->assertOk()
             ->assertJsonPath('qc.summary.total_expected', 2);
@@ -117,6 +119,7 @@ class QcOutboundFlowTest extends TestCase
             ->postJson(route('mobile.qc.scan'), [
                 'type' => 'no_resi',
                 'code' => 'RESI-001',
+                'picker_employee_id' => $this->pickerId(),
             ])
             ->assertStatus(422)
             ->assertJsonPath('message', 'Resi sudah scan out.');
@@ -167,6 +170,7 @@ class QcOutboundFlowTest extends TestCase
             ->postJson(route('mobile.qc.scan'), [
                 'type' => 'no_resi',
                 'code' => $resi->no_resi,
+                'picker_employee_id' => $this->pickerId(),
             ])
             ->assertOk();
 
@@ -212,6 +216,7 @@ class QcOutboundFlowTest extends TestCase
             ->postJson(route('mobile.qc.scan'), [
                 'type' => 'no_resi',
                 'code' => $resi->no_resi,
+                'picker_employee_id' => $this->pickerId(),
             ])
             ->assertOk();
 
@@ -236,6 +241,7 @@ class QcOutboundFlowTest extends TestCase
             ->postJson(route('mobile.qc.scan'), [
                 'type' => 'no_resi',
                 'code' => $resi->no_resi,
+                'picker_employee_id' => $this->pickerId(),
             ])
             ->assertStatus(422)
             ->assertJsonPath('message', 'Resi sudah QC selesai.');
@@ -291,6 +297,7 @@ class QcOutboundFlowTest extends TestCase
             ->postJson(route('mobile.qc.scan'), [
                 'type' => 'no_resi',
                 'code' => 'RESI-002',
+                'picker_employee_id' => $this->pickerId(),
             ])
             ->assertOk();
 
@@ -355,6 +362,7 @@ class QcOutboundFlowTest extends TestCase
             ->postJson(route('mobile.qc.scan'), [
                 'type' => 'no_resi',
                 'code' => $resiA->no_resi,
+                'picker_employee_id' => $this->pickerId(),
             ])
             ->assertOk();
 
@@ -371,6 +379,7 @@ class QcOutboundFlowTest extends TestCase
         $this->actingAs($qcUser)
             ->postJson(route('mobile.qc.hold'), [
                 'qc_id' => $qcA->id,
+                'reason_code' => 'other',
                 'reason' => 'Menunggu pengecekan fisik',
             ])
             ->assertOk()
@@ -380,6 +389,7 @@ class QcOutboundFlowTest extends TestCase
             ->postJson(route('mobile.qc.scan'), [
                 'type' => 'no_resi',
                 'code' => $resiB->no_resi,
+                'picker_employee_id' => $this->pickerId(),
             ])
             ->assertOk();
 
@@ -398,6 +408,7 @@ class QcOutboundFlowTest extends TestCase
         $this->actingAs($qcUser)
             ->postJson(route('mobile.qc.reset'), [
                 'qc_id' => $qcA->id,
+                'reason_code' => 'other',
                 'reason' => 'Alokasi dibatalkan',
             ])
             ->assertOk()
@@ -456,6 +467,7 @@ class QcOutboundFlowTest extends TestCase
             ->postJson(route('mobile.qc.scan'), [
                 'type' => 'no_resi',
                 'code' => $resi->no_resi,
+                'picker_employee_id' => $this->pickerId(),
             ])
             ->assertOk();
 
@@ -515,6 +527,7 @@ class QcOutboundFlowTest extends TestCase
             ->postJson(route('mobile.qc.scan'), [
                 'type' => 'no_resi',
                 'code' => 'FORBIDDEN',
+                'picker_employee_id' => $this->pickerId(),
             ])
             ->assertForbidden();
 
@@ -524,6 +537,14 @@ class QcOutboundFlowTest extends TestCase
                 'code' => 'FORBIDDEN',
             ])
             ->assertForbidden();
+    }
+
+    private function pickerId(): int
+    {
+        return Employee::firstOrCreate(
+            ['employee_code' => 'PCK-FLOW-001'],
+            ['name' => 'Picker Flow', 'employment_status' => 'active']
+        )->id;
     }
 
     private function createUserWithRole(string $slug): User

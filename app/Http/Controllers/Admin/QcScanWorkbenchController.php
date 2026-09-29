@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Mobile\QcScanController as BaseQcScanController;
+use App\Support\QcReasonCategory;
 
 class QcScanWorkbenchController extends BaseQcScanController
 {
@@ -20,11 +21,7 @@ class QcScanWorkbenchController extends BaseQcScanController
                 'scanOutHistory' => route('admin.outbound.scan-out-history.index'),
             ],
             'pickers' => $this->pickerOptions(),
+            'reasonOptions' => QcReasonCategory::all(),
         ]);
-    }
-
-    protected function pickerSelectionRequired(): bool
-    {
-        return true;
     }
 }

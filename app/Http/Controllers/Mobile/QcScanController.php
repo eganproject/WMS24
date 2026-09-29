@@ -7,6 +7,7 @@ use App\Models\Employee;
 use App\Models\Item;
 use App\Models\QcResiScan;
 use App\Models\QcResiScanDuplicateAttempt;
+use App\Models\QcResiScanEvent;
 use App\Models\QcResiScanItem;
 use App\Models\QcResiScanSubstitution;
 use App\Models\Resi;
@@ -18,11 +19,14 @@ use App\Support\ItemBarcodeResolver;
 use App\Support\PickingListBalanceService;
 use App\Support\QcScanExceptionRegistry;
 use App\Support\QcInventoryService;
+use App\Support\QcReasonCategory;
+use App\Support\QcScanEventLogger;
 use App\Support\QcTransitStatus;
 use App\Support\StockService;
 use App\Support\WarehouseService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class QcScanController extends Controller
@@ -40,6 +44,8 @@ class QcScanController extends Controller
                 'logout' => route('logout'),
                 'desktopQcScan' => route('admin.outbound.qc-scan.index'),
             ],
+            'pickers' => $this->pickerOptions(),
+            'reasonOptions' => QcReasonCategory::all(),
         ]);
     }
 
@@ -239,7 +245,8 @@ class QcScanController extends Controller
                 ], 422);
             }
 
-            $skuCode = app(ItemBarcodeResolver::class)->resolveSku($code);
+            $resolvedItem = app(ItemBarcodeResolver::class)->resolveItem($code);
+            $skuCode = $resolvedItem?->sku ?? $code;
 
             $items = QcResiScanItem::where('qc_resi_scan_id', $qc->id)
                 ->lockForUpdate()
@@ -257,6 +264,7 @@ class QcScanController extends Controller
                     $qc->id,
                     $qc->scan_code ?: ($qc->resi?->no_resi ?? null)
                 );
+                $this->recordWrongSkuEvent($qc, $items, $code, $resolvedItem?->sku, $qty);
                 return response()->json([
                     'message' => 'SKU tidak sesuai resi.',
                 ], 422);
@@ -266,6 +274,14 @@ class QcScanController extends Controller
             $scanned = (int) $target->scanned_qty;
             if ($scanned + $qty > $expected) {
                 DB::rollBack();
+                app(QcScanEventLogger::class)->record($qc, QcResiScanEvent::TYPE_OVER_QTY, [
+                    'scan_code' => $code,
+                    'sku' => $target->sku,
+                    'expected_sku' => $target->sku,
+                    'qty' => $qty,
+                    'expected_qty' => $expected,
+                    'scanned_qty' => $scanned,
+                ]);
                 return response()->json([
                     'message' => 'Qty scan melebihi kebutuhan.',
                     'details' => [[
@@ -334,15 +350,16 @@ class QcScanController extends Controller
             'original_sku' => ['required', 'string', 'max:100'],
             'replacement_sku' => ['required', 'string', 'max:100'],
             'qty' => ['required', 'integer', 'min:1'],
-            'reason' => ['required', 'string', 'max:500'],
-        ]);
+            ...$this->reasonRules(QcReasonCategory::SUBSTITUTION),
+        ], $this->reasonMessages());
 
         $originalSku = trim((string) $validated['original_sku']);
         $replacementSku = trim((string) $validated['replacement_sku']);
         $qty = (int) $validated['qty'];
-        $reason = trim((string) $validated['reason']);
+        $reasonCode = $validated['reason_code'];
+        $reason = QcReasonCategory::compose(QcReasonCategory::SUBSTITUTION, $reasonCode, $validated['reason'] ?? null);
 
-        if ($originalSku === '' || $replacementSku === '' || $reason === '') {
+        if ($originalSku === '' || $replacementSku === '') {
             return response()->json([
                 'message' => 'SKU asal, SKU pengganti, qty, dan alasan wajib diisi.',
             ], 422);
@@ -463,9 +480,20 @@ class QcScanController extends Controller
                 'original_sku' => $source->sku,
                 'replacement_sku' => $replacementItem->sku,
                 'qty' => $qty,
+                'reason_code' => $reasonCode,
                 'reason' => $reason,
                 'buyer_note_snapshot' => $qc->resi?->catatan_pembeli,
                 'created_by' => auth()->id(),
+            ]);
+
+            app(QcScanEventLogger::class)->record($qc, QcResiScanEvent::TYPE_SUBSTITUTION, [
+                'sku' => $replacementItem->sku,
+                'expected_sku' => $source->sku,
+                'qty' => $qty,
+                'expected_qty' => $sourceExpected,
+                'scanned_qty' => $sourceScanned,
+                'reason_code' => $reasonCode,
+                'reason' => $reason,
             ]);
 
             if (($qc->status ?? '') === QcTransitStatus::HOLD) {
@@ -505,15 +533,11 @@ class QcScanController extends Controller
     {
         $validated = $request->validate([
             'qc_id' => ['required', 'integer', 'exists:qc_resi_scans,id'],
-            'reason' => ['required', 'string', 'max:500'],
-        ]);
+            ...$this->reasonRules(QcReasonCategory::HOLD),
+        ], $this->reasonMessages());
 
-        $reason = trim((string) $validated['reason']);
-        if ($reason === '') {
-            return response()->json([
-                'message' => 'Alasan simpan & lewatkan wajib diisi.',
-            ], 422);
-        }
+        $reasonCode = $validated['reason_code'];
+        $reason = QcReasonCategory::compose(QcReasonCategory::HOLD, $reasonCode, $validated['reason'] ?? null);
 
         DB::beginTransaction();
         try {
@@ -535,6 +559,8 @@ class QcScanController extends Controller
             $qc->last_scanned_by = auth()->id();
             $qc->last_scanned_at = now();
             $qc->save();
+
+            $this->recordProgressEvent($qc, QcResiScanEvent::TYPE_HOLD, $reasonCode, $reason);
 
             $this->loadQcRelations($qc);
 
@@ -689,15 +715,11 @@ class QcScanController extends Controller
     {
         $validated = $request->validate([
             'qc_id' => ['required', 'integer', 'exists:qc_resi_scans,id'],
-            'reason' => ['required', 'string', 'max:500'],
-        ]);
+            ...$this->reasonRules(QcReasonCategory::RESET),
+        ], $this->reasonMessages());
 
-        $reason = trim((string) $validated['reason']);
-        if ($reason === '') {
-            return response()->json([
-                'message' => 'Alasan reset wajib diisi.',
-            ], 422);
-        }
+        $reasonCode = $validated['reason_code'];
+        $reason = QcReasonCategory::compose(QcReasonCategory::RESET, $reasonCode, $validated['reason'] ?? null);
 
         DB::beginTransaction();
         try {
@@ -711,6 +733,8 @@ class QcScanController extends Controller
                     'message' => 'QC sudah selesai, tidak bisa direset.',
                 ], 422);
             }
+
+            $this->recordProgressEvent($qc, QcResiScanEvent::TYPE_RESET, $reasonCode, $reason);
 
             QcResiScanItem::where('qc_resi_scan_id', $qc->id)
                 ->update(['scanned_qty' => 0]);
@@ -744,7 +768,67 @@ class QcScanController extends Controller
 
     protected function pickerSelectionRequired(): bool
     {
-        return false;
+        return true;
+    }
+
+    private function recordWrongSkuEvent(QcResiScan $qc, $items, string $code, ?string $resolvedSku, int $qty): void
+    {
+        $outstanding = $items
+            ->filter(fn ($row) => (int) $row->scanned_qty < (int) $row->expected_qty)
+            ->map(fn ($row) => [
+                'sku' => $row->sku,
+                'remaining' => (int) $row->expected_qty - (int) $row->scanned_qty,
+            ])
+            ->values();
+
+        // SKU yang seharusnya diambil hanya bisa dipastikan bila tersisa satu baris yang belum terpenuhi.
+        app(QcScanEventLogger::class)->record(
+            $qc,
+            $resolvedSku !== null ? QcResiScanEvent::TYPE_WRONG_SKU : QcResiScanEvent::TYPE_UNKNOWN_BARCODE,
+            [
+                'scan_code' => mb_substr($code, 0, 191),
+                'sku' => $resolvedSku,
+                'expected_sku' => $outstanding->count() === 1 ? $outstanding->first()['sku'] : null,
+                'qty' => $qty,
+                'meta' => ['outstanding' => $outstanding->all()],
+            ]
+        );
+    }
+
+    private function reasonRules(string $action): array
+    {
+        return [
+            'reason_code' => ['required', 'string', Rule::in(QcReasonCategory::codes($action))],
+            'reason' => ['nullable', 'string', 'max:400', 'required_if:reason_code,'.QcReasonCategory::OTHER],
+        ];
+    }
+
+    private function reasonMessages(): array
+    {
+        return [
+            'reason_code.required' => 'Pilih kategori alasan.',
+            'reason_code.in' => 'Kategori alasan tidak valid.',
+            'reason.required_if' => 'Catatan wajib diisi bila memilih alasan Lainnya.',
+        ];
+    }
+
+    private function recordProgressEvent(QcResiScan $qc, string $type, string $reasonCode, string $reason): void
+    {
+        $items = QcResiScanItem::where('qc_resi_scan_id', $qc->id)->get(['sku', 'expected_qty', 'scanned_qty']);
+
+        app(QcScanEventLogger::class)->record($qc, $type, [
+            'expected_qty' => (int) $items->sum('expected_qty'),
+            'scanned_qty' => (int) $items->sum('scanned_qty'),
+            'reason_code' => $reasonCode,
+            'reason' => $reason,
+            'meta' => [
+                'items' => $items->map(fn ($row) => [
+                    'sku' => $row->sku,
+                    'expected_qty' => (int) $row->expected_qty,
+                    'scanned_qty' => (int) $row->scanned_qty,
+                ])->values()->all(),
+            ],
+        ]);
     }
 
     protected function pickerOptions()
@@ -845,6 +929,7 @@ class QcScanController extends Controller
                     'original_sku' => $row->original_sku,
                     'replacement_sku' => $row->replacement_sku,
                     'qty' => (int) $row->qty,
+                    'reason_code' => $row->reason_code,
                     'reason' => $row->reason,
                     'buyer_note_snapshot' => $row->buyer_note_snapshot,
                     'created_by' => $row->creator?->name ?? '-',

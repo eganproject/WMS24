@@ -14,6 +14,7 @@ class QcResiScanSubstitution extends Model
         'original_sku',
         'replacement_sku',
         'qty',
+        'reason_code',
         'reason',
         'buyer_note_snapshot',
         'created_by',

@@ -81,27 +81,6 @@ class InboundTransaction extends Model
         return $this->scanSession->items->every(fn ($item) => (int) $item->scanned_qty === 0 && (int) $item->scanned_koli === 0);
     }
 
-    public function canDeleteReceiptScan(?User $user): bool
-    {
-        return $user?->email === 'admin@gmail.com'
-            && $this->type === 'receipt'
-            && $this->status === \App\Support\InboundScanStatus::SCANNING
-            && $this->scanSession
-            && ! $this->approved_at
-            && ! $this->scanSession->completed_at
-            && ! ($this->stock_mutations_exists ?? $this->stockMutations()->exists())
-            && ! ($this->used_koli_units_exists ?? $this->usedKoliUnits()->exists());
-    }
-
-    public function usedKoliUnits()
-    {
-        return $this->koliUnits()->where(function ($query) {
-            $query->whereNotIn('status', [InboundKoliUnit::STATUS_AVAILABLE, InboundKoliUnit::STATUS_NOT_RECEIVED])
-                ->orWhereNotNull('reserved_transfer_id')
-                ->orWhereHas('transferScan');
-        });
-    }
-
     public function koliUnits()
     {
         return $this->hasMany(InboundKoliUnit::class, 'inbound_transaction_id');

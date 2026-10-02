@@ -178,7 +178,7 @@ class InboundReturnListUiTest extends TestCase
         $this->withoutMiddleware()
             ->deleteJson(route('admin.inbound.receipts.destroy', $transaction->id))
             ->assertUnprocessable()
-            ->assertJsonPath('message', 'Hanya admin@gmail.com yang dapat menghapus penerimaan berstatus Sedang Scan.');
+            ->assertJsonPath('message', 'Inbound yang sudah mulai discan tidak bisa dihapus.');
 
         $this->assertDatabaseHas('inbound_transactions', ['id' => $transaction->id, 'type' => 'receipt']);
         $this->assertDatabaseHas('inbound_scan_sessions', ['id' => $session->id]);
@@ -232,7 +232,7 @@ class InboundReturnListUiTest extends TestCase
         }
     }
 
-    public function test_admin_can_delete_scanning_receipt_with_progress_and_qr_without_changing_stock(): void
+    public function test_admin_cannot_delete_scanning_receipt_and_stock_scan_and_qr_remain_intact(): void
     {
         [$transaction, $session, $scanItem] = $this->scanningTransaction('receipt', 1);
         $units = app(\App\Support\InboundKoliUnitService::class)->syncForTransaction($transaction);
@@ -240,14 +240,14 @@ class InboundReturnListUiTest extends TestCase
             'item_id' => $scanItem->item_id, 'warehouse_id' => $transaction->warehouse_id, 'stock' => 20,
         ]);
         $this->actingAs(User::factory()->create(['email' => 'admin@gmail.com']))->withoutMiddleware();
-        $this->get(route('admin.inbound.receipts.index'))->assertOk()->assertSee('seluruh progres scan');
-        $this->getJson(route('admin.inbound.receipts.data'))->assertJsonPath('data.0.can_delete', true);
-        $this->deleteJson(route('admin.inbound.receipts.destroy', $transaction->id))->assertOk();
-        $this->assertDatabaseMissing('inbound_transactions', ['id' => $transaction->id]);
-        $this->assertDatabaseMissing('inbound_items', ['inbound_transaction_id' => $transaction->id]);
-        $this->assertDatabaseMissing('inbound_scan_sessions', ['id' => $session->id]);
-        $this->assertDatabaseMissing('inbound_scan_session_items', ['id' => $scanItem->id]);
-        $this->assertDatabaseMissing('inbound_koli_units', ['id' => $units->first()->id]);
+        $this->get(route('admin.inbound.receipts.index'))->assertOk()->assertDontSee('seluruh progres scan');
+        $this->getJson(route('admin.inbound.receipts.data'))->assertJsonPath('data.0.can_delete', false);
+        $this->deleteJson(route('admin.inbound.receipts.destroy', $transaction->id))->assertUnprocessable();
+        $this->assertDatabaseHas('inbound_transactions', ['id' => $transaction->id]);
+        $this->assertDatabaseHas('inbound_items', ['inbound_transaction_id' => $transaction->id]);
+        $this->assertDatabaseHas('inbound_scan_sessions', ['id' => $session->id]);
+        $this->assertDatabaseHas('inbound_scan_session_items', ['id' => $scanItem->id]);
+        $this->assertDatabaseHas('inbound_koli_units', ['id' => $units->first()->id]);
         $this->assertSame(20, (int) $stock->fresh()->stock);
         $this->assertDatabaseCount('stock_mutations', 0);
     }
@@ -286,7 +286,7 @@ class InboundReturnListUiTest extends TestCase
         }
     }
 
-    public function test_receipt_admin_exception_does_not_allow_deleting_manual_scan(): void
+    public function test_admin_cannot_delete_manual_scan(): void
     {
         [$transaction] = $this->scanningTransaction('manual', 1);
         $this->actingAs(User::factory()->create(['email' => 'admin@gmail.com']))->withoutMiddleware();

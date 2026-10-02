@@ -421,11 +421,9 @@ class InboundController extends Controller
                 ? route('admin.masterdata.suppliers.index')
                 : null,
             'importRequiresSupplier' => $this->usesSupplier($type),
-            'deleteWarningText' => match (true) {
-                $type === 'receipt' && auth()->user()?->email === 'admin@gmail.com' => 'Dokumen penerimaan, seluruh progres scan, dan label QR dus terkait akan dihapus permanen. Stok belum bertambah sebelum scan selesai. Pastikan barang fisik dan dokumen penerimaan sudah diperiksa.',
-                $type === 'return' => 'Retur inbound dan sesi scan kosongnya akan dihapus permanen. Pastikan belum ada qty yang discan.',
-                default => 'Data akan dihapus sebelum proses scan inbound.',
-            },
+            'deleteWarningText' => $type === 'return'
+                ? 'Retur inbound dan sesi scan kosongnya akan dihapus permanen. Pastikan belum ada qty yang discan.'
+                : 'Data akan dihapus sebelum proses scan inbound.',
             'importUrl' => match ($type) {
                 'receipt' => route('admin.inbound.receipts.import'),
                 'return' => route('admin.inbound.returns.import'),
@@ -498,7 +496,7 @@ class InboundController extends Controller
                 'inbound_transactions.created_by',
                 'inbound_transactions.approved_at',
             ])
-            ->withExists(['stockMutations', 'usedKoliUnits'])
+            ->withExists('stockMutations')
             ->orderBy('inbound_transactions.transacted_at', 'desc');
 
         if ($baseType) {
@@ -572,9 +570,6 @@ class InboundController extends Controller
             $canDelete = $status === InboundScanStatus::PENDING_SCAN && ! $hasScanSession;
             if ($row->type === 'return' && $status === InboundScanStatus::SCANNING && $hasScanSession) {
                 $canDelete = $row->canDeleteReturnScan();
-            }
-            if ($row->type === 'receipt' && $status === InboundScanStatus::SCANNING) {
-                $canDelete = $row->canDeleteReceiptScan(auth()->user());
             }
 
             $itemDetails = $items->map(function (InboundItem $item) {
@@ -881,18 +876,9 @@ class InboundController extends Controller
             $session?->load('items');
             $canDeletePending = $status === InboundScanStatus::PENDING_SCAN && ! $session;
             $canDeleteReturnScan = $transaction->canDeleteReturnScan();
-            $canDeleteReceiptScan = $transaction->canDeleteReceiptScan(auth()->user());
 
-            if (! $canDeletePending && ! $canDeleteReturnScan && ! $canDeleteReceiptScan) {
+            if (! $canDeletePending && ! $canDeleteReturnScan) {
                 DB::rollBack();
-
-                if ($type === 'receipt' && $status === InboundScanStatus::SCANNING) {
-                    return response()->json([
-                        'message' => auth()->user()?->email === 'admin@gmail.com'
-                            ? 'Penerimaan yang sudah difinalisasi, memiliki riwayat mutasi stok, atau dus terkait transfer tidak bisa dihapus.'
-                            : 'Hanya admin@gmail.com yang dapat menghapus penerimaan berstatus Sedang Scan.',
-                    ], 422);
-                }
 
                 return response()->json([
                     'message' => $type === 'return' && $status === InboundScanStatus::SCANNING

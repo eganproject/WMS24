@@ -62,6 +62,26 @@ class InboundTransaction extends Model
         return $this->hasOne(InboundScanSession::class, 'inbound_transaction_id');
     }
 
+    public function stockMutations()
+    {
+        return $this->hasMany(StockMutation::class, 'source_id')->where('source_type', 'inbound');
+    }
+
+    public function canDeleteReturnScan(?User $user): bool
+    {
+        if ($this->type !== 'return'
+            || $this->status !== \App\Support\InboundScanStatus::SCANNING
+            || ! $this->scanSession
+            || $this->approved_at
+            || $this->scanSession->completed_at
+            || ($this->stock_mutations_exists ?? $this->stockMutations()->exists())) {
+            return false;
+        }
+
+        return $user?->email === 'admin@gmail.com'
+            || ($this->scanSession->items->every(fn ($item) => (int) $item->scanned_qty === 0 && (int) $item->scanned_koli === 0));
+    }
+
     public function koliUnits()
     {
         return $this->hasMany(InboundKoliUnit::class, 'inbound_transaction_id');

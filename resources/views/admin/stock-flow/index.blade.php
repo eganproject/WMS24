@@ -2543,6 +2543,7 @@
                 });
                 confirmed = res.isConfirmed;
             }
+            if (typeof Swal === 'undefined') confirmed = window.confirm(deleteWarningText);
             if (!confirmed) return;
             try {
                 const res = await fetch(resolveRoute(rowType, 'delete').replace(':id', id), {

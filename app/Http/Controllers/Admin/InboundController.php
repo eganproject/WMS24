@@ -422,7 +422,9 @@ class InboundController extends Controller
                 : null,
             'importRequiresSupplier' => $this->usesSupplier($type),
             'deleteWarningText' => $type === 'return'
-                ? 'Retur inbound dan sesi scan kosongnya akan dihapus permanen. Pastikan belum ada qty yang discan.'
+                ? (auth()->user()?->email === 'admin@gmail.com'
+                    ? 'Retur inbound beserta seluruh progres scan akan dihapus permanen. Stok belum bertambah sebelum scan selesai. Pastikan barang fisik dan dokumen retur sudah diperiksa.'
+                    : 'Retur inbound dan sesi scan kosongnya akan dihapus permanen. Pastikan belum ada qty yang discan.')
                 : 'Data akan dihapus sebelum proses scan inbound.',
             'importUrl' => match ($type) {
                 'receipt' => route('admin.inbound.receipts.import'),
@@ -494,7 +496,9 @@ class InboundController extends Controller
                 'inbound_transactions.warehouse_id',
                 'inbound_transactions.status',
                 'inbound_transactions.created_by',
+                'inbound_transactions.approved_at',
             ])
+            ->withExists('stockMutations')
             ->orderBy('inbound_transactions.transacted_at', 'desc');
 
         if ($baseType) {
@@ -567,7 +571,7 @@ class InboundController extends Controller
             $hasScanSession = (bool) $row->scanSession;
             $canDelete = $status === InboundScanStatus::PENDING_SCAN && ! $hasScanSession;
             if ($row->type === 'return' && $status === InboundScanStatus::SCANNING && $hasScanSession) {
-                $canDelete = $scannedQty === 0 && $scannedKoli === 0;
+                $canDelete = $row->canDeleteReturnScan(auth()->user());
             }
 
             $itemDetails = $items->map(function (InboundItem $item) {
@@ -861,27 +865,28 @@ class InboundController extends Controller
     {
         DB::beginTransaction();
         try {
-            $transaction = InboundTransaction::with('scanSession.items')
+            // Match scan/complete lock order: session first, then transaction.
+            $session = \App\Models\InboundScanSession::where('inbound_transaction_id', $id)
+                ->lockForUpdate()->first();
+            $transaction = InboundTransaction::query()
                 ->where('type', $type)
                 ->lockForUpdate()
                 ->findOrFail($id);
 
             $status = $transaction->status ?? InboundScanStatus::PENDING_SCAN;
-            $scannedQty = (int) ($transaction->scanSession?->items?->sum('scanned_qty') ?? 0);
-            $scannedKoli = (int) ($transaction->scanSession?->items?->sum('scanned_koli') ?? 0);
-            $canDeletePending = $status === InboundScanStatus::PENDING_SCAN && ! $transaction->scanSession;
-            $canDeleteEmptyReturnScan = $type === 'return'
-                && $status === InboundScanStatus::SCANNING
-                && $transaction->scanSession
-                && $scannedQty === 0
-                && $scannedKoli === 0;
+            $transaction->setRelation('scanSession', $session);
+            $session?->load('items');
+            $canDeletePending = $status === InboundScanStatus::PENDING_SCAN && ! $session;
+            $canDeleteReturnScan = $transaction->canDeleteReturnScan(auth()->user());
 
-            if (! $canDeletePending && ! $canDeleteEmptyReturnScan) {
+            if (! $canDeletePending && ! $canDeleteReturnScan) {
                 DB::rollBack();
 
                 return response()->json([
                     'message' => $type === 'return' && $status === InboundScanStatus::SCANNING
-                        ? 'Retur inbound hanya dapat dihapus saat sedang scan apabila belum ada qty yang discan.'
+                        ? ($transaction->approved_at || $session?->completed_at || $transaction->stockMutations()->exists()
+                            ? 'Retur inbound yang sudah difinalisasi atau memiliki riwayat mutasi stok tidak bisa dihapus.'
+                            : 'Retur inbound hanya dapat dihapus saat sedang scan apabila belum ada qty yang discan. Pengecualian hanya untuk admin@gmail.com.')
                         : 'Inbound yang sudah mulai discan tidak bisa dihapus.',
                 ], 422);
             }

@@ -137,7 +137,7 @@ class InboundReturnListUiTest extends TestCase
         $this->withoutMiddleware()
             ->deleteJson(route('admin.inbound.returns.destroy', $transaction->id))
             ->assertUnprocessable()
-            ->assertJsonPath('message', 'Retur inbound hanya dapat dihapus saat sedang scan apabila belum ada qty yang discan.');
+            ->assertJsonPath('message', 'Retur inbound hanya dapat dihapus saat sedang scan apabila belum ada qty yang discan. Pengecualian hanya untuk admin@gmail.com.');
 
         $this->assertDatabaseHas('inbound_transactions', ['id' => $transaction->id]);
         $this->assertDatabaseHas('inbound_scan_sessions', ['id' => $session->id]);
@@ -168,6 +168,7 @@ class InboundReturnListUiTest extends TestCase
     public function test_zero_scan_delete_exception_does_not_apply_to_receipt_module(): void
     {
         [$transaction, $session] = $this->scanningTransaction('receipt', 0);
+        $this->actingAs(User::factory()->create(['email' => 'admin@gmail.com']));
 
         $this->withoutMiddleware()
             ->getJson(route('admin.inbound.receipts.data', ['start' => 0, 'length' => 10]))
@@ -181,6 +182,54 @@ class InboundReturnListUiTest extends TestCase
 
         $this->assertDatabaseHas('inbound_transactions', ['id' => $transaction->id, 'type' => 'receipt']);
         $this->assertDatabaseHas('inbound_scan_sessions', ['id' => $session->id]);
+    }
+
+    public function test_special_admin_can_delete_partial_return_scan_without_changing_stock(): void
+    {
+        [$transaction, $session, $scanItem] = $this->scanningTransaction('return', 1);
+        $stock = \App\Models\ItemStock::create([
+            'item_id' => $scanItem->item_id, 'warehouse_id' => $transaction->warehouse_id, 'stock' => 20,
+        ]);
+        $this->actingAs(User::factory()->create(['email' => 'admin@gmail.com']))->withoutMiddleware();
+        $this->getJson(route('admin.inbound.returns.data'))->assertJsonPath('data.0.can_delete', true);
+        $this->deleteJson(route('admin.inbound.returns.destroy', $transaction->id))->assertOk();
+        $this->assertDatabaseMissing('inbound_transactions', ['id' => $transaction->id]);
+        $this->assertDatabaseMissing('inbound_items', ['inbound_transaction_id' => $transaction->id]);
+        $this->assertDatabaseMissing('inbound_scan_sessions', ['id' => $session->id]);
+        $this->assertDatabaseMissing('inbound_scan_session_items', ['id' => $scanItem->id]);
+        $this->assertSame(20, (int) $stock->fresh()->stock);
+        $this->assertDatabaseCount('stock_mutations', 0);
+    }
+
+    public function test_other_authenticated_user_cannot_delete_partial_return_scan(): void
+    {
+        [$transaction] = $this->scanningTransaction('return', 1);
+        $this->actingAs(User::factory()->create(['email' => 'other@gmail.com']))->withoutMiddleware();
+        $this->getJson(route('admin.inbound.returns.data'))->assertJsonPath('data.0.can_delete', false);
+        $this->deleteJson(route('admin.inbound.returns.destroy', $transaction->id))->assertUnprocessable();
+        $this->assertDatabaseHas('inbound_transactions', ['id' => $transaction->id]);
+    }
+
+    public function test_special_admin_cannot_delete_finalized_or_stock_mutated_return(): void
+    {
+        [$transaction, $session, $scanItem] = $this->scanningTransaction('return', 1);
+        $this->actingAs(User::factory()->create(['email' => 'admin@gmail.com']))->withoutMiddleware();
+        foreach (['completed', 'approved', 'session_completed', 'mutation'] as $case) {
+            $transaction->update(['status' => $case === 'completed' ? InboundScanStatus::COMPLETED : InboundScanStatus::SCANNING,
+                'approved_at' => $case === 'approved' ? now() : null]);
+            $session->update(['completed_at' => $case === 'session_completed' ? now() : null]);
+            if ($case === 'mutation') {
+                \App\Models\StockMutation::create([
+                    'item_id' => $scanItem->item_id, 'warehouse_id' => $transaction->warehouse_id,
+                    'direction' => 'in', 'qty' => 1, 'stock_before' => 0, 'stock_after' => 1,
+                    'source_type' => 'inbound', 'source_subtype' => 'return', 'source_id' => $transaction->id,
+                    'occurred_at' => now(),
+                ]);
+            }
+            $this->getJson(route('admin.inbound.returns.data'))->assertJsonPath('data.0.can_delete', false);
+            $this->deleteJson(route('admin.inbound.returns.destroy', $transaction->id))->assertUnprocessable();
+            $this->assertDatabaseHas('inbound_transactions', ['id' => $transaction->id]);
+        }
     }
 
     private function scanningTransaction(string $type, int $scannedQty): array

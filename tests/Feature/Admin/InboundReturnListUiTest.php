@@ -137,7 +137,7 @@ class InboundReturnListUiTest extends TestCase
         $this->withoutMiddleware()
             ->deleteJson(route('admin.inbound.returns.destroy', $transaction->id))
             ->assertUnprocessable()
-            ->assertJsonPath('message', 'Retur inbound hanya dapat dihapus saat sedang scan apabila belum ada qty yang discan. Pengecualian hanya untuk admin@gmail.com.');
+            ->assertJsonPath('message', 'Retur inbound hanya dapat dihapus saat sedang scan apabila belum ada qty yang discan.');
 
         $this->assertDatabaseHas('inbound_transactions', ['id' => $transaction->id]);
         $this->assertDatabaseHas('inbound_scan_sessions', ['id' => $session->id]);
@@ -184,19 +184,19 @@ class InboundReturnListUiTest extends TestCase
         $this->assertDatabaseHas('inbound_scan_sessions', ['id' => $session->id]);
     }
 
-    public function test_special_admin_can_delete_partial_return_scan_without_changing_stock(): void
+    public function test_admin_cannot_delete_partial_return_scan_and_data_remains_intact(): void
     {
         [$transaction, $session, $scanItem] = $this->scanningTransaction('return', 1);
         $stock = \App\Models\ItemStock::create([
             'item_id' => $scanItem->item_id, 'warehouse_id' => $transaction->warehouse_id, 'stock' => 20,
         ]);
         $this->actingAs(User::factory()->create(['email' => 'admin@gmail.com']))->withoutMiddleware();
-        $this->getJson(route('admin.inbound.returns.data'))->assertJsonPath('data.0.can_delete', true);
-        $this->deleteJson(route('admin.inbound.returns.destroy', $transaction->id))->assertOk();
-        $this->assertDatabaseMissing('inbound_transactions', ['id' => $transaction->id]);
-        $this->assertDatabaseMissing('inbound_items', ['inbound_transaction_id' => $transaction->id]);
-        $this->assertDatabaseMissing('inbound_scan_sessions', ['id' => $session->id]);
-        $this->assertDatabaseMissing('inbound_scan_session_items', ['id' => $scanItem->id]);
+        $this->getJson(route('admin.inbound.returns.data'))->assertJsonPath('data.0.can_delete', false);
+        $this->deleteJson(route('admin.inbound.returns.destroy', $transaction->id))->assertUnprocessable();
+        $this->assertDatabaseHas('inbound_transactions', ['id' => $transaction->id]);
+        $this->assertDatabaseHas('inbound_items', ['inbound_transaction_id' => $transaction->id]);
+        $this->assertDatabaseHas('inbound_scan_sessions', ['id' => $session->id]);
+        $this->assertDatabaseHas('inbound_scan_session_items', ['id' => $scanItem->id]);
         $this->assertSame(20, (int) $stock->fresh()->stock);
         $this->assertDatabaseCount('stock_mutations', 0);
     }

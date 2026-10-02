@@ -67,7 +67,7 @@ class InboundTransaction extends Model
         return $this->hasMany(StockMutation::class, 'source_id')->where('source_type', 'inbound');
     }
 
-    public function canDeleteReturnScan(?User $user): bool
+    public function canDeleteReturnScan(): bool
     {
         if ($this->type !== 'return'
             || $this->status !== \App\Support\InboundScanStatus::SCANNING
@@ -78,8 +78,7 @@ class InboundTransaction extends Model
             return false;
         }
 
-        return $user?->email === 'admin@gmail.com'
-            || ($this->scanSession->items->every(fn ($item) => (int) $item->scanned_qty === 0 && (int) $item->scanned_koli === 0));
+        return $this->scanSession->items->every(fn ($item) => (int) $item->scanned_qty === 0 && (int) $item->scanned_koli === 0);
     }
 
     public function koliUnits()

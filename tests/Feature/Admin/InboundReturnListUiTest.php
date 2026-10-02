@@ -165,10 +165,10 @@ class InboundReturnListUiTest extends TestCase
         ]);
     }
 
-    public function test_zero_scan_delete_exception_does_not_apply_to_receipt_module(): void
+    public function test_other_user_cannot_delete_receipt_even_with_zero_scan(): void
     {
         [$transaction, $session] = $this->scanningTransaction('receipt', 0);
-        $this->actingAs(User::factory()->create(['email' => 'admin@gmail.com']));
+        $this->actingAs(User::factory()->create(['email' => 'other@gmail.com']));
 
         $this->withoutMiddleware()
             ->getJson(route('admin.inbound.receipts.data', ['start' => 0, 'length' => 10]))
@@ -178,7 +178,7 @@ class InboundReturnListUiTest extends TestCase
         $this->withoutMiddleware()
             ->deleteJson(route('admin.inbound.receipts.destroy', $transaction->id))
             ->assertUnprocessable()
-            ->assertJsonPath('message', 'Inbound yang sudah mulai discan tidak bisa dihapus.');
+            ->assertJsonPath('message', 'Hanya admin@gmail.com yang dapat menghapus penerimaan berstatus Sedang Scan.');
 
         $this->assertDatabaseHas('inbound_transactions', ['id' => $transaction->id, 'type' => 'receipt']);
         $this->assertDatabaseHas('inbound_scan_sessions', ['id' => $session->id]);
@@ -230,6 +230,69 @@ class InboundReturnListUiTest extends TestCase
             $this->deleteJson(route('admin.inbound.returns.destroy', $transaction->id))->assertUnprocessable();
             $this->assertDatabaseHas('inbound_transactions', ['id' => $transaction->id]);
         }
+    }
+
+    public function test_admin_can_delete_scanning_receipt_with_progress_and_qr_without_changing_stock(): void
+    {
+        [$transaction, $session, $scanItem] = $this->scanningTransaction('receipt', 1);
+        $units = app(\App\Support\InboundKoliUnitService::class)->syncForTransaction($transaction);
+        $stock = \App\Models\ItemStock::create([
+            'item_id' => $scanItem->item_id, 'warehouse_id' => $transaction->warehouse_id, 'stock' => 20,
+        ]);
+        $this->actingAs(User::factory()->create(['email' => 'admin@gmail.com']))->withoutMiddleware();
+        $this->get(route('admin.inbound.receipts.index'))->assertOk()->assertSee('seluruh progres scan');
+        $this->getJson(route('admin.inbound.receipts.data'))->assertJsonPath('data.0.can_delete', true);
+        $this->deleteJson(route('admin.inbound.receipts.destroy', $transaction->id))->assertOk();
+        $this->assertDatabaseMissing('inbound_transactions', ['id' => $transaction->id]);
+        $this->assertDatabaseMissing('inbound_items', ['inbound_transaction_id' => $transaction->id]);
+        $this->assertDatabaseMissing('inbound_scan_sessions', ['id' => $session->id]);
+        $this->assertDatabaseMissing('inbound_scan_session_items', ['id' => $scanItem->id]);
+        $this->assertDatabaseMissing('inbound_koli_units', ['id' => $units->first()->id]);
+        $this->assertSame(20, (int) $stock->fresh()->stock);
+        $this->assertDatabaseCount('stock_mutations', 0);
+    }
+
+    public function test_other_user_cannot_delete_receipt_with_scan_progress(): void
+    {
+        [$transaction, $session, $scanItem] = $this->scanningTransaction('receipt', 1);
+        $this->actingAs(User::factory()->create(['email' => 'other@gmail.com']))->withoutMiddleware();
+        $this->getJson(route('admin.inbound.receipts.data'))->assertJsonPath('data.0.can_delete', false);
+        $this->deleteJson(route('admin.inbound.receipts.destroy', $transaction->id))->assertUnprocessable();
+        $this->assertDatabaseHas('inbound_scan_session_items', ['id' => $scanItem->id, 'scanned_qty' => 1]);
+    }
+
+    public function test_admin_cannot_delete_receipt_with_finalization_stock_history_or_used_koli(): void
+    {
+        [$transaction, $session, $scanItem] = $this->scanningTransaction('receipt', 1);
+        $units = app(\App\Support\InboundKoliUnitService::class)->syncForTransaction($transaction);
+        $this->actingAs(User::factory()->create(['email' => 'admin@gmail.com']))->withoutMiddleware();
+        foreach (['completed', 'approved', 'session_completed', 'used_koli', 'mutation'] as $case) {
+            $transaction->update(['status' => $case === 'completed' ? InboundScanStatus::COMPLETED : InboundScanStatus::SCANNING,
+                'approved_at' => $case === 'approved' ? now() : null]);
+            $session->update(['completed_at' => $case === 'session_completed' ? now() : null]);
+            $units->first()->update(['status' => $case === 'used_koli' ? 'reserved' : 'available']);
+            if ($case === 'mutation') {
+                \App\Models\StockMutation::create([
+                    'item_id' => $scanItem->item_id, 'warehouse_id' => $transaction->warehouse_id,
+                    'direction' => 'in', 'qty' => 1, 'stock_before' => 0, 'stock_after' => 1,
+                    'source_type' => 'inbound', 'source_subtype' => 'receipt', 'source_id' => $transaction->id,
+                    'occurred_at' => now(),
+                ]);
+            }
+            $this->getJson(route('admin.inbound.receipts.data'))->assertJsonPath('data.0.can_delete', false);
+            $this->deleteJson(route('admin.inbound.receipts.destroy', $transaction->id))->assertUnprocessable();
+            $this->assertDatabaseHas('inbound_transactions', ['id' => $transaction->id]);
+            $this->assertDatabaseHas('inbound_koli_units', ['id' => $units->first()->id]);
+        }
+    }
+
+    public function test_receipt_admin_exception_does_not_allow_deleting_manual_scan(): void
+    {
+        [$transaction] = $this->scanningTransaction('manual', 1);
+        $this->actingAs(User::factory()->create(['email' => 'admin@gmail.com']))->withoutMiddleware();
+        $this->getJson(route('admin.inbound.manuals.data'))->assertJsonPath('data.0.can_delete', false);
+        $this->deleteJson(route('admin.inbound.manuals.destroy', $transaction->id))->assertUnprocessable();
+        $this->assertDatabaseHas('inbound_transactions', ['id' => $transaction->id]);
     }
 
     private function scanningTransaction(string $type, int $scannedQty): array

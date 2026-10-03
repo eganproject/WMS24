@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\Item;
 use Illuminate\Database\Query\Builder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -125,6 +126,11 @@ class StockBalanceReportService
             ->select('item_id')
             ->selectRaw("SUM({$signedQty}) AS net_since_start")
             ->selectRaw("SUM(CASE WHEN occurred_at <= ? THEN {$signedQty} ELSE 0 END) AS period_net", [$dateTo])
+            ->selectRaw("SUM(CASE WHEN warehouse_id = ? THEN {$signedQty} ELSE 0 END) AS main_net_since_start", [$mainWarehouseId])
+            ->selectRaw(
+                "SUM(CASE WHEN warehouse_id = ? AND occurred_at <= ? THEN {$signedQty} ELSE 0 END) AS main_period_net",
+                [$mainWarehouseId, $dateTo]
+            )
             ->selectRaw(
                 "SUM(CASE WHEN occurred_at <= ? AND {$inCondition} THEN qty ELSE 0 END) AS period_in",
                 [$dateTo, $mainWarehouseId]
@@ -144,6 +150,7 @@ class StockBalanceReportService
         $stocks = DB::table('item_stocks')
             ->select('item_id')
             ->selectRaw('SUM(stock) AS current_stock')
+            ->selectRaw('SUM(CASE WHEN warehouse_id = ? THEN stock ELSE 0 END) AS main_current_stock', [$mainWarehouseId])
             ->whereIn('warehouse_id', $scopeIds)
             ->groupBy('item_id');
 
@@ -152,6 +159,7 @@ class StockBalanceReportService
         $outExpression = 'COALESCE(movements.period_out, 0)';
         $otherExpression = "(COALESCE(movements.period_net, 0) - {$inExpression} + {$outExpression})";
         $endingExpression = "({$openingExpression} + COALESCE(movements.period_net, 0))";
+        $mainEndingExpression = '(COALESCE(stocks.main_current_stock, 0) - COALESCE(movements.main_net_since_start, 0) + COALESCE(movements.main_period_net, 0))';
 
         $query = DB::table('items')
             ->joinSub($stocks, 'stocks', 'stocks.item_id', '=', 'items.id')
@@ -170,7 +178,9 @@ class StockBalanceReportService
             ->selectRaw("{$inExpression} AS stock_in")
             ->selectRaw("{$outExpression} AS stock_out")
             ->selectRaw("{$otherExpression} AS other_net")
-            ->selectRaw("{$endingExpression} AS ending_stock");
+            ->selectRaw("{$endingExpression} AS ending_stock")
+            ->selectRaw("{$mainEndingExpression} AS main_ending_stock")
+            ->selectRaw("({$endingExpression} - {$mainEndingExpression}) AS display_ending_stock");
 
         $search = trim((string) ($filters['q'] ?? ''));
         if ($search !== '') {
@@ -182,6 +192,70 @@ class StockBalanceReportService
         }
 
         return $query;
+    }
+
+    /**
+     * Rincian kolom "Mutasi Lain (Net)" per jenis sumber mutasi pada periode, untuk
+     * SKU yang sama dengan laporan konsolidasi (termasuk filter pencarian).
+     */
+    public function otherMutationBreakdown(array $filters): Collection
+    {
+        $dateFrom = (string) $filters['date_from'].' 00:00:00';
+        $dateTo = (string) $filters['date_to'].' 23:59:59';
+        $warehouseIds = WarehouseService::sellableWarehouseIds();
+        $mainWarehouseId = (int) (WarehouseService::warehouseIdByCode(WarehouseService::defaultWarehouseCode()) ?? 0);
+        $itemIds = $this->consolidatedQuery($filters)->reorder()->select('items.id');
+
+        $query = DB::table('stock_mutations')
+            ->select(['source_type', 'source_subtype', 'direction'])
+            ->selectRaw('SUM(qty) AS qty')
+            ->whereBetween('occurred_at', [$dateFrom, $dateTo])
+            ->whereIn('warehouse_id', $warehouseIds !== [] ? $warehouseIds : [0])
+            ->whereIn('item_id', $itemIds)
+            // Mutasi yang sudah masuk kolom Masuk/Keluar tidak dihitung ulang di sini.
+            ->whereNot(function ($query) use ($mainWarehouseId) {
+                $query->where('direction', 'in')
+                    ->where('source_type', 'inbound')
+                    ->where('warehouse_id', $mainWarehouseId);
+            })
+            ->whereNot(function ($query) {
+                $query->where('direction', 'out')
+                    ->where(function ($query) {
+                        $query->where('source_type', 'qc_shipment')
+                            ->orWhere(fn ($query) => $query->where('source_type', 'outbound')->where('source_subtype', 'manual'));
+                    });
+            })
+            ->groupBy('source_type', 'source_subtype', 'direction');
+
+        if (Schema::hasColumn('stock_mutations', 'is_void')) {
+            $query->where('is_void', false);
+        }
+
+        return $query->get()
+            ->groupBy(fn ($row) => $this->otherMutationLabel($row))
+            ->map(function (Collection $rows, string $label) {
+                $qtyIn = (int) $rows->where('direction', 'in')->sum('qty');
+                $qtyOut = (int) $rows->where('direction', 'out')->sum('qty');
+
+                return (object) ['label' => $label, 'qty_in' => $qtyIn, 'qty_out' => $qtyOut, 'net' => $qtyIn - $qtyOut];
+            })
+            ->sortBy('label')
+            ->values();
+    }
+
+    private function otherMutationLabel(object $row): string
+    {
+        return match ((string) $row->source_type) {
+            'inbound' => 'Inbound ke Gudang Display',
+            'outbound' => 'Outbound non-manual ('.($row->source_subtype ?: '-').')',
+            'transfer', 'transfer_cancel' => 'Transfer antar gudang',
+            'customer_return' => 'Retur pelanggan',
+            'opname' => 'Stok opname',
+            'adjustment' => 'Penyesuaian stok',
+            'damaged', 'damaged_allocation' => 'Barang rusak / alokasi rusak',
+            'qc_shipment' => 'Koreksi QC resi',
+            default => 'Lainnya ('.$row->source_type.')',
+        };
     }
 
     public function consolidatedSummary(Builder $query): object

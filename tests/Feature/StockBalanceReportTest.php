@@ -107,12 +107,19 @@ class StockBalanceReportTest extends TestCase
         $mainWarehouse = Warehouse::query()->where('code', config('inventory.default_warehouse_code'))->firstOrFail();
         $displayWarehouse = Warehouse::query()->where('code', config('inventory.display_warehouse_code'))->firstOrFail();
         $item = Item::create(['sku' => 'EXPORT-SALDO', 'name' => 'Barang Export Saldo', 'item_type' => Item::TYPE_SINGLE]);
+        $idleItem = Item::create(['sku' => 'IDLE-SALDO', 'name' => 'Barang Diam', 'item_type' => Item::TYPE_SINGLE]);
+        $soldOutItem = Item::create(['sku' => 'HABIS-SALDO', 'name' => 'Barang Habis', 'item_type' => Item::TYPE_SINGLE]);
+        $minusItem = Item::create(['sku' => 'MINUS-SALDO', 'name' => 'Barang Minus', 'item_type' => Item::TYPE_SINGLE]);
 
         ItemStock::create(['item_id' => $item->id, 'warehouse_id' => $mainWarehouse->id, 'stock' => 30]);
         ItemStock::create(['item_id' => $item->id, 'warehouse_id' => $displayWarehouse->id, 'stock' => 5]);
+        ItemStock::create(['item_id' => $idleItem->id, 'warehouse_id' => $displayWarehouse->id, 'stock' => 3]);
+        ItemStock::create(['item_id' => $soldOutItem->id, 'warehouse_id' => $displayWarehouse->id, 'stock' => 0]);
+        ItemStock::create(['item_id' => $minusItem->id, 'warehouse_id' => $mainWarehouse->id, 'stock' => -1]);
         $this->mutation($item, $mainWarehouse, 'in', 20, '2026-08-05 09:00:00', 1, false, 'inbound', 'manual');
         $this->mutation($item, $displayWarehouse, 'out', 4, '2026-08-06 09:00:00', 2, false, 'qc_shipment', 'resi');
         $this->mutation($item, $mainWarehouse, 'out', 1, '2026-08-07 09:00:00', 3, false, 'adjustment', 'approve');
+        $this->mutation($soldOutItem, $displayWarehouse, 'out', 2, '2026-08-08 09:00:00', 4, false, 'qc_shipment', 'resi');
 
         $this->actingAs($user)
             ->get(route('admin.reports.stock-balance.index'))
@@ -140,18 +147,53 @@ class StockBalanceReportTest extends TestCase
         file_put_contents($path, $binary);
 
         try {
-            $sheet = IOFactory::load($path)->getSheetByName('Saldo Stok');
-            $this->assertSame('Laporan Saldo Stok (Gudang Besar + Gudang Display)', $sheet->getCell('A1')->getValue());
+            $workbook = IOFactory::load($path);
+            $this->assertSame(['Ringkasan', 'Detail Saldo per SKU', 'Perlu Perhatian'], $workbook->getSheetNames());
+
+            $detail = $workbook->getSheetByName('Detail Saldo per SKU');
+            $this->assertSame('Laporan Saldo Stok - Detail per SKU', $detail->getCell('A1')->getValue());
+            $this->assertSame([
+                'No', 'SKU', 'Nama Item', 'Status Item', 'Stok Awal', 'Masuk (Inbound Gudang Besar)',
+                'Keluar (Outbound Manual + QC Resi)', 'Mutasi Lain (Net)', 'Saldo Akhir', 'Saldo Akhir Gudang Besar',
+                'Saldo Akhir Gudang Display', 'Perubahan (Akhir - Awal)', 'Kondisi Stok', 'Keterangan',
+            ], $detail->rangeToArray('A6:N6')[0]);
+            // Urut nama: Diam, Export Saldo, Habis, Minus. Nilai kosong ditulis 0, bukan sel kosong.
             $this->assertSame(
-                ['No', 'SKU', 'Nama Item', 'Stok Awal', 'Masuk (Inbound Gudang Besar)', 'Keluar (Outbound Manual + QC Resi)', 'Mutasi Lain (Net)', 'Saldo Akhir'],
-                $sheet->rangeToArray('A6:H6')[0]
+                [1, 'IDLE-SALDO', 'Barang Diam', 'Aktif', 3, 0, 0, 0, 3, 0, 3, 0, 'Tersedia', 'Tidak ada pergerakan'],
+                $detail->rangeToArray('A7:N7', null, false, false)[0]
             );
-            // Awal 20 + masuk 20 - keluar 4 + lain (-1) = akhir 35.
+            // Awal 20 + masuk 20 - keluar 4 + lain (-1) = akhir 35 (Besar 30, Display 5).
             $this->assertSame(
-                [1, 'EXPORT-SALDO', 'Barang Export Saldo', 20, 20, 4, -1, 35],
-                $sheet->rangeToArray('A7:H7', null, false, false)[0]
+                [2, 'EXPORT-SALDO', 'Barang Export Saldo', 'Aktif', 20, 20, 4, -1, 35, 30, 5, 15, 'Tersedia', 'Ada mutasi lain'],
+                $detail->rangeToArray('A8:N8', null, false, false)[0]
             );
-            $this->assertNull($sheet->getCell('A8')->getValue());
+            $this->assertSame(
+                [3, 'HABIS-SALDO', 'Barang Habis', 'Aktif', 2, 0, 2, 0, 0, 0, 0, -2, 'Habis', 'Habis setelah terjual'],
+                $detail->rangeToArray('A9:N9', null, false, false)[0]
+            );
+            $this->assertSame('MINUS-SALDO', $detail->getCell('B10')->getValue());
+            $this->assertSame('Minus', $detail->getCell('M10')->getValue());
+            $this->assertSame('TOTAL', $detail->getCell('A11')->getValue());
+            $this->assertSame('=SUBTOTAL(109,I7:I10)', $detail->getCell('I11')->getValue());
+            $this->assertSame(37, $detail->getCell('I11')->getCalculatedValue());
+
+            $attention = $workbook->getSheetByName('Perlu Perhatian');
+            $this->assertSame(['Saldo minus', 'MINUS-SALDO'], $attention->rangeToArray('B7:C7')[0]);
+            $this->assertSame(['Habis setelah terjual', 'HABIS-SALDO'], $attention->rangeToArray('B8:C8')[0]);
+            $this->assertSame(['Stok tidak bergerak', 'IDLE-SALDO'], $attention->rangeToArray('B9:C9')[0]);
+            $this->assertNull($attention->getCell('A10')->getValue());
+
+            $summary = $workbook->getSheetByName('Ringkasan');
+            $this->assertSame('Laporan Saldo Stok - Ringkasan', $summary->getCell('A1')->getValue());
+            // Stok awal 24, masuk 20, keluar 6, mutasi lain -1, saldo akhir 37, 4 SKU.
+            $this->assertSame([24, 20, 6, -1, 37, 4], $summary->rangeToArray('A6:F6', null, false, false)[0]);
+            $values = collect($summary->toArray(null, true, false, false));
+            $reconciliation = $values->first(fn ($row) => $row[0] === '(=) Saldo Akhir');
+            $this->assertSame([37, 'Seimbang'], [$reconciliation[1], $reconciliation[2]]);
+            $this->assertSame([0, 1, -1], array_slice($values->first(fn ($row) => $row[0] === 'Penyesuaian stok'), 1, 3));
+            $topOutHeader = $values->search(fn ($row) => $row[0] === '10 SKU KELUAR TERBANYAK');
+            $this->assertSame(['EXPORT-SALDO', 'Barang Export Saldo', null, 4, 35, 'Tersedia'], $values[$topOutHeader + 2]);
+            $this->assertSame(['HABIS-SALDO', 'Barang Habis', null, 2, 0, 'Habis'], $values[$topOutHeader + 3]);
         } finally {
             @unlink($path);
         }

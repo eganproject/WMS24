@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Exports\StockBalanceReportExport;
 use App\Exports\StockMovementAnalysisExport;
 use App\Models\Item;
 use App\Models\ItemStock;
@@ -22,123 +23,138 @@ class StockBalanceReportTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_report_reconstructs_opening_and_ending_stock_for_a_date_range(): void
+    public function test_report_consolidates_main_and_display_warehouses_per_sku(): void
     {
         $user = $this->adminUser();
-        $warehouse = Warehouse::query()->where('code', config('inventory.default_warehouse_code'))->firstOrFail();
+        $mainWarehouse = Warehouse::query()->where('code', config('inventory.default_warehouse_code'))->firstOrFail();
+        $displayWarehouse = Warehouse::query()->where('code', config('inventory.display_warehouse_code'))->firstOrFail();
+        $otherWarehouse = Warehouse::create(['code' => 'TEST_REPORT', 'name' => 'Gudang Uji Laporan']);
         $item = Item::create([
             'sku' => 'SKU-SALDO-01',
             'name' => 'Barang Uji Saldo',
             'item_type' => Item::TYPE_SINGLE,
             'status' => Item::STATUS_ACTIVE,
         ]);
+        $otherOnlyItem = Item::create(['sku' => 'SKU-LAIN', 'name' => 'Barang Gudang Lain', 'item_type' => Item::TYPE_SINGLE]);
 
-        // Saldo dasar 100 + 20 sebelum periode + 50 masuk - 30 keluar - 10 setelah periode.
-        ItemStock::create([
-            'item_id' => $item->id,
-            'warehouse_id' => $warehouse->id,
-            'stock' => 130,
-        ]);
+        // Stok terkini gabungan Besar + Display = 140. Gudang lain tidak ikut dihitung.
+        ItemStock::create(['item_id' => $item->id, 'warehouse_id' => $mainWarehouse->id, 'stock' => 100]);
+        ItemStock::create(['item_id' => $item->id, 'warehouse_id' => $displayWarehouse->id, 'stock' => 40]);
+        ItemStock::create(['item_id' => $item->id, 'warehouse_id' => $otherWarehouse->id, 'stock' => 500]);
+        ItemStock::create(['item_id' => $otherOnlyItem->id, 'warehouse_id' => $otherWarehouse->id, 'stock' => 20]);
 
-        $this->mutation($item, $warehouse, 'in', 20, '2026-08-05 09:00:00', 1);
-        $this->mutation($item, $warehouse, 'in', 50, '2026-08-12 09:00:00', 2);
-        $this->mutation($item, $warehouse, 'out', 30, '2026-08-18 09:00:00', 3);
-        $this->mutation($item, $warehouse, 'out', 10, '2026-08-25 09:00:00', 4);
-        $this->mutation($item, $warehouse, 'in', 999, '2026-08-15 09:00:00', 5, true);
+        // Masuk: hanya inbound ke Gudang Besar.
+        $this->mutation($item, $mainWarehouse, 'in', 50, '2026-08-11 09:00:00', 1, false, 'inbound', 'manual');
+        // Keluar: QC scan resi + outbound manual.
+        $this->mutation($item, $displayWarehouse, 'out', 12, '2026-08-12 09:00:00', 2, false, 'qc_shipment', 'resi');
+        $this->mutation($item, $mainWarehouse, 'out', 8, '2026-08-13 09:00:00', 3, false, 'outbound', 'manual');
+        // Mutasi lain: inbound ke Display, transfer internal, retur outbound, retur pelanggan, opname.
+        $this->mutation($item, $displayWarehouse, 'in', 7, '2026-08-14 09:00:00', 4, false, 'inbound', 'manual');
+        $this->mutation($item, $mainWarehouse, 'out', 15, '2026-08-15 09:00:00', 5, false, 'transfer', 'send');
+        $this->mutation($item, $displayWarehouse, 'in', 15, '2026-08-15 10:00:00', 6, false, 'transfer', 'receive');
+        $this->mutation($item, $mainWarehouse, 'out', 3, '2026-08-16 09:00:00', 7, false, 'outbound', 'return');
+        $this->mutation($item, $displayWarehouse, 'in', 4, '2026-08-17 09:00:00', 8, false, 'customer_return', 'good');
+        $this->mutation($item, $mainWarehouse, 'out', 2, '2026-08-18 09:00:00', 9, false, 'opname', 'approve');
+        // Diabaikan: mutasi batal dan gudang di luar cakupan.
+        $this->mutation($item, $mainWarehouse, 'in', 999, '2026-08-15 09:00:00', 10, true, 'inbound', 'manual');
+        $this->mutation($item, $otherWarehouse, 'in', 300, '2026-08-15 09:00:00', 11, false, 'inbound', 'manual');
+        // Setelah periode.
+        $this->mutation($item, $displayWarehouse, 'out', 10, '2026-08-25 09:00:00', 12, false, 'qc_shipment', 'resi');
 
         $response = $this->actingAs($user)->getJson(route('admin.reports.stock-balance.data', [
             'date_from' => '2026-08-10',
             'date_to' => '2026-08-20',
-            'warehouse_ids' => [$warehouse->id],
             'draw' => 1,
             'start' => 0,
             'length' => 25,
         ]));
 
+        // Awal 114 + masuk 50 - keluar 20 + lain 6 = akhir 150.
         $response->assertOk()
-            ->assertJsonPath('recordsFiltered', 1)
-            ->assertJsonPath('summary.opening_stock', 120)
-            ->assertJsonPath('summary.stock_in', 50)
-            ->assertJsonPath('summary.stock_out', 30)
-            ->assertJsonPath('summary.ending_stock', 140)
-            ->assertJsonPath('data.0.sku', 'SKU-SALDO-01')
-            ->assertJsonPath('data.0.opening_stock', 120)
-            ->assertJsonPath('data.0.stock_in', 50)
-            ->assertJsonPath('data.0.stock_out', 30)
-            ->assertJsonPath('data.0.ending_stock', 140);
-    }
-
-    public function test_report_filters_warehouses_searches_items_and_rejects_invalid_periods(): void
-    {
-        $user = $this->adminUser();
-        $mainWarehouse = Warehouse::query()->where('code', config('inventory.default_warehouse_code'))->firstOrFail();
-        $otherWarehouse = Warehouse::create(['code' => 'TEST_REPORT', 'name' => 'Gudang Uji Laporan']);
-        $firstItem = Item::create(['sku' => 'FILTER-ONE', 'name' => 'Barang Pertama', 'item_type' => Item::TYPE_SINGLE]);
-        $secondItem = Item::create(['sku' => 'FILTER-TWO', 'name' => 'Barang Kedua', 'item_type' => Item::TYPE_SINGLE]);
-
-        ItemStock::create(['item_id' => $firstItem->id, 'warehouse_id' => $mainWarehouse->id, 'stock' => 10]);
-        ItemStock::create(['item_id' => $secondItem->id, 'warehouse_id' => $otherWarehouse->id, 'stock' => 20]);
-
-        $allWarehousesResponse = $this->actingAs($user)->getJson(route('admin.reports.stock-balance.data', [
-            'date_from' => '2026-08-01',
-            'date_to' => '2026-08-31',
-        ]));
-        $allWarehousesResponse->assertOk()
-            ->assertJsonPath('recordsFiltered', 2)
-            ->assertJsonPath('summary.total_warehouses', 2)
-            ->assertJsonPath('summary.ending_stock', 30);
-
-        $multipleWarehousesResponse = $this->actingAs($user)->getJson(route('admin.reports.stock-balance.data', [
-            'date_from' => '2026-08-01',
-            'date_to' => '2026-08-31',
-            'warehouse_ids' => [$mainWarehouse->id, $otherWarehouse->id],
-            'q' => 'FILTER',
-        ]));
-        $multipleWarehousesResponse->assertOk()
-            ->assertJsonPath('recordsFiltered', 2)
-            ->assertJsonPath('summary.total_warehouses', 2)
-            ->assertJsonPath('summary.ending_stock', 30);
-
-        $response = $this->actingAs($user)->getJson(route('admin.reports.stock-balance.data', [
-            'date_from' => '2026-08-01',
-            'date_to' => '2026-08-31',
-            'warehouse_ids' => [$otherWarehouse->id],
-            'q' => 'FILTER-TWO',
-        ]));
-
-        $response->assertOk()
+            ->assertJsonPath('recordsTotal', 1)
             ->assertJsonPath('recordsFiltered', 1)
             ->assertJsonPath('summary.total_items', 1)
-            ->assertJsonPath('summary.ending_stock', 20)
-            ->assertJsonPath('data.0.warehouse_id', $otherWarehouse->id)
-            ->assertJsonPath('data.0.sku', 'FILTER-TWO');
+            ->assertJsonPath('summary.opening_stock', 114)
+            ->assertJsonPath('summary.stock_in', 50)
+            ->assertJsonPath('summary.stock_out', 20)
+            ->assertJsonPath('summary.other_net', 6)
+            ->assertJsonPath('summary.ending_stock', 150)
+            ->assertJsonPath('data.0.sku', 'SKU-SALDO-01')
+            ->assertJsonPath('data.0.opening_stock', 114)
+            ->assertJsonPath('data.0.stock_in', 50)
+            ->assertJsonPath('data.0.stock_out', 20)
+            ->assertJsonPath('data.0.other_net', 6)
+            ->assertJsonPath('data.0.ending_stock', 150)
+            ->assertJsonMissingPath('data.0.warehouse_id');
+
+        $this->actingAs($user)->getJson(route('admin.reports.stock-balance.data', [
+            'date_from' => '2026-08-10',
+            'date_to' => '2026-08-20',
+            'q' => 'TIDAK-ADA',
+        ]))->assertOk()
+            ->assertJsonPath('recordsTotal', 1)
+            ->assertJsonPath('recordsFiltered', 0);
 
         $this->actingAs($user)->getJson(route('admin.reports.stock-balance.data', [
             'date_from' => '2026-08-31',
             'date_to' => '2026-08-01',
         ]))->assertUnprocessable()->assertJsonValidationErrors('date_to');
+    }
+
+    public function test_balance_page_and_export_use_consolidated_columns(): void
+    {
+        $user = $this->adminUser();
+        $mainWarehouse = Warehouse::query()->where('code', config('inventory.default_warehouse_code'))->firstOrFail();
+        $displayWarehouse = Warehouse::query()->where('code', config('inventory.display_warehouse_code'))->firstOrFail();
+        $item = Item::create(['sku' => 'EXPORT-SALDO', 'name' => 'Barang Export Saldo', 'item_type' => Item::TYPE_SINGLE]);
+
+        ItemStock::create(['item_id' => $item->id, 'warehouse_id' => $mainWarehouse->id, 'stock' => 30]);
+        ItemStock::create(['item_id' => $item->id, 'warehouse_id' => $displayWarehouse->id, 'stock' => 5]);
+        $this->mutation($item, $mainWarehouse, 'in', 20, '2026-08-05 09:00:00', 1, false, 'inbound', 'manual');
+        $this->mutation($item, $displayWarehouse, 'out', 4, '2026-08-06 09:00:00', 2, false, 'qc_shipment', 'resi');
+        $this->mutation($item, $mainWarehouse, 'out', 1, '2026-08-07 09:00:00', 3, false, 'adjustment', 'approve');
 
         $this->actingAs($user)
             ->get(route('admin.reports.stock-balance.index'))
             ->assertOk()
             ->assertSee('Laporan Saldo Stok')
             ->assertSee('Stok Awal')
+            ->assertSee('Mutasi Lain')
+            ->assertSee('Gudang Besar + Gudang Display')
             ->assertSee('Analisis Pergerakan')
             ->assertSee('Fast Moving')
             ->assertSee('Non Moving')
             ->assertSee('id="btn_export_stock_movement"', false)
             ->assertSee('Export Analisis')
-            ->assertSee('Seluruh Gudang')
-            ->assertSee('Gudang (bisa pilih beberapa)');
+            ->assertDontSee('id="filter_warehouse"', false);
+
+        $filters = ['date_from' => '2026-08-01', 'date_to' => '2026-08-31'];
 
         $this->actingAs($user)
-            ->get(route('admin.reports.stock-balance.export', [
-                'date_from' => '2026-08-01',
-                'date_to' => '2026-08-31',
-                'warehouse_ids' => [$mainWarehouse->id, $otherWarehouse->id],
-            ]))
+            ->get(route('admin.reports.stock-balance.export', $filters))
             ->assertOk()
             ->assertDownload();
+
+        $binary = Excel::raw(new StockBalanceReportExport($filters + ['q' => '']), ExcelWriter::XLSX);
+        $path = tempnam(sys_get_temp_dir(), 'stock-balance-export').'.xlsx';
+        file_put_contents($path, $binary);
+
+        try {
+            $sheet = IOFactory::load($path)->getSheetByName('Saldo Stok');
+            $this->assertSame('Laporan Saldo Stok (Gudang Besar + Gudang Display)', $sheet->getCell('A1')->getValue());
+            $this->assertSame(
+                ['No', 'SKU', 'Nama Item', 'Stok Awal', 'Masuk (Inbound Gudang Besar)', 'Keluar (Outbound Manual + QC Resi)', 'Mutasi Lain (Net)', 'Saldo Akhir'],
+                $sheet->rangeToArray('A6:H6')[0]
+            );
+            // Awal 20 + masuk 20 - keluar 4 + lain (-1) = akhir 35.
+            $this->assertSame(
+                [1, 'EXPORT-SALDO', 'Barang Export Saldo', 20, 20, 4, -1, 35],
+                $sheet->rangeToArray('A7:H7', null, false, false)[0]
+            );
+            $this->assertNull($sheet->getCell('A8')->getValue());
+        } finally {
+            @unlink($path);
+        }
     }
 
     public function test_movement_analysis_classifies_actual_demand_and_ignores_internal_mutations(): void

@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Admin;
 use App\Exports\StockBalanceReportExport;
 use App\Exports\StockMovementAnalysisExport;
 use App\Http\Controllers\Controller;
-use App\Models\Warehouse;
 use App\Support\Permission;
 use App\Support\StockBalanceReportService;
 use App\Support\StockMovementAnalysisService;
@@ -20,7 +19,6 @@ class StockBalanceReportController extends Controller
         return view('admin.reports.stock-balance.index', [
             'dataUrl' => route('admin.reports.stock-balance.data'),
             'exportUrl' => route('admin.reports.stock-balance.export'),
-            'warehouses' => Warehouse::query()->orderBy('name')->get(['id', 'code', 'name']),
             'defaultDateFrom' => now()->startOfMonth()->toDateString(),
             'defaultDateTo' => now()->toDateString(),
         ]);
@@ -37,21 +35,21 @@ class StockBalanceReportController extends Controller
             return $this->movementData($request, $filters, $movementAnalysis);
         }
 
-        $query = $reportService->query($filters);
+        $query = $reportService->consolidatedQuery($filters);
 
         $totalFilters = $filters;
         $totalFilters['q'] = '';
-        $recordsTotal = $reportService->query($totalFilters)->count();
+        $recordsTotal = $reportService->consolidatedQuery($totalFilters)->count();
         $recordsFiltered = (clone $query)->count();
-        $summary = $reportService->summary($query);
+        $summary = $reportService->consolidatedSummary($query);
 
         $sortColumns = [
             1 => 'items.sku',
             2 => 'items.name',
-            3 => 'warehouses.name',
-            4 => 'opening_stock',
-            5 => 'stock_in',
-            6 => 'stock_out',
+            3 => 'opening_stock',
+            4 => 'stock_in',
+            5 => 'stock_out',
+            6 => 'other_net',
             7 => 'ending_stock',
         ];
         $orderColumn = (int) $request->input('order.0.column', 2);
@@ -60,7 +58,7 @@ class StockBalanceReportController extends Controller
         if (isset($sortColumns[$orderColumn])) {
             $query->orderBy($sortColumns[$orderColumn], $orderDirection);
         } else {
-            $query->orderBy('items.name')->orderBy('warehouses.name');
+            $query->orderBy('items.name');
         }
 
         $start = max(0, (int) $request->input('start', 0));
@@ -75,16 +73,14 @@ class StockBalanceReportController extends Controller
             'sku' => $row->sku,
             'item_name' => $row->item_name,
             'item_status' => $row->item_status,
-            'warehouse_id' => (int) $row->warehouse_id,
-            'warehouse_code' => $row->warehouse_code,
-            'warehouse_name' => $row->warehouse_name,
             'opening_stock' => (int) $row->opening_stock,
             'stock_in' => (int) $row->stock_in,
             'stock_out' => (int) $row->stock_out,
+            'other_net' => (int) $row->other_net,
             'ending_stock' => (int) $row->ending_stock,
             'mutation_url' => $canViewMutations ? route('admin.inventory.stock-mutations.index', [
                 'item_id' => $row->item_id,
-                'warehouse_id' => $row->warehouse_id,
+                'warehouse_id' => 'all',
                 'date_from' => $filters['date_from'],
                 'date_to' => $filters['date_to'],
             ]) : null,
@@ -99,12 +95,11 @@ class StockBalanceReportController extends Controller
                 'date_to' => $filters['date_to'],
             ],
             'summary' => [
-                'total_rows' => (int) ($summary->total_rows ?? 0),
                 'total_items' => (int) ($summary->total_items ?? 0),
-                'total_warehouses' => (int) ($summary->total_warehouses ?? 0),
                 'opening_stock' => (int) ($summary->opening_stock ?? 0),
                 'stock_in' => (int) ($summary->stock_in ?? 0),
                 'stock_out' => (int) ($summary->stock_out ?? 0),
+                'other_net' => (int) ($summary->other_net ?? 0),
                 'ending_stock' => (int) ($summary->ending_stock ?? 0),
             ],
             'data' => $rows,

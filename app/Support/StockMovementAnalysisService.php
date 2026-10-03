@@ -29,32 +29,14 @@ class StockMovementAnalysisService
         $dateTo = (string) $filters['date_to'].' 23:59:59';
         $periodDays = (int) Carbon::parse($filters['date_from'])
             ->diffInDays(Carbon::parse($filters['date_to'])) + 1;
-        // Analisis pergerakan selalu memakai stok yang dapat dijual: Gudang Besar
-        // dan Gudang Display. Pilihan gudang pada tab saldo tidak berlaku di sini.
+        // Analisis pergerakan memakai saldo konsolidasi yang sama dengan tab Saldo Stok:
+        // Gudang Besar + Gudang Display, sehingga stok awal/akhir kedua tab selalu cocok.
         $warehouseIds = WarehouseService::sellableWarehouseIds();
 
         $balanceFilters = $filters;
         $balanceFilters['q'] = '';
-        $balanceFilters['warehouse_ids'] = $warehouseIds;
 
-        $itemBalances = DB::query()
-            ->fromSub($this->stockBalanceReport->query($balanceFilters)->reorder(), 'stock_rows')
-            ->select([
-                'stock_rows.item_id',
-                'stock_rows.sku',
-                'stock_rows.item_name',
-                'stock_rows.item_status',
-            ])
-            ->selectRaw('SUM(stock_rows.opening_stock) AS opening_stock')
-            ->selectRaw('SUM(stock_rows.stock_in) AS stock_in')
-            ->selectRaw('SUM(stock_rows.stock_out) AS stock_out')
-            ->selectRaw('SUM(stock_rows.ending_stock) AS ending_stock')
-            ->groupBy(
-                'stock_rows.item_id',
-                'stock_rows.sku',
-                'stock_rows.item_name',
-                'stock_rows.item_status'
-            );
+        $itemBalances = $this->stockBalanceReport->consolidatedQuery($balanceFilters)->reorder();
 
         // Sintaks CONCAT berbeda antara SQLite dan MySQL; subquery ini menghitung
         // pasangan tipe dan ID dokumen secara akurat pada kedua database.

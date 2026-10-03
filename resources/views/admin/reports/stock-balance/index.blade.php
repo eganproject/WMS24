@@ -7,7 +7,7 @@
 <style>
     .stock-report-filter-grid {
         display: grid;
-        grid-template-columns: minmax(240px, 1.4fr) repeat(3, minmax(170px, .7fr)) auto;
+        grid-template-columns: minmax(240px, 1.4fr) repeat(2, minmax(170px, .7fr)) auto;
         gap: .85rem;
         align-items: end;
     }
@@ -20,7 +20,7 @@
         padding: .8rem 1.1rem;
     }
     .stock-report-tabs .nav-link.active { background: #eef6ff; color: #009ef7; }
-    .stock-summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; }
+    .stock-summary-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1rem; }
     .movement-summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .85rem; }
     .stock-summary-card, .movement-summary-card {
         background: #f8f9fc;
@@ -47,6 +47,7 @@
     .summary-opening { --category-color: #7239ea; }
     .summary-incoming { --category-color: #50cd89; }
     .summary-outgoing { --category-color: #f1416c; }
+    .summary-other { --category-color: #ffc700; }
     .summary-ending { --category-color: #009ef7; }
     .movement-fast { --category-color: #50cd89; }
     .movement-medium { --category-color: #009ef7; }
@@ -65,16 +66,13 @@
     #stock_movement_table tbody tr:hover { background: #fafcff; }
     .movement-item-name { color: #7e8299; font-size: .78rem; line-height: 1.35; margin-top: .2rem; max-width: 290px; white-space: normal; }
     .movement-metric-note { color: #a1a5b7; font-size: .72rem; font-weight: 500; margin-top: .15rem; }
-    .stock-report-filter-grid.movement-mode { grid-template-columns: minmax(240px, 1.4fr) repeat(2, minmax(170px, .7fr)) auto; }
-    .stock-report-filter-grid.movement-mode #warehouse_filter_group { display: none; }
     @media (max-width: 1199.98px) {
         .stock-report-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-        .stock-report-filter-grid.movement-mode { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .stock-summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
         .movement-summary-grid, .movement-definition-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     }
     @media (max-width: 767.98px) {
         .stock-report-filter-grid, .stock-summary-grid, .movement-summary-grid, .movement-definition-grid { grid-template-columns: 1fr; }
-        .stock-report-filter-grid.movement-mode { grid-template-columns: 1fr; }
         .stock-report-filter-grid .btn { width: 100%; }
         .stock-report-tabs .nav-item { flex: 1; }
         .stock-report-tabs .nav-link { text-align: center; width: 100%; }
@@ -106,16 +104,6 @@
                 <label class="text-muted fs-7 mb-1">Cari Barang</label>
                 <input type="text" class="form-control form-control-solid" id="report_search" placeholder="SKU atau nama barang" autocomplete="off" />
             </div>
-            <div id="warehouse_filter_group">
-                <label class="text-muted fs-7 mb-1">Gudang (bisa pilih beberapa)</label>
-                <select class="form-select form-select-solid" id="filter_warehouse" multiple>
-                    <option value="all" selected>Seluruh Gudang</option>
-                    @foreach($warehouses as $warehouse)
-                        <option value="{{ $warehouse->id }}">{{ $warehouse->name }}{{ $warehouse->code ? ' ('.$warehouse->code.')' : '' }}</option>
-                    @endforeach
-                </select>
-                <div class="text-muted fs-8 mt-1">Pilih satu atau beberapa gudang.</div>
-            </div>
             <div><label class="text-muted fs-7 mb-1">Tanggal Awal</label><input type="text" class="form-control form-control-solid" id="filter_date_from" value="{{ $defaultDateFrom }}" placeholder="YYYY-MM-DD" /></div>
             <div><label class="text-muted fs-7 mb-1">Tanggal Akhir</label><input type="text" class="form-control form-control-solid" id="filter_date_to" value="{{ $defaultDateTo }}" placeholder="YYYY-MM-DD" /></div>
             <div class="d-flex gap-2"><button type="button" class="btn btn-primary" id="filter_apply">Terapkan</button><button type="button" class="btn btn-light" id="filter_reset">Reset</button></div>
@@ -125,19 +113,24 @@
             <div class="tab-pane fade show active" id="stock_balance_tab" role="tabpanel">
                 <div class="alert alert-light-primary d-flex align-items-start mb-6">
                     <i class="fas fa-info-circle text-primary mt-1 me-3"></i>
-                    <div><div class="fw-semibold">Saldo akhir = stok awal + stok masuk − stok keluar.</div><div class="text-muted fs-8">Tanggal mencakup transaksi pukul 00:00–23:59. Mutasi yang dibatalkan tidak dihitung.</div></div>
+                    <div>
+                        <div class="fw-semibold">Saldo stok gabungan Gudang Besar + Gudang Display. Saldo akhir = stok awal + masuk − keluar ± mutasi lain.</div>
+                        <div class="text-muted fs-8"><b>Masuk</b>: hanya inbound ke Gudang Besar. <b>Keluar</b>: hanya outbound manual dan QC scan hasil import resi. <b>Mutasi lain (net)</b>: retur pelanggan, opname, penyesuaian, barang rusak, transfer ke/dari gudang lain, dan mutasi lain pada kedua gudang; transfer antara Gudang Besar dan Gudang Display saling meniadakan.</div>
+                        <div class="text-muted fs-8">Tanggal mencakup transaksi pukul 00:00–23:59. Mutasi yang dibatalkan tidak dihitung.</div>
+                    </div>
                 </div>
                 <div class="stock-summary-grid mb-8">
                     <div class="stock-summary-card summary-opening"><div class="stock-summary-label">Total Stok Awal</div><div class="stock-summary-value" id="summary_opening">0</div><div class="text-muted fs-8 mt-1" id="summary_scope">0 item</div></div>
-                    <div class="stock-summary-card summary-incoming"><div class="stock-summary-label">Total Masuk</div><div class="stock-summary-value text-success" id="summary_in">0</div><div class="text-muted fs-8 mt-1">Selama periode terpilih</div></div>
-                    <div class="stock-summary-card summary-outgoing"><div class="stock-summary-label">Total Keluar</div><div class="stock-summary-value text-danger" id="summary_out">0</div><div class="text-muted fs-8 mt-1">Selama periode terpilih</div></div>
+                    <div class="stock-summary-card summary-incoming"><div class="stock-summary-label">Total Masuk</div><div class="stock-summary-value text-success" id="summary_in">0</div><div class="text-muted fs-8 mt-1">Inbound ke Gudang Besar</div></div>
+                    <div class="stock-summary-card summary-outgoing"><div class="stock-summary-label">Total Keluar</div><div class="stock-summary-value text-danger" id="summary_out">0</div><div class="text-muted fs-8 mt-1">Outbound manual + QC resi</div></div>
+                    <div class="stock-summary-card summary-other"><div class="stock-summary-label">Mutasi Lain (Net)</div><div class="stock-summary-value text-warning" id="summary_other">0</div><div class="text-muted fs-8 mt-1">Retur, opname, penyesuaian, dll.</div></div>
                     <div class="stock-summary-card summary-ending"><div class="stock-summary-label">Total Saldo Akhir</div><div class="stock-summary-value text-primary" id="summary_ending">0</div><div class="text-muted fs-8 mt-1" id="summary_period">-</div></div>
                 </div>
-                <h3 class="fw-bolder mb-4">Rincian Saldo per SKU dan Gudang</h3>
+                <h3 class="fw-bolder mb-4">Rincian Saldo per SKU (Gudang Besar + Gudang Display)</h3>
                 <div class="table-responsive">
                     <table class="table align-middle table-row-dashed fs-6 gy-5" id="stock_balance_table">
                         <thead><tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0">
-                            <th class="w-50px">No</th><th>SKU</th><th class="min-w-250px">Nama Barang</th><th>Gudang</th><th class="text-end">Stok Awal</th><th class="text-end">Masuk</th><th class="text-end">Keluar</th><th class="text-end">Saldo Akhir</th><th class="text-end">Aksi</th>
+                            <th class="w-50px">No</th><th>SKU</th><th class="min-w-250px">Nama Barang</th><th class="text-end">Stok Awal</th><th class="text-end">Masuk</th><th class="text-end">Keluar</th><th class="text-end">Mutasi Lain</th><th class="text-end">Saldo Akhir</th><th class="text-end">Aksi</th>
                         </tr></thead><tbody></tbody>
                     </table>
                 </div>
@@ -204,9 +197,9 @@
 document.addEventListener('DOMContentLoaded', () => {
     const dataUrl = @json($dataUrl);
     const exportUrl = @json($exportUrl);
-    const defaults = { warehouseValues: ['all'], dateFrom: @json($defaultDateFrom), dateTo: @json($defaultDateTo) };
+    const defaults = { dateFrom: @json($defaultDateFrom), dateTo: @json($defaultDateTo) };
     const fields = {
-        search: document.getElementById('report_search'), warehouse: document.getElementById('filter_warehouse'), dateFrom: document.getElementById('filter_date_from'),
+        search: document.getElementById('report_search'), dateFrom: document.getElementById('filter_date_from'),
         dateTo: document.getElementById('filter_date_to'), category: document.getElementById('filter_movement_category'), daysCover: document.getElementById('filter_days_cover'), export: document.getElementById('btn_export_stock_balance'),
         movementExport: document.getElementById('btn_export_stock_movement'),
     };
@@ -215,9 +208,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const formatQty = (value) => numberFormat.format(Number(value || 0));
     const formatDecimal = (value) => decimalFormat.format(Number(value || 0));
     const escapeHtml = (value) => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
-    const selectedWarehouseIds = () => Array.from(fields.warehouse.selectedOptions).map((option) => option.value).filter((value) => value && value !== 'all');
     const requestParams = (params) => {
-        params.date_from = fields.dateFrom.value; params.date_to = fields.dateTo.value; params.warehouse_ids = selectedWarehouseIds(); params.q = fields.search.value.trim();
+        params.date_from = fields.dateFrom.value; params.date_to = fields.dateTo.value; params.q = fields.search.value.trim();
     };
     const validatePeriod = () => {
         if (!fields.dateFrom.value || !fields.dateTo.value) {
@@ -234,27 +226,17 @@ document.addEventListener('DOMContentLoaded', () => {
         flatpickr(fields.dateFrom, { dateFormat: 'Y-m-d', allowInput: true }); flatpickr(fields.dateTo, { dateFormat: 'Y-m-d', allowInput: true });
     }
     if (typeof $ !== 'undefined' && $.fn.select2) {
-        $(fields.warehouse).select2({ width: '100%', placeholder: 'Pilih gudang', closeOnSelect: false });
         $(fields.category).select2({ width: '100%', minimumResultsForSearch: Infinity });
         $(fields.daysCover).select2({ width: '100%', minimumResultsForSearch: Infinity });
     }
-    let previousWarehouseValues = ['all'];
-    const normalizeWarehouseSelection = () => {
-        let values = Array.from(fields.warehouse.selectedOptions).map((option) => option.value);
-        const allWasSelected = previousWarehouseValues.includes('all'); const allIsSelected = values.includes('all');
-        if (allIsSelected && !allWasSelected) values = ['all'];
-        else if (allIsSelected && values.length > 1) values = values.filter((value) => value !== 'all');
-        else if (!values.length) values = ['all'];
-        Array.from(fields.warehouse.options).forEach((option) => { option.selected = values.includes(option.value); });
-        if (typeof $ !== 'undefined' && $.fn.select2) $(fields.warehouse).trigger('change.select2');
-        previousWarehouseValues = values;
-    };
     const updateBalanceSummary = (summary, period) => {
         document.getElementById('summary_opening').textContent = formatQty(summary.opening_stock);
         document.getElementById('summary_in').textContent = formatQty(summary.stock_in);
         document.getElementById('summary_out').textContent = formatQty(summary.stock_out);
+        const otherNet = Number(summary.other_net || 0);
+        document.getElementById('summary_other').textContent = otherNet > 0 ? `+${formatQty(otherNet)}` : formatQty(otherNet);
         document.getElementById('summary_ending').textContent = formatQty(summary.ending_stock);
-        document.getElementById('summary_scope').textContent = `${formatQty(summary.total_items)} item · ${formatQty(summary.total_warehouses)} gudang`;
+        document.getElementById('summary_scope').textContent = `${formatQty(summary.total_items)} item · Gudang Besar + Display`;
         document.getElementById('summary_period').textContent = period?.date_from && period?.date_to ? `${period.date_from} s.d. ${period.date_to}` : '-';
     };
     const balanceTable = $('#stock_balance_table').DataTable({
@@ -264,10 +246,10 @@ document.addEventListener('DOMContentLoaded', () => {
             { data: null, orderable: false, searchable: false, render: (data, type, row, meta) => meta.row + meta.settings._iDisplayStart + 1 },
             { data: 'sku', render: (value, type, row) => `<div class="fw-bolder text-gray-900">${escapeHtml(value || '-')}</div>${row.item_status === 'inactive' ? '<span class="badge badge-light-secondary mt-1">Nonaktif</span>' : ''}` },
             { data: 'item_name', render: (value) => `<span class="fw-semibold text-gray-800">${escapeHtml(value || '-')}</span>` },
-            { data: 'warehouse_name', render: (value, type, row) => `<div>${escapeHtml(value || '-')}</div><div class="text-muted fs-8">${escapeHtml(row.warehouse_code || '')}</div>` },
             { data: 'opening_stock', className: 'text-end stock-report-qty', render: formatQty },
             { data: 'stock_in', className: 'text-end stock-report-qty text-success', render: (value) => value > 0 ? `+${formatQty(value)}` : '0' },
             { data: 'stock_out', className: 'text-end stock-report-qty text-danger', render: (value) => value > 0 ? `−${formatQty(value)}` : '0' },
+            { data: 'other_net', className: 'text-end stock-report-qty text-warning', render: (value) => Number(value) > 0 ? `+${formatQty(value)}` : (Number(value) < 0 ? `−${formatQty(Math.abs(value))}` : '0') },
             { data: 'ending_stock', className: 'text-end stock-report-qty', render: (value) => `<span class="badge ${Number(value) < 0 ? 'badge-light-danger' : 'badge-light-primary'} fs-7">${formatQty(value)}</span>` },
             { data: null, orderable: false, searchable: false, className: 'text-end', render: (data, type, row) => row.mutation_url ? `<a href="${escapeHtml(row.mutation_url)}" class="btn btn-sm btn-light-primary"><i class="fas fa-list-ul"></i> Mutasi</a>` : '<span class="text-muted">-</span>' },
         ],
@@ -314,7 +296,6 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     const reload = () => { if (!validatePeriod()) return; balanceTable.ajax.reload(); if (movementTable) movementTable.ajax.reload(); };
     document.getElementById('filter_apply').addEventListener('click', reload);
-    fields.warehouse.addEventListener('change', () => { normalizeWarehouseSelection(); reload(); });
     let searchTimer = null; fields.search.addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(reload, 450); });
     [fields.dateFrom, fields.dateTo].forEach((input) => input.addEventListener('change', reload));
     const reloadMovementTable = () => { if (movementTable && validatePeriod()) movementTable.ajax.reload(); };
@@ -331,20 +312,18 @@ document.addEventListener('DOMContentLoaded', () => {
         if (movementTable && validatePeriod()) movementTable.ajax.reload();
     }));
     document.getElementById('filter_reset').addEventListener('click', () => {
-        fields.search.value = ''; Array.from(fields.warehouse.options).forEach((option) => { option.selected = defaults.warehouseValues.includes(option.value); });
-        previousWarehouseValues = [...defaults.warehouseValues]; fields.dateFrom.value = defaults.dateFrom; fields.dateTo.value = defaults.dateTo; fields.category.value = ''; fields.daysCover.value = '';
-        if (typeof $ !== 'undefined' && $.fn.select2) { $(fields.warehouse).trigger('change.select2'); $(fields.category).trigger('change.select2'); $(fields.daysCover).trigger('change.select2'); }
+        fields.search.value = ''; fields.dateFrom.value = defaults.dateFrom; fields.dateTo.value = defaults.dateTo; fields.category.value = ''; fields.daysCover.value = '';
+        if (typeof $ !== 'undefined' && $.fn.select2) { $(fields.category).trigger('change.select2'); $(fields.daysCover).trigger('change.select2'); }
         reload();
     });
     document.querySelectorAll('#stock_report_tabs [data-bs-toggle="tab"]').forEach((tab) => tab.addEventListener('shown.bs.tab', (event) => {
         const movementActive = event.target.getAttribute('data-bs-target') === '#stock_movement_tab'; fields.export.classList.toggle('d-none', movementActive);
-        document.getElementById('stock_report_filters').classList.toggle('movement-mode', movementActive);
         if (movementActive) createMovementTable().columns.adjust(); else balanceTable.columns.adjust();
     }));
     fields.export.addEventListener('click', () => {
         if (!validatePeriod()) return;
         const params = new URLSearchParams(); params.set('date_from', fields.dateFrom.value); params.set('date_to', fields.dateTo.value);
-        selectedWarehouseIds().forEach((value) => params.append('warehouse_ids[]', value)); if (fields.search.value.trim()) params.set('q', fields.search.value.trim());
+        if (fields.search.value.trim()) params.set('q', fields.search.value.trim());
         window.location.href = `${exportUrl}?${params.toString()}`;
     });
     fields.movementExport.addEventListener('click', () => {

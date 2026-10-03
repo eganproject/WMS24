@@ -2,7 +2,6 @@
 
 namespace App\Exports;
 
-use App\Models\Warehouse;
 use App\Support\StockBalanceReportService;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
@@ -33,7 +32,7 @@ class StockBalanceReportExport implements FromCollection, WithHeadings, WithTitl
 
     public function startCell(): string
     {
-        return 'A5';
+        return 'A6';
     }
 
     public function collection(): Collection
@@ -43,8 +42,7 @@ class StockBalanceReportExport implements FromCollection, WithHeadings, WithTitl
         }
 
         $this->rows = app(StockBalanceReportService::class)
-            ->query($this->filters)
-            ->orderBy('warehouses.name')
+            ->consolidatedQuery($this->filters)
             ->orderBy('items.name')
             ->get()
             ->values()
@@ -52,11 +50,10 @@ class StockBalanceReportExport implements FromCollection, WithHeadings, WithTitl
                 $index + 1,
                 $row->sku,
                 $row->item_name,
-                $row->warehouse_code,
-                $row->warehouse_name,
                 (int) $row->opening_stock,
                 (int) $row->stock_in,
                 (int) $row->stock_out,
+                (int) $row->other_net,
                 (int) $row->ending_stock,
             ]);
 
@@ -69,38 +66,43 @@ class StockBalanceReportExport implements FromCollection, WithHeadings, WithTitl
             'No',
             'SKU',
             'Nama Item',
-            'Kode Gudang',
-            'Gudang',
             'Stok Awal',
-            'Stok Masuk',
-            'Stok Keluar',
+            'Masuk (Inbound Gudang Besar)',
+            'Keluar (Outbound Manual + QC Resi)',
+            'Mutasi Lain (Net)',
             'Saldo Akhir',
         ];
     }
 
     public function styles(Worksheet $sheet): array
     {
-        $summary = app(StockBalanceReportService::class)
-            ->summary(app(StockBalanceReportService::class)->query($this->filters));
+        $service = app(StockBalanceReportService::class);
+        $summary = $service->consolidatedSummary($service->consolidatedQuery($this->filters));
+        $format = fn ($value) => number_format((int) $value, 0, ',', '.');
 
-        $sheet->mergeCells('A1:I1');
-        $sheet->mergeCells('A2:I2');
-        $sheet->mergeCells('A3:I3');
-        $sheet->setCellValue('A1', 'Laporan Saldo Stok');
+        foreach (['A1:H1', 'A2:H2', 'A3:H3', 'A4:H4'] as $range) {
+            $sheet->mergeCells($range);
+        }
+        $sheet->setCellValue('A1', 'Laporan Saldo Stok (Gudang Besar + Gudang Display)');
         $sheet->setCellValue('A2', $this->filterSummary());
-        $sheet->setCellValue('A3', sprintf(
-            'Total: stok awal %s | masuk %s | keluar %s | saldo akhir %s',
-            number_format((int) ($summary->opening_stock ?? 0), 0, ',', '.'),
-            number_format((int) ($summary->stock_in ?? 0), 0, ',', '.'),
-            number_format((int) ($summary->stock_out ?? 0), 0, ',', '.'),
-            number_format((int) ($summary->ending_stock ?? 0), 0, ',', '.')
+        $sheet->setCellValue('A3', 'Saldo akhir = stok awal + masuk - keluar + mutasi lain. Masuk: inbound ke Gudang Besar. '
+            .'Keluar: outbound manual + QC scan import resi. Mutasi lain: retur, opname, penyesuaian, barang rusak, transfer ke/dari gudang lain.');
+        $sheet->setCellValue('A4', sprintf(
+            'Total %s item: stok awal %s | masuk %s | keluar %s | mutasi lain %s | saldo akhir %s',
+            $format($summary->total_items ?? 0),
+            $format($summary->opening_stock ?? 0),
+            $format($summary->stock_in ?? 0),
+            $format($summary->stock_out ?? 0),
+            $format($summary->other_net ?? 0),
+            $format($summary->ending_stock ?? 0)
         ));
 
         return [
             1 => ['font' => ['bold' => true, 'size' => 16, 'color' => ['rgb' => '181C32']]],
             2 => ['font' => ['color' => ['rgb' => '7E8299']]],
-            3 => ['font' => ['bold' => true, 'color' => ['rgb' => '3F4254']]],
-            5 => [
+            3 => ['font' => ['italic' => true, 'color' => ['rgb' => '7E8299']]],
+            4 => ['font' => ['bold' => true, 'color' => ['rgb' => '3F4254']]],
+            6 => [
                 'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
                 'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '1B84FF']],
             ],
@@ -112,43 +114,32 @@ class StockBalanceReportExport implements FromCollection, WithHeadings, WithTitl
         return [
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
-                $lastRow = max(5, 5 + $this->collection()->count());
-                $range = 'A5:I'.$lastRow;
+                $lastRow = max(6, 6 + $this->collection()->count());
+                $range = 'A6:H'.$lastRow;
 
-                $sheet->freezePane('A6');
+                $sheet->freezePane('A7');
                 $sheet->setAutoFilter($range);
                 $sheet->getStyle($range)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setRGB('E4E6EF');
-                $sheet->getStyle('A1:I'.$lastRow)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
-                $sheet->getStyle('F6:I'.$lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
-                $sheet->getStyle('F6:I'.$lastRow)->getNumberFormat()->setFormatCode('#,##0');
-                $sheet->getStyle('A5:I5')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getStyle('A1:H'.$lastRow)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+                $sheet->getStyle('A3')->getAlignment()->setWrapText(true);
+                $sheet->getRowDimension(3)->setRowHeight(30);
+                $sheet->getStyle('D7:H'.$lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                $sheet->getStyle('D7:H'.$lastRow)->getNumberFormat()->setFormatCode('#,##0;-#,##0;0');
+                $sheet->getStyle('A6:H6')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setWrapText(true);
                 $sheet->getColumnDimension('B')->setWidth(20);
                 $sheet->getColumnDimension('C')->setWidth(38);
-                $sheet->getColumnDimension('E')->setWidth(25);
             },
         ];
     }
 
     private function filterSummary(): string
     {
-        $warehouseIds = array_values(array_filter(array_map(
-            'intval',
-            (array) ($this->filters['warehouse_ids'] ?? [])
-        )));
-        $warehouse = $warehouseIds === []
-            ? 'Seluruh Gudang'
-            : Warehouse::query()
-                ->whereIn('id', $warehouseIds)
-                ->orderBy('name')
-                ->pluck('name')
-                ->implode(', ');
         $search = trim((string) ($this->filters['q'] ?? ''));
 
         return sprintf(
-            'Periode %s s.d. %s | Gudang: %s%s',
+            'Periode %s s.d. %s | Gudang: Gudang Besar + Gudang Display%s',
             $this->filters['date_from'],
             $this->filters['date_to'],
-            $warehouse,
             $search !== '' ? ' | Pencarian: '.$search : ''
         );
     }

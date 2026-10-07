@@ -5,6 +5,7 @@ namespace Tests\Feature\Admin;
 use App\Models\Item;
 use App\Models\ItemStock;
 use App\Models\OutboundTransaction;
+use App\Models\StockMutation;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Support\OutboundManualQcStatus;
@@ -275,6 +276,73 @@ class OutboundManualStockValidationTest extends TestCase
             'status' => OutboundManualQcStatus::QC_SCANNING,
             'recipient_name' => 'Penerima QC',
         ]);
+    }
+
+    public function test_admin_can_delete_scanning_manual_without_affecting_other_data(): void
+    {
+        $user = User::factory()->create(['email' => 'admin@gmail.com']);
+        $warehouse = $this->createWarehouse('DELETE-SCANNING');
+        $item = $this->createItem('DELETE-SCANNING');
+        ItemStock::create(['item_id' => $item->id, 'warehouse_id' => $warehouse->id, 'stock' => 10]);
+        $transactions = [];
+        foreach (['SCAN-DELETE', 'SCAN-KEEP'] as $code) {
+            $tx = OutboundTransaction::create([
+                'code' => $code, 'type' => 'manual', 'status' => OutboundManualQcStatus::QC_SCANNING,
+                'warehouse_id' => $warehouse->id, 'transacted_at' => now(), 'created_by' => $user->id,
+            ]);
+            $tx->items()->create(['item_id' => $item->id, 'qty' => 3]);
+            $session = $tx->qcSession()->create(['started_by' => $user->id, 'started_at' => now()]);
+            $session->items()->create([
+                'item_id' => $item->id, 'sku' => $item->sku, 'expected_qty' => 3, 'scanned_qty' => 1,
+            ]);
+            $transactions[] = $tx;
+        }
+        [$target, $other] = $transactions;
+        $targetSessionId = $target->qcSession->id;
+        $mutation = StockMutation::create([
+            'item_id' => $item->id, 'warehouse_id' => $warehouse->id, 'direction' => 'out',
+            'qty' => 2, 'stock_before' => 12, 'stock_after' => 10,
+            'source_type' => 'outbound', 'source_id' => $other->id, 'occurred_at' => now(),
+        ]);
+
+        $this->actingAs($user)->withoutMiddleware()
+            ->getJson(route('admin.outbound.manuals.data'))
+            ->assertOk()->assertJsonPath('data.0.can_delete', true);
+        $this->deleteJson(route('admin.outbound.manuals.destroy', $target->id))->assertOk();
+
+        $this->assertDatabaseMissing('outbound_transactions', ['id' => $target->id]);
+        $this->assertDatabaseMissing('outbound_items', ['outbound_transaction_id' => $target->id]);
+        $this->assertDatabaseMissing('outbound_qc_sessions', ['id' => $targetSessionId]);
+        $this->assertDatabaseMissing('outbound_qc_session_items', ['outbound_qc_session_id' => $targetSessionId]);
+        $this->assertDatabaseHas('outbound_transactions', ['id' => $other->id]);
+        $this->assertDatabaseHas('outbound_items', ['outbound_transaction_id' => $other->id, 'qty' => 3]);
+        $this->assertDatabaseHas('outbound_qc_session_items', ['outbound_qc_session_id' => $other->qcSession->id, 'scanned_qty' => 1]);
+        $this->assertDatabaseHas('stock_mutations', ['id' => $mutation->id, 'qty' => 2]);
+        $this->assertDatabaseHas('item_stocks', ['item_id' => $item->id, 'warehouse_id' => $warehouse->id, 'stock' => 10]);
+    }
+
+    public function test_admin_cannot_delete_manual_after_qc_or_with_stock_mutations(): void
+    {
+        $user = User::factory()->create(['email' => 'admin@gmail.com']);
+        $warehouse = $this->createWarehouse('DELETE-GUARD');
+        $item = $this->createItem('DELETE-GUARD');
+        foreach ([OutboundManualQcStatus::PENDING, OutboundManualQcStatus::APPROVED, OutboundManualQcStatus::QC_SCANNING] as $status) {
+            $tx = OutboundTransaction::create([
+                'code' => 'GUARD-'.$status, 'type' => 'manual', 'status' => $status,
+                'warehouse_id' => $warehouse->id, 'transacted_at' => now(),
+            ]);
+            if ($status === OutboundManualQcStatus::QC_SCANNING) {
+                StockMutation::create([
+                    'item_id' => $item->id, 'warehouse_id' => $warehouse->id, 'direction' => 'out',
+                    'qty' => 1, 'stock_before' => 2, 'stock_after' => 1,
+                    'source_type' => 'outbound', 'source_id' => $tx->id, 'occurred_at' => now(),
+                ]);
+            }
+            $this->actingAs($user)->withoutMiddleware()
+                ->deleteJson(route('admin.outbound.manuals.destroy', $tx->id))->assertStatus(422);
+            $this->assertDatabaseHas('outbound_transactions', ['id' => $tx->id, 'status' => $status]);
+        }
+        $this->assertDatabaseCount('stock_mutations', 1);
     }
 
     private function createWarehouse(string $code): Warehouse

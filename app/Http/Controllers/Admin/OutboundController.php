@@ -439,9 +439,9 @@ class OutboundController extends Controller
                     'approved' => 'Selesai',
                 ],
             'lockedStatuses' => $type === 'manual' ? OutboundManualQcStatus::lockedForEdit() : ['approved'],
-            'deleteLockedStatuses' => $type === 'manual' ? OutboundManualQcStatus::lockedForDelete() : ['approved'],
+            'deleteLockedStatuses' => $this->deleteLockedStatusesFor($type),
             'deleteWarningText' => $type === 'manual'
-                ? 'Data outbound manual akan dihapus jika belum masuk tahap QC.'
+                ? 'Transaksi outbound manual beserta detail dan scan QC miliknya akan dihapus. Penghapusan saat sedang QC hanya tersedia untuk admin@gmail.com.'
                 : 'Data akan dihapus dan stok akan dikembalikan',
             'showScanProgressColumn' => $type === 'manual',
             'exportUrl' => $type === 'manual' ? route('admin.outbound.manuals.export') : null,
@@ -602,6 +602,7 @@ class OutboundController extends Controller
                 'type' => $row->type,
                 'status' => $row->status ?? 'pending',
                 'scan_progress' => $scanProgress,
+                'can_delete' => !in_array($row->status ?? 'pending', $this->deleteLockedStatusesFor($row->type), true),
             ];
         });
 
@@ -818,15 +819,31 @@ class OutboundController extends Controller
     {
         DB::beginTransaction();
         try {
-            $tx = OutboundTransaction::where('type', $type)->findOrFail($id);
+            $tx = OutboundTransaction::where('type', $type)->lockForUpdate()->findOrFail($id);
             if (in_array($tx->status ?? 'pending', $this->deleteLockedStatusesFor($type), true)) {
                 DB::rollBack();
 
                 return response()->json(['message' => 'Data sudah masuk tahap QC/selesai dan tidak bisa dihapus'], 422);
             }
 
-            StockService::rollbackBySource('outbound', $tx->id);
-            StockMutation::where('source_type', 'outbound')->where('source_id', $tx->id)->delete();
+            if ($type === 'manual' && $tx->status === OutboundManualQcStatus::QC_SCANNING) {
+                // QC scanning does not deplete stock. Refuse inconsistent or linked
+                // transactions rather than changing stock or detaching other data.
+                $session = $tx->qcSession()->lockForUpdate()->first();
+                if ($tx->approved_at || $tx->approved_by || $session?->completed_at
+                    || $tx->damagedAllocation()->exists()
+                    || StockMutation::where('source_type', 'outbound')->where('source_id', $tx->id)->exists()) {
+                    DB::rollBack();
+
+                    return response()->json([
+                        'message' => 'Data tidak bisa dihapus karena memiliki approval, QC selesai, mutasi stok, atau alokasi barang rusak. Periksa transaksi terlebih dahulu.',
+                    ], 422);
+                }
+            } else {
+                StockService::rollbackBySource('outbound', $tx->id);
+                StockMutation::where('source_type', 'outbound')->where('source_id', $tx->id)->delete();
+            }
+            // Foreign keys cascade only this transaction's items and QC session/items.
             $tx->delete();
 
             DB::commit();
@@ -1124,7 +1141,12 @@ class OutboundController extends Controller
     private function deleteLockedStatusesFor(string $type): array
     {
         if ($type === 'manual') {
-            return OutboundManualQcStatus::lockedForDelete();
+            $statuses = OutboundManualQcStatus::lockedForDelete();
+            if (auth()->user()?->email === 'admin@gmail.com') {
+                $statuses = array_values(array_diff($statuses, [OutboundManualQcStatus::QC_SCANNING]));
+            }
+
+            return $statuses;
         }
 
         return ['approved'];

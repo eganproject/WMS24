@@ -505,6 +505,7 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/daily-stock-forecast/data', [DailyStockForecastController::class, 'data'])->name('daily-stock-forecast.data');
         Route::get('/stock-runout-forecast', [StockRunoutForecastController::class, 'index'])->name('stock-runout-forecast.index');
         Route::get('/stock-runout-forecast/data', [StockRunoutForecastController::class, 'data'])->name('stock-runout-forecast.data');
+        Route::get('/stock-runout-forecast/export', [StockRunoutForecastController::class, 'export'])->name('stock-runout-forecast.export');
         Route::get('/low-stock-snapshots', [LowStockSnapshotController::class, 'index'])->name('low-stock-snapshots.index');
         Route::get('/low-stock-snapshots/data', [LowStockSnapshotController::class, 'data'])->name('low-stock-snapshots.data');
         Route::post('/low-stock-snapshots', [LowStockSnapshotController::class, 'store'])->name('low-stock-snapshots.store');

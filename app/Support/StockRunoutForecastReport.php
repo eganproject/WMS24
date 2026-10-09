@@ -172,6 +172,8 @@ class StockRunoutForecastReport
                 'items.sku', 'items.name', 'categories.name as category_name',
                 DB::raw("{$this->stockExpr} as stock"),
                 DB::raw("{$this->outboundExpr} as total_outbound"),
+                DB::raw('COALESCE(outbound_usage.qc_outbound, 0) as qc_outbound'),
+                DB::raw('COALESCE(outbound_usage.manual_outbound, 0) as manual_outbound'),
             ])
             ->orderByRaw("{$sortExpr} ".($direction ?? $this->direction))
             ->orderBy('items.sku')
@@ -217,7 +219,12 @@ class StockRunoutForecastReport
     private function query(bool $withStatus = true): Builder
     {
         $outboundQuery = StockMutation::query()
-            ->select('item_id', DB::raw('SUM(qty) as total_outbound'))
+            ->select(
+                'item_id',
+                DB::raw('SUM(qty) as total_outbound'),
+                DB::raw("SUM(CASE WHEN source_type = 'qc_shipment' THEN qty ELSE 0 END) as qc_outbound"),
+                DB::raw("SUM(CASE WHEN source_type = 'outbound' THEN qty ELSE 0 END) as manual_outbound"),
+            )
             ->where('direction', 'out')
             ->where(function ($query) {
                 $query->where('source_type', 'qc_shipment')
@@ -308,6 +315,8 @@ class StockRunoutForecastReport
             'status_label' => self::STATUS_LABELS[$status],
             'stock' => $stock,
             'total_outbound' => $totalOutbound,
+            'qc_outbound' => (int) $item->qc_outbound,
+            'manual_outbound' => (int) $item->manual_outbound,
             'daily_average' => round($average, 2),
             'forecast_demand' => round($demand, 2),
             'forecast_stock' => round($stock - $demand, 2),

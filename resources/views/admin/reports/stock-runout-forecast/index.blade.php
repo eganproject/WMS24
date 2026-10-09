@@ -53,6 +53,12 @@
     #stock_runout_forecast_table tbody tr:hover { background: #fafcff; }
     .runout-item-name { color: #7e8299; font-size: .8rem; line-height: 1.35; margin-top: .15rem; max-width: 300px; white-space: normal; }
     .runout-note { color: #a1a5b7; font-size: .72rem; font-weight: 500; margin-top: .15rem; white-space: nowrap; }
+    .runout-kv { display: grid; grid-template-columns: auto auto; column-gap: .9rem; row-gap: .15rem; justify-content: end; font-size: .75rem; line-height: 1.35; white-space: nowrap; }
+    .runout-kv > span { color: #a1a5b7; font-weight: 500; text-align: left; }
+    .runout-kv > b { color: #5e6278; font-variant-numeric: tabular-nums; font-weight: 700; text-align: right; }
+    .runout-kv > .is-main { color: #3f4254; font-size: .85rem; font-weight: 700; }
+    .runout-kv > b.is-main { color: #181c32; font-weight: 800; }
+    .runout-kv > .is-divider { border-top: 1px dashed #e4e6ef; grid-column: 1 / -1; margin: .2rem 0; }
     .runout-coverage { background: #eef2f7; border-radius: 999px; height: 5px; margin-top: .4rem; overflow: hidden; width: 120px; }
     .runout-coverage > span { border-radius: 999px; display: block; height: 100%; }
     .runout-restock { color: #d9214e; font-size: 1.1rem; font-weight: 800; }
@@ -190,10 +196,10 @@
                         <th class="min-w-250px">Barang</th>
                         <th>Status</th>
                         <th class="text-end">Stok Gabungan</th>
-                        <th class="text-end">Rata-rata / Hari</th>
+                        <th class="text-end min-w-175px">Rata-rata / Hari</th>
                         <th>Estimasi Habis</th>
-                        <th class="text-end" id="col_forecast_demand">Kebutuhan Periode</th>
-                        <th class="text-end">Sisa Proyeksi</th>
+                        <th class="text-end min-w-175px" id="col_forecast_demand">Kebutuhan &amp; Sisa</th>
+                        <th>Sisa Proyeksi</th>
                         <th class="text-end">Perlu Restock</th>
                     </tr>
                 </thead>
@@ -262,14 +268,26 @@ document.addEventListener('DOMContentLoaded', function () {
             { data: null, name: 'sku', render: (row) => `<div class="fw-bolder text-gray-900">${escapeHtml(row.sku)}</div><div class="runout-item-name">${escapeHtml(row.name)}</div><div class="runout-note">${escapeHtml(row.category)}</div>` },
             { data: 'status', orderable: false, render: (value) => `<span class="badge ${statusMeta[value]?.badge || 'badge-light'}">${statusMeta[value]?.label || '-'}</span>` },
             { data: 'stock', name: 'stock', className: 'text-end runout-number fw-bold', render: (value) => `<span class="${Number(value) <= 0 ? 'text-danger' : ''}">${number(value)}</span>` },
-            { data: 'daily_average', name: 'daily_average', orderSequence: ['desc', 'asc'], className: 'text-end runout-number', render: (value, type, row) => `<div class="fw-bold">${number(value, 2)}</div><div class="runout-note">${number(row.total_outbound)} terjual / ${number(lastPeriod.history_days)} hr</div>` },
+            { data: 'daily_average', name: 'daily_average', orderSequence: ['desc', 'asc'], className: 'text-end runout-number', render: (value, type, row) => `<div class="runout-kv">
+                <span class="is-main">Rata-rata</span><b class="is-main">${number(value, 2)} /hari</b>
+                <i class="is-divider"></i>
+                <span>Total keluar ${number(lastPeriod.history_days)} hr</span><b>${number(row.total_outbound)}</b>
+                <span>• QC scan resi</span><b>${number(row.qc_outbound)}</b>
+                <span>• Outbound manual</span><b>${number(row.manual_outbound)}</b>
+            </div>` },
             { data: 'days_until_runout', name: 'runout', render: (value, type, row) => {
                 const coverage = Math.max(0, Math.min(100, (Number(value) / Math.max(1, lastPeriod.forecast_days || 1)) * 100));
                 const label = Number(row.stock) <= 0 ? '<span class="text-danger fw-bolder">Sudah habis</span>' : `<span class="fw-bolder">${number(value, 1)} hari</span>`;
                 return `<div class="runout-number">${label}</div><div class="runout-note">${Number(row.stock) <= 0 ? 'Restock segera' : 'sekitar ' + date(row.runout_date)}</div><div class="runout-coverage" title="Ketahanan stok ${Math.round(coverage)}% dari periode forecast"><span style="width:${coverage}%;background:${statusMeta[row.status]?.bar || '#009ef7'}"></span></div>`;
             } },
-            { data: 'forecast_demand', name: 'forecast_demand', orderSequence: ['desc', 'asc'], className: 'text-end runout-number', render: (value) => number(value, 2) },
-            { data: 'forecast_stock', name: 'forecast_stock', className: 'text-end runout-number text-danger fw-bold', render: (value) => number(value, 2) },
+            { data: 'forecast_demand', name: 'forecast_demand', orderSequence: ['desc', 'asc'], className: 'text-end', render: (value, type, row) => `<div class="runout-kv">
+                <span class="is-main">Kebutuhan</span><b class="is-main">${number(value, 2)}</b>
+                <span>Stok saat ini</span><b>${number(row.stock)}</b>
+                <i class="is-divider"></i>
+                <span>Sisa proyeksi</span><b class="text-danger">${number(row.forecast_stock, 2)}</b>
+            </div>` },
+            // Kolom tersembunyi agar pilihan "Urutkan: Sisa Proyeksi" tetap bisa dipakai.
+            { data: 'forecast_stock', name: 'forecast_stock', visible: false },
             { data: 'restock_need', name: 'restock_need', orderSequence: ['desc', 'asc'], className: 'text-end runout-number', render: (value) => `<span class="runout-restock">${number(value)}</span><div class="runout-note">unit</div>` },
         ],
     });
@@ -288,7 +306,7 @@ document.addEventListener('DOMContentLoaded', function () {
         $('#summary_critical').text(number(counts.critical?.items));
         $('#summary_nearest_runout').text(summary.nearest_runout_days === null || summary.nearest_runout_days === undefined ? '-' : (Number(summary.nearest_runout_days) <= 0 ? 'Habis' : `${number(summary.nearest_runout_days, 1)} hari`));
         $('#summary_nearest_date').text(summary.nearest_runout_date ? `Sekitar ${date(summary.nearest_runout_date)}` : 'Tidak ada data');
-        $('#col_forecast_demand').text(`Kebutuhan ${number(period.forecast_days)} Hari`);
+        $('#col_forecast_demand').text(`Kebutuhan & Sisa (${number(period.forecast_days)} Hari)`);
         $('#period_info').html(`Penjualan <b>${date(period.start)} – ${date(period.end)}</b> (${number(period.history_days)} hari) &nbsp;•&nbsp; Forecast stok sampai <b>${date(forecastEnd.toISOString().slice(0, 10))}</b> (${number(period.forecast_days)} hari ke depan)`);
 
         const all = Object.values(counts).reduce((total, item) => total + Number(item.items || 0), 0);

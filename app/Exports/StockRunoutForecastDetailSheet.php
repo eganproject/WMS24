@@ -20,7 +20,7 @@ use PhpOffice\PhpSpreadsheet\Style\Alignment;
 class StockRunoutForecastDetailSheet extends StockRunoutForecastSheet implements FromCollection, WithCustomStartCell, WithCustomValueBinder, WithEvents, WithHeadings, WithStrictNullComparison, WithTitle
 {
     private const HEADER_ROW = 6;
-    private const LAST_COLUMN = 'M';
+    private const LAST_COLUMN = 'O';
 
     public function title(): string
     {
@@ -39,7 +39,7 @@ class StockRunoutForecastDetailSheet extends StockRunoutForecastSheet implements
 
         return [
             'No', 'SKU', 'Nama Barang', 'Kategori', 'Status',
-            'Stok Gabungan', "Penjualan {$history} Hari", 'Rata-rata / Hari', "Kebutuhan {$forecast} Hari",
+            'Stok Gabungan', "Total Keluar {$history} Hari", 'Keluar QC Scan Resi', 'Keluar Outbound Manual', 'Rata-rata / Hari', "Kebutuhan {$forecast} Hari",
             'Sisa Proyeksi', 'Perlu Restock', 'Estimasi Habis', 'Tanggal Habis',
         ];
     }
@@ -54,6 +54,8 @@ class StockRunoutForecastDetailSheet extends StockRunoutForecastSheet implements
             $row['status_label'],
             $row['stock'],
             $row['total_outbound'],
+            $row['qc_outbound'],
+            $row['manual_outbound'],
             $row['daily_average'],
             $row['forecast_demand'],
             $row['forecast_stock'],
@@ -94,12 +96,13 @@ class StockRunoutForecastDetailSheet extends StockRunoutForecastSheet implements
 
                 $this->styleHeader($sheet, "A{$header}:{$last}{$header}");
                 // Kolom keputusan restock diberi warna berbeda agar langsung terlihat.
-                $this->styleHeader($sheet, "K{$header}:M{$header}", 'F1416C');
+                $this->styleHeader($sheet, "G{$header}:I{$header}", '0063B1');
+                $this->styleHeader($sheet, "M{$header}:O{$header}", 'F1416C');
                 $sheet->getRowDimension($header)->setRowHeight(34);
 
                 $sheet->setCellValue("A{$totalRow}", 'TOTAL');
                 $sheet->mergeCells("A{$totalRow}:E{$totalRow}");
-                foreach (range('F', 'K') as $column) {
+                foreach (range('F', 'M') as $column) {
                     if ($count > 0) {
                         $sheet->setCellValueExplicit("{$column}{$totalRow}", "=SUBTOTAL(109,{$column}{$firstRow}:{$column}{$lastRow})", DataType::TYPE_FORMULA);
                     } else {
@@ -112,24 +115,24 @@ class StockRunoutForecastDetailSheet extends StockRunoutForecastSheet implements
                 $sheet->setAutoFilter("A{$header}:{$last}".max($header, $lastRow));
                 $this->styleBorders($sheet, "A{$header}:{$last}{$totalRow}");
                 $sheet->getStyle("A{$firstRow}:A{$totalRow}")->getNumberFormat()->setFormatCode('#,##0');
-                $sheet->getStyle("F{$firstRow}:G{$totalRow}")->getNumberFormat()->setFormatCode(self::QTY_FORMAT);
-                $sheet->getStyle("H{$firstRow}:J{$totalRow}")->getNumberFormat()->setFormatCode(self::DECIMAL_FORMAT);
-                $sheet->getStyle("K{$firstRow}:K{$totalRow}")->getNumberFormat()->setFormatCode(self::QTY_FORMAT);
-                $sheet->getStyle("L{$firstRow}:L{$lastRow}")->getNumberFormat()->setFormatCode(self::DAYS_FORMAT);
-                $sheet->getStyle("M{$firstRow}:M{$lastRow}")->getNumberFormat()->setFormatCode('dd/mm/yyyy');
-                $sheet->getStyle("K{$firstRow}:K{$totalRow}")->getFont()->setBold(true)->getColor()->setRGB('D9214E');
+                $sheet->getStyle("F{$firstRow}:I{$totalRow}")->getNumberFormat()->setFormatCode(self::QTY_FORMAT);
+                $sheet->getStyle("J{$firstRow}:L{$totalRow}")->getNumberFormat()->setFormatCode(self::DECIMAL_FORMAT);
+                $sheet->getStyle("M{$firstRow}:M{$totalRow}")->getNumberFormat()->setFormatCode(self::QTY_FORMAT);
+                $sheet->getStyle("N{$firstRow}:N{$lastRow}")->getNumberFormat()->setFormatCode(self::DAYS_FORMAT);
+                $sheet->getStyle("O{$firstRow}:O{$lastRow}")->getNumberFormat()->setFormatCode('dd/mm/yyyy');
+                $sheet->getStyle("M{$firstRow}:M{$totalRow}")->getFont()->setBold(true)->getColor()->setRGB('D9214E');
                 $sheet->getStyle("A1:{$last}{$totalRow}")->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
                 $sheet->getStyle("C{$firstRow}:D{$lastRow}")->getAlignment()->setWrapText(true);
                 $sheet->getStyle("E{$firstRow}:E{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                $sheet->getStyle("M{$firstRow}:M{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getStyle("O{$firstRow}:O{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
                 if ($count > 0) {
                     $this->addTextHighlight($sheet, "E{$firstRow}:E{$lastRow}", $this->statusHighlightRules());
                 }
 
                 foreach ([
-                    'A' => 7, 'B' => 20, 'C' => 40, 'D' => 20, 'E' => 15, 'F' => 13, 'G' => 14,
-                    'H' => 13, 'I' => 14, 'J' => 13, 'K' => 13, 'L' => 14, 'M' => 14,
+                    'A' => 7, 'B' => 20, 'C' => 40, 'D' => 20, 'E' => 15, 'F' => 13, 'G' => 14, 'H' => 14,
+                    'I' => 15, 'J' => 13, 'K' => 14, 'L' => 13, 'M' => 13, 'N' => 14, 'O' => 14,
                 ] as $column => $width) {
                     $sheet->getColumnDimension($column)->setWidth($width);
                 }

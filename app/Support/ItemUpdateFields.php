@@ -11,6 +11,7 @@ class ItemUpdateFields
         'status' => ['label' => 'Status', 'headers' => ['status'], 'description' => 'Gunakan active atau inactive.'],
         'category' => ['label' => 'Kategori', 'headers' => ['parent_category', 'category'], 'description' => 'Nama parent dan kategori yang sudah tersedia.'],
         'address' => ['label' => 'Alamat', 'headers' => ['address'], 'description' => 'Kode area atau alamat lengkap, misalnya KAB-A-03-05.'],
+        'main_address' => ['label' => 'Lokasi Gudang Besar', 'headers' => ['main_address'], 'description' => 'Bin location gudang besar format AREA-RACK-KOLOM-BARIS, misalnya GB1-A-01-02. Kosongkan untuk menghapus.'],
         'description' => ['label' => 'Deskripsi', 'headers' => ['description'], 'description' => 'Deskripsi bebas untuk item.'],
         'safety_stock' => ['label' => 'Stok Pengaman', 'headers' => ['safety_stock'], 'description' => 'Bilangan bulat minimal 0.'],
     ];

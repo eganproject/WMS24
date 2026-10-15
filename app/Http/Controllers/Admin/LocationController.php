@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\Area;
 use App\Models\Item;
 use App\Models\Location;
+use App\Models\Warehouse;
 use App\Support\LocationService;
+use App\Support\WarehouseService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -15,13 +17,30 @@ class LocationController extends Controller
 {
     public function index()
     {
-        $areas = Area::orderBy('code')->get(['id', 'code', 'name']);
-        return view('admin.masterdata.locations.index', compact('areas'));
+        $areas = Area::with('warehouse:id,name')->orderBy('code')->get(['id', 'warehouse_id', 'code', 'name']);
+        $warehouses = Warehouse::query()
+            ->whereIn('id', [WarehouseService::displayWarehouseId(), WarehouseService::defaultWarehouseId()])
+            ->orderBy('name')
+            ->get(['id', 'name']);
+        return view('admin.masterdata.locations.index', compact('areas', 'warehouses'));
     }
 
     public function data(Request $request)
     {
-        $query = Location::with('area')->orderBy('code');
+        $query = Location::with('area.warehouse:id,name')->orderBy('code');
+
+        $warehouseFilter = (int) $request->input('warehouse_id', 0);
+        if ($warehouseFilter > 0) {
+            $includeUnassigned = $warehouseFilter === WarehouseService::displayWarehouseId();
+            $query->whereHas('area', function ($areaQ) use ($warehouseFilter, $includeUnassigned) {
+                $areaQ->where(function ($q) use ($warehouseFilter, $includeUnassigned) {
+                    $q->where('warehouse_id', $warehouseFilter);
+                    if ($includeUnassigned) {
+                        $q->orWhereNull('warehouse_id');
+                    }
+                });
+            });
+        }
 
         $search = trim((string) $request->input('q', ''));
         if ($search !== '') {
@@ -52,6 +71,7 @@ class LocationController extends Controller
                 'area_id' => $loc->area_id,
                 'area_code' => $loc->area?->code ?? '-',
                 'area_name' => $loc->area?->name ?? '-',
+                'warehouse_name' => $loc->area?->warehouse?->name ?? 'Gudang Display',
                 'rack_code' => $loc->rack_code,
                 'column_no' => (int) $loc->column_no,
                 'row_no' => (int) $loc->row_no,
@@ -158,6 +178,19 @@ class LocationController extends Controller
             ]);
         }
 
+        $location->loadMissing('area');
+        if ($location->area && LocationService::areaWarehouseId($location->area) !== LocationService::areaWarehouseId($area)) {
+            $inUse = Item::query()
+                ->where('location_id', $location->id)
+                ->orWhere('main_location_id', $location->id)
+                ->exists();
+            if ($inUse) {
+                throw ValidationException::withMessages([
+                    'area_id' => 'Lokasi sudah dipakai item, tidak bisa dipindah ke area gudang lain.',
+                ]);
+            }
+        }
+
         $code = LocationService::buildAddress($area->code, $rack, $col, $row);
 
         DB::beginTransaction();
@@ -201,6 +234,7 @@ class LocationController extends Controller
                 'area_id' => $location->area_id,
                 'address' => $location->area?->code ?? $location->code,
             ]);
+            Item::where('main_location_id', $location->id)->update(['main_location_id' => null]);
             $location->delete();
             DB::commit();
             return response()->json(['message' => 'Lokasi berhasil dihapus']);

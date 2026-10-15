@@ -7,6 +7,7 @@ use App\Models\Item;
 use App\Support\ItemBarcodeResolver;
 use App\Support\ItemUpdateFields;
 use App\Support\LocationService;
+use App\Support\WarehouseService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -119,7 +120,10 @@ class ItemUpdatesImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
                     $payload['category_id'] = $this->resolveCategoryId($row, $item, $excelRow);
                     break;
                 case 'address':
-                    $this->applyAddress($payload, $row);
+                    $this->applyAddress($payload, $row, $item, $excelRow);
+                    break;
+                case 'main_address':
+                    $this->applyMainAddress($payload, $row, $item, $excelRow);
                     break;
                 case 'description':
                     $payload['description'] = $this->nullableTrim($row['description'] ?? null);
@@ -189,7 +193,7 @@ class ItemUpdatesImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
         return (int) $category->id;
     }
 
-    private function applyAddress(array &$payload, Collection $row): void
+    private function applyAddress(array &$payload, Collection $row, Item $item, int $excelRow): void
     {
         $address = trim((string) ($row['address'] ?? ''));
         if ($address === '') {
@@ -197,6 +201,10 @@ class ItemUpdatesImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             $payload['location_id'] = null;
             $payload['address'] = null;
             return;
+        }
+
+        if (!LocationService::addressFitsWarehouse($address, WarehouseService::displayWarehouseId())) {
+            $this->fail($excelRow, $item, 'area pada address bukan area gudang display.');
         }
 
         $location = LocationService::resolveLocation($address);
@@ -211,6 +219,15 @@ class ItemUpdatesImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
         $payload['area_id'] = $area?->id;
         $payload['location_id'] = null;
         $payload['address'] = $area?->code ?? $address;
+    }
+
+    private function applyMainAddress(array &$payload, Collection $row, Item $item, int $excelRow): void
+    {
+        try {
+            $payload['main_location_id'] = LocationService::resolveMainWarehouseLocation((string) ($row['main_address'] ?? ''))?->id;
+        } catch (\InvalidArgumentException $e) {
+            $this->fail($excelRow, $item, $e->getMessage());
+        }
     }
 
     private function parseSafetyStock(Collection $row, Item $item, int $excelRow): int

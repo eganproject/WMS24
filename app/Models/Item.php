@@ -22,6 +22,7 @@ class Item extends Model
         'category_id',
         'area_id',
         'location_id',
+        'main_location_id',
         'address',
         'description',
         'safety_stock',
@@ -57,6 +58,20 @@ class Item extends Model
     public function location()
     {
         return $this->belongsTo(Location::class, 'location_id');
+    }
+
+    /**
+     * Bin location di gudang besar. Relasi `location` tetap menjadi lokasi gudang display
+     * (dipakai picking list, area picker, dsb).
+     */
+    public function mainLocation()
+    {
+        return $this->belongsTo(Location::class, 'main_location_id');
+    }
+
+    public function mainAddress(): string
+    {
+        return (string) ($this->mainLocation?->code ?? '');
     }
 
     public function resolvedArea(): ?Area

@@ -11,6 +11,7 @@ use App\Models\ItemBarcode;
 use App\Models\ItemBarcodeScanMiss;
 use App\Models\ItemStock;
 use App\Models\Area;
+use App\Models\Warehouse;
 use App\Exports\ItemBarcodeTemplateExport;
 use App\Exports\ItemBundleTemplateExport;
 use App\Exports\ItemUpdatesTemplateExport;
@@ -42,23 +43,118 @@ class ItemController extends Controller
     public function index()
     {
         $categories = Category::orderBy('name')->get(['id', 'name']);
-        $displayWarehouseId = WarehouseService::displayWarehouseId();
-        $mainWarehouseId = WarehouseService::defaultWarehouseId();
-        $areas = Area::query()
-            ->where(fn ($q) => $q->whereNull('warehouse_id')->orWhere('warehouse_id', $displayWarehouseId))
-            ->orderBy('code')
-            ->get(['id', 'code', 'name']);
-        $mainAreas = Area::query()
-            ->where('warehouse_id', $mainWarehouseId)
-            ->orderBy('code')
-            ->get(['id', 'code', 'name']);
         $componentItems = Item::query()
             ->where('item_type', Item::TYPE_SINGLE)
             ->orderBy('sku')
             ->get(['id', 'sku', 'name']);
 
         $itemUpdateFields = ItemUpdateFields::definitions();
-        return view('admin.masterdata.items.index', compact('categories', 'areas', 'mainAreas', 'componentItems', 'itemUpdateFields'));
+        return view('admin.masterdata.items.index', compact('categories', 'componentItems', 'itemUpdateFields'));
+    }
+
+    public function create()
+    {
+        return view('admin.masterdata.items.form', $this->formViewData(null));
+    }
+
+    public function edit(Item $item)
+    {
+        return view('admin.masterdata.items.form', $this->formViewData($item));
+    }
+
+    public function show(Item $item)
+    {
+        $item->load([
+            'category',
+            'area',
+            'location.area',
+            'mainLocation.area',
+            'barcodes',
+            'bundleComponents.component',
+            'bundleParents.bundle',
+            'stocks',
+        ]);
+
+        $stocksByWarehouse = $item->stocks->keyBy('warehouse_id');
+        $warehouseStocks = Warehouse::orderBy('name')->get(['id', 'code', 'name'])
+            ->map(function (Warehouse $warehouse) use ($item, $stocksByWarehouse) {
+                $stock = $stocksByWarehouse->get($warehouse->id);
+
+                return [
+                    'name' => $warehouse->name,
+                    'code' => $warehouse->code,
+                    'stock' => $item->isBundle()
+                        ? BundleService::virtualAvailableQty($item, (int) $warehouse->id)
+                        : (int) ($stock?->stock ?? 0),
+                    'safety_stock' => $stock?->safety_stock,
+                    'has_record' => (bool) $stock,
+                ];
+            });
+
+        return view('admin.masterdata.items.show', [
+            'item' => $item,
+            'area' => $item->resolvedArea(),
+            'address' => $item->resolvedAddress(),
+            'warehouseStocks' => $warehouseStocks,
+        ]);
+    }
+
+    private function formViewData(?Item $item): array
+    {
+        $itemPayload = null;
+        if ($item) {
+            $item->load(['location', 'mainLocation', 'area', 'barcodes', 'bundleComponents']);
+            $location = $item->location;
+            $mainLocation = $item->mainLocation;
+            $itemPayload = [
+                'id' => $item->id,
+                'sku' => $item->sku,
+                'name' => $item->name,
+                'item_type' => $item->item_type ?: Item::TYPE_SINGLE,
+                'status' => $item->status ?: Item::STATUS_ACTIVE,
+                'category_id' => $item->category_id,
+                'area_id' => $item->resolvedArea()?->id,
+                'rack_code' => $location?->rack_code ?? '',
+                'column_no' => $location?->column_no ?? '',
+                'row_no' => $location?->row_no ?? '',
+                'address' => $item->resolvedAddress(),
+                'main_area_id' => $mainLocation?->area_id,
+                'main_rack_code' => $mainLocation?->rack_code ?? '',
+                'main_column_no' => $mainLocation?->column_no ?? '',
+                'main_row_no' => $mainLocation?->row_no ?? '',
+                'description' => $item->description ?? '',
+                'safety_stock' => (int) ($item->safety_stock ?? 0),
+                'koli_qty' => $item->koli_qty !== null ? (int) $item->koli_qty : null,
+                'bundle_components' => $item->bundleComponents->map(fn ($row) => [
+                    'component_item_id' => (int) $row->component_item_id,
+                    'required_qty' => (int) $row->required_qty,
+                ])->values()->all(),
+                'external_barcodes' => $item->barcodes->map(fn (ItemBarcode $row) => [
+                    'barcode_value' => $row->barcode_value,
+                    'source_name' => $row->source_name,
+                    'note' => $row->note,
+                ])->values()->all(),
+            ];
+        }
+
+        return [
+            'item' => $item,
+            'itemPayload' => $itemPayload,
+            'categories' => Category::orderBy('name')->get(['id', 'name']),
+            'areas' => Area::query()
+                ->where(fn ($q) => $q->whereNull('warehouse_id')->orWhere('warehouse_id', WarehouseService::displayWarehouseId()))
+                ->orderBy('code')
+                ->get(['id', 'code', 'name']),
+            'mainAreas' => Area::query()
+                ->where('warehouse_id', WarehouseService::defaultWarehouseId())
+                ->orderBy('code')
+                ->get(['id', 'code', 'name']),
+            'componentItems' => Item::query()
+                ->where('item_type', Item::TYPE_SINGLE)
+                ->when($item, fn ($query) => $query->where('id', '!=', $item->id))
+                ->orderBy('sku')
+                ->get(['id', 'sku', 'name']),
+        ];
     }
 
     public function data(Request $request)

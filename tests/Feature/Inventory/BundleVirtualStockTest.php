@@ -316,7 +316,7 @@ class BundleVirtualStockTest extends TestCase
 
         $this->withoutMiddleware();
         $this->actingAs($user)
-            ->get(route('admin.masterdata.items.index'))
+            ->get(route('admin.masterdata.items.create'))
             ->assertOk()
             ->assertSee('Bundle / Virtual Stock')
             ->assertSee('Komponen Bundle');

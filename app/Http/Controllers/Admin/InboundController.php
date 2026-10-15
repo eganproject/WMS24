@@ -80,6 +80,16 @@ class InboundController extends Controller
         return $this->store($request, 'manual');
     }
 
+    public function receiptsCreate()
+    {
+        return $this->formPage('receipt', 'Tambah Penerimaan Barang', 'receipts');
+    }
+
+    public function receiptsEdit(int $id)
+    {
+        return $this->formPage('receipt', 'Edit Penerimaan Barang', 'receipts', $id);
+    }
+
     public function receiptsShow(int $id)
     {
         return $this->show('receipt', $id);
@@ -292,6 +302,43 @@ class InboundController extends Controller
 
     private function index(string $type, string $pageTitle, string $routeBase)
     {
+        return view('admin.stock-flow.index', $this->indexViewData($type, $pageTitle, $routeBase));
+    }
+
+    private function formPage(string $type, string $pageTitle, string $routeBase, ?int $id = null)
+    {
+        $transaction = null;
+        if ($id !== null) {
+            $transaction = InboundTransaction::with('scanSession')
+                ->where('type', $type)
+                ->findOrFail($id);
+
+            $status = $transaction->status ?? InboundScanStatus::PENDING_SCAN;
+            if ($status !== InboundScanStatus::PENDING_SCAN || $transaction->scanSession) {
+                return redirect()->route("admin.inbound.{$routeBase}.detail", $transaction->id);
+            }
+        }
+
+        $viewData = $this->indexViewData($type, $pageTitle, $routeBase);
+
+        return view('admin.stock-flow.index', array_merge($viewData, [
+            'pageTitle' => $pageTitle,
+            'formPage' => $transaction ? 'edit' : 'create',
+            'formEditId' => $transaction?->id,
+            'formEditCode' => $transaction?->code,
+            'formListTitle' => match ($type) {
+                'receipt' => 'Penerimaan Barang',
+                'return' => 'Retur Inbound',
+                default => 'Inbound Manual',
+            },
+            'formDetailUrl' => $transaction
+                ? route("admin.inbound.{$routeBase}.detail", $transaction->id)
+                : null,
+        ]));
+    }
+
+    private function indexViewData(string $type, string $pageTitle, string $routeBase): array
+    {
         $items = Item::query()
             ->where('item_type', Item::TYPE_SINGLE)
             ->orderBy('name')
@@ -318,6 +365,7 @@ class InboundController extends Controller
                 'approve' => route('admin.inbound.receipts.approve', ':id'),
                 'qr_preview' => route('admin.inbound.receipts.qr-preview', ':id'),
                 'qr_pdf' => route('admin.inbound.receipts.qr-pdf', ':id'),
+                'edit_page' => route('admin.inbound.receipts.edit', ':id'),
             ],
             'return' => [
                 'store' => route('admin.inbound.returns.store'),
@@ -339,13 +387,15 @@ class InboundController extends Controller
 
         $defaultDateRange = $type === 'receipt' ? $this->defaultDateRange() : ['from' => null, 'to' => null];
 
-        return view('admin.stock-flow.index', [
+        return [
             'pageTitle' => $pageTitle,
             'dataUrl' => route("admin.inbound.{$routeBase}.data"),
             'defaultDateFrom' => $defaultDateRange['from'],
             'defaultDateTo' => $defaultDateRange['to'],
             'exportUrl' => $type === 'receipt' ? route('admin.inbound.receipts.export') : null,
             'storeUrl' => route("admin.inbound.{$routeBase}.store"),
+            'createPageUrl' => $type === 'receipt' ? route('admin.inbound.receipts.create') : null,
+            'indexUrl' => route("admin.inbound.{$routeBase}.index"),
             'showUrlTpl' => route("admin.inbound.{$routeBase}.show", ':id'),
             'updateUrlTpl' => route("admin.inbound.{$routeBase}.update", ':id'),
             'deleteUrlTpl' => route("admin.inbound.{$routeBase}.destroy", ':id'),
@@ -463,7 +513,7 @@ class InboundController extends Controller
                 'manual' => 'Header: sku, qty atau koli. Opsional: ref_no, surat_jalan_no, surat_jalan_at, note, item_note, transacted_at.',
                 default => null,
             },
-        ]);
+        ];
     }
 
     private function data(Request $request, string $type)

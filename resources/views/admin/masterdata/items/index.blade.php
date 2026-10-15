@@ -78,9 +78,9 @@
                     <button type="button" class="btn btn-light-success me-3" id="btn_import_barcodes" data-bs-toggle="modal" data-bs-target="#modal_import_barcodes">Import Barcode Alias</button>
                     <button type="button" class="btn btn-light-warning me-3" id="btn_import_bundle" data-bs-toggle="modal" data-bs-target="#modal_import_bundle">Import Bundle</button>
                     <button type="button" class="btn btn-light-info me-3" id="btn_open_barcode_misses" data-bs-toggle="modal" data-bs-target="#modal_barcode_misses">Barcode Tidak Dikenal</button>
-                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modal_item_form" id="btn_open_create_item">
+                    <a href="{{ route('admin.masterdata.items.create') }}" class="btn btn-primary" id="btn_open_create_item">
                         Add Item
-                    </button>
+                    </a>
                 @endif
             </div>
         </div>
@@ -109,155 +109,6 @@
         </div>
     </div>
 </div>
-
-<!--begin::Modal-->
-<div class="modal fade" id="modal_item_form" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered mw-650px">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 class="fw-bolder" id="modal_item_title">Add Item</h2>
-                <div class="btn btn-icon btn-sm btn-active-icon-primary" data-bs-dismiss="modal">
-                    <span class="svg-icon svg-icon-1">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
-                            <rect opacity="0.5" x="6" y="17.3137" width="16" height="2" rx="1" transform="rotate(-45 6 17.3137)" fill="black" />
-                            <rect x="7.41422" y="6" width="16" height="2" rx="1" transform="rotate(45 7.41422 6)" fill="black" />
-                        </svg>
-                    </span>
-                </div>
-            </div>
-            <div class="modal-body scroll-y mx-5 mx-xl-15 my-7">
-                <form class="form" id="item_form">
-                    @csrf
-                    <input type="hidden" name="item_id" id="item_id" />
-                    <div class="fv-row mb-7">
-                        <label class="required fs-6 fw-bold form-label mb-2">SKU</label>
-                        <input type="text" class="form-control form-control-solid" name="sku" id="item_sku" required />
-                        <div class="invalid-feedback" id="error_sku"></div>
-                    </div>
-                    <div class="fv-row mb-7">
-                        <label class="required fs-6 fw-bold form-label mb-2">Nama</label>
-                        <input type="text" class="form-control form-control-solid" name="name" id="item_name" required />
-                        <div class="invalid-feedback" id="error_name"></div>
-                    </div>
-                    <div class="fv-row mb-7">
-                        <label class="required fs-6 fw-bold form-label mb-2">Tipe Item</label>
-                        <select name="item_type" id="item_type" class="form-select form-select-solid">
-                            <option value="single">Single / Stok Fisik</option>
-                            <option value="bundle">Bundle / Virtual Stock</option>
-                        </select>
-                        <div class="form-text">Bundle tidak memiliki stok fisik. Stoknya dihitung dari komponen.</div>
-                        <div class="invalid-feedback" id="error_item_type"></div>
-                    </div>
-                    <div class="fv-row mb-7">
-                        <label class="required fs-6 fw-bold form-label mb-2">Status SKU</label>
-                        <select name="status" id="item_status" class="form-select form-select-solid">
-                            <option value="active">Aktif</option>
-                            <option value="inactive">Nonaktif</option>
-                        </select>
-                        <div class="form-text">SKU nonaktif tidak tampil default di Item Stocks, low stock, snapshot, dan replenishment.</div>
-                        <div class="invalid-feedback" id="error_status"></div>
-                    </div>
-                    <div class="fv-row mb-7">
-                        <label class="fs-6 fw-bold form-label mb-2">Kategori</label>
-                        <select name="category_id" id="item_category_id" class="form-select form-select-solid" data-control="select2" data-placeholder="Pilih kategori">
-                            <option value="0">Tanpa Kategori</option>
-                            @foreach($categories as $c)
-                                <option value="{{ $c->id }}">{{ $c->name }}</option>
-                            @endforeach
-                        </select>
-                        <div class="invalid-feedback" id="error_category_id"></div>
-                    </div>
-                    <div class="fv-row mb-7">
-                        <label class="fs-6 fw-bold form-label mb-2">Area</label>
-                        <select name="area_id" id="item_area_id" class="form-select form-select-solid" data-control="select2" data-placeholder="Pilih area">
-                            <option value="">Pilih area</option>
-                            @foreach($areas as $area)
-                                <option value="{{ $area->id }}" data-code="{{ $area->code }}">{{ $area->code }} - {{ $area->name }}</option>
-                            @endforeach
-                        </select>
-                        <div class="invalid-feedback" id="error_area_id"></div>
-                    </div>
-                    <div class="row g-3 mb-7">
-                        <div class="col-md-6">
-                            <label class="fs-6 fw-bold form-label mb-2">Rack</label>
-                            <input type="text" class="form-control form-control-solid" name="rack_code" id="item_rack_code" />
-                            <div class="invalid-feedback" id="error_rack_code"></div>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="fs-6 fw-bold form-label mb-2">Kolom</label>
-                            <input type="number" min="1" class="form-control form-control-solid" name="column_no" id="item_column_no" />
-                            <div class="invalid-feedback" id="error_column_no"></div>
-                        </div>
-                    </div>
-                    <div class="row g-3 mb-7">
-                        <div class="col-md-6">
-                            <label class="fs-6 fw-bold form-label mb-2">Baris</label>
-                            <input type="number" min="1" class="form-control form-control-solid" name="row_no" id="item_row_no" />
-                            <div class="invalid-feedback" id="error_row_no"></div>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="fs-6 fw-bold form-label mb-2">Alamat</label>
-                            <input type="text" class="form-control form-control-solid" name="address" id="item_address" placeholder="KAB atau KAB-A-03-05" />
-                            <div class="form-text">Boleh hanya area jika slot detail belum ada. Jika rack, kolom, atau baris diisi, semuanya wajib lengkap.</div>
-                            <div class="invalid-feedback" id="error_address"></div>
-                        </div>
-                    </div>
-                    <div class="fv-row mb-7">
-                        <label class="fs-6 fw-bold form-label mb-2">Deskripsi</label>
-                        <textarea class="form-control form-control-solid" name="description" id="item_description" rows="3"></textarea>
-                        <div class="invalid-feedback" id="error_description"></div>
-                    </div>
-                    <div class="fv-row mb-7">
-                        <label class="fs-6 fw-bold form-label mb-2">Isi per Koli (pcs)</label>
-                        <input type="number" min="0" class="form-control form-control-solid" name="koli_qty" id="item_koli_qty" placeholder="Contoh: 24" />
-                        <div class="form-text">Isi 0 atau kosong jika tidak menggunakan koli.</div>
-                        <div class="invalid-feedback" id="error_koli_qty"></div>
-                    </div>
-                    <div class="fv-row mb-7">
-                        <label class="fs-6 fw-bold form-label mb-2">Jumlah Stok Pengaman</label>
-                        <input type="number" min="0" class="form-control form-control-solid" name="safety_stock" id="item_safety_stock" value="0" />
-                        <div class="invalid-feedback" id="error_safety_stock"></div>
-                    </div>
-                    <div class="border border-dashed rounded p-5 mb-7" id="external_barcodes_card">
-                        <div class="d-flex align-items-center justify-content-between mb-4">
-                            <div>
-                                <div class="fw-bold">Barcode / QR Eksternal</div>
-                                <div class="text-muted fs-7">Dipakai untuk QC Scan SKU dan Stock Opname. Setiap barcode wajib unik.</div>
-                            </div>
-                            <button type="button" class="btn btn-sm btn-light-primary" id="btn_add_external_barcode">Tambah Barcode</button>
-                        </div>
-                        <div id="external_barcodes_container" class="d-flex flex-column gap-4"></div>
-                        <div class="invalid-feedback d-block" id="error_external_barcodes"></div>
-                    </div>
-                    <div class="card border border-dashed border-primary bg-light-primary" id="bundle_components_card" style="display:none;">
-                        <div class="card-header min-h-50px">
-                            <div class="card-title">
-                                <span class="fw-bold text-primary">Komponen Bundle</span>
-                            </div>
-                            <div class="card-toolbar">
-                                <button type="button" class="btn btn-sm btn-primary" id="btn_add_bundle_component">Tambah Komponen</button>
-                            </div>
-                        </div>
-                        <div class="card-body pt-5">
-                            <div class="text-muted fs-7 mb-4">Virtual stock bundle dihitung dari komponen. Komponen harus item fisik, bukan bundle lain.</div>
-                            <div id="bundle_components_container" class="d-flex flex-column gap-4"></div>
-                            <div class="invalid-feedback d-block" id="error_bundle_components"></div>
-                        </div>
-                    </div>
-                    <div class="text-end pt-3">
-                        <button type="button" class="btn btn-light me-3" data-bs-dismiss="modal">Batal</button>
-                        <button type="submit" class="btn btn-primary">
-                            <span class="indicator-label">Simpan</span>
-                            <span class="indicator-progress">Please wait...
-                            <span class="spinner-border spinner-border-sm align-middle ms-2"></span></span>
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-<!--end::Modal-->
 
 <!--begin::Import Modal-->
 <div class="modal fade" id="modal_import_items" tabindex="-1" aria-hidden="true">
@@ -605,8 +456,8 @@
 <script>
     const csrfToken = '{{ csrf_token() }}';
     const dataUrl   = '{{ route('admin.masterdata.items.data') }}';
-    const storeUrl  = '{{ route('admin.masterdata.items.store') }}';
-    const updateTpl = '{{ route('admin.masterdata.items.update', ':id') }}';
+    const showTpl   = '{{ route('admin.masterdata.items.show', ':id') }}';
+    const editTpl   = '{{ route('admin.masterdata.items.edit', ':id') }}';
     const deleteTpl = '{{ route('admin.masterdata.items.destroy', ':id') }}';
     const importUrl = '{{ route('admin.masterdata.items.import') }}';
     const itemUpdateTemplateUrl = '{{ route('admin.masterdata.items.update-template') }}';
@@ -620,21 +471,6 @@
     const canDelete = {{ $canDelete ? 'true' : 'false' }};
     const componentItemOptionsHtml = `@foreach($componentItems as $componentItem)<option value="{{ $componentItem->id }}" data-sku="{{ $componentItem->sku }}" data-name="{{ $componentItem->name }}">{{ $componentItem->sku }} - {{ $componentItem->name }}</option>@endforeach`;
 
-    const ensureOption = (selectEl, id, name) => {
-        if (!selectEl) return;
-        const exists = Array.from(selectEl.options).some(opt => opt.value == id);
-        if (!exists) {
-            const opt = document.createElement('option');
-            opt.value = id;
-            opt.textContent = name;
-            selectEl.appendChild(opt);
-        } else {
-            Array.from(selectEl.options).forEach(opt => {
-                if (opt.value == id) opt.textContent = name;
-            });
-        }
-    };
-
     document.addEventListener('DOMContentLoaded', () => {
         const tableEl = $('#items_table');
         const searchInput = document.querySelector('[data-kt-filter="search"]');
@@ -642,30 +478,6 @@
         const resetBtn = document.getElementById('filter_items_reset');
         const limitSelect = document.getElementById('filter_items_limit');
         const categoryFilter = document.getElementById('filter_item_category');
-        const form = document.getElementById('item_form');
-        const modalEl = document.getElementById('modal_item_form');
-        const modal = modalEl ? new bootstrap.Modal(modalEl) : null;
-        const formSku = document.getElementById('item_sku');
-        const formName = document.getElementById('item_name');
-        const formType = document.getElementById('item_type');
-        const formStatus = document.getElementById('item_status');
-        const formCategory = document.getElementById('item_category_id');
-        const formArea = document.getElementById('item_area_id');
-        const formRack = document.getElementById('item_rack_code');
-        const formColumn = document.getElementById('item_column_no');
-        const formRow = document.getElementById('item_row_no');
-        const formId = document.getElementById('item_id');
-        const formAddress = document.getElementById('item_address');
-        const formDescription = document.getElementById('item_description');
-        const formSafetyStock = document.getElementById('item_safety_stock');
-        const formKoliQty = document.getElementById('item_koli_qty');
-        const externalBarcodesCard = document.getElementById('external_barcodes_card');
-        const externalBarcodesContainer = document.getElementById('external_barcodes_container');
-        const addExternalBarcodeBtn = document.getElementById('btn_add_external_barcode');
-        const bundleCard = document.getElementById('bundle_components_card');
-        const bundleContainer = document.getElementById('bundle_components_container');
-        const addBundleComponentBtn = document.getElementById('btn_add_bundle_component');
-        const titleEl = document.getElementById('modal_item_title');
         const importBtn = document.getElementById('btn_import_items');
         const importModalEl = document.getElementById('modal_import_items');
         const importModal = importModalEl ? new bootstrap.Modal(importModalEl) : null;
@@ -752,24 +564,6 @@
             }
         };
 
-        const setCategoryValue = (val) => {
-            if (!formCategory) return;
-            const normalized = (val === null || val === undefined || val === '' || val === 'null') ? '0' : String(val);
-            formCategory.value = normalized;
-            if (typeof $ !== 'undefined' && $(formCategory).data('select2')) {
-                $(formCategory).val(normalized).trigger('change');
-            }
-        };
-
-        const setAreaValue = (val) => {
-            if (!formArea) return;
-            const normalized = (val === null || val === undefined || val === '' || val === 'null') ? '' : String(val);
-            formArea.value = normalized;
-            if (typeof $ !== 'undefined' && $(formArea).data('select2')) {
-                $(formArea).val(normalized).trigger('change');
-            }
-        };
-
         const escapeHtml = (value) => String(value ?? '')
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
@@ -808,145 +602,6 @@
             return `${baseUrl}?${params.toString()}`;
         };
 
-        const createExternalBarcodeRow = (barcode = {}) => {
-            if (!externalBarcodesContainer) return null;
-            const row = document.createElement('div');
-            row.className = 'row g-3 align-items-end external-barcode-row';
-            row.innerHTML = `
-                <div class="col-md-5">
-                    <label class="fs-7 fw-bold form-label mb-2">Barcode / QR</label>
-                    <input type="text" class="form-control form-control-solid external-barcode-value" data-field="barcode_value" value="${escapeHtml(barcode.barcode_value || '')}" />
-                </div>
-                <div class="col-md-3">
-                    <label class="fs-7 fw-bold form-label mb-2">Sumber</label>
-                    <input type="text" class="form-control form-control-solid external-barcode-source" data-field="source_name" value="${escapeHtml(barcode.source_name || '')}" placeholder="Supplier/marketplace" />
-                </div>
-                <div class="col-md-3">
-                    <label class="fs-7 fw-bold form-label mb-2">Catatan</label>
-                    <input type="text" class="form-control form-control-solid external-barcode-note" data-field="note" value="${escapeHtml(barcode.note || '')}" />
-                </div>
-                <div class="col-md-1">
-                    <button type="button" class="btn btn-icon btn-light-danger btn-remove-external-barcode">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </div>
-            `;
-            externalBarcodesContainer.appendChild(row);
-            syncExternalBarcodeFieldNames();
-            return row;
-        };
-
-        const syncExternalBarcodeFieldNames = () => {
-            if (!externalBarcodesContainer) return;
-            Array.from(externalBarcodesContainer.querySelectorAll('.external-barcode-row')).forEach((row, index) => {
-                row.querySelectorAll('[data-field]').forEach((field) => {
-                    field.setAttribute('name', `external_barcodes[${index}][${field.getAttribute('data-field')}]`);
-                });
-            });
-        };
-
-        const clearExternalBarcodes = () => {
-            if (externalBarcodesContainer) externalBarcodesContainer.innerHTML = '';
-        };
-
-        const createBundleComponentRow = (component = {}) => {
-            if (!bundleContainer) return null;
-            const row = document.createElement('div');
-            row.className = 'row g-3 align-items-end bundle-component-row';
-            row.innerHTML = `
-                <div class="col-md-8">
-                    <label class="fs-7 fw-bold form-label mb-2">Komponen</label>
-                    <select class="form-select form-select-solid bundle-component-item" data-field="component_item_id" data-control="select2" data-placeholder="Pilih komponen">
-                        <option value="">Pilih komponen</option>
-                        ${componentItemOptionsHtml}
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label class="fs-7 fw-bold form-label mb-2">Qty</label>
-                    <input type="number" min="1" class="form-control form-control-solid bundle-component-qty" data-field="required_qty" value="${component.required_qty ?? ''}" />
-                </div>
-                <div class="col-md-1">
-                    <button type="button" class="btn btn-icon btn-light-danger btn-remove-bundle-component">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </div>
-            `;
-            bundleContainer.appendChild(row);
-            const selectEl = row.querySelector('.bundle-component-item');
-            if (selectEl && typeof $ !== 'undefined' && $.fn.select2) {
-                $(selectEl).select2({
-                    placeholder: 'Pilih komponen',
-                    allowClear: true,
-                    width: '100%',
-                });
-            }
-            if (selectEl && component.component_item_id) {
-                selectEl.value = String(component.component_item_id);
-                if (typeof $ !== 'undefined' && $(selectEl).data('select2')) {
-                    $(selectEl).val(String(component.component_item_id)).trigger('change');
-                }
-            }
-            syncBundleComponentFieldNames();
-            return row;
-        };
-
-        const syncBundleComponentFieldNames = () => {
-            if (!bundleContainer) return;
-
-            Array.from(bundleContainer.querySelectorAll('.bundle-component-row')).forEach((row, index) => {
-                const itemField = row.querySelector('.bundle-component-item');
-                const qtyField = row.querySelector('.bundle-component-qty');
-
-                if (itemField) {
-                    itemField.setAttribute('name', `bundle_components[${index}][component_item_id]`);
-                }
-
-                if (qtyField) {
-                    qtyField.setAttribute('name', `bundle_components[${index}][required_qty]`);
-                }
-            });
-        };
-
-        const clearBundleComponents = () => {
-            if (bundleContainer) bundleContainer.innerHTML = '';
-        };
-
-        const ensureBundleComponentRow = () => {
-            if (bundleContainer && !bundleContainer.querySelector('.bundle-component-row')) {
-                createBundleComponentRow();
-            }
-        };
-
-        const toggleBundleMode = () => {
-            const isBundle = (formType?.value || 'single') === 'bundle';
-            if (bundleCard) {
-                bundleCard.style.display = isBundle ? '' : 'none';
-            }
-            if (externalBarcodesCard) {
-                externalBarcodesCard.style.display = isBundle ? 'none' : '';
-            }
-
-            [formArea, formRack, formColumn, formRow, formAddress, formKoliQty, formSafetyStock].forEach((field) => {
-                if (!field) return;
-                field.disabled = isBundle;
-            });
-
-            if (isBundle) {
-                setAreaValue('');
-                if (formRack) formRack.value = '';
-                if (formColumn) formColumn.value = '';
-                if (formRow) formRow.value = '';
-                if (formAddress) formAddress.value = '';
-                if (formKoliQty) formKoliQty.value = '';
-                if (formSafetyStock) formSafetyStock.value = 0;
-                ensureBundleComponentRow();
-                syncBundleComponentFieldNames();
-                clearExternalBarcodes();
-            } else {
-                clearBundleComponents();
-            }
-        };
-
         if (!tableEl.length || !$.fn.DataTable) {
             console.error('DataTables unavailable');
             return;
@@ -963,16 +618,6 @@
                 allowClear: false,
                 width: '100%'
             }).on('select2:opening select2:closing select2:close', function(e){ e.stopPropagation(); });
-            $(formCategory).select2({
-                placeholder: 'Pilih kategori',
-                allowClear: true,
-                width: '100%'
-            });
-            $(formArea).select2({
-                placeholder: 'Pilih area',
-                allowClear: true,
-                width: '100%'
-            });
         }
 
         const refreshMenus = () => {
@@ -1013,7 +658,7 @@
             },
             columns: [
                 { data: null, orderable: false, searchable: false, render: (data, type, row, meta) => meta.row + meta.settings._iDisplayStart + 1 },
-                { data: 'sku' },
+                { data: 'sku', render: (data, type, row) => type === 'display' ? `<a href="${showTpl.replace(':id', row.id)}" class="text-gray-800 text-hover-primary fw-bold">${escapeHtml(data)}</a>` : data },
                 { data: 'name' },
                 { data: 'type_label', render: (data, type, row) => row.item_type === 'bundle' ? '<span class="badge badge-light-primary">Bundle</span>' : '<span class="badge badge-light-success">Single</span>' },
                 { data: 'status_label', render: (data, type, row) => row.status === 'inactive' ? '<span class="badge badge-light-secondary">Nonaktif</span>' : '<span class="badge badge-light-success">Aktif</span>' },
@@ -1024,12 +669,11 @@
                 { data: 'koli_qty', className:'text-end', render: (data, type, row)=> row.item_type === 'bundle' ? '-' : ((data === null || data === undefined || data === '') ? '-' : data) },
                 { data: 'safety_stock', className:'text-end', render: (data, type, row)=> row.item_type === 'bundle' ? '-' : (data ?? 0) },
                 { data: 'id', orderable:false, searchable:false, className:'text-end', render: (data, type, row)=>{
-                    const components = encodeURIComponent(JSON.stringify(row.bundle_components || []));
-                    const externalBarcodes = encodeURIComponent(JSON.stringify(row.external_barcodes || []));
+                    const detailItem = `<div class="menu-item px-3"><a href="${showTpl.replace(':id', data)}" class="menu-link px-3">Detail</a></div>`;
                     const qrItem = `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-qr" data-id="${data}" data-sku="${row.sku}" data-name="${row.name}">QR Code</a></div>`;
-                    const editItem = canUpdate ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-edit" data-id="${data}" data-sku="${row.sku}" data-name="${row.name}" data-item-type="${row.item_type}" data-status="${row.status || 'active'}" data-category="${row.category_id}" data-address="${row.address ?? ''}" data-area-id="${row.area_id ?? ''}" data-rack-code="${row.rack_code ?? ''}" data-column-no="${row.column_no ?? ''}" data-row-no="${row.row_no ?? ''}" data-description="${row.description}" data-koli-qty="${row.koli_qty ?? ''}" data-safety-stock="${row.safety_stock ?? 0}" data-external-barcodes="${externalBarcodes}" data-bundle-components="${components}">Edit</a></div>` : '';
+                    const editItem = canUpdate ? `<div class="menu-item px-3"><a href="${editTpl.replace(':id', data)}" class="menu-link px-3">Edit</a></div>` : '';
                     const delItem = canDelete ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 text-danger btn-delete" data-id="${data}">Hapus</a></div>` : '';
-                    const actions = `${qrItem}${editItem}${delItem}`;
+                    const actions = `${detailItem}${qrItem}${editItem}${delItem}`;
                     if (!actions) return '';
                     return `
                         <div class="text-end">
@@ -1081,59 +725,6 @@
                 dt.page.len(10).draw();
             }
             reloadTable();
-        });
-
-        const clearErrors = () => {
-            ['error_sku','error_name','error_item_type','error_status','error_category_id','error_area_id','error_rack_code','error_column_no','error_row_no','error_address','error_description','error_koli_qty','error_safety_stock','error_external_barcodes','error_bundle_components'].forEach(id => {
-                const el = document.getElementById(id);
-                if (el) el.textContent = '';
-            });
-        };
-
-        const buildAddress = () => {
-            if (!formArea || !formRack || !formColumn || !formRow) return '';
-            const areaOpt = formArea.options[formArea.selectedIndex];
-            const areaCode = areaOpt ? (areaOpt.getAttribute('data-code') || '').trim() : '';
-            const rack = (formRack.value || '').trim().toUpperCase();
-            const rawCol = (formColumn.value || '').trim();
-            const rawRow = (formRow.value || '').trim();
-            const col = parseInt(formColumn.value || '', 10);
-            const row = parseInt(formRow.value || '', 10);
-            if (!areaCode) return '';
-            if (!rack && !rawCol && !rawRow) return areaCode;
-            if (!rack || !col || !row) return '';
-            const colLabel = String(col).padStart(2, '0');
-            const rowLabel = String(row).padStart(2, '0');
-            return `${areaCode}-${rack}-${colLabel}-${rowLabel}`;
-        };
-
-        const syncAddress = () => {
-            if (!formAddress) return;
-            const code = buildAddress();
-            if (code) {
-                formAddress.value = code;
-            }
-        };
-
-        document.getElementById('btn_open_create_item')?.addEventListener('click', () => {
-            if (!form) return;
-            form.reset();
-            formId.value = '';
-            if (formSku) formSku.value = '';
-            if (formType) formType.value = 'single';
-            if (formStatus) formStatus.value = 'active';
-            if (formKoliQty) formKoliQty.value = '';
-            if (formSafetyStock) formSafetyStock.value = 0;
-            setCategoryValue('0');
-            setAreaValue('');
-            if (formRack) formRack.value = '';
-            if (formColumn) formColumn.value = '';
-            if (formRow) formRow.value = '';
-            clearExternalBarcodes();
-            clearBundleComponents();
-            clearErrors();
-            toggleBundleMode();
-            if (titleEl) titleEl.textContent = 'Add Item';
         });
 
         importBtn?.addEventListener('click', () => {
@@ -1486,107 +1077,6 @@
             }
         });
 
-        form?.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            clearErrors();
-            syncExternalBarcodeFieldNames();
-            syncBundleComponentFieldNames();
-            const id = formId.value;
-            const url = id ? updateTpl.replace(':id', id) : storeUrl;
-            const method = id ? 'PUT' : 'POST';
-            const formData = new FormData(form);
-            if (id) formData.append('_method', 'PUT');
-            try {
-                const res = await fetch(url, {
-                    method: method === 'PUT' ? 'POST' : method,
-                    headers: {
-                        'X-CSRF-TOKEN': csrfToken,
-                        'Accept': 'application/json',
-                    },
-                    body: formData,
-                });
-                const text = await res.text();
-                let json;
-                try { json = JSON.parse(text); } catch (parseErr) {
-                    console.error('Invalid JSON', text);
-                    notifyError('Respons server tidak valid');
-                    return;
-                }
-                if (!res.ok) {
-                    if (json?.errors) {
-                        Object.entries(json.errors).forEach(([key, msgs])=>{
-                            const errEl = document.getElementById(`error_${key}`);
-                            if (errEl) errEl.textContent = msgs.join(', ');
-                        });
-                        const msg = Object.values(json.errors).flat().join(', ');
-                        if (msg) notifyError(msg);
-                    } else {
-                        notifyError(json.message || 'Gagal menyimpan item');
-                    }
-                    return;
-                }
-                notifySuccess(json.message || 'Berhasil');
-                modal?.hide();
-                reloadTable(true);
-            } catch (err) {
-                console.error(err);
-                notifyError('Gagal menyimpan item');
-            }
-        });
-
-        tableEl.on('click', '.btn-edit', function(e) {
-            e.preventDefault();
-            const id = this.getAttribute('data-id');
-            const sku = this.getAttribute('data-sku');
-            const name = this.getAttribute('data-name');
-            const itemType = this.getAttribute('data-item-type') || 'single';
-            const status = this.getAttribute('data-status') || 'active';
-            const categoryId = this.getAttribute('data-category');
-            const address = this.getAttribute('data-address') || '';
-            const areaId = this.getAttribute('data-area-id') || '';
-            const rackCode = this.getAttribute('data-rack-code') || '';
-            const columnNo = this.getAttribute('data-column-no') || '';
-            const rowNo = this.getAttribute('data-row-no') || '';
-            const description = this.getAttribute('data-description') || '';
-            const koliQty = this.getAttribute('data-koli-qty');
-            const safetyStock = this.getAttribute('data-safety-stock');
-            const bundleComponentsRaw = this.getAttribute('data-bundle-components') || '';
-            const externalBarcodesRaw = this.getAttribute('data-external-barcodes') || '';
-            if (!form) return;
-            formId.value = id;
-            if (formSku) formSku.value = sku || '';
-            formName.value = name;
-            if (formType) formType.value = itemType;
-            if (formStatus) formStatus.value = status;
-            if (formAddress) formAddress.value = address;
-            setAreaValue(areaId);
-            if (formRack) formRack.value = rackCode;
-            if (formColumn) formColumn.value = columnNo;
-            if (formRow) formRow.value = rowNo;
-            formDescription.value = description;
-            if (formKoliQty) formKoliQty.value = koliQty ?? '';
-            if (formSafetyStock) formSafetyStock.value = safetyStock ?? 0;
-            setCategoryValue(categoryId || '0');
-            clearExternalBarcodes();
-            try {
-                const externalBarcodes = externalBarcodesRaw ? JSON.parse(decodeURIComponent(externalBarcodesRaw)) : [];
-                externalBarcodes.forEach((barcode) => createExternalBarcodeRow(barcode));
-            } catch (err) {
-                console.error('Failed to parse external barcodes', err);
-            }
-            clearBundleComponents();
-            try {
-                const bundleComponents = bundleComponentsRaw ? JSON.parse(decodeURIComponent(bundleComponentsRaw)) : [];
-                bundleComponents.forEach((component) => createBundleComponentRow(component));
-            } catch (err) {
-                console.error('Failed to parse bundle components', err);
-            }
-            clearErrors();
-            toggleBundleMode();
-            if (titleEl) titleEl.textContent = 'Edit Item';
-            modal?.show();
-        });
-
         tableEl.on('click', '.btn-qr', function(e) {
             e.preventDefault();
             const id = this.getAttribute('data-id');
@@ -1606,32 +1096,6 @@
             qrDownloadEl.setAttribute('download', qrFilename(sku));
             qrModal?.show();
         });
-
-        [formArea, formRack, formColumn, formRow].forEach((field) => {
-            field?.addEventListener('input', syncAddress);
-            field?.addEventListener('change', syncAddress);
-        });
-
-        formType?.addEventListener('change', toggleBundleMode);
-        addExternalBarcodeBtn?.addEventListener('click', () => createExternalBarcodeRow());
-        externalBarcodesContainer?.addEventListener('click', (event) => {
-            const button = event.target.closest('.btn-remove-external-barcode');
-            if (!button) return;
-            button.closest('.external-barcode-row')?.remove();
-            syncExternalBarcodeFieldNames();
-        });
-        addBundleComponentBtn?.addEventListener('click', () => createBundleComponentRow());
-        bundleContainer?.addEventListener('click', (event) => {
-            const button = event.target.closest('.btn-remove-bundle-component');
-            if (!button) return;
-            button.closest('.bundle-component-row')?.remove();
-            if ((formType?.value || 'single') === 'bundle') {
-                ensureBundleComponentRow();
-            }
-            syncBundleComponentFieldNames();
-        });
-
-        toggleBundleMode();
 
         tableEl.on('click', '.btn-delete', async function(e) {
             e.preventDefault();

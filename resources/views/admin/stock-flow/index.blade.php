@@ -46,6 +46,11 @@
     $defaultType = $typeDefault ?? '';
     $canCreateDefault = $permMap[$defaultType]['create'] ?? false;
     $canImport = !empty($importUrl ?? null) && $canCreateDefault;
+    // Halaman form terpisah (create/edit) dipakai bila controller mengirim formPage; daftar yang punya
+    // createPageUrl membuka halaman tersebut alih-alih modal.
+    $formPage = $formPage ?? null;
+    $createPageUrl = $createPageUrl ?? null;
+    $usesModalForm = !$formPage && empty($createPageUrl);
 @endphp
 
 @if(!empty($enhancedItemList ?? false))
@@ -378,7 +383,74 @@
     @endpush
 @endif
 
+@if($formPage)
+    @push('styles')
+    <style>
+        .stock-flow-page-fields {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            column-gap: 1.5rem;
+        }
+    </style>
+    @endpush
+
+    @section('page_breadcrumbs')
+        <li class="breadcrumb-item text-gray-600">
+            <a href="{{ route('admin.dashboard') }}" class="text-gray-600 text-hover-primary">Admin</a>
+        </li>
+        <li class="breadcrumb-item text-gray-600">
+            <a href="{{ $indexUrl }}" class="text-gray-600 text-hover-primary">{{ $formListTitle ?? 'Daftar' }}</a>
+        </li>
+        <li class="breadcrumb-item text-gray-500">{{ $formPage === 'edit' ? ($formEditCode ?: 'Edit') : 'Tambah' }}</li>
+    @endsection
+
+    @section('page_actions')
+        <a href="{{ $formDetailUrl ?? $indexUrl }}" class="btn btn-sm btn-light">
+            <i class="fas fa-arrow-left me-1"></i> Kembali
+        </a>
+    @endsection
+@endif
+
 @section('content')
+@if($formPage)
+<form class="form w-100" id="stock_flow_form">
+    @csrf
+    <div class="card mb-6">
+        <div class="card-header border-0 pt-6">
+            <div class="card-title flex-column">
+                <h3 class="fw-bolder mb-1">Informasi Dokumen{{ $formPage === 'edit' && $formEditCode ? ' · '.$formEditCode : '' }}</h3>
+                <div class="text-muted fs-7">Tanggal, referensi, supplier, dan surat jalan.</div>
+            </div>
+        </div>
+        <div class="card-body pt-2">
+            <div class="stock-flow-page-fields">
+                @include('admin.stock-flow.partials.form-fields')
+            </div>
+        </div>
+    </div>
+    <div class="card mb-6">
+        <div class="card-header border-0 pt-6">
+            <div class="card-title flex-column">
+                <h3 class="fw-bolder mb-1">Daftar Item</h3>
+                <div class="text-muted fs-7">Gunakan input cepat, tambah baris manual, atau import Excel.</div>
+            </div>
+        </div>
+        <div class="card-body pt-2">
+            @include('admin.stock-flow.partials.form-items')
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-body d-flex justify-content-end gap-3 py-5">
+            <a href="{{ $formDetailUrl ?? $indexUrl }}" class="btn btn-light">Batal</a>
+            <button type="submit" class="btn btn-primary" id="btn_submit_flow">
+                <span class="indicator-label">Simpan</span>
+                <span class="indicator-progress">Please wait...
+                <span class="spinner-border spinner-border-sm align-middle ms-2"></span></span>
+            </button>
+        </div>
+    </div>
+</form>
+@else
 <div class="card {{ !empty($enhancedItemList ?? false) ? 'return-in-list-card' : '' }}">
     <div class="card-header border-0 pt-6">
         <div class="card-title">
@@ -429,9 +501,15 @@
                 </button>
             @endif
             @if($canCreateDefault)
-                <button type="button" class="btn btn-primary" id="btn_open_create_flow" data-bs-toggle="modal" data-bs-target="#modal_stock_flow">
-                    Tambah
-                </button>
+                @if(!empty($createPageUrl))
+                    <a href="{{ $createPageUrl }}" class="btn btn-primary" id="btn_open_create_flow">
+                        Tambah
+                    </a>
+                @else
+                    <button type="button" class="btn btn-primary" id="btn_open_create_flow" data-bs-toggle="modal" data-bs-target="#modal_stock_flow">
+                        Tambah
+                    </button>
+                @endif
             @endif
         </div>
     </div>
@@ -471,6 +549,7 @@
     </div>
 </div>
 
+@if($usesModalForm)
 <div class="modal fade" id="modal_stock_flow" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable mw-900px">
         <div class="modal-content">
@@ -488,126 +567,8 @@
             <div class="modal-body scroll-y mx-5 mx-xl-15 my-7">
                 <form class="form" id="stock_flow_form">
                     @csrf
-                    <div class="alert alert-primary p-5 mb-7">
-                        <div class="d-flex align-items-center justify-content-between gap-3 flex-wrap mb-2">
-                            <div class="fw-bold">Input Cepat Item</div>
-                            <button type="button" class="btn btn-sm btn-light" id="btn_toggle_quick_items">Sembunyikan Form</button>
-                        </div>
-                        <div id="flow_quick_items_body">
-                            <div class="text-muted fs-7 mb-3" id="flow_quick_item_hint">
-                                Tulis satu item per baris. Format: SKU koli/qty catatan.
-                            </div>
-                            @if(!empty($enableInputUnitSelect ?? false))
-                                <div class="w-200px mb-3">
-                                    <label class="form-label fw-bold mb-1">Satuan Input Cepat</label>
-                                    <select class="form-select form-select-solid" id="flow_quick_input_unit">
-                                        <option value="koli" selected>Koli</option>
-                                        <option value="pcs">PCS</option>
-                                    </select>
-                                    <div class="form-text">PCS hanya untuk Gudang Display atau Gudang Rusak.</div>
-                                </div>
-                            @endif
-                            <textarea class="form-control form-control-solid mb-3" id="flow_quick_items" rows="4" placeholder="SKU-001 2&#10;SKU-002 5 Catatan item"></textarea>
-                            <div class="d-flex align-items-center gap-3 flex-wrap">
-                                <button type="button" class="btn btn-light-primary" id="btn_add_quick_items">Tambahkan dari Teks</button>
-                                <div class="text-danger fs-7" id="flow_quick_items_error"></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div id="flow_items_container"></div>
-                    <div class="mb-7 d-flex flex-wrap gap-3">
-                        <button type="button" class="btn btn-light" id="btn_add_flow_item">Tambah Item</button>
-                        @if(!empty($itemImportUrl ?? null))
-                            <button type="button" class="btn btn-light-primary" id="btn_open_item_import">
-                                Import Item Excel
-                            </button>
-                        @endif
-                    </div>
-                    @if(count($warehouseOptions ?? []) > 0)
-                        <div class="fv-row mb-7" id="flow_warehouse_row" style="display:none;">
-                            <label class="required fs-6 fw-bold form-label mb-2">Gudang Tujuan</label>
-                            <select class="form-select form-select-solid" name="warehouse_id" id="flow_warehouse_id">
-                                <option value="">Pilih Gudang</option>
-                                @foreach($warehouseOptions as $wh)
-                                    <option value="{{ $wh['id'] }}">{{ $wh['name'] }}</option>
-                                @endforeach
-                            </select>
-                            <div class="invalid-feedback" id="error_warehouse_id"></div>
-                        </div>
-                    @endif
-                    <div class="fv-row mb-7">
-                        <label class="fs-6 fw-bold form-label mb-2">Tanggal</label>
-                        <input type="text" class="form-control form-control-solid" name="transacted_at" id="flow_transacted_at" placeholder="YYYY-MM-DD HH:mm" />
-                        <div class="invalid-feedback" id="error_transacted_at"></div>
-                    </div>
-                    <div class="fv-row mb-7">
-                        <label class="fs-6 fw-bold form-label mb-2">Ref No</label>
-                        <input type="text" class="form-control form-control-solid" name="ref_no" id="flow_ref_no" />
-                        <div class="invalid-feedback" id="error_ref_no"></div>
-                    </div>
-                    @if(!empty($showRecipientFields ?? false))
-                        <div id="flow_recipient_fields">
-                            <div class="row g-4 mb-7">
-                                <div class="col-md-6">
-                                    <label class="fs-6 fw-bold form-label mb-2">Nama Penerima</label>
-                                    <input type="text" class="form-control form-control-solid" name="recipient_name" id="flow_recipient_name" />
-                                    <div class="invalid-feedback" id="error_recipient_name"></div>
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="fs-6 fw-bold form-label mb-2">Telepon/Kontak Penerima</label>
-                                    <input type="text" class="form-control form-control-solid" name="recipient_phone" id="flow_recipient_phone" />
-                                    <div class="invalid-feedback" id="error_recipient_phone"></div>
-                                </div>
-                            </div>
-                            <div class="fv-row mb-7">
-                                <label class="fs-6 fw-bold form-label mb-2">Alamat Penerima</label>
-                                <textarea class="form-control form-control-solid" name="recipient_address" id="flow_recipient_address" rows="3"></textarea>
-                                <div class="invalid-feedback" id="error_recipient_address"></div>
-                            </div>
-                        </div>
-                    @endif
-                    @if(isset($supplierFlowTypes) && count($supplierFlowTypes) > 0)
-                        <div class="fv-row mb-7" id="flow_supplier_row" style="display:none;">
-                            <label class="fs-6 fw-bold form-label mb-2">Supplier</label>
-                            <select class="form-select form-select-solid" name="supplier_id" id="flow_supplier_id">
-                                <option value="">Pilih Supplier</option>
-                                @foreach(($suppliers ?? []) as $supplier)
-                                    <option value="{{ $supplier->id }}">{{ $supplier->name }}</option>
-                                @endforeach
-                            </select>
-                            <div class="invalid-feedback" id="error_supplier_id"></div>
-                        </div>
-                    @endif
-                    @if(!empty($showDeliveryNoteFields ?? false))
-                        <div class="fv-row mb-7">
-                            <label class="fs-6 fw-bold form-label mb-2">{{ $deliveryNoteNoLabel ?? 'No Surat Jalan' }}</label>
-                            <input type="text" class="form-control form-control-solid" name="surat_jalan_no" id="flow_surat_jalan_no" />
-                            <div class="invalid-feedback" id="error_surat_jalan_no"></div>
-                        </div>
-                        <div class="fv-row mb-7">
-                            <label class="fs-6 fw-bold form-label mb-2">{{ $deliveryNoteDateLabel ?? 'Tanggal Surat Jalan' }}</label>
-                            <input type="text" class="form-control form-control-solid" name="surat_jalan_at" id="flow_surat_jalan_at" placeholder="YYYY-MM-DD" />
-                            <div class="invalid-feedback" id="error_surat_jalan_at"></div>
-                        </div>
-                        <div class="fv-row mb-7">
-                            <label class="fs-6 fw-bold form-label mb-2">{{ $deliveryNoteImageLabel ?? 'Gambar Surat Jalan' }}</label>
-                            <input type="file" class="form-control form-control-solid" name="surat_jalan_image" id="flow_surat_jalan_image" accept="image/jpeg,image/png,image/webp" />
-                            <div class="form-text">Opsional. Format JPG, PNG, atau WEBP. Maksimal 2 MB.</div>
-                            <div class="invalid-feedback d-block" id="error_surat_jalan_image"></div>
-                            <div class="mt-3" id="flow_surat_jalan_image_preview" style="display:none;">
-                                <a href="#" target="_blank" rel="noopener" class="btn btn-light-primary btn-sm" id="flow_surat_jalan_image_link">{{ $deliveryNoteImageLinkLabel ?? 'Lihat gambar saat ini' }}</a>
-                                <label class="form-check form-check-sm form-check-custom form-check-solid mt-3">
-                                    <input class="form-check-input" type="checkbox" name="remove_surat_jalan_image" id="flow_remove_surat_jalan_image" value="1" />
-                                    <span class="form-check-label">Hapus gambar saat ini</span>
-                                </label>
-                            </div>
-                        </div>
-                    @endif
-                    <div class="fv-row mb-7">
-                        <label class="fs-6 fw-bold form-label mb-2">Catatan</label>
-                        <textarea class="form-control form-control-solid" name="note" id="flow_note" rows="3"></textarea>
-                        <div class="invalid-feedback" id="error_note"></div>
-                    </div>
+                    @include('admin.stock-flow.partials.form-items')
+                    @include('admin.stock-flow.partials.form-fields')
                     <div class="text-end pt-3">
                         <button type="button" class="btn btn-light me-3" data-bs-dismiss="modal">Batal</button>
                         <button type="submit" class="btn btn-primary">
@@ -621,6 +582,7 @@
         </div>
     </div>
 </div>
+@endif
 
 @if($canImport)
     <div class="modal fade" id="modal_import_flow" tabindex="-1" aria-hidden="true">
@@ -700,8 +662,9 @@
         </div>
     </div>
 @endif
+@endif
 
-@if(!empty($itemImportUrl ?? null))
+@if(!empty($itemImportUrl ?? null) && ($formPage || $usesModalForm))
     <div class="modal fade" id="modal_import_flow_items" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered mw-650px">
             <div class="modal-content">
@@ -750,6 +713,7 @@
     </div>
 @endif
 
+@unless($formPage)
 <div class="modal fade" id="modal_flow_item_detail" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered {{ !empty($enhancedItemList ?? false) ? 'modal-xl' : 'modal-lg' }} modal-dialog-scrollable">
         <div class="modal-content">
@@ -789,6 +753,7 @@
         </div>
     </div>
 </div>
+@endunless
 
 @endsection
 
@@ -842,6 +807,10 @@
     const exportUrl = @json($exportUrl ?? null);
     const defaultDateFrom = @json($defaultDateFrom ?? '');
     const defaultDateTo = @json($defaultDateTo ?? '');
+    const formPageMode = @json($formPage ?? null);
+    const formPageEditId = @json($formEditId ?? null);
+    const formPageReturnUrl = @json($indexUrl ?? null);
+    const createPageUrl = @json($createPageUrl ?? null);
 
     document.addEventListener('DOMContentLoaded', () => {
         const tableEl = $('#stock_flow_table');
@@ -849,7 +818,7 @@
         const form = document.getElementById('stock_flow_form');
         const modalEl = document.getElementById('modal_stock_flow');
         const modal = modalEl ? new bootstrap.Modal(modalEl) : null;
-        const modalContentEl = modalEl?.querySelector('.modal-content') || modalEl;
+        const modalContentEl = modalEl?.querySelector('.modal-content') || modalEl || document.body;
         const itemDetailModalEl = document.getElementById('modal_flow_item_detail');
         const itemDetailModal = itemDetailModalEl ? new bootstrap.Modal(itemDetailModalEl) : null;
         const itemDetailTitle = document.getElementById('flow_item_detail_title');
@@ -907,6 +876,7 @@
         let fpTo = null;
         let fpTransacted = null;
         let fpSuratJalan = null;
+        let reloadTable = () => {};
 
         /** Kembalikan filter tanggal ke rentang default halaman (kosong bila tidak ada default). */
         const applyDefaultDateRange = () => {
@@ -1904,7 +1874,7 @@
         });
         if (!canCreateDefault && openCreateBtn) {
             openCreateBtn.remove();
-        } else {
+        } else if (!createPageUrl) {
             openCreateBtn?.addEventListener('click', resetForm);
         }
 
@@ -1943,6 +1913,272 @@
             }
             validateUniqueItems();
         });
+
+        const loadEditForm = async (id, rowType) => {
+            try {
+                const res = await fetch(resolveRoute(rowType, 'show').replace(':id', id), { headers: { 'Accept': 'application/json' }});
+                const json = await res.json();
+                if (!res.ok) {
+                    if (typeof Swal !== 'undefined') Swal.fire('Error', json.message || 'Gagal memuat data', 'error');
+                    return false;
+                }
+                form.dataset.editId = id;
+                form.dataset.flowType = rowType;
+                if (modalTitle) modalTitle.textContent = `Edit ${json.code || ''}`.trim();
+                document.getElementById('flow_ref_no').value = json.ref_no || '';
+                applySupplierVisibility(rowType);
+                applyRecipientVisibility(rowType);
+                if (recipientNameEl) recipientNameEl.value = json.recipient_name || '';
+                if (recipientPhoneEl) recipientPhoneEl.value = json.recipient_phone || '';
+                if (recipientAddressEl) recipientAddressEl.value = json.recipient_address || '';
+                if (supplierSelect) {
+                    supplierSelect.value = json.supplier_id ? String(json.supplier_id) : '';
+                    if (typeof $ !== 'undefined' && $(supplierSelect).data('select2')) {
+                        $(supplierSelect).val(supplierSelect.value).trigger('change.select2');
+                    }
+                }
+                if (suratJalanNoEl) suratJalanNoEl.value = json.surat_jalan_no || '';
+                if (suratJalanImageEl) suratJalanImageEl.value = '';
+                if (removeSuratJalanImageEl) removeSuratJalanImageEl.checked = false;
+                if (json.surat_jalan_image_url && suratJalanImagePreview && suratJalanImageLink) {
+                    suratJalanImageLink.href = json.surat_jalan_image_url;
+                    suratJalanImagePreview.style.display = '';
+                } else {
+                    if (suratJalanImageLink) suratJalanImageLink.href = '#';
+                    if (suratJalanImagePreview) suratJalanImagePreview.style.display = 'none';
+                }
+                document.getElementById('flow_note').value = json.note || '';
+                applyWarehouseVisibility(rowType);
+                if (warehouseSelect) {
+                    const fallbackId = displayWarehouseId || defaultWarehouseId || '';
+                    warehouseSelect.value = json.warehouse_id ? String(json.warehouse_id) : (fallbackId ? String(fallbackId) : '');
+                    applyInputUnitAvailability();
+                }
+                if (fpTransacted) {
+                    fpTransacted.setDate(json.transacted_at || null, true, 'Y-m-d\\TH:i');
+                } else {
+                    document.getElementById('flow_transacted_at').value = json.transacted_at || '';
+                }
+                if (fpSuratJalan) {
+                    fpSuratJalan.setDate(json.surat_jalan_at || null, true, 'Y-m-d');
+                } else if (suratJalanAtEl) {
+                    suratJalanAtEl.value = json.surat_jalan_at || '';
+                }
+
+                itemsContainer.innerHTML = '';
+                (json.items || []).forEach(item => createItemRow(item));
+                if ((json.items || []).length === 0) {
+                    createItemRow();
+                }
+                clearErrors();
+                validateUniqueItems();
+                return true;
+            } catch (err) {
+                console.error(err);
+                if (typeof Swal !== 'undefined') Swal.fire('Error', 'Gagal memuat data', 'error');
+                return false;
+            }
+        };
+
+        itemImportBtn?.addEventListener('click', (event) => {
+            event.preventDefault();
+            if (itemImportInput) itemImportInput.value = '';
+            if (itemImportError) itemImportError.textContent = '';
+            itemImportModal?.show();
+        });
+
+        itemImportSubmit?.addEventListener('click', async () => {
+            if (!itemImportUrl) return;
+            if (itemImportError) itemImportError.textContent = '';
+
+            const file = itemImportInput?.files?.[0];
+            if (!file) {
+                if (itemImportError) itemImportError.textContent = 'Pilih file Excel item terlebih dahulu.';
+                return;
+            }
+            if (requireExplicitWarehouseSelection && !warehouseSelect?.value) {
+                if (itemImportError) itemImportError.textContent = 'Pilih gudang tujuan pada form sebelum import item.';
+                return;
+            }
+
+            let confirmed = true;
+            if (hasMeaningfulItemRows() && typeof Swal !== 'undefined') {
+                const confirmation = await Swal.fire({
+                    title: 'Ganti daftar item saat ini?',
+                    text: 'Item hasil import akan menggantikan seluruh daftar item di form ini agar datanya tidak tercampur.',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Ya, ganti item',
+                    cancelButtonText: 'Batal',
+                    buttonsStyling: false,
+                    customClass: {
+                        confirmButton: 'btn btn-primary',
+                        cancelButton: 'btn btn-light',
+                    },
+                });
+                confirmed = confirmation.isConfirmed;
+            }
+
+            if (!confirmed) {
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+            if (warehouseSelect?.value) formData.append('warehouse_id', warehouseSelect.value);
+            const originalContent = itemImportSubmit.innerHTML;
+            itemImportSubmit.disabled = true;
+            itemImportSubmit.setAttribute('aria-busy', 'true');
+            itemImportSubmit.innerHTML = '<span class="spinner-border spinner-border-sm align-middle me-2" role="status" aria-hidden="true"></span>Memproses item...';
+
+            try {
+                const res = await fetch(itemImportUrl, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Accept': 'application/json',
+                    },
+                    body: formData,
+                });
+
+                const text = await res.text();
+                let json;
+                try { json = JSON.parse(text); } catch (err) {
+                    if (typeof Swal !== 'undefined') Swal.fire('Error', 'Respons server tidak valid', 'error');
+                    return;
+                }
+
+                if (!res.ok) {
+                    const msg = json?.errors?.file?.[0] || json?.message || 'Gagal import item';
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire('Error', msg, 'error');
+                    } else if (itemImportError) {
+                        itemImportError.textContent = msg;
+                    }
+                    return;
+                }
+
+                replaceItemsFromImport(json.items || []);
+                if (itemImportInput) itemImportInput.value = '';
+                itemImportModal?.hide();
+                window.setTimeout(() => {
+                    modal?.show();
+                }, 180);
+
+                if (typeof Swal !== 'undefined') {
+                    const summary = json?.summary || {};
+                    const parts = [
+                        summary.count ? `${summary.count} item` : null,
+                        summary.qty ? `Qty ${summary.qty}` : null,
+                        summary.koli ? `Koli ${summary.koli}` : null,
+                    ].filter(Boolean).join(' | ');
+
+                    Swal.fire('Berhasil', parts ? `${json.message || 'Import item berhasil'} (${parts})` : (json.message || 'Import item berhasil'), 'success');
+                }
+            } catch (err) {
+                console.error(err);
+                if (typeof Swal !== 'undefined') Swal.fire('Error', 'Gagal import item', 'error');
+            } finally {
+                itemImportSubmit.disabled = false;
+                itemImportSubmit.removeAttribute('aria-busy');
+                itemImportSubmit.innerHTML = originalContent;
+            }
+        });
+
+        form?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            clearErrors();
+            if (!validateUniqueItems()) {
+                if (typeof Swal !== 'undefined') Swal.fire('Error', 'Item tidak boleh duplikat', 'error');
+                return;
+            }
+
+            const isEdit = !!form.dataset.editId;
+            const flowType = form.dataset.flowType || defaultTypeFilter || '';
+            const url = isEdit
+                ? resolveRoute(flowType, 'update').replace(':id', form.dataset.editId)
+                : resolveRoute(flowType, 'store');
+            const formData = new FormData(form);
+            if (isEdit) formData.append('_method', 'PUT');
+
+            try {
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Accept': 'application/json',
+                    },
+                    body: formData,
+                });
+                const text = await res.text();
+                let json;
+                try { json = JSON.parse(text); } catch (err) {
+                    console.error('Invalid JSON', text);
+                    if (typeof Swal !== 'undefined') Swal.fire('Error', 'Respons server tidak valid', 'error');
+                    return;
+                }
+                if (!res.ok) {
+                    if (json?.errors) {
+                        const unhandled = [];
+                        Object.entries(json.errors).forEach(([key, msgs]) => {
+                            if (key.startsWith('items.')) {
+                                const parts = key.split('.');
+                                const idx = parseInt(parts[1], 10);
+                                const field = parts[2];
+                                const row = itemsContainer.querySelectorAll('.flow-item-row')[idx];
+                                const errEl = row ? row.querySelector(`[data-error-for="${field}"]`) : null;
+                                const fieldEl = row
+                                    ? (field === 'item_id'
+                                        ? row.querySelector('.flow-item-select')
+                                        : row.querySelector(`[data-name="${field}"]`))
+                                    : null;
+                                if (errEl) errEl.textContent = msgs.join(', ');
+                                else unhandled.push(msgs.join(', '));
+                                if (fieldEl) fieldEl.classList.add('is-invalid');
+                            } else {
+                                const errEl = document.getElementById(`error_${key}`);
+                                if (errEl) errEl.textContent = msgs.join(', ');
+                                else unhandled.push(msgs.join(', '));
+                            }
+                        });
+                        if (unhandled.length && typeof Swal !== 'undefined') {
+                            Swal.fire('Error', unhandled.join(', '), 'error');
+                        }
+                    } else if (typeof Swal !== 'undefined') {
+                        Swal.fire('Error', json.message || 'Gagal menyimpan', 'error');
+                    }
+                    return;
+                }
+                if (formPageMode) {
+                    if (typeof Swal !== 'undefined') {
+                        await Swal.fire({
+                            title: 'Berhasil',
+                            text: json.message || 'Berhasil',
+                            icon: 'success',
+                            timer: 1200,
+                            showConfirmButton: false,
+                        });
+                    }
+                    window.location.href = formPageReturnUrl || window.location.href;
+                    return;
+                }
+                if (typeof Swal !== 'undefined') Swal.fire('Berhasil', json.message || 'Berhasil', 'success');
+                modal?.hide();
+                reloadTable();
+            } catch (err) {
+                console.error(err);
+                if (typeof Swal !== 'undefined') Swal.fire('Error', 'Gagal menyimpan', 'error');
+            }
+        });
+
+        if (formPageMode) {
+            if (formPageMode === 'edit' && formPageEditId) {
+                loadEditForm(String(formPageEditId), defaultTypeFilter);
+            } else {
+                resetForm();
+            }
+            return;
+        }
 
         if (!tableEl.length || !$.fn.DataTable) {
             console.error('DataTables unavailable');
@@ -2054,8 +2290,11 @@
                     const approveItem = canApprove
                         ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 text-success btn-approve" data-id="${data}" data-type="${rowType}">Approve</a></div>`
                         : '';
+                    const editPageRoute = routeMap?.[rowType]?.edit_page || '';
                     const editItem = (!isLocked && perms.update)
-                        ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-edit" data-id="${data}" data-type="${rowType}">Edit</a></div>`
+                        ? (editPageRoute
+                            ? `<div class="menu-item px-3"><a href="${editPageRoute.replace(':id', data)}" class="menu-link px-3">Edit</a></div>`
+                            : `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-edit" data-id="${data}" data-type="${rowType}">Edit</a></div>`)
                         : '';
                     const delItem = (canDelete && perms.delete)
                         ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 text-danger btn-delete" data-id="${data}" data-type="${rowType}">Hapus</a></div>`
@@ -2089,7 +2328,7 @@
             showItemDetail(row);
         });
 
-        const reloadTable = () => dt.ajax.reload();
+        reloadTable = () => dt.ajax.reload();
         searchInput?.addEventListener('keyup', reloadTable);
         warehouseFilter?.addEventListener('change', reloadTable);
         statusFilter?.addEventListener('change', reloadTable);
@@ -2261,13 +2500,6 @@
             if (importWarehouseError) importWarehouseError.textContent = '';
         });
 
-        itemImportBtn?.addEventListener('click', (event) => {
-            event.preventDefault();
-            if (itemImportInput) itemImportInput.value = '';
-            if (itemImportError) itemImportError.textContent = '';
-            itemImportModal?.show();
-        });
-
         importSubmit?.addEventListener('click', async () => {
             if (!importUrl) return;
             if (importError) importError.textContent = '';
@@ -2329,104 +2561,6 @@
             }
         });
 
-        itemImportSubmit?.addEventListener('click', async () => {
-            if (!itemImportUrl) return;
-            if (itemImportError) itemImportError.textContent = '';
-
-            const file = itemImportInput?.files?.[0];
-            if (!file) {
-                if (itemImportError) itemImportError.textContent = 'Pilih file Excel item terlebih dahulu.';
-                return;
-            }
-            if (requireExplicitWarehouseSelection && !warehouseSelect?.value) {
-                if (itemImportError) itemImportError.textContent = 'Pilih gudang tujuan pada form sebelum import item.';
-                return;
-            }
-
-            let confirmed = true;
-            if (hasMeaningfulItemRows() && typeof Swal !== 'undefined') {
-                const confirmation = await Swal.fire({
-                    title: 'Ganti daftar item saat ini?',
-                    text: 'Item hasil import akan menggantikan seluruh daftar item di form ini agar datanya tidak tercampur.',
-                    icon: 'warning',
-                    showCancelButton: true,
-                    confirmButtonText: 'Ya, ganti item',
-                    cancelButtonText: 'Batal',
-                    buttonsStyling: false,
-                    customClass: {
-                        confirmButton: 'btn btn-primary',
-                        cancelButton: 'btn btn-light',
-                    },
-                });
-                confirmed = confirmation.isConfirmed;
-            }
-
-            if (!confirmed) {
-                return;
-            }
-
-            const formData = new FormData();
-            formData.append('file', file);
-            if (warehouseSelect?.value) formData.append('warehouse_id', warehouseSelect.value);
-            const originalContent = itemImportSubmit.innerHTML;
-            itemImportSubmit.disabled = true;
-            itemImportSubmit.setAttribute('aria-busy', 'true');
-            itemImportSubmit.innerHTML = '<span class="spinner-border spinner-border-sm align-middle me-2" role="status" aria-hidden="true"></span>Memproses item...';
-
-            try {
-                const res = await fetch(itemImportUrl, {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRF-TOKEN': csrfToken,
-                        'Accept': 'application/json',
-                    },
-                    body: formData,
-                });
-
-                const text = await res.text();
-                let json;
-                try { json = JSON.parse(text); } catch (err) {
-                    if (typeof Swal !== 'undefined') Swal.fire('Error', 'Respons server tidak valid', 'error');
-                    return;
-                }
-
-                if (!res.ok) {
-                    const msg = json?.errors?.file?.[0] || json?.message || 'Gagal import item';
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire('Error', msg, 'error');
-                    } else if (itemImportError) {
-                        itemImportError.textContent = msg;
-                    }
-                    return;
-                }
-
-                replaceItemsFromImport(json.items || []);
-                if (itemImportInput) itemImportInput.value = '';
-                itemImportModal?.hide();
-                window.setTimeout(() => {
-                    modal?.show();
-                }, 180);
-
-                if (typeof Swal !== 'undefined') {
-                    const summary = json?.summary || {};
-                    const parts = [
-                        summary.count ? `${summary.count} item` : null,
-                        summary.qty ? `Qty ${summary.qty}` : null,
-                        summary.koli ? `Koli ${summary.koli}` : null,
-                    ].filter(Boolean).join(' | ');
-
-                    Swal.fire('Berhasil', parts ? `${json.message || 'Import item berhasil'} (${parts})` : (json.message || 'Import item berhasil'), 'success');
-                }
-            } catch (err) {
-                console.error(err);
-                if (typeof Swal !== 'undefined') Swal.fire('Error', 'Gagal import item', 'error');
-            } finally {
-                itemImportSubmit.disabled = false;
-                itemImportSubmit.removeAttribute('aria-busy');
-                itemImportSubmit.innerHTML = originalContent;
-            }
-        });
-
         tableEl.on('click', '.btn-download-qr', async function(e) {
             e.preventDefault();
             const url = this.getAttribute('data-url');
@@ -2456,68 +2590,9 @@
             e.preventDefault();
             const id = this.getAttribute('data-id');
             if (!id) return;
-            try {
             const rowType = this.getAttribute('data-type') || defaultTypeFilter;
-            const res = await fetch(resolveRoute(rowType, 'show').replace(':id', id), { headers: { 'Accept': 'application/json' }});
-            const json = await res.json();
-            if (!res.ok) {
-                if (typeof Swal !== 'undefined') Swal.fire('Error', json.message || 'Gagal memuat data', 'error');
-                return;
-            }
-            form.dataset.editId = id;
-            form.dataset.flowType = rowType;
-            if (modalTitle) modalTitle.textContent = `Edit ${json.code || ''}`.trim();
-                document.getElementById('flow_ref_no').value = json.ref_no || '';
-                applySupplierVisibility(rowType);
-                applyRecipientVisibility(rowType);
-                if (recipientNameEl) recipientNameEl.value = json.recipient_name || '';
-                if (recipientPhoneEl) recipientPhoneEl.value = json.recipient_phone || '';
-                if (recipientAddressEl) recipientAddressEl.value = json.recipient_address || '';
-                if (supplierSelect) {
-                    supplierSelect.value = json.supplier_id ? String(json.supplier_id) : '';
-                    if (typeof $ !== 'undefined' && $(supplierSelect).data('select2')) {
-                        $(supplierSelect).val(supplierSelect.value).trigger('change.select2');
-                    }
-                }
-                if (suratJalanNoEl) suratJalanNoEl.value = json.surat_jalan_no || '';
-                if (suratJalanImageEl) suratJalanImageEl.value = '';
-                if (removeSuratJalanImageEl) removeSuratJalanImageEl.checked = false;
-                if (json.surat_jalan_image_url && suratJalanImagePreview && suratJalanImageLink) {
-                    suratJalanImageLink.href = json.surat_jalan_image_url;
-                    suratJalanImagePreview.style.display = '';
-                } else {
-                    if (suratJalanImageLink) suratJalanImageLink.href = '#';
-                    if (suratJalanImagePreview) suratJalanImagePreview.style.display = 'none';
-                }
-                document.getElementById('flow_note').value = json.note || '';
-                applyWarehouseVisibility(rowType);
-                if (warehouseSelect) {
-                    const fallbackId = displayWarehouseId || defaultWarehouseId || '';
-                    warehouseSelect.value = json.warehouse_id ? String(json.warehouse_id) : (fallbackId ? String(fallbackId) : '');
-                    applyInputUnitAvailability();
-                }
-                if (fpTransacted) {
-                    fpTransacted.setDate(json.transacted_at || null, true, 'Y-m-d\\TH:i');
-                } else {
-                    document.getElementById('flow_transacted_at').value = json.transacted_at || '';
-                }
-                if (fpSuratJalan) {
-                    fpSuratJalan.setDate(json.surat_jalan_at || null, true, 'Y-m-d');
-                } else if (suratJalanAtEl) {
-                    suratJalanAtEl.value = json.surat_jalan_at || '';
-                }
-
-                itemsContainer.innerHTML = '';
-                (json.items || []).forEach(item => createItemRow(item));
-                if ((json.items || []).length === 0) {
-                    createItemRow();
-                }
-                clearErrors();
-                validateUniqueItems();
+            if (await loadEditForm(id, rowType)) {
                 modal?.show();
-            } catch (err) {
-                console.error(err);
-                if (typeof Swal !== 'undefined') Swal.fire('Error', 'Gagal memuat data', 'error');
             }
         });
 
@@ -2613,78 +2688,6 @@
             }
         });
 
-        form?.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            clearErrors();
-            if (!validateUniqueItems()) {
-                if (typeof Swal !== 'undefined') Swal.fire('Error', 'Item tidak boleh duplikat', 'error');
-                return;
-            }
-
-            const isEdit = !!form.dataset.editId;
-            const flowType = form.dataset.flowType || defaultTypeFilter || '';
-            const url = isEdit
-                ? resolveRoute(flowType, 'update').replace(':id', form.dataset.editId)
-                : resolveRoute(flowType, 'store');
-            const formData = new FormData(form);
-            if (isEdit) formData.append('_method', 'PUT');
-
-            try {
-                const res = await fetch(url, {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRF-TOKEN': csrfToken,
-                        'Accept': 'application/json',
-                    },
-                    body: formData,
-                });
-                const text = await res.text();
-                let json;
-                try { json = JSON.parse(text); } catch (err) {
-                    console.error('Invalid JSON', text);
-                    if (typeof Swal !== 'undefined') Swal.fire('Error', 'Respons server tidak valid', 'error');
-                    return;
-                }
-                if (!res.ok) {
-                    if (json?.errors) {
-                        const unhandled = [];
-                        Object.entries(json.errors).forEach(([key, msgs]) => {
-                            if (key.startsWith('items.')) {
-                                const parts = key.split('.');
-                                const idx = parseInt(parts[1], 10);
-                                const field = parts[2];
-                                const row = itemsContainer.querySelectorAll('.flow-item-row')[idx];
-                                const errEl = row ? row.querySelector(`[data-error-for="${field}"]`) : null;
-                                const fieldEl = row
-                                    ? (field === 'item_id'
-                                        ? row.querySelector('.flow-item-select')
-                                        : row.querySelector(`[data-name="${field}"]`))
-                                    : null;
-                                if (errEl) errEl.textContent = msgs.join(', ');
-                                else unhandled.push(msgs.join(', '));
-                                if (fieldEl) fieldEl.classList.add('is-invalid');
-                            } else {
-                                const errEl = document.getElementById(`error_${key}`);
-                                if (errEl) errEl.textContent = msgs.join(', ');
-                                else unhandled.push(msgs.join(', '));
-                            }
-                        });
-                        if (unhandled.length && typeof Swal !== 'undefined') {
-                            Swal.fire('Error', unhandled.join(', '), 'error');
-                        }
-                    } else if (typeof Swal !== 'undefined') {
-                        Swal.fire('Error', json.message || 'Gagal menyimpan', 'error');
-                    }
-                    return;
-                }
-                if (typeof Swal !== 'undefined') Swal.fire('Berhasil', json.message || 'Berhasil', 'success');
-                modal?.hide();
-                reloadTable();
-            } catch (err) {
-                console.error(err);
-                if (typeof Swal !== 'undefined') Swal.fire('Error', 'Gagal menyimpan', 'error');
-            }
-        });
     });
 </script>
 @endpush

@@ -206,7 +206,7 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::post('/items/barcode-misses/{miss}/resolve', [\App\Http\Controllers\Admin\ItemController::class, 'resolveBarcodeMiss'])->name('items.barcode-misses.resolve');
         Route::get('/items/bundle-template', [\App\Http\Controllers\Admin\ItemController::class, 'bundleTemplate'])->name('items.bundle-template');
         Route::get('/items/{item}/qr-code', [\App\Http\Controllers\Admin\ItemController::class, 'qrCode'])->name('items.qr-code');
-        Route::resource('items', \App\Http\Controllers\Admin\ItemController::class)->except(['create','show','edit'])->names('items');
+        Route::resource('items', \App\Http\Controllers\Admin\ItemController::class)->names('items');
         Route::post('/items/import', [\App\Http\Controllers\Admin\ItemController::class, 'import'])->name('items.import');
         Route::post('/items/bundle-import', [\App\Http\Controllers\Admin\ItemController::class, 'bundleImport'])->name('items.bundle-import');
 
@@ -357,7 +357,9 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::get('/receipts/template', [InboundController::class, 'receiptsTemplate'])->name('receipts.template');
         Route::get('/receipts/export', [InboundController::class, 'receiptsExport'])->name('receipts.export');
         Route::get('/surat-jalan-image/{id}', [InboundController::class, 'suratJalanImage'])->name('surat-jalan-image');
+        Route::get('/receipts/create', [InboundController::class, 'receiptsCreate'])->name('receipts.create');
         Route::get('/receipts/{id}', [InboundController::class, 'receiptsShow'])->name('receipts.show');
+        Route::get('/receipts/{id}/edit', [InboundController::class, 'receiptsEdit'])->name('receipts.edit');
         Route::get('/receipts/{id}/qr-preview', [InboundController::class, 'receiptsQrPreview'])->name('receipts.qr-preview');
         Route::get('/receipts/{id}/qr-pdf', [InboundController::class, 'receiptsQrPdf'])->name('receipts.qr-pdf');
         Route::put('/receipts/{id}', [InboundController::class, 'receiptsUpdate'])->name('receipts.update');

@@ -10,6 +10,7 @@ class Area extends Model
     use HasFactory;
 
     protected $fillable = [
+        'warehouse_id',
         'code',
         'name',
         'is_active',
@@ -19,7 +20,13 @@ class Area extends Model
     protected $casts = [
         'is_active' => 'boolean',
         'sort_order' => 'integer',
+        'warehouse_id' => 'integer',
     ];
+
+    public function warehouse()
+    {
+        return $this->belongsTo(Warehouse::class, 'warehouse_id');
+    }
 
     public function locations()
     {

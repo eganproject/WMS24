@@ -152,6 +152,21 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
                 'category_id' => $catId,
                 'description' => $description,
             ];
+            if (($hasAddressHeader || $hasLocationHeaders) && !LocationService::addressFitsWarehouse($address, WarehouseService::displayWarehouseId())) {
+                throw ValidationException::withMessages([
+                    'file' => "Baris {$excelRow} (SKU {$sku}): area pada alamat bukan area gudang display.",
+                ]);
+            }
+            if ($this->hasAnyKey($row, ['main_address', 'lokasi_gudang_besar'])) {
+                $mainAddress = trim((string) ($row['main_address'] ?? $row['lokasi_gudang_besar'] ?? ''));
+                try {
+                    $payload['main_location_id'] = LocationService::resolveMainWarehouseLocation($mainAddress)?->id;
+                } catch (\InvalidArgumentException $e) {
+                    throw ValidationException::withMessages([
+                        'file' => "Baris {$excelRow} (SKU {$sku}): {$e->getMessage()}",
+                    ]);
+                }
+            }
             if ($hasAddressHeader || $hasLocationHeaders) {
                 $location = LocationService::resolveLocation($address);
                 if ($location) {

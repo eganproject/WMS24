@@ -226,7 +226,7 @@
 
                 <div class="row g-6 mb-6">
                     <div class="col-md-4">
-                        <div class="text-muted fs-7">Alamat</div>
+                        <div class="text-muted fs-7">Lokasi {{ $displayWarehouseLabel ?? 'Gudang Display' }}</div>
                         <div class="fw-bold" id="item_detail_address">-</div>
                     </div>
                     <div class="col-md-2">
@@ -244,6 +244,13 @@
                     <div class="col-md-2">
                         <div class="text-muted fs-7">Row</div>
                         <div class="fw-bold" id="item_detail_row">-</div>
+                    </div>
+                </div>
+
+                <div class="row g-6 mb-6">
+                    <div class="col-md-4">
+                        <div class="text-muted fs-7">Lokasi {{ $defaultWarehouseLabel ?? 'Gudang Besar' }}</div>
+                        <div class="fw-bold" id="item_detail_main_address">-</div>
                     </div>
                 </div>
 
@@ -773,6 +780,7 @@
             detailHtml('item_detail_type', renderItemTypeBadge(row.item_type));
             detailText('item_detail_category', row.category);
             detailText('item_detail_address', row.address);
+            detailText('item_detail_main_address', row.main_address);
             detailText('item_detail_area', row.area_code);
             detailText('item_detail_rack', row.rack_code);
             detailText('item_detail_column', row.column_no);

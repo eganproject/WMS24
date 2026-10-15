@@ -96,7 +96,8 @@
                         <th>Tipe</th>
                         <th>Status</th>
                         <th>Kategori</th>
-                        <th>Alamat</th>
+                        <th>Lokasi Display</th>
+                        <th>Lokasi Gd. Besar</th>
                         <th>Deskripsi</th>
                         <th>Bundle</th>
                         <th class="text-end">Isi/Koli</th>
@@ -167,6 +168,7 @@
                         </select>
                         <div class="invalid-feedback" id="error_category_id"></div>
                     </div>
+                    <div class="fw-bolder text-gray-700 mb-3">Lokasi Gudang Display</div>
                     <div class="fv-row mb-7">
                         <label class="fs-6 fw-bold form-label mb-2">Area</label>
                         <select name="area_id" id="item_area_id" class="form-select form-select-solid" data-control="select2" data-placeholder="Pilih area">
@@ -201,6 +203,41 @@
                             <div class="form-text">Boleh hanya area jika slot detail belum ada. Jika rack, kolom, atau baris diisi, semuanya wajib lengkap.</div>
                             <div class="invalid-feedback" id="error_address"></div>
                         </div>
+                    </div>
+                    <div class="fw-bolder text-gray-700 mb-3">Lokasi Gudang Besar (Bin Location)</div>
+                    <div class="fv-row mb-7">
+                        <label class="fs-6 fw-bold form-label mb-2">Area Gudang Besar</label>
+                        <select name="main_area_id" id="item_main_area_id" class="form-select form-select-solid" data-control="select2" data-placeholder="Pilih area gudang besar">
+                            <option value="">Pilih area gudang besar</option>
+                            @foreach($mainAreas as $area)
+                                <option value="{{ $area->id }}" data-code="{{ $area->code }}">{{ $area->code }} - {{ $area->name }}</option>
+                            @endforeach
+                        </select>
+                        @if($mainAreas->isEmpty())
+                            <div class="form-text">Belum ada area gudang besar. Buat dulu di Master Data &gt; Areas dengan gudang <strong>Gudang Besar</strong>.</div>
+                        @endif
+                        <div class="invalid-feedback" id="error_main_area_id"></div>
+                    </div>
+                    <div class="row g-3 mb-7">
+                        <div class="col-md-4">
+                            <label class="fs-6 fw-bold form-label mb-2">Rack</label>
+                            <input type="text" class="form-control form-control-solid" name="main_rack_code" id="item_main_rack_code" />
+                            <div class="invalid-feedback" id="error_main_rack_code"></div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="fs-6 fw-bold form-label mb-2">Kolom</label>
+                            <input type="number" min="1" class="form-control form-control-solid" name="main_column_no" id="item_main_column_no" />
+                            <div class="invalid-feedback" id="error_main_column_no"></div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="fs-6 fw-bold form-label mb-2">Baris</label>
+                            <input type="number" min="1" class="form-control form-control-solid" name="main_row_no" id="item_main_row_no" />
+                            <div class="invalid-feedback" id="error_main_row_no"></div>
+                        </div>
+                    </div>
+                    <div class="fv-row mb-7">
+                        <div class="form-text">Opsional. Jika diisi, area, rack, kolom, dan baris wajib lengkap. Kosongkan semua untuk menghapus lokasi gudang besar.</div>
+                        <div class="invalid-feedback" id="error_main_address"></div>
                     </div>
                     <div class="fv-row mb-7">
                         <label class="fs-6 fw-bold form-label mb-2">Deskripsi</label>
@@ -297,11 +334,12 @@
                         <li><strong>address</strong> (opsional, bisa diisi <code>KAB</code> atau alamat detail seperti <code>KAB-A-03-05</code>)</li>
                         <li><strong>area</strong> (opsional, boleh berdiri sendiri sebagai alamat sementara)</li>
                         <li><strong>area</strong> + <strong>rack</strong> + <strong>column</strong> + <strong>row</strong> (opsional, jika ingin alamat detail; jika salah satu detail diisi maka semuanya wajib)</li>
+                        <li><strong>main_address</strong> (opsional, bin location gudang besar dengan format lengkap <code>AREA-RACK-KOLOM-BARIS</code>, misalnya <code>GB1-A-01-02</code>; area harus area gudang besar)</li>
                         <li><strong>description</strong> (opsional)</li>
                     </ul>
                     <p class="text-muted small mb-1">Jika Anda menambahkan kolom <code>item_type</code>, nilainya hanya boleh <code>single</code>. Nilai <code>bundle</code> akan ditolak.</p>
                     <p class="text-muted small mb-1">Tambahkan kolom <code>external_barcodes</code> atau <code>barcode</code> jika ingin mengisi alias barcode/QR eksternal. Pisahkan banyak barcode dengan koma, titik koma, atau baris baru.</p>
-                    <p class="text-muted small mb-1">Contoh header: <code>sku,name,item_type,status,parent_category,category,stock_gudang_besar,stock_gudang_display,stock,safety_stock_gudang_besar,safety_stock_gudang_display,safety_stock,koli_qty,external_barcodes,area,rack,column,row,description</code></p>
+                    <p class="text-muted small mb-1">Contoh header: <code>sku,name,item_type,status,parent_category,category,stock_gudang_besar,stock_gudang_display,stock,safety_stock_gudang_besar,safety_stock_gudang_display,safety_stock,koli_qty,external_barcodes,area,rack,column,row,main_address,description</code></p>
                     <p class="text-muted small mb-1">Gunakan format Excel (.xlsx/.xls) dengan header di baris pertama.</p>
                     <p class="text-muted small mb-1">Jika kolom category dikosongkan, item otomatis dimasukkan ke kategori "Tanpa Kategori".</p>
                     <p class="text-muted small mb-0">Catatan: gunakan <code>area</code> saja jika baru tahu area umum. Jika ingin alamat detail, lengkapi <code>area</code>, <code>rack</code>, <code>column</code>, dan <code>row</code>.</p>
@@ -656,6 +694,10 @@
         const formRow = document.getElementById('item_row_no');
         const formId = document.getElementById('item_id');
         const formAddress = document.getElementById('item_address');
+        const formMainArea = document.getElementById('item_main_area_id');
+        const formMainRack = document.getElementById('item_main_rack_code');
+        const formMainColumn = document.getElementById('item_main_column_no');
+        const formMainRow = document.getElementById('item_main_row_no');
         const formDescription = document.getElementById('item_description');
         const formSafetyStock = document.getElementById('item_safety_stock');
         const formKoliQty = document.getElementById('item_koli_qty');
@@ -768,6 +810,22 @@
             if (typeof $ !== 'undefined' && $(formArea).data('select2')) {
                 $(formArea).val(normalized).trigger('change');
             }
+        };
+
+        const setMainAreaValue = (val) => {
+            if (!formMainArea) return;
+            const normalized = (val === null || val === undefined || val === '' || val === 'null') ? '' : String(val);
+            formMainArea.value = normalized;
+            if (typeof $ !== 'undefined' && $(formMainArea).data('select2')) {
+                $(formMainArea).val(normalized).trigger('change');
+            }
+        };
+
+        const resetMainLocation = () => {
+            setMainAreaValue('');
+            if (formMainRack) formMainRack.value = '';
+            if (formMainColumn) formMainColumn.value = '';
+            if (formMainRow) formMainRow.value = '';
         };
 
         const escapeHtml = (value) => String(value ?? '')
@@ -926,7 +984,7 @@
                 externalBarcodesCard.style.display = isBundle ? 'none' : '';
             }
 
-            [formArea, formRack, formColumn, formRow, formAddress, formKoliQty, formSafetyStock].forEach((field) => {
+            [formArea, formRack, formColumn, formRow, formAddress, formMainArea, formMainRack, formMainColumn, formMainRow, formKoliQty, formSafetyStock].forEach((field) => {
                 if (!field) return;
                 field.disabled = isBundle;
             });
@@ -937,6 +995,7 @@
                 if (formColumn) formColumn.value = '';
                 if (formRow) formRow.value = '';
                 if (formAddress) formAddress.value = '';
+                resetMainLocation();
                 if (formKoliQty) formKoliQty.value = '';
                 if (formSafetyStock) formSafetyStock.value = 0;
                 ensureBundleComponentRow();
@@ -970,6 +1029,11 @@
             });
             $(formArea).select2({
                 placeholder: 'Pilih area',
+                allowClear: true,
+                width: '100%'
+            });
+            $(formMainArea).select2({
+                placeholder: 'Pilih area gudang besar',
                 allowClear: true,
                 width: '100%'
             });
@@ -1018,7 +1082,8 @@
                 { data: 'type_label', render: (data, type, row) => row.item_type === 'bundle' ? '<span class="badge badge-light-primary">Bundle</span>' : '<span class="badge badge-light-success">Single</span>' },
                 { data: 'status_label', render: (data, type, row) => row.status === 'inactive' ? '<span class="badge badge-light-secondary">Nonaktif</span>' : '<span class="badge badge-light-success">Aktif</span>' },
                 { data: 'category' },
-                { data: 'address' },
+                { data: 'address', render: (data) => data ? escapeHtml(data) : '-' },
+                { data: 'main_address', render: (data) => data ? escapeHtml(data) : '-' },
                 { data: 'description' },
                 { data: 'bundle_summary', render: (data)=> data || '-' },
                 { data: 'koli_qty', className:'text-end', render: (data, type, row)=> row.item_type === 'bundle' ? '-' : ((data === null || data === undefined || data === '') ? '-' : data) },
@@ -1027,7 +1092,7 @@
                     const components = encodeURIComponent(JSON.stringify(row.bundle_components || []));
                     const externalBarcodes = encodeURIComponent(JSON.stringify(row.external_barcodes || []));
                     const qrItem = `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-qr" data-id="${data}" data-sku="${row.sku}" data-name="${row.name}">QR Code</a></div>`;
-                    const editItem = canUpdate ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-edit" data-id="${data}" data-sku="${row.sku}" data-name="${row.name}" data-item-type="${row.item_type}" data-status="${row.status || 'active'}" data-category="${row.category_id}" data-address="${row.address ?? ''}" data-area-id="${row.area_id ?? ''}" data-rack-code="${row.rack_code ?? ''}" data-column-no="${row.column_no ?? ''}" data-row-no="${row.row_no ?? ''}" data-description="${row.description}" data-koli-qty="${row.koli_qty ?? ''}" data-safety-stock="${row.safety_stock ?? 0}" data-external-barcodes="${externalBarcodes}" data-bundle-components="${components}">Edit</a></div>` : '';
+                    const editItem = canUpdate ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-edit" data-id="${data}" data-sku="${row.sku}" data-name="${row.name}" data-item-type="${row.item_type}" data-status="${row.status || 'active'}" data-category="${row.category_id}" data-address="${row.address ?? ''}" data-area-id="${row.area_id ?? ''}" data-rack-code="${row.rack_code ?? ''}" data-column-no="${row.column_no ?? ''}" data-row-no="${row.row_no ?? ''}" data-main-area-id="${row.main_area_id ?? ''}" data-main-rack-code="${row.main_rack_code ?? ''}" data-main-column-no="${row.main_column_no ?? ''}" data-main-row-no="${row.main_row_no ?? ''}" data-description="${row.description}" data-koli-qty="${row.koli_qty ?? ''}" data-safety-stock="${row.safety_stock ?? 0}" data-external-barcodes="${externalBarcodes}" data-bundle-components="${components}">Edit</a></div>` : '';
                     const delItem = canDelete ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 text-danger btn-delete" data-id="${data}">Hapus</a></div>` : '';
                     const actions = `${qrItem}${editItem}${delItem}`;
                     if (!actions) return '';
@@ -1084,7 +1149,7 @@
         });
 
         const clearErrors = () => {
-            ['error_sku','error_name','error_item_type','error_status','error_category_id','error_area_id','error_rack_code','error_column_no','error_row_no','error_address','error_description','error_koli_qty','error_safety_stock','error_external_barcodes','error_bundle_components'].forEach(id => {
+            ['error_sku','error_name','error_item_type','error_status','error_category_id','error_area_id','error_rack_code','error_column_no','error_row_no','error_address','error_main_area_id','error_main_rack_code','error_main_column_no','error_main_row_no','error_main_address','error_description','error_koli_qty','error_safety_stock','error_external_barcodes','error_bundle_components'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.textContent = '';
             });
@@ -1129,6 +1194,7 @@
             if (formRack) formRack.value = '';
             if (formColumn) formColumn.value = '';
             if (formRow) formRow.value = '';
+            resetMainLocation();
             clearExternalBarcodes();
             clearBundleComponents();
             clearErrors();
@@ -1563,6 +1629,10 @@
             if (formRack) formRack.value = rackCode;
             if (formColumn) formColumn.value = columnNo;
             if (formRow) formRow.value = rowNo;
+            setMainAreaValue(this.getAttribute('data-main-area-id') || '');
+            if (formMainRack) formMainRack.value = this.getAttribute('data-main-rack-code') || '';
+            if (formMainColumn) formMainColumn.value = this.getAttribute('data-main-column-no') || '';
+            if (formMainRow) formMainRow.value = this.getAttribute('data-main-row-no') || '';
             formDescription.value = description;
             if (formKoliQty) formKoliQty.value = koliQty ?? '';
             if (formSafetyStock) formSafetyStock.value = safetyStock ?? 0;

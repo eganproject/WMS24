@@ -15,6 +15,7 @@ class QcScanReportExport implements WithMultipleSheets
         return [
             new QcScanReportSummarySheet($this->report),
             new QcScanReportHourlySheet($this->report),
+            new QcScanReportStoreSheet($this->report),
             new QcScanReportDetailSheet($this->report),
         ];
     }

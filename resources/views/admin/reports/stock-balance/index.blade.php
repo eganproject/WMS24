@@ -153,9 +153,32 @@
                     <div class="movement-summary-card movement-slow" data-movement-filter="slow"><div class="stock-summary-label">Slow Moving</div><div class="stock-summary-value text-warning" id="movement_slow_count">0</div><div class="text-muted fs-8 mt-1">Sisa kontribusi &gt; 90%</div></div>
                     <div class="movement-summary-card movement-non-moving" data-movement-filter="non_moving"><div class="stock-summary-label">Non Moving</div><div class="stock-summary-value text-gray-700" id="movement_non_moving_count">0</div><div class="text-muted fs-8 mt-1">Tanpa qty keluar operasional</div></div>
                 </div>
+                <div class="mb-7">
+                    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+                        <div><h3 class="fw-bolder mb-1">Pergerakan per Toko</h3><div class="text-muted fs-8">Setiap toko diklasifikasikan terhadap qty keluar resi toko itu sendiri. Outbound manual tidak memiliki toko sehingga tidak dihitung di sini.</div></div>
+                    </div>
+                    <div class="table-responsive movement-table-shell">
+                        <table class="table table-hover align-middle table-row-dashed fs-6 gy-4 mb-0" id="movement_store_table">
+                            <thead><tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0">
+                                <th class="ps-4">Toko</th><th class="text-end">Fast</th><th class="text-end">Medium</th><th class="text-end">Slow</th><th class="text-end">SKU Terjual</th><th class="text-end">Qty Keluar</th><th class="text-end pe-4"></th>
+                            </tr></thead>
+                            <tbody><tr><td colspan="7" class="text-center text-muted py-6">Memuat data toko...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
                 <div class="movement-table-toolbar mb-4">
                     <div><h3 class="fw-bolder mb-1">Analisis Pergerakan per SKU</h3><div class="text-muted fs-8" id="movement_scope">0 SKU dianalisis</div></div>
                     <div class="d-flex align-items-end gap-3 flex-wrap">
+                        <div class="w-200px">
+                            <label class="text-muted fs-7 mb-1">Toko</label>
+                            <select class="form-select form-select-solid" id="filter_movement_store">
+                                <option value="">Semua Toko</option>
+                                @foreach($stores as $store)
+                                    <option value="{{ $store->id }}">{{ $store->name }}</option>
+                                @endforeach
+                                <option value="none">Tanpa Toko</option>
+                            </select>
+                        </div>
                         <div class="w-225px">
                             <label class="text-muted fs-7 mb-1">Klasifikasi</label>
                             <select class="form-select form-select-solid" id="filter_movement_category">
@@ -179,6 +202,9 @@
                         </button>
                     </div>
                 </div>
+                <div class="alert alert-light-warning fs-8 py-3 mb-4 d-none" id="movement_store_note">
+                    Mode per toko: qty keluar, frequency, dan klasifikasi hanya dari resi toko <span class="fw-bold" id="movement_store_note_name"></span>. Stok dan days cover tetap memakai stok gabungan karena stok dipakai bersama semua toko.
+                </div>
                 <div class="table-responsive movement-table-shell">
                     <table class="table table-hover align-middle table-row-dashed fs-6 gy-5" id="stock_movement_table">
                         <thead><tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0">
@@ -200,7 +226,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const defaults = { dateFrom: @json($defaultDateFrom), dateTo: @json($defaultDateTo) };
     const fields = {
         search: document.getElementById('report_search'), dateFrom: document.getElementById('filter_date_from'),
-        dateTo: document.getElementById('filter_date_to'), category: document.getElementById('filter_movement_category'), daysCover: document.getElementById('filter_days_cover'), export: document.getElementById('btn_export_stock_balance'),
+        dateTo: document.getElementById('filter_date_to'), category: document.getElementById('filter_movement_category'), daysCover: document.getElementById('filter_days_cover'), store: document.getElementById('filter_movement_store'), export: document.getElementById('btn_export_stock_balance'),
         movementExport: document.getElementById('btn_export_stock_movement'),
     };
     const numberFormat = new Intl.NumberFormat('id-ID');
@@ -228,6 +254,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof $ !== 'undefined' && $.fn.select2) {
         $(fields.category).select2({ width: '100%', minimumResultsForSearch: Infinity });
         $(fields.daysCover).select2({ width: '100%', minimumResultsForSearch: Infinity });
+        $(fields.store).select2({ width: '100%' });
     }
     const updateBalanceSummary = (summary, period) => {
         document.getElementById('summary_opening').textContent = formatQty(summary.opening_stock);
@@ -278,7 +305,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (movementTable) return movementTable;
         movementTable = $('#stock_movement_table').DataTable({
             processing: true, serverSide: true, pageLength: 25, lengthMenu: [[10, 25, 50, 100], [10, 25, 50, 100]], dom: 'rt<"d-flex flex-stack flex-wrap pt-5"lip>', order: [[3, 'desc']],
-            ajax: { url: dataUrl, data: (params) => { params.date_from = fields.dateFrom.value; params.date_to = fields.dateTo.value; params.q = fields.search.value.trim(); params.analysis = 'movement'; params.movement_category = fields.category.value; params.days_cover = fields.daysCover.value; }, dataSrc: (json) => { updateMovementSummary(json.summary || {}, json.period || {}); return json.data || []; }, error: (xhr) => { if (typeof toastr !== 'undefined') toastr.error(xhr.responseJSON?.message || 'Analisis pergerakan gagal dimuat.'); } },
+            ajax: { url: dataUrl, data: (params) => { params.date_from = fields.dateFrom.value; params.date_to = fields.dateTo.value; params.q = fields.search.value.trim(); params.analysis = 'movement'; params.store_id = fields.store.value; params.movement_category = fields.category.value; params.days_cover = fields.daysCover.value; }, dataSrc: (json) => { updateMovementSummary(json.summary || {}, json.period || {}); return json.data || []; }, error: (xhr) => { if (typeof toastr !== 'undefined') toastr.error(xhr.responseJSON?.message || 'Analisis pergerakan gagal dimuat.'); } },
             columns: [
                 { data: null, orderable: false, searchable: false, render: (data, type, row, meta) => meta.row + meta.settings._iDisplayStart + 1 },
                 { data: 'sku', render: (value, type, row) => `<div class="fw-bolder text-gray-900">${escapeHtml(value || '-')}</div><div class="movement-item-name">${escapeHtml(row.item_name || '-')}</div>${row.item_status === 'inactive' ? '<span class="badge badge-light-secondary mt-1">Nonaktif</span>' : ''}` },
@@ -294,31 +321,82 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         return movementTable;
     };
-    const reload = () => { if (!validatePeriod()) return; balanceTable.ajax.reload(); if (movementTable) movementTable.ajax.reload(); };
+    const storeTableBody = document.querySelector('#movement_store_table tbody');
+    let storeRequest = 0;
+    const loadStoreBreakdown = async () => {
+        const requestId = ++storeRequest;
+        storeTableBody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-6">Memuat data toko...</td></tr>';
+        const params = new URLSearchParams({ analysis: 'movement_stores', date_from: fields.dateFrom.value, date_to: fields.dateTo.value });
+        try {
+            const response = await fetch(`${dataUrl}?${params.toString()}`, { headers: { Accept: 'application/json' } });
+            const json = await response.json();
+            if (requestId !== storeRequest) return;
+            if (!response.ok) throw new Error(json?.message || 'Ringkasan per toko gagal dimuat.');
+            const rows = Array.isArray(json.data) ? json.data : [];
+            storeTableBody.innerHTML = rows.length ? rows.map((row) => `
+                <tr class="${row.store_id === fields.store.value ? 'bg-light-primary' : ''}">
+                    <td class="ps-4 fw-bolder text-gray-900">${escapeHtml(row.store)}</td>
+                    <td class="text-end stock-report-qty text-success">${formatQty(row.fast_items)}</td>
+                    <td class="text-end stock-report-qty text-primary">${formatQty(row.medium_items)}</td>
+                    <td class="text-end stock-report-qty text-warning">${formatQty(row.slow_items)}</td>
+                    <td class="text-end stock-report-qty">${formatQty(row.moving_items)}</td>
+                    <td class="text-end stock-report-qty">${formatQty(row.demand_out)}</td>
+                    <td class="text-end pe-4"><button type="button" class="btn btn-sm btn-light-primary" data-store-pick="${escapeHtml(row.store_id)}">Lihat SKU</button></td>
+                </tr>`).join('') : '<tr><td colspan="7" class="text-center text-muted py-6">Belum ada resi keluar pada periode ini.</td></tr>';
+        } catch (error) {
+            if (requestId !== storeRequest) return;
+            storeTableBody.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-6">${escapeHtml(error.message)}</td></tr>`;
+        }
+    };
+    const updateStoreNote = () => {
+        const note = document.getElementById('movement_store_note');
+        note.classList.toggle('d-none', !fields.store.value);
+        document.getElementById('movement_store_note_name').textContent = fields.store.value ? fields.store.options[fields.store.selectedIndex]?.text || '' : '';
+        storeTableBody.querySelectorAll('tr').forEach((row) => {
+            const button = row.querySelector('[data-store-pick]');
+            row.classList.toggle('bg-light-primary', !!button && button.dataset.storePick === fields.store.value);
+        });
+    };
+    const reload = () => { if (!validatePeriod()) return; balanceTable.ajax.reload(); if (movementTable) { movementTable.ajax.reload(); loadStoreBreakdown(); } };
     document.getElementById('filter_apply').addEventListener('click', reload);
     let searchTimer = null; fields.search.addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(reload, 450); });
     [fields.dateFrom, fields.dateTo].forEach((input) => input.addEventListener('change', reload));
     const reloadMovementTable = () => { if (movementTable && validatePeriod()) movementTable.ajax.reload(); };
+    const onStoreChange = () => { updateStoreNote(); reloadMovementTable(); };
     if (typeof $ !== 'undefined' && $.fn.select2) {
         $(fields.category).on('change', reloadMovementTable);
         $(fields.daysCover).on('change', reloadMovementTable);
+        $(fields.store).on('change', onStoreChange);
     } else {
         fields.category.addEventListener('change', reloadMovementTable);
         fields.daysCover.addEventListener('change', reloadMovementTable);
+        fields.store.addEventListener('change', onStoreChange);
     }
+    storeTableBody.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-store-pick]');
+        if (!button) return;
+        fields.store.value = fields.store.value === button.dataset.storePick ? '' : button.dataset.storePick;
+        if (typeof $ !== 'undefined' && $.fn.select2) $(fields.store).trigger('change.select2');
+        onStoreChange();
+    });
     document.querySelectorAll('[data-movement-filter]').forEach((card) => card.addEventListener('click', () => {
         fields.category.value = fields.category.value === card.dataset.movementFilter ? '' : card.dataset.movementFilter;
         if (typeof $ !== 'undefined' && $.fn.select2) $(fields.category).trigger('change.select2');
         if (movementTable && validatePeriod()) movementTable.ajax.reload();
     }));
     document.getElementById('filter_reset').addEventListener('click', () => {
-        fields.search.value = ''; fields.dateFrom.value = defaults.dateFrom; fields.dateTo.value = defaults.dateTo; fields.category.value = ''; fields.daysCover.value = '';
-        if (typeof $ !== 'undefined' && $.fn.select2) { $(fields.category).trigger('change.select2'); $(fields.daysCover).trigger('change.select2'); }
+        fields.search.value = ''; fields.dateFrom.value = defaults.dateFrom; fields.dateTo.value = defaults.dateTo; fields.category.value = ''; fields.daysCover.value = ''; fields.store.value = '';
+        if (typeof $ !== 'undefined' && $.fn.select2) { $(fields.category).trigger('change.select2'); $(fields.daysCover).trigger('change.select2'); $(fields.store).trigger('change.select2'); }
+        updateStoreNote();
         reload();
     });
     document.querySelectorAll('#stock_report_tabs [data-bs-toggle="tab"]').forEach((tab) => tab.addEventListener('shown.bs.tab', (event) => {
         const movementActive = event.target.getAttribute('data-bs-target') === '#stock_movement_tab'; fields.export.classList.toggle('d-none', movementActive);
-        if (movementActive) createMovementTable().columns.adjust(); else balanceTable.columns.adjust();
+        if (movementActive) {
+            const firstOpen = !movementTable;
+            createMovementTable().columns.adjust();
+            if (firstOpen) loadStoreBreakdown();
+        } else balanceTable.columns.adjust();
     }));
     fields.export.addEventListener('click', () => {
         if (!validatePeriod()) return;
@@ -332,6 +410,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (fields.search.value.trim()) params.set('q', fields.search.value.trim());
         if (fields.category.value) params.set('movement_category', fields.category.value);
         if (fields.daysCover.value) params.set('days_cover', fields.daysCover.value);
+        if (fields.store.value) params.set('store_id', fields.store.value);
         window.location.href = `${exportUrl}?${params.toString()}`;
     });
 });

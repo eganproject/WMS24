@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Models\Store;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -32,6 +33,9 @@ class StockMovementAnalysisService
         // Analisis pergerakan memakai saldo konsolidasi yang sama dengan tab Saldo Stok:
         // Gudang Besar + Gudang Display, sehingga stok awal/akhir kedua tab selalu cocok.
         $warehouseIds = WarehouseService::sellableWarehouseIds();
+        // Filter toko hanya mengubah demand (QC resi dari toko tsb). Stok tetap stok gabungan
+        // karena stok dipakai bersama oleh semua toko.
+        $storeFilter = ResiStoreFilter::normalize($filters['store_id'] ?? null);
 
         $balanceFilters = $filters;
         $balanceFilters['q'] = '';
@@ -40,7 +44,7 @@ class StockMovementAnalysisService
 
         // Sintaks CONCAT berbeda antara SQLite dan MySQL; subquery ini menghitung
         // pasangan tipe dan ID dokumen secara akurat pada kedua database.
-        $periodDemandDocuments = $this->demandQuery($warehouseIds)
+        $periodDemandDocuments = $this->demandQuery($warehouseIds, $storeFilter)
             ->whereBetween('occurred_at', [$dateFrom, $dateTo])
             ->select(['item_id', 'source_type', 'source_id'])
             ->distinct();
@@ -51,13 +55,13 @@ class StockMovementAnalysisService
             ->selectRaw('COUNT(*) AS demand_documents')
             ->groupBy('item_id');
 
-        $periodDemand = $this->demandQuery($warehouseIds)
+        $periodDemand = $this->demandQuery($warehouseIds, $storeFilter)
             ->whereBetween('occurred_at', [$dateFrom, $dateTo])
             ->select(['item_id'])
             ->selectRaw('SUM(qty) AS demand_out')
             ->groupBy('item_id');
 
-        $lastDemand = $this->demandQuery($warehouseIds)
+        $lastDemand = $this->demandQuery($warehouseIds, $storeFilter)
             ->where('occurred_at', '<=', $dateTo)
             ->select(['item_id'])
             ->selectRaw('MAX(occurred_at) AS last_out_at')
@@ -175,7 +179,63 @@ class StockMovementAnalysisService
         ];
     }
 
-    private function demandQuery(array $warehouseIds): Builder
+    /**
+     * Ringkasan fast/medium/slow per toko. Setiap toko diranking terhadap demand toko itu sendiri,
+     * sehingga angkanya sama persis dengan tabel saat filter toko dipilih.
+     */
+    public function storeBreakdown(array $filters): array
+    {
+        $dateFrom = (string) $filters['date_from'].' 00:00:00';
+        $dateTo = (string) $filters['date_to'].' 23:59:59';
+
+        $demandScanIds = $this->demandQuery(WarehouseService::sellableWarehouseIds())
+            ->where('source_type', 'qc_shipment')
+            ->whereBetween('occurred_at', [$dateFrom, $dateTo])
+            ->select('source_id');
+        $demandResiIds = DB::table('qc_resi_scans')
+            ->whereIn('id', $demandScanIds)
+            ->select('resi_id');
+
+        $storeKeys = DB::table('resis')
+            ->whereIn('id', $demandResiIds)
+            ->distinct()
+            ->pluck('store_id')
+            ->map(fn ($storeId) => $storeId === null ? ResiStoreFilter::NONE : (string) (int) $storeId)
+            ->unique();
+
+        $storeNames = Store::query()
+            ->whereIn('id', $storeKeys->reject(fn ($key) => $key === ResiStoreFilter::NONE)->map(fn ($key) => (int) $key)->all())
+            ->pluck('name', 'id');
+
+        $baseFilters = $filters;
+        $baseFilters['q'] = '';
+        $baseFilters['movement_category'] = '';
+        $baseFilters['days_cover'] = '';
+
+        return $storeKeys
+            ->map(function (string $storeKey) use ($baseFilters, $storeNames) {
+                $storeFilters = $baseFilters;
+                $storeFilters['store_id'] = $storeKey;
+                $summary = $this->summary($this->query($storeFilters));
+
+                return [
+                    'store_id' => $storeKey,
+                    'store' => $storeKey === ResiStoreFilter::NONE
+                        ? ResiStoreFilter::NONE_LABEL
+                        : (string) ($storeNames[(int) $storeKey] ?? '-'),
+                    'fast_items' => (int) ($summary->fast_items ?? 0),
+                    'medium_items' => (int) ($summary->medium_items ?? 0),
+                    'slow_items' => (int) ($summary->slow_items ?? 0),
+                    'moving_items' => (int) ($summary->fast_items ?? 0) + (int) ($summary->medium_items ?? 0) + (int) ($summary->slow_items ?? 0),
+                    'demand_out' => (int) ($summary->demand_out ?? 0),
+                ];
+            })
+            ->sortByDesc('demand_out')
+            ->values()
+            ->all();
+    }
+
+    private function demandQuery(array $warehouseIds, ?string $storeFilter = null): Builder
     {
         $query = DB::table('stock_mutations')
             ->where('direction', 'out')
@@ -190,6 +250,17 @@ class StockMovementAnalysisService
 
         if (Schema::hasColumn('stock_mutations', 'is_void')) {
             $query->where('is_void', false);
+        }
+
+        if ($storeFilter !== null) {
+            // Outbound manual tidak punya toko, jadi demand per toko hanya dari QC resi.
+            $resiScans = DB::table('qc_resi_scans as store_qc')
+                ->join('resis as store_resi', 'store_resi.id', '=', 'store_qc.resi_id')
+                ->select('store_qc.id');
+            ResiStoreFilter::apply($resiScans, 'store_resi.store_id', $storeFilter);
+
+            $query->where('source_type', 'qc_shipment')
+                ->whereIn('source_id', $resiScans);
         }
 
         return $query;

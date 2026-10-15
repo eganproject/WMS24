@@ -25,6 +25,11 @@ class StockMovementExportReport
             ->get();
     }
 
+    public function storeRows(): array
+    {
+        return app(StockMovementAnalysisService::class)->storeBreakdown($this->filters);
+    }
+
     public function attentionRows(): Collection
     {
         return $this->rows()->filter(function ($row) {
@@ -93,11 +98,12 @@ class StockMovementExportReport
         };
 
         return sprintf(
-            'Periode %s s.d. %s (%s hari) | Gudang: %s | Kategori: %s%s',
+            'Periode %s s.d. %s (%s hari) | Gudang: %s | Toko: %s | Kategori: %s%s',
             $this->filters['date_from'],
             $this->filters['date_to'],
             $this->periodDays(),
             $warehouse,
+            ResiStoreFilter::label(ResiStoreFilter::normalize($this->filters['store_id'] ?? null)),
             $category !== '' ? $this->categoryLabel($category) : 'Semua Kategori',
             $search !== '' ? ' | Pencarian: '.$search : ''
         );

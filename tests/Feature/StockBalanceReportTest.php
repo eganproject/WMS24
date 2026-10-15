@@ -7,8 +7,11 @@ use App\Exports\StockMovementAnalysisExport;
 use App\Models\Item;
 use App\Models\ItemStock;
 use App\Models\Menu;
+use App\Models\QcResiScan;
+use App\Models\Resi;
 use App\Models\Role;
 use App\Models\StockMutation;
+use App\Models\Store;
 use App\Models\User;
 use App\Models\Warehouse;
 use Database\Seeders\StockBalanceReportMenuSeeder;
@@ -337,7 +340,7 @@ class StockBalanceReportTest extends TestCase
 
         try {
             $workbook = IOFactory::load($path);
-            $this->assertSame(['Ringkasan Analisis', 'Detail Semua SKU', 'Fokus Tindak Lanjut'], $workbook->getSheetNames());
+            $this->assertSame(['Ringkasan Analisis', 'Detail Semua SKU', 'Fokus Tindak Lanjut', 'Per Toko'], $workbook->getSheetNames());
             $this->assertSame('Laporan Analisis Pergerakan Stok', $workbook->getSheetByName('Ringkasan Analisis')->getCell('A1')->getValue());
             $this->assertSame('MOVE-EXPORT', $workbook->getSheetByName('Detail Semua SKU')->getCell('B6')->getValue());
             $this->assertSame('Fast Moving', $workbook->getSheetByName('Detail Semua SKU')->getCell('E6')->getValue());
@@ -411,6 +414,112 @@ class StockBalanceReportTest extends TestCase
         $this->assertTrue((bool) $permission->can_create);
         $this->assertTrue((bool) $permission->can_update);
         $this->assertTrue((bool) $permission->can_delete);
+    }
+
+    public function test_movement_analysis_can_be_classified_per_store(): void
+    {
+        $user = $this->adminUser();
+        $mainWarehouse = Warehouse::query()->where('code', config('inventory.default_warehouse_code'))->firstOrFail();
+        $storeA = Store::create(['name' => 'Toko Alpha']);
+        $storeB = Store::create(['name' => 'Toko Beta']);
+        $items = collect(['P', 'Q', 'R'])->mapWithKeys(function (string $code) use ($mainWarehouse) {
+            $item = Item::create([
+                'sku' => 'STORE-'.$code,
+                'name' => 'Barang Toko '.$code,
+                'item_type' => Item::TYPE_SINGLE,
+                'status' => Item::STATUS_ACTIVE,
+            ]);
+            ItemStock::create(['item_id' => $item->id, 'warehouse_id' => $mainWarehouse->id, 'stock' => 200]);
+
+            return [$code => $item];
+        });
+
+        $qcAlpha = $this->storeQc($user, 'ALPHA-1', $storeA);
+        $qcBeta = $this->storeQc($user, 'BETA-1', $storeB);
+        $qcNoStore = $this->storeQc($user, 'NOSTORE-1', null);
+        // Toko Alpha: P 70 (fast), Q 20 (medium), R 10 (slow).
+        $this->mutation($items['P'], $mainWarehouse, 'out', 70, '2026-08-15 09:00:00', $qcAlpha->id, false, 'qc_shipment', 'resi');
+        $this->mutation($items['Q'], $mainWarehouse, 'out', 20, '2026-08-15 09:00:00', $qcAlpha->id, false, 'qc_shipment', 'resi');
+        $this->mutation($items['R'], $mainWarehouse, 'out', 10, '2026-08-15 09:00:00', $qcAlpha->id, false, 'qc_shipment', 'resi');
+        // Toko Beta: R 60 (fast), Q 30 (slow).
+        $this->mutation($items['R'], $mainWarehouse, 'out', 60, '2026-08-15 09:00:00', $qcBeta->id, false, 'qc_shipment', 'resi');
+        $this->mutation($items['Q'], $mainWarehouse, 'out', 30, '2026-08-15 09:00:00', $qcBeta->id, false, 'qc_shipment', 'resi');
+        // Tanpa toko dan outbound manual tidak masuk ke toko mana pun.
+        $this->mutation($items['Q'], $mainWarehouse, 'out', 5, '2026-08-15 09:00:00', $qcNoStore->id, false, 'qc_shipment', 'resi');
+        $this->mutation($items['P'], $mainWarehouse, 'out', 500, '2026-08-15 09:00:00', 9001, false, 'outbound', 'manual');
+
+        $params = ['date_from' => '2026-08-10', 'date_to' => '2026-08-20', 'analysis' => 'movement', 'draw' => 1, 'start' => 0, 'length' => 25];
+
+        $alpha = $this->actingAs($user)->getJson(route('admin.reports.stock-balance.data', $params + ['store_id' => $storeA->id]))
+            ->assertOk()
+            ->assertJsonPath('summary.fast_items', 1)
+            ->assertJsonPath('summary.medium_items', 1)
+            ->assertJsonPath('summary.slow_items', 1)
+            ->assertJsonPath('summary.demand_out', 100);
+        $alphaRows = collect($alpha->json('data'))->keyBy('sku');
+        $this->assertSame('fast', $alphaRows['STORE-P']['movement_category']);
+        $this->assertSame('medium', $alphaRows['STORE-Q']['movement_category']);
+        $this->assertSame('slow', $alphaRows['STORE-R']['movement_category']);
+
+        $beta = $this->actingAs($user)->getJson(route('admin.reports.stock-balance.data', $params + ['store_id' => $storeB->id]))
+            ->assertOk()
+            ->assertJsonPath('summary.fast_items', 1)
+            ->assertJsonPath('summary.slow_items', 1)
+            ->assertJsonPath('summary.non_moving_items', 1)
+            ->assertJsonPath('summary.demand_out', 90);
+        $betaRows = collect($beta->json('data'))->keyBy('sku');
+        $this->assertSame('fast', $betaRows['STORE-R']['movement_category']);
+        $this->assertSame('non_moving', $betaRows['STORE-P']['movement_category']);
+
+        $this->actingAs($user)->getJson(route('admin.reports.stock-balance.data', $params + ['store_id' => 'none']))
+            ->assertOk()
+            ->assertJsonPath('summary.demand_out', 5);
+
+        // Tanpa filter toko, outbound manual tetap dihitung seperti sebelumnya.
+        $this->actingAs($user)->getJson(route('admin.reports.stock-balance.data', $params))
+            ->assertOk()
+            ->assertJsonPath('summary.demand_out', 695);
+
+        $breakdown = $this->actingAs($user)->getJson(route('admin.reports.stock-balance.data', [
+            'date_from' => '2026-08-10',
+            'date_to' => '2026-08-20',
+            'analysis' => 'movement_stores',
+        ]))->assertOk()->assertJsonCount(3, 'data');
+        $stores = collect($breakdown->json('data'))->keyBy('store');
+        $this->assertSame(['fast_items' => 1, 'medium_items' => 1, 'slow_items' => 1, 'moving_items' => 3, 'demand_out' => 100], collect($stores['Toko Alpha'])->only(['fast_items', 'medium_items', 'slow_items', 'moving_items', 'demand_out'])->all());
+        $this->assertSame(90, $stores['Toko Beta']['demand_out']);
+        $this->assertSame(5, $stores['Tanpa Toko']['demand_out']);
+        $this->assertSame((string) $storeA->id, $stores['Toko Alpha']['store_id']);
+
+        $this->actingAs($user)->get(route('admin.reports.stock-balance.export', [
+            'date_from' => '2026-08-10',
+            'date_to' => '2026-08-20',
+            'analysis' => 'movement',
+            'store_id' => $storeA->id,
+        ]))->assertOk()->assertDownload();
+    }
+
+    private function storeQc(User $user, string $code, ?Store $store): QcResiScan
+    {
+        $resi = Resi::create([
+            'id_pesanan' => 'ORDER-'.$code,
+            'tanggal_pesanan' => '2026-08-15',
+            'tanggal_upload' => '2026-08-15',
+            'no_resi' => $code,
+            'store_id' => $store?->id,
+            'uploader_id' => $user->id,
+        ]);
+
+        return QcResiScan::create([
+            'resi_id' => $resi->id,
+            'scan_type' => 'resi',
+            'scan_code' => $code,
+            'status' => 'passed',
+            'started_at' => '2026-08-15 08:00:00',
+            'completed_at' => '2026-08-15 09:00:00',
+            'scanned_by' => $user->id,
+            'completed_by' => $user->id,
+        ]);
     }
 
     private function mutation(

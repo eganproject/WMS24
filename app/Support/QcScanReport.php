@@ -14,6 +14,7 @@ class QcScanReport
         $details = $this->detailRows($filters);
         $hourly = $this->hourlyRows($details);
         $operators = $this->operatorRows($details);
+        $stores = $this->storeRows($details);
         $totalResi = $details->count();
         $durationRows = $details->whereNotNull('duration_minutes');
         $peak = $details->groupBy('hour')->map->count()->sortDesc()->keys()->first();
@@ -43,12 +44,15 @@ class QcScanReport
                 'date_to' => $filters['date_to'],
                 'operator_id' => $filters['operator_id'],
                 'operator_name' => $filters['operator_name'],
+                'store_id' => $filters['store_id'],
+                'store_name' => ResiStoreFilter::label($filters['store_id']),
                 'search' => $filters['q'],
             ],
             'summary' => $summary,
             'charts' => $this->charts($details, $operators),
             'hourly' => $hourly->values()->all(),
             'operators' => $operators->values()->all(),
+            'stores' => $stores->values()->all(),
             'details' => $details->values()->all(),
         ];
     }
@@ -76,18 +80,20 @@ class QcScanReport
             ->leftJoin('users as started_user', 'started_user.id', '=', 'qc.scanned_by')
             ->leftJoin('resis as r', 'r.id', '=', 'qc.resi_id')
             ->leftJoin('kurirs as k', 'k.id', '=', 'r.kurir_id')
+            ->leftJoin('stores as st', 'st.id', '=', 'r.store_id')
             ->leftJoinSub($itemTotals, 'item_totals', 'item_totals.qc_resi_scan_id', '=', 'qc.id')
             ->leftJoinSub($substitutionTotals, 'sub_totals', 'sub_totals.qc_resi_scan_id', '=', 'qc.id')
             ->leftJoinSub($duplicateTotals, 'dup_totals', 'dup_totals.qc_resi_scan_id', '=', 'qc.id')
             ->where('qc.status', QcTransitStatus::PASSED)
             ->whereNotNull('qc.completed_at')
-            ->selectRaw("qc.id, qc.resi_id, qc.scan_type, qc.scan_code, qc.started_at, qc.completed_at, qc.reset_count, COALESCE(qc.completed_by, qc.scanned_by) as operator_id, COALESCE(completed_user.name, started_user.name, '-') as operator_name, r.id_pesanan, r.no_resi, COALESCE(k.name, '-') as expedition, COALESCE(item_totals.total_sku, 0) as total_sku, COALESCE(item_totals.expected_qty, 0) as expected_qty, COALESCE(item_totals.total_qty, 0) as total_qty, COALESCE(sub_totals.substitution_count, 0) as substitution_count, COALESCE(sub_totals.substitution_qty, 0) as substitution_qty, COALESCE(dup_totals.duplicate_attempts, 0) as duplicate_attempts");
+            ->selectRaw("qc.id, qc.resi_id, qc.scan_type, qc.scan_code, qc.started_at, qc.completed_at, qc.reset_count, COALESCE(qc.completed_by, qc.scanned_by) as operator_id, COALESCE(completed_user.name, started_user.name, '-') as operator_name, r.id_pesanan, r.no_resi, COALESCE(k.name, '-') as expedition, r.store_id, st.name as store_name, COALESCE(item_totals.total_sku, 0) as total_sku, COALESCE(item_totals.expected_qty, 0) as expected_qty, COALESCE(item_totals.total_qty, 0) as total_qty, COALESCE(sub_totals.substitution_count, 0) as substitution_count, COALESCE(sub_totals.substitution_qty, 0) as substitution_qty, COALESCE(dup_totals.duplicate_attempts, 0) as duplicate_attempts");
 
         $this->applyCompletedPeriod($query, $filters);
 
         if ($filters['operator_id']) {
             $query->whereRaw('COALESCE(qc.completed_by, qc.scanned_by) = ?', [$filters['operator_id']]);
         }
+        ResiStoreFilter::apply($query, 'r.store_id', $filters['store_id']);
 
         if ($filters['q'] !== '') {
             $value = '%'.$filters['q'].'%';
@@ -97,7 +103,8 @@ class QcScanReport
                     ->orWhere('r.id_pesanan', 'like', $value)
                     ->orWhere('r.no_resi', 'like', $value)
                     ->orWhere('qc.scan_code', 'like', $value)
-                    ->orWhere('k.name', 'like', $value);
+                    ->orWhere('k.name', 'like', $value)
+                    ->orWhere('st.name', 'like', $value);
             });
         }
 
@@ -119,6 +126,8 @@ class QcScanReport
                 'id_pesanan' => (string) ($row->id_pesanan ?? '-'),
                 'no_resi' => (string) ($row->no_resi ?? '-'),
                 'expedition' => (string) ($row->expedition ?? '-'),
+                'store_id' => $row->store_id !== null ? (int) $row->store_id : null,
+                'store' => (string) ($row->store_name ?? ResiStoreFilter::NONE_LABEL),
                 'scan_type' => (string) ($row->scan_type ?? '-'),
                 'scan_code' => (string) ($row->scan_code ?? '-'),
                 'total_sku' => (int) $row->total_sku,
@@ -190,6 +199,32 @@ class QcScanReport
             ->values();
     }
 
+    private function storeRows(Collection $details): Collection
+    {
+        $totalResi = $details->count();
+
+        return $details
+            ->groupBy(fn (array $row) => (string) ($row['store_id'] ?? ResiStoreFilter::NONE))
+            ->map(function (Collection $rows) use ($totalResi) {
+                $durations = $rows->whereNotNull('duration_minutes');
+
+                return [
+                    'store' => $rows->first()['store'],
+                    'total_resi' => $rows->count(),
+                    'percentage' => $totalResi > 0 ? round($rows->count() * 100 / $totalResi, 2) : 0,
+                    'total_operators' => $rows->pluck('operator_id')->filter()->unique()->count(),
+                    'total_sku' => (int) $rows->sum('total_sku'),
+                    'total_qty' => (int) $rows->sum('total_qty'),
+                    'avg_duration_minutes' => $durations->isNotEmpty() ? round((float) $durations->avg('duration_minutes'), 2) : 0,
+                    'reset_count' => (int) $rows->sum('reset_count'),
+                    'substitution_count' => (int) $rows->sum('substitution_count'),
+                    'duplicate_attempts' => (int) $rows->sum('duplicate_attempts'),
+                ];
+            })
+            ->sortByDesc('total_resi')
+            ->values();
+    }
+
     private function charts(Collection $details, Collection $operators): array
     {
         $byHour = array_fill(0, 24, 0);
@@ -222,6 +257,7 @@ class QcScanReport
         if ($filters['operator_id']) {
             $query->where('duplicate.scanned_by', $filters['operator_id']);
         }
+        ResiStoreFilter::apply($query, 'r.store_id', $filters['store_id']);
         $this->applyEventSearch($query, $filters, 'duplicate.scan_code', 'actor.name');
 
         return $query->count();
@@ -238,6 +274,7 @@ class QcScanReport
         if ($filters['operator_id']) {
             $query->where('qc.hold_by', $filters['operator_id']);
         }
+        ResiStoreFilter::apply($query, 'r.store_id', $filters['store_id']);
         $this->applyEventSearch($query, $filters, 'qc.scan_code', 'actor.name');
 
         return $query->count();
@@ -281,6 +318,7 @@ class QcScanReport
             'date_to' => $this->date($filters['date_to'] ?? null),
             'operator_id' => !empty($filters['operator_id']) ? (int) $filters['operator_id'] : null,
             'operator_name' => trim((string) ($filters['operator_name'] ?? '')),
+            'store_id' => ResiStoreFilter::normalize($filters['store_id'] ?? null),
             'q' => trim((string) ($filters['q'] ?? '')),
         ];
     }

@@ -6,6 +6,7 @@ use App\Exports\QcScanReportExport;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Support\QcScanReport;
+use App\Support\ResiStoreFilter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
@@ -25,6 +26,7 @@ class QcScanReportController extends Controller
             'dataUrl' => route('admin.reports.qc-scan.data'),
             'exportUrl' => route('admin.reports.qc-scan.export'),
             'operators' => User::query()->whereIn('id', $operatorIds)->orderBy('name')->get(['id', 'name']),
+            'stores' => ResiStoreFilter::options(),
             'today' => now()->toDateString(),
         ]);
     }
@@ -60,6 +62,7 @@ class QcScanReportController extends Controller
             'date_from' => ['nullable', 'date'],
             'date_to' => ['nullable', 'date', 'after_or_equal:date_from'],
             'operator_id' => ['nullable', 'integer', 'exists:users,id'],
+            'store_id' => ResiStoreFilter::rule(),
             'q' => ['nullable', 'string', 'max:120'],
         ]);
     }

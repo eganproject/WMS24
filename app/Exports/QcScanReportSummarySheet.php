@@ -94,8 +94,9 @@ class QcScanReportSummarySheet implements FromArray, WithTitle, WithEvents
         $from = $period['date_from'] ?: 'Semua tanggal';
         $to = $period['date_to'] ?: 'Semua tanggal';
         $operator = $period['operator_name'] ?: 'Semua petugas';
+        $store = $period['store_name'] ?? 'Semua toko';
         $search = $period['search'] ? ' | Pencarian: '.$period['search'] : '';
 
-        return "Periode selesai QC: {$from} s.d. {$to} | Petugas: {$operator}{$search}";
+        return "Periode selesai QC: {$from} s.d. {$to} | Petugas: {$operator} | Toko: {$store}{$search}";
     }
 }

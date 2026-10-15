@@ -4,6 +4,7 @@ namespace App\Exports;
 
 use App\Models\Resi;
 use App\Models\ShipmentScanOut;
+use App\Support\ResiStoreFilter;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -152,6 +153,7 @@ class ScanOutReportSummarySheet implements FromCollection, WithHeadings, WithTit
         if ($operatorId = $this->filters['operator_id'] ?? null) {
             $query->where('so.scanned_by', $operatorId);
         }
+        ResiStoreFilter::apply($query, 'r.store_id', $this->storeFilter());
         if ($dateFrom = $this->parseDate($this->filters['date_from'] ?? null)) {
             $query->where('so.scan_date', '>=', $dateFrom);
         }
@@ -171,6 +173,7 @@ class ScanOutReportSummarySheet implements FromCollection, WithHeadings, WithTit
         if ($dateTo = $this->parseDate($this->filters['date_to'] ?? null)) {
             $resiQuery->whereDate('tanggal_upload', '<=', $dateTo);
         }
+        ResiStoreFilter::apply($resiQuery, 'resis.store_id', $this->storeFilter());
 
         $canceledTotal = (clone $resiQuery)->where('status', 'canceled')->count();
         $active = (clone $resiQuery)->where(fn ($q) => $q->whereNull('status')->orWhere('status', '!=', 'canceled'));
@@ -194,7 +197,12 @@ class ScanOutReportSummarySheet implements FromCollection, WithHeadings, WithTit
         $operator = trim((string) ($this->filters['operator_name'] ?? '')) ?: 'Semua operator';
         $search = trim((string) ($this->filters['q'] ?? ''));
 
-        return 'Periode scan: '.$from.' s.d. '.$to.' | Operator: '.$operator.($search !== '' ? ' | Pencarian: '.$search : '');
+        return 'Periode scan: '.$from.' s.d. '.$to.' | Operator: '.$operator.' | Toko: '.ResiStoreFilter::label($this->storeFilter()).($search !== '' ? ' | Pencarian: '.$search : '');
+    }
+
+    private function storeFilter(): ?string
+    {
+        return ResiStoreFilter::normalize($this->filters['store_id'] ?? null);
     }
 
     private function parseDate(?string $value): ?string

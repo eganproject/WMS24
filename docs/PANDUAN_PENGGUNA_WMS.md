@@ -34,7 +34,7 @@ Lakukan pengaturan berikut sebelum transaksi operasional dimulai.
 
 1. **Master Data > Users**: buat akun pengguna, pilih peran, hubungkan dengan karyawan bila diperlukan, aktifkan akun, lalu berikan kata sandi awal. Data pengguna juga dapat diimpor.
 2. **Master Data > Roles, Menus, Permissions**: buat peran khusus bila diperlukan; atur menu yang boleh dilihat dan tindakan yang boleh dilakukan pada tiap peran.
-3. **Master Data > Categories, Areas, Locations**: buat struktur kategori dan lokasi fisik penyimpanan. Area menunjukkan zona, sedangkan lokasi adalah kode/alamat tempat barang disimpan.
+3. **Master Data > Categories, Areas, Locations**: buat struktur kategori dan lokasi fisik penyimpanan. Area menunjukkan zona, sedangkan lokasi adalah kode/alamat tempat barang disimpan. Setiap area dimiliki satu gudang (**Gudang Display** atau **Gudang Besar**); lokasi mengikuti gudang areanya. Item bisa punya lokasi display (dipakai picking) dan bin location gudang besar sekaligus.
 4. **Master Data > Items**: daftarkan SKU, nama, kategori, area/lokasi, satuan/deskripsi, stok pengaman, dan kuantitas per koli. Item dapat berupa **single** atau **bundle**. Bundle memakai komponen SKU lain dan stoknya mengikuti ketersediaan komponen.
 5. Tambahkan alias barcode SKU melalui impor barcode bila label barang berbeda dengan SKU utama. Tinjau **barcode misses** untuk scan yang belum dikenali dan tandai selesai setelah master datanya diperbaiki.
 6. Lengkapi **Suppliers**, **Stores**, dan **Kurir** sebelum membuat dokumen yang memakai data tersebut.

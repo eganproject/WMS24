@@ -43,14 +43,13 @@ class ItemController extends Controller
     public function index()
     {
         $categories = Category::orderBy('name')->get(['id', 'name']);
-        $areas = Area::orderBy('code')->get(['id', 'code', 'name']);
         $componentItems = Item::query()
             ->where('item_type', Item::TYPE_SINGLE)
             ->orderBy('sku')
             ->get(['id', 'sku', 'name']);
 
         $itemUpdateFields = ItemUpdateFields::definitions();
-        return view('admin.masterdata.items.index', compact('categories', 'areas', 'componentItems', 'itemUpdateFields'));
+        return view('admin.masterdata.items.index', compact('categories', 'componentItems', 'itemUpdateFields'));
     }
 
     public function create()
@@ -69,6 +68,7 @@ class ItemController extends Controller
             'category',
             'area',
             'location.area',
+            'mainLocation.area',
             'barcodes',
             'bundleComponents.component',
             'bundleParents.bundle',
@@ -103,8 +103,9 @@ class ItemController extends Controller
     {
         $itemPayload = null;
         if ($item) {
-            $item->load(['location', 'area', 'barcodes', 'bundleComponents']);
+            $item->load(['location', 'mainLocation', 'area', 'barcodes', 'bundleComponents']);
             $location = $item->location;
+            $mainLocation = $item->mainLocation;
             $itemPayload = [
                 'id' => $item->id,
                 'sku' => $item->sku,
@@ -117,6 +118,10 @@ class ItemController extends Controller
                 'column_no' => $location?->column_no ?? '',
                 'row_no' => $location?->row_no ?? '',
                 'address' => $item->resolvedAddress(),
+                'main_area_id' => $mainLocation?->area_id,
+                'main_rack_code' => $mainLocation?->rack_code ?? '',
+                'main_column_no' => $mainLocation?->column_no ?? '',
+                'main_row_no' => $mainLocation?->row_no ?? '',
                 'description' => $item->description ?? '',
                 'safety_stock' => (int) ($item->safety_stock ?? 0),
                 'koli_qty' => $item->koli_qty !== null ? (int) $item->koli_qty : null,
@@ -136,7 +141,14 @@ class ItemController extends Controller
             'item' => $item,
             'itemPayload' => $itemPayload,
             'categories' => Category::orderBy('name')->get(['id', 'name']),
-            'areas' => Area::orderBy('code')->get(['id', 'code', 'name']),
+            'areas' => Area::query()
+                ->where(fn ($q) => $q->whereNull('warehouse_id')->orWhere('warehouse_id', WarehouseService::displayWarehouseId()))
+                ->orderBy('code')
+                ->get(['id', 'code', 'name']),
+            'mainAreas' => Area::query()
+                ->where('warehouse_id', WarehouseService::defaultWarehouseId())
+                ->orderBy('code')
+                ->get(['id', 'code', 'name']),
             'componentItems' => Item::query()
                 ->where('item_type', Item::TYPE_SINGLE)
                 ->when($item, fn ($query) => $query->where('id', '!=', $item->id))
@@ -147,7 +159,7 @@ class ItemController extends Controller
 
     public function data(Request $request)
     {
-        $query = Item::with(['category', 'location.area', 'area', 'barcodes', 'bundleComponents.component'])->orderBy('name');
+        $query = Item::with(['category', 'location.area', 'mainLocation.area', 'area', 'barcodes', 'bundleComponents.component'])->orderBy('name');
 
         $statusFilter = (string) $request->input('status', 'active');
         if ($statusFilter === Item::STATUS_INACTIVE) {
@@ -174,6 +186,8 @@ class ItemController extends Controller
                         $this->applyTextSearch($areaQ, 'code', $search, $exact);
                         $this->applyTextSearch($areaQ, 'name', $search, $exact, 'or');
                     });
+                })->orWhereHas('mainLocation', function ($locQ) use ($search, $exact) {
+                    $this->applyTextSearch($locQ, 'code', $search, $exact);
                 })->orWhereHas('barcodes', function ($barcodeQ) use ($search, $exact) {
                     $this->applyTextSearch($barcodeQ, 'barcode_value', $search, $exact);
                     $this->applyTextSearch($barcodeQ, 'source_name', $search, $exact, 'or');
@@ -209,6 +223,7 @@ class ItemController extends Controller
             $location = $i->location;
             $area = $i->resolvedArea();
             $address = $i->resolvedAddress();
+            $mainLocation = $i->mainLocation;
             return [
                 'id' => $i->id,
                 'sku' => $i->sku,
@@ -225,6 +240,11 @@ class ItemController extends Controller
                 'rack_code' => $location?->rack_code ?? '',
                 'column_no' => $location?->column_no ?? '',
                 'row_no' => $location?->row_no ?? '',
+                'main_address' => $mainLocation?->code ?? '',
+                'main_area_id' => $mainLocation?->area_id,
+                'main_rack_code' => $mainLocation?->rack_code ?? '',
+                'main_column_no' => $mainLocation?->column_no ?? '',
+                'main_row_no' => $mainLocation?->row_no ?? '',
                 'description' => $i->description ?? '',
                 'safety_stock' => (int) ($i->safety_stock ?? 0),
                 'koli_qty' => $i->koli_qty !== null ? (int) $i->koli_qty : null,
@@ -269,6 +289,11 @@ class ItemController extends Controller
             'column_no' => ['nullable', 'integer', 'min:1'],
             'row_no' => ['nullable', 'integer', 'min:1'],
             'address' => ['nullable', 'string'],
+            'main_area_id' => ['nullable', 'integer', 'exists:areas,id'],
+            'main_rack_code' => ['nullable', 'string', 'max:20'],
+            'main_column_no' => ['nullable', 'integer', 'min:1'],
+            'main_row_no' => ['nullable', 'integer', 'min:1'],
+            'main_address' => ['nullable', 'string'],
             'description' => ['nullable', 'string'],
             'safety_stock' => ['nullable', 'integer', 'min:0'],
             'koli_qty' => ['nullable', 'integer', 'min:0', 'max:4294967295'],
@@ -305,6 +330,7 @@ class ItemController extends Controller
             $externalBarcodes = [];
         } else {
             $this->applyLocationPayload($validated);
+            $this->applyMainLocationPayload($validated);
             $externalBarcodes = $this->normalizeBarcodeRows($externalBarcodes, $validated['sku']);
         }
 
@@ -361,6 +387,11 @@ class ItemController extends Controller
             'column_no' => ['nullable', 'integer', 'min:1'],
             'row_no' => ['nullable', 'integer', 'min:1'],
             'address' => ['nullable', 'string'],
+            'main_area_id' => ['nullable', 'integer', 'exists:areas,id'],
+            'main_rack_code' => ['nullable', 'string', 'max:20'],
+            'main_column_no' => ['nullable', 'integer', 'min:1'],
+            'main_row_no' => ['nullable', 'integer', 'min:1'],
+            'main_address' => ['nullable', 'string'],
             'description' => ['nullable', 'string'],
             'safety_stock' => ['nullable', 'integer', 'min:0'],
             'koli_qty' => ['nullable', 'integer', 'min:0', 'max:4294967295'],
@@ -406,6 +437,7 @@ class ItemController extends Controller
             $externalBarcodes = [];
         } else {
             $this->applyLocationPayload($validated);
+            $this->applyMainLocationPayload($validated);
             $externalBarcodes = $this->normalizeBarcodeRows($externalBarcodes, $validated['sku'], $item);
         }
 
@@ -884,6 +916,16 @@ class ItemController extends Controller
             ($col !== null && $col !== '') ||
             ($row !== null && $row !== '');
 
+        $displayWarehouseId = WarehouseService::displayWarehouseId();
+        if ($areaId !== null && $areaId !== '') {
+            $selectedArea = Area::find((int) $areaId);
+            if ($selectedArea && !LocationService::areaBelongsToWarehouse($selectedArea, $displayWarehouseId)) {
+                throw ValidationException::withMessages([
+                    'area_id' => 'Area ini bukan area gudang display.',
+                ]);
+            }
+        }
+
         if ($hasDetailedParts) {
             if ($areaId === null || $areaId === '' || $rack === '' || $col === null || $col === '' || $row === null || $row === '') {
                 throw ValidationException::withMessages([
@@ -912,7 +954,12 @@ class ItemController extends Controller
 
         if (array_key_exists('address', $validated)) {
             $address = trim((string) ($validated['address'] ?? ''));
-            $location = LocationService::resolveLocation($address);
+            if (!LocationService::addressFitsWarehouse($address, $displayWarehouseId)) {
+                throw ValidationException::withMessages([
+                    'address' => 'Area pada alamat ini bukan area gudang display.',
+                ]);
+            }
+            $location = LocationService::resolveLocation($address, $displayWarehouseId);
             if ($location) {
                 $validated['area_id'] = $location->area_id;
                 $validated['location_id'] = $location->id;
@@ -920,7 +967,7 @@ class ItemController extends Controller
                 return;
             }
 
-            $area = LocationService::resolveArea($address);
+            $area = LocationService::resolveArea($address, $displayWarehouseId);
             if ($area) {
                 $validated['area_id'] = $area->id;
                 $validated['location_id'] = null;
@@ -934,10 +981,63 @@ class ItemController extends Controller
         }
     }
 
+    /**
+     * Bin location gudang besar: wajib slot lengkap (area + rack + kolom + baris) atau kosong.
+     */
+    private function applyMainLocationPayload(array &$validated): void
+    {
+        $keys = ['main_area_id', 'main_rack_code', 'main_column_no', 'main_row_no', 'main_address'];
+        $present = array_filter($keys, fn ($key) => array_key_exists($key, $validated));
+        if ($present === []) {
+            return;
+        }
+
+        $areaId = $validated['main_area_id'] ?? null;
+        $rack = trim((string) ($validated['main_rack_code'] ?? ''));
+        $col = $validated['main_column_no'] ?? null;
+        $row = $validated['main_row_no'] ?? null;
+        $address = trim((string) ($validated['main_address'] ?? ''));
+        unset($validated['main_area_id'], $validated['main_rack_code'], $validated['main_column_no'], $validated['main_row_no'], $validated['main_address']);
+
+        $mainWarehouseId = WarehouseService::defaultWarehouseId();
+        $hasParts = ($areaId !== null && $areaId !== '') || $rack !== '' ||
+            ($col !== null && $col !== '') ||
+            ($row !== null && $row !== '');
+
+        if ($hasParts) {
+            if ($areaId === null || $areaId === '' || $rack === '' || $col === null || $col === '' || $row === null || $row === '') {
+                throw ValidationException::withMessages([
+                    'main_rack_code' => 'Lengkapi area, rack, kolom, dan baris untuk lokasi gudang besar.',
+                ]);
+            }
+
+            $area = Area::find((int) $areaId);
+            if (!$area || !LocationService::areaBelongsToWarehouse($area, $mainWarehouseId)) {
+                throw ValidationException::withMessages([
+                    'main_area_id' => 'Area ini bukan area gudang besar.',
+                ]);
+            }
+
+            $location = LocationService::resolveLocationFromParts($area->id, $rack, (int) $col, (int) $row);
+            $validated['main_location_id'] = $location?->id;
+            return;
+        }
+
+        try {
+            $validated['main_location_id'] = LocationService::resolveMainWarehouseLocation($address)?->id;
+        } catch (\InvalidArgumentException $e) {
+            throw ValidationException::withMessages([
+                'main_address' => ucfirst($e->getMessage()),
+            ]);
+        }
+    }
+
     private function normalizeBundlePayload(array &$validated): void
     {
         $validated['area_id'] = null;
         $validated['location_id'] = null;
+        $validated['main_location_id'] = null;
+        unset($validated['main_area_id'], $validated['main_rack_code'], $validated['main_column_no'], $validated['main_row_no'], $validated['main_address']);
         $validated['address'] = null;
         $validated['safety_stock'] = 0;
         $validated['koli_qty'] = null;

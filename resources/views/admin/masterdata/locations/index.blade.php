@@ -23,6 +23,14 @@
                 </span>
                 <input type="text" class="form-control form-control-solid w-250px ps-14" placeholder="Search location" data-kt-filter="search" />
             </div>
+            <div class="ms-3 my-1">
+                <select id="filter_location_warehouse" class="form-select form-select-solid w-200px">
+                    <option value="">Semua gudang</option>
+                    @foreach($warehouses as $warehouse)
+                        <option value="{{ $warehouse->id }}">{{ $warehouse->name }}</option>
+                    @endforeach
+                </select>
+            </div>
         </div>
         <div class="card-toolbar">
             <div class="d-flex justify-content-end" data-kt-user-table-toolbar="base">
@@ -41,6 +49,7 @@
                     <tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0">
                         <th>ID</th>
                         <th>Kode</th>
+                        <th>Gudang</th>
                         <th>Area</th>
                         <th>Rack</th>
                         <th>Kolom</th>
@@ -78,7 +87,7 @@
                         <select name="area_id" id="location_area_id" class="form-select form-select-solid" data-control="select2" data-placeholder="Pilih area" required>
                             <option value="">Pilih area</option>
                             @foreach($areas as $area)
-                                <option value="{{ $area->id }}" data-code="{{ $area->code }}">{{ $area->code }} - {{ $area->name }}</option>
+                                <option value="{{ $area->id }}" data-code="{{ $area->code }}">{{ $area->code }} - {{ $area->name }} ({{ $area->warehouse?->name ?? 'Gudang Display' }})</option>
                             @endforeach
                         </select>
                         <div class="invalid-feedback" id="error_area_id"></div>
@@ -186,11 +195,13 @@
                 dataSrc: 'data',
                 data: function(params) {
                     params.q = searchInput?.value || '';
+                    params.warehouse_id = document.getElementById('filter_location_warehouse')?.value || '';
                 }
             },
             columns: [
                 { data: 'id' },
                 { data: 'code' },
+                { data: 'warehouse_name', orderable: false },
                 { data: 'area_code', render: (val, type, row) => `${row.area_code || '-'} - ${row.area_name || '-'}` },
                 { data: 'rack_code' },
                 { data: 'column_no' },
@@ -223,6 +234,7 @@
 
         const reloadTable = () => dt.ajax.reload();
         searchInput?.addEventListener('keyup', reloadTable);
+        document.getElementById('filter_location_warehouse')?.addEventListener('change', reloadTable);
 
         document.getElementById('btn_open_create')?.addEventListener('click', () => {
             if (!form) return;

@@ -21,7 +21,75 @@ class LocationService
         return $area;
     }
 
-    public static function resolveArea(string $areaCode): ?Area
+    /**
+     * Area tanpa warehouse_id (data lama) dianggap milik gudang display.
+     */
+    public static function areaWarehouseId(Area $area): int
+    {
+        return $area->warehouse_id ? (int) $area->warehouse_id : WarehouseService::displayWarehouseId();
+    }
+
+    public static function areaBelongsToWarehouse(Area $area, int $warehouseId): bool
+    {
+        return self::areaWarehouseId($area) === $warehouseId;
+    }
+
+    public static function findAreaByCode(string $areaCode): ?Area
+    {
+        $normalized = self::normalizeAreaCode($areaCode);
+        if ($normalized === null) {
+            return null;
+        }
+
+        return Area::query()->whereRaw('UPPER(code) = ?', [$normalized])->first();
+    }
+
+    /**
+     * True jika area pada alamat (kode area saja atau AREA-RACK-KOLOM-BARIS) belum ada
+     * atau memang milik gudang $warehouseId. Tidak membuat data baru.
+     */
+    public static function addressFitsWarehouse(string $address, int $warehouseId): bool
+    {
+        $address = trim($address);
+        if ($address === '') {
+            return true;
+        }
+
+        $areaCode = self::parseAddress($address)['area_code'] ?? $address;
+        $area = self::findAreaByCode($areaCode);
+
+        return !$area || self::areaBelongsToWarehouse($area, $warehouseId);
+    }
+
+    /**
+     * Resolve bin location gudang besar dari alamat lengkap AREA-RACK-KOLOM-BARIS.
+     *
+     * @throws \InvalidArgumentException jika format salah atau area milik gudang lain.
+     */
+    public static function resolveMainWarehouseLocation(string $address): ?Location
+    {
+        $address = trim($address);
+        if ($address === '') {
+            return null;
+        }
+
+        if (!self::parseAddress($address)) {
+            throw new \InvalidArgumentException('format lokasi gudang besar harus AREA-RACK-KOLOM-BARIS.');
+        }
+
+        $location = self::resolveLocation($address, WarehouseService::defaultWarehouseId());
+        if (!$location) {
+            throw new \InvalidArgumentException('area pada lokasi gudang besar bukan area gudang besar.');
+        }
+
+        return $location;
+    }
+
+    /**
+     * Cari (atau buat) area berdasarkan kode. Jika $warehouseId diisi, area yang sudah ada
+     * harus milik gudang tersebut; jika milik gudang lain hasilnya null.
+     */
+    public static function resolveArea(string $areaCode, ?int $warehouseId = null): ?Area
     {
         $normalized = self::normalizeAreaCode($areaCode);
         if ($normalized === null) {
@@ -33,6 +101,10 @@ class LocationService
             ->first();
 
         if ($area) {
+            if ($warehouseId !== null && !self::areaBelongsToWarehouse($area, $warehouseId)) {
+                return null;
+            }
+
             if ($area->code !== $normalized) {
                 $area->code = $normalized;
                 $area->save();
@@ -42,6 +114,7 @@ class LocationService
         }
 
         return Area::create([
+            'warehouse_id' => $warehouseId ?? WarehouseService::displayWarehouseId(),
             'code' => $normalized,
             'name' => $normalized,
             'is_active' => true,
@@ -109,14 +182,14 @@ class LocationService
         return "{$area}-{$rack}-{$colLabel}-{$rowLabel}";
     }
 
-    public static function resolveLocation(string $address): ?Location
+    public static function resolveLocation(string $address, ?int $warehouseId = null): ?Location
     {
         $parsed = self::parseAddress($address);
         if (!$parsed) {
             return null;
         }
 
-        $area = self::resolveArea($parsed['area_code']);
+        $area = self::resolveArea($parsed['area_code'], $warehouseId);
         if (!$area) {
             return null;
         }

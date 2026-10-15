@@ -34,6 +34,7 @@ class ItemsTemplateExport implements FromCollection, WithHeadings
             'rack',
             'column',
             'row',
+            'main_address',
             'description',
         ];
     }

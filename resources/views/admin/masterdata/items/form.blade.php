@@ -132,8 +132,8 @@
             <div class="card mb-6">
                 <div class="card-header border-0 pt-6">
                     <div class="card-title flex-column">
-                        <h3 class="fw-bolder mb-1">Lokasi</h3>
-                        <div class="text-muted fs-7">Area dan slot rak item. Tidak berlaku untuk bundle.</div>
+                        <h3 class="fw-bolder mb-1">Lokasi Gudang Display</h3>
+                        <div class="text-muted fs-7">Area dan slot rak item di gudang display. Tidak berlaku untuk bundle.</div>
                     </div>
                 </div>
                 <div class="card-body pt-2">
@@ -170,6 +170,49 @@
                         <div class="form-text">Boleh hanya area jika slot detail belum ada. Jika rack, kolom, atau baris diisi, semuanya wajib lengkap.</div>
                         <div class="invalid-feedback d-block" id="error_address"></div>
                     </div>
+                </div>
+            </div>
+
+            <div class="card mb-6">
+                <div class="card-header border-0 pt-6">
+                    <div class="card-title flex-column">
+                        <h3 class="fw-bolder mb-1">Lokasi Gudang Besar</h3>
+                        <div class="text-muted fs-7">Bin location di gudang besar. Opsional, tidak berlaku untuk bundle.</div>
+                    </div>
+                </div>
+                <div class="card-body pt-2">
+                    <div class="fv-row mb-7">
+                        <label class="fs-6 fw-bold form-label mb-2">Area Gudang Besar</label>
+                        <select name="main_area_id" id="item_main_area_id" class="form-select form-select-solid" data-placeholder="Pilih area gudang besar">
+                            <option value="">Pilih area gudang besar</option>
+                            @foreach($mainAreas as $area)
+                                <option value="{{ $area->id }}" data-code="{{ $area->code }}">{{ $area->code }} - {{ $area->name }}</option>
+                            @endforeach
+                        </select>
+                        @if($mainAreas->isEmpty())
+                            <div class="form-text">Belum ada area gudang besar. Buat dulu di Master Data &gt; Areas dengan gudang <strong>Gudang Besar</strong>.</div>
+                        @endif
+                        <div class="invalid-feedback d-block" id="error_main_area_id"></div>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-4">
+                            <label class="fs-6 fw-bold form-label mb-2">Rack</label>
+                            <input type="text" class="form-control form-control-solid" name="main_rack_code" id="item_main_rack_code" />
+                            <div class="invalid-feedback d-block" id="error_main_rack_code"></div>
+                        </div>
+                        <div class="col-4">
+                            <label class="fs-6 fw-bold form-label mb-2">Kolom</label>
+                            <input type="number" min="1" class="form-control form-control-solid" name="main_column_no" id="item_main_column_no" />
+                            <div class="invalid-feedback d-block" id="error_main_column_no"></div>
+                        </div>
+                        <div class="col-4">
+                            <label class="fs-6 fw-bold form-label mb-2">Baris</label>
+                            <input type="number" min="1" class="form-control form-control-solid" name="main_row_no" id="item_main_row_no" />
+                            <div class="invalid-feedback d-block" id="error_main_row_no"></div>
+                        </div>
+                    </div>
+                    <div class="form-text">Jika diisi, area, rack, kolom, dan baris wajib lengkap. Kosongkan semua untuk menghapus lokasi gudang besar.</div>
+                    <div class="invalid-feedback d-block" id="error_main_address"></div>
                 </div>
             </div>
 
@@ -233,6 +276,10 @@
         const formRow = document.getElementById('item_row_no');
         const formId = document.getElementById('item_id');
         const formAddress = document.getElementById('item_address');
+        const formMainArea = document.getElementById('item_main_area_id');
+        const formMainRack = document.getElementById('item_main_rack_code');
+        const formMainColumn = document.getElementById('item_main_column_no');
+        const formMainRow = document.getElementById('item_main_row_no');
         const formDescription = document.getElementById('item_description');
         const formSafetyStock = document.getElementById('item_safety_stock');
         const formKoliQty = document.getElementById('item_koli_qty');
@@ -278,6 +325,22 @@
             if (typeof $ !== 'undefined' && $(formArea).data('select2')) {
                 $(formArea).val(normalized).trigger('change');
             }
+        };
+
+        const setMainAreaValue = (val) => {
+            if (!formMainArea) return;
+            const normalized = (val === null || val === undefined || val === '' || val === 'null') ? '' : String(val);
+            formMainArea.value = normalized;
+            if (typeof $ !== 'undefined' && $(formMainArea).data('select2')) {
+                $(formMainArea).val(normalized).trigger('change');
+            }
+        };
+
+        const resetMainLocation = () => {
+            setMainAreaValue('');
+            if (formMainRack) formMainRack.value = '';
+            if (formMainColumn) formMainColumn.value = '';
+            if (formMainRow) formMainRow.value = '';
         };
 
         const refreshExternalBarcodesEmpty = () => {
@@ -398,7 +461,7 @@
             if (bundleCard) bundleCard.style.display = isBundle ? '' : 'none';
             if (externalBarcodesCard) externalBarcodesCard.style.display = isBundle ? 'none' : '';
 
-            [formArea, formRack, formColumn, formRow, formAddress, formKoliQty, formSafetyStock].forEach((field) => {
+            [formArea, formRack, formColumn, formRow, formAddress, formMainArea, formMainRack, formMainColumn, formMainRow, formKoliQty, formSafetyStock].forEach((field) => {
                 if (!field) return;
                 field.disabled = isBundle;
             });
@@ -409,6 +472,7 @@
                 if (formColumn) formColumn.value = '';
                 if (formRow) formRow.value = '';
                 if (formAddress) formAddress.value = '';
+                resetMainLocation();
                 if (formKoliQty) formKoliQty.value = '';
                 if (formSafetyStock) formSafetyStock.value = 0;
                 ensureBundleComponentRow();
@@ -420,7 +484,7 @@
         };
 
         const clearErrors = () => {
-            ['error_sku','error_name','error_item_type','error_status','error_category_id','error_area_id','error_rack_code','error_column_no','error_row_no','error_address','error_description','error_koli_qty','error_safety_stock','error_external_barcodes','error_bundle_components'].forEach(id => {
+            ['error_sku','error_name','error_item_type','error_status','error_category_id','error_area_id','error_rack_code','error_column_no','error_row_no','error_address','error_main_area_id','error_main_rack_code','error_main_column_no','error_main_row_no','error_main_address','error_description','error_koli_qty','error_safety_stock','error_external_barcodes','error_bundle_components'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.textContent = '';
             });
@@ -454,6 +518,7 @@
         if (typeof $ !== 'undefined' && $.fn.select2) {
             $(formCategory).select2({ placeholder: 'Pilih kategori', allowClear: true, width: '100%' });
             $(formArea).select2({ placeholder: 'Pilih area', allowClear: true, width: '100%' });
+            $(formMainArea).select2({ placeholder: 'Pilih area gudang besar', allowClear: true, width: '100%' });
         }
 
         const fillForm = (item) => {
@@ -467,6 +532,10 @@
             if (formRack) formRack.value = item?.rack_code || '';
             if (formColumn) formColumn.value = item?.column_no || '';
             if (formRow) formRow.value = item?.row_no || '';
+            setMainAreaValue(item?.main_area_id ?? '');
+            if (formMainRack) formMainRack.value = item?.main_rack_code || '';
+            if (formMainColumn) formMainColumn.value = item?.main_column_no || '';
+            if (formMainRow) formMainRow.value = item?.main_row_no || '';
             if (formDescription) formDescription.value = item?.description || '';
             if (formKoliQty) formKoliQty.value = item?.koli_qty ?? '';
             if (formSafetyStock) formSafetyStock.value = item?.safety_stock ?? 0;

@@ -51,6 +51,7 @@ class ItemStockController extends Controller
         $query = Item::with([
             'category',
             'location.area',
+            'mainLocation',
             'area',
             'bundleComponents.component',
             'stocks' => function ($q) use ($defaultId, $displayId, $damagedId) {
@@ -146,6 +147,7 @@ class ItemStockController extends Controller
                 'status_label' => ($i->status ?: Item::STATUS_ACTIVE) === Item::STATUS_ACTIVE ? 'Aktif' : 'Nonaktif',
                 'category' => $i->category?->name ?? '-',
                 'address' => $i->resolvedAddress(),
+                'main_address' => $i->mainAddress(),
                 'area_code' => $area?->code ?? '',
                 'rack_code' => $location?->rack_code ?? '',
                 'column_no' => $location?->column_no ?? '',

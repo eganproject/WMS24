@@ -516,7 +516,7 @@ class TelegramBotService
 
     private function locationReply(string $query): string
     {
-        $item = $this->findItemForQuery($query, ['category', 'location.area', 'area', 'stocks.warehouse']);
+        $item = $this->findItemForQuery($query, ['category', 'location.area', 'mainLocation', 'area', 'stocks.warehouse']);
         if (!$item) {
             return "SKU atau item '{$query}' tidak ditemukan.";
         }
@@ -528,6 +528,7 @@ class TelegramBotService
             'Kategori: '.($item->category?->name ?? '-'),
             'Area: '.($item->resolvedArea()?->name ?? '-'),
             'Lokasi: '.($item->resolvedAddress() ?: '-'),
+            ...($item->mainAddress() !== '' ? ['Lokasi Gudang Besar: '.$item->mainAddress()] : []),
             'Koli: '.((int) ($item->koli_qty ?? 0) ?: '-'),
             '',
             'Stok:',

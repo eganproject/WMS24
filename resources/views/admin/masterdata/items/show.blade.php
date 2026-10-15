@@ -81,7 +81,7 @@
                             </tr>
                             @unless($isBundle)
                                 <tr>
-                                    <td class="text-muted">Area</td>
+                                    <td class="text-muted">Area Display</td>
                                     <td class="fw-bold">{{ $area ? $area->code.' - '.$area->name : '-' }}</td>
                                 </tr>
                                 <tr>
@@ -95,8 +95,12 @@
                                     </td>
                                 </tr>
                                 <tr>
-                                    <td class="text-muted">Alamat</td>
+                                    <td class="text-muted">Lokasi Gudang Display</td>
                                     <td class="fw-bold">{{ $address !== '' ? $address : '-' }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted">Lokasi Gudang Besar</td>
+                                    <td class="fw-bold">{{ $item->mainLocation?->code ?? '-' }}</td>
                                 </tr>
                             @endunless
                             <tr>

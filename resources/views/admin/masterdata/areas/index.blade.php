@@ -23,6 +23,14 @@
                 </span>
                 <input type="text" class="form-control form-control-solid w-250px ps-14" placeholder="Search area" data-kt-filter="search" />
             </div>
+            <div class="ms-3 my-1">
+                <select id="filter_area_warehouse" class="form-select form-select-solid w-200px">
+                    <option value="">Semua gudang</option>
+                    @foreach($warehouses as $warehouse)
+                        <option value="{{ $warehouse->id }}">{{ $warehouse->name }}</option>
+                    @endforeach
+                </select>
+            </div>
         </div>
         <div class="card-toolbar">
             <div class="d-flex justify-content-end" data-kt-user-table-toolbar="base">
@@ -42,6 +50,7 @@
                         <th>ID</th>
                         <th>Kode</th>
                         <th>Nama</th>
+                        <th>Gudang</th>
                         <th>Status</th>
                         <th>Sort</th>
                         <th class="text-end">Aksi</th>
@@ -81,6 +90,16 @@
                         <label class="required fs-6 fw-bold form-label mb-2">Nama</label>
                         <input type="text" class="form-control form-control-solid" name="name" id="area_name" required />
                         <div class="invalid-feedback" id="error_name"></div>
+                    </div>
+                    <div class="fv-row mb-7">
+                        <label class="required fs-6 fw-bold form-label mb-2">Gudang</label>
+                        <select name="warehouse_id" id="area_warehouse_id" class="form-select form-select-solid">
+                            @foreach($warehouses as $warehouse)
+                                <option value="{{ $warehouse->id }}">{{ $warehouse->name }}</option>
+                            @endforeach
+                        </select>
+                        <div class="form-text">Area gudang display dipakai untuk lokasi picking. Area gudang besar dipakai untuk bin location stok gudang besar.</div>
+                        <div class="invalid-feedback" id="error_warehouse_id"></div>
                     </div>
                     <div class="row g-3 mb-7">
                         <div class="col-md-6">
@@ -122,6 +141,7 @@
     const deleteTpl = '{{ route('admin.masterdata.areas.destroy', ':id') }}';
     const canUpdate = {{ $canUpdate ? 'true' : 'false' }};
     const canDelete = {{ $canDelete ? 'true' : 'false' }};
+    const defaultAreaWarehouseId = '{{ $defaultAreaWarehouseId }}';
 
     document.addEventListener('DOMContentLoaded', () => {
         const tableEl = $('#area_table');
@@ -134,6 +154,8 @@
         const formName = document.getElementById('area_name');
         const formActive = document.getElementById('area_is_active');
         const formSort = document.getElementById('area_sort_order');
+        const formWarehouse = document.getElementById('area_warehouse_id');
+        const warehouseFilter = document.getElementById('filter_area_warehouse');
         const titleEl = document.getElementById('modal_area_title');
 
         if (!tableEl.length || !$.fn.DataTable) {
@@ -157,16 +179,18 @@
                 dataSrc: 'data',
                 data: function(params) {
                     params.q = searchInput?.value || '';
+                    params.warehouse_id = warehouseFilter?.value || '';
                 }
             },
             columns: [
                 { data: 'id' },
                 { data: 'code' },
                 { data: 'name' },
+                { data: 'warehouse_name', orderable: false },
                 { data: 'is_active', render: (val) => val ? 'Aktif' : 'Nonaktif' },
                 { data: 'sort_order', render: (val) => val ?? '-' },
                 { data: 'id', orderable:false, searchable:false, className:'text-end', render: (data, type, row)=>{
-                    const editItem = canUpdate ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-edit" data-id="${data}" data-code="${row.code}" data-name="${row.name}" data-is-active="${row.is_active ? 1 : 0}" data-sort-order="${row.sort_order ?? ''}">Edit</a></div>` : '';
+                    const editItem = canUpdate ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 btn-edit" data-id="${data}" data-code="${row.code}" data-name="${row.name}" data-is-active="${row.is_active ? 1 : 0}" data-warehouse-id="${row.warehouse_id ?? ''}" data-sort-order="${row.sort_order ?? ''}">Edit</a></div>` : '';
                     const delItem = canDelete ? `<div class="menu-item px-3"><a href="#" class="menu-link px-3 text-danger btn-delete" data-id="${data}">Hapus</a></div>` : '';
                     const actions = `${editItem}${delItem}`;
                     if (!actions) return '';
@@ -193,18 +217,20 @@
 
         const reloadTable = () => dt.ajax.reload();
         searchInput?.addEventListener('keyup', reloadTable);
+        warehouseFilter?.addEventListener('change', reloadTable);
 
         document.getElementById('btn_open_create')?.addEventListener('click', () => {
             if (!form) return;
             form.reset();
             formId.value = '';
             if (formActive) formActive.value = '1';
+            if (formWarehouse) formWarehouse.value = defaultAreaWarehouseId;
             clearErrors();
             if (titleEl) titleEl.textContent = 'Add Area';
         });
 
         const clearErrors = () => {
-            ['error_code','error_name','error_is_active','error_sort_order'].forEach(id => {
+            ['error_code','error_name','error_warehouse_id','error_is_active','error_sort_order'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.textContent = '';
             });
@@ -267,6 +293,7 @@
             if (formName) formName.value = name || '';
             if (formActive) formActive.value = isActive === '0' ? '0' : '1';
             if (formSort) formSort.value = sortOrder ?? '';
+            if (formWarehouse) formWarehouse.value = this.getAttribute('data-warehouse-id') || defaultAreaWarehouseId;
             clearErrors();
             if (titleEl) titleEl.textContent = 'Edit Area';
             modal?.show();

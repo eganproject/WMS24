@@ -391,6 +391,10 @@
             grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
             column-gap: 1.5rem;
         }
+
+        .stock-flow-page-fields #flow_recipient_fields {
+            grid-column: 1 / -1;
+        }
     </style>
     @endpush
 
@@ -419,7 +423,7 @@
         <div class="card-header border-0 pt-6">
             <div class="card-title flex-column">
                 <h3 class="fw-bolder mb-1">Informasi Dokumen{{ $formPage === 'edit' && $formEditCode ? ' · '.$formEditCode : '' }}</h3>
-                <div class="text-muted fs-7">Tanggal, referensi, supplier, dan surat jalan.</div>
+                <div class="text-muted fs-7">{{ $formFieldsHint ?? 'Tanggal, referensi, supplier, dan surat jalan.' }}</div>
             </div>
         </div>
         <div class="card-body pt-2">

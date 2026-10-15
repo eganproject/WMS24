@@ -5,12 +5,14 @@ namespace Tests\Feature\Admin;
 use App\Http\Middleware\AuthorizeMenuPermission;
 use App\Models\InboundTransaction;
 use App\Models\Item;
+use App\Models\OutboundTransaction;
 use App\Models\ItemBarcode;
 use App\Models\ItemStock;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Support\InboundScanStatus;
 use App\Support\ItemBarcodeResolver;
+use App\Support\OutboundManualQcStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -151,6 +153,75 @@ class FullPageFormsTest extends TestCase
             ->assertOk()
             ->assertSee('id="modal_stock_flow"', false)
             ->assertSee('const formPageMode = null;', false);
+    }
+
+    public function test_outbound_manual_create_page_renders_form_and_list_links_to_it(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)
+            ->withoutMiddleware(AuthorizeMenuPermission::class)
+            ->get(route('admin.outbound.manuals.create'))
+            ->assertOk()
+            ->assertSee('const formPageMode = "create";', false)
+            ->assertSee('id="flow_recipient_name"', false)
+            ->assertDontSee('id="modal_stock_flow"', false);
+
+        $this->actingAs($user)
+            ->withoutMiddleware(AuthorizeMenuPermission::class)
+            ->get(route('admin.outbound.manuals.index'))
+            ->assertOk()
+            ->assertDontSee('id="modal_stock_flow"', false)
+            ->assertSee('"edit_page":', false);
+    }
+
+    public function test_outbound_manual_edit_page_only_for_editable_status(): void
+    {
+        $user = User::factory()->create();
+        $editable = $this->outboundManual('OUT-MNL-EDIT-1', OutboundManualQcStatus::PENDING_QC);
+        $locked = $this->outboundManual('OUT-MNL-EDIT-2', OutboundManualQcStatus::QC_SCANNING);
+
+        $this->actingAs($user)
+            ->withoutMiddleware(AuthorizeMenuPermission::class)
+            ->get(route('admin.outbound.manuals.edit', $editable->id))
+            ->assertOk()
+            ->assertSee('const formPageMode = "edit";', false)
+            ->assertSee('OUT-MNL-EDIT-1');
+
+        $this->actingAs($user)
+            ->withoutMiddleware(AuthorizeMenuPermission::class)
+            ->get(route('admin.outbound.manuals.edit', $locked->id))
+            ->assertRedirect(route('admin.outbound.manuals.detail', $locked->id));
+    }
+
+    public function test_other_outbound_lists_keep_modal_form(): void
+    {
+        $user = User::factory()->create();
+
+        foreach (['admin.outbound.pickers.index', 'admin.outbound.returns.index'] as $routeName) {
+            $this->actingAs($user)
+                ->withoutMiddleware(AuthorizeMenuPermission::class)
+                ->get(route($routeName))
+                ->assertOk()
+                ->assertSee('id="modal_stock_flow"', false)
+                ->assertSee('const formPageMode = null;', false);
+        }
+    }
+
+    private function outboundManual(string $code, string $status): OutboundTransaction
+    {
+        $warehouse = Warehouse::firstOrCreate(['code' => 'GUDANG_DISPLAY'], [
+            'name' => 'Gudang Display',
+            'type' => 'display',
+        ]);
+
+        return OutboundTransaction::create([
+            'code' => $code,
+            'type' => 'manual',
+            'warehouse_id' => $warehouse->id,
+            'transacted_at' => now(),
+            'status' => $status,
+        ]);
     }
 
     private function receipt(string $code, string $status): InboundTransaction

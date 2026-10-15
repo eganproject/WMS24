@@ -55,6 +55,8 @@ class FullPageFormsTest extends TestCase
         $response->assertSee('Edit Item');
         $response->assertSee('"sku":"SKU-EDIT-01"', false);
         $response->assertSee('"koli_qty":12', false);
+        $response->assertSee('"main_area_id":null', false);
+        $response->assertSee('id="item_main_area_id"', false);
         $response->assertSee('"barcode_value":"8990001112223"', false);
         $response->assertSee(route('admin.masterdata.items.update', ':id'), false);
     }

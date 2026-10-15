@@ -414,7 +414,9 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::post('/manuals', [OutboundController::class, 'manualsStore'])->name('manuals.store');
         Route::post('/manuals/import', [OutboundController::class, 'manualsImport'])->name('manuals.import');
         Route::get('/manuals/template', [OutboundController::class, 'manualsTemplate'])->name('manuals.template');
+        Route::get('/manuals/create', [OutboundController::class, 'manualsCreate'])->name('manuals.create');
         Route::get('/manuals/{id}', [OutboundController::class, 'manualsShow'])->name('manuals.show');
+        Route::get('/manuals/{id}/edit', [OutboundController::class, 'manualsEdit'])->name('manuals.edit');
         Route::put('/manuals/{id}', [OutboundController::class, 'manualsUpdate'])->name('manuals.update');
         Route::delete('/manuals/{id}', [OutboundController::class, 'manualsDestroy'])->name('manuals.destroy');
         Route::get('/manuals/{id}/detail', [OutboundController::class, 'manualsDetail'])->name('manuals.detail');

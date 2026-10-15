@@ -87,6 +87,16 @@ class OutboundController extends Controller
         return $this->show('picker', $id);
     }
 
+    public function manualsCreate()
+    {
+        return $this->formPage('manual', 'Tambah Outbound Manual', 'manuals');
+    }
+
+    public function manualsEdit(int $id)
+    {
+        return $this->formPage('manual', 'Edit Outbound Manual', 'manuals', $id);
+    }
+
     public function manualsShow(int $id)
     {
         return $this->show('manual', $id);
@@ -327,6 +337,34 @@ class OutboundController extends Controller
 
     private function index(string $type, string $pageTitle, string $routeBase)
     {
+        return view('admin.stock-flow.index', $this->indexViewData($type, $pageTitle, $routeBase));
+    }
+
+    private function formPage(string $type, string $pageTitle, string $routeBase, ?int $id = null)
+    {
+        $transaction = null;
+        if ($id !== null) {
+            $transaction = OutboundTransaction::where('type', $type)->findOrFail($id);
+            if (in_array($transaction->status ?? 'pending', $this->lockedStatusesFor($type), true)) {
+                return redirect()->route("admin.outbound.{$routeBase}.detail", $transaction->id);
+            }
+        }
+
+        return view('admin.stock-flow.index', array_merge($this->indexViewData($type, $pageTitle, $routeBase), [
+            'pageTitle' => $pageTitle,
+            'formPage' => $transaction ? 'edit' : 'create',
+            'formEditId' => $transaction?->id,
+            'formEditCode' => $transaction?->code,
+            'formListTitle' => 'Outbound Manual',
+            'formFieldsHint' => 'Gudang, tanggal, referensi, penerima, dan surat jalan.',
+            'formDetailUrl' => $transaction
+                ? route("admin.outbound.{$routeBase}.detail", $transaction->id)
+                : null,
+        ]));
+    }
+
+    private function indexViewData(string $type, string $pageTitle, string $routeBase): array
+    {
         $items = Item::orderBy('name')->get(['id', 'sku', 'name', 'koli_qty', 'item_type']);
         $warehouses = Warehouse::orderBy('name')->get(['id', 'name', 'code']);
         $suppliers = $this->usesSupplier($type)
@@ -354,6 +392,7 @@ class OutboundController extends Controller
                 'delivery_note' => route('admin.outbound.delivery-notes.show', ':id'),
                 'delivery_note_print' => route('admin.outbound.delivery-notes.print', ':id'),
                 'approve' => route('admin.outbound.manuals.approve', ':id'),
+                'edit_page' => route('admin.outbound.manuals.edit', ':id'),
             ],
             'return' => [
                 'store' => route('admin.outbound.returns.store'),
@@ -367,10 +406,12 @@ class OutboundController extends Controller
             ],
         ];
 
-        return view('admin.stock-flow.index', [
+        return [
             'pageTitle' => $pageTitle,
             'dataUrl' => route("admin.outbound.{$routeBase}.data"),
             'storeUrl' => route("admin.outbound.{$routeBase}.store"),
+            'createPageUrl' => $type === 'manual' ? route('admin.outbound.manuals.create') : null,
+            'indexUrl' => route("admin.outbound.{$routeBase}.index"),
             'showUrlTpl' => route("admin.outbound.{$routeBase}.show", ':id'),
             'updateUrlTpl' => route("admin.outbound.{$routeBase}.update", ':id'),
             'deleteUrlTpl' => route("admin.outbound.{$routeBase}.destroy", ':id'),
@@ -450,7 +491,7 @@ class OutboundController extends Controller
             'initialWarehouseId' => request()->input('warehouse_id'),
             'initialStatus' => request()->input('status'),
             'initialSearch' => request()->input('q'),
-        ]);
+        ];
     }
 
     private function data(Request $request, string $type)

@@ -149,6 +149,9 @@ class BundleService
                 'required_qty' => $row['required_qty'],
             ]);
         }
+
+        // Item::saved sudah memicu sync sebelum komponen tersimpan; ulangi agar stok virtual API memakai komponen terbaru.
+        StockApiSyncService::syncItem($bundle->id);
     }
 
     public static function summarize(Item $item): string

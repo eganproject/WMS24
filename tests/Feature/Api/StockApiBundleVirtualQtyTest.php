@@ -62,10 +62,12 @@ class StockApiBundleVirtualQtyTest extends TestCase
 
         $current = collect($this->getJson('/api/v1/stocks', $headers)->assertOk()->json('data'))->keyBy('sku');
         $this->assertEquals(5, $current['ZBUNDLE-1']['qty']);
+        $this->assertSame(0, $current['ZBUNDLE-1']['min_qty']);
         $this->assertEquals(14, $current['KOMP-A']['qty']);
 
         $historical = collect($this->getJson('/api/v1/stocks?as_of='.now()->format('Y-m-d'), $headers)->assertOk()->json('data'))->keyBy('sku');
         $this->assertEquals(5, $historical['ZBUNDLE-1']['qty']);
+        $this->assertSame(0, $historical['ZBUNDLE-1']['min_qty']);
         $this->assertEquals(12, $historical['KOMP-B']['qty']);
 
         $beforeStock = collect($this->getJson('/api/v1/stocks?as_of='.now()->subDays(3)->format('Y-m-d'), $headers)->assertOk()->json('data'))->keyBy('sku');

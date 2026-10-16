@@ -6,6 +6,7 @@ use App\Exports\StockBalanceReportExport;
 use App\Exports\StockMovementAnalysisExport;
 use App\Http\Controllers\Controller;
 use App\Support\Permission;
+use App\Support\ResiStoreFilter;
 use App\Support\StockBalanceReportService;
 use App\Support\StockMovementAnalysisService;
 use Illuminate\Http\Request;
@@ -21,6 +22,7 @@ class StockBalanceReportController extends Controller
             'exportUrl' => route('admin.reports.stock-balance.export'),
             'defaultDateFrom' => now()->startOfMonth()->toDateString(),
             'defaultDateTo' => now()->toDateString(),
+            'stores' => ResiStoreFilter::options(),
         ]);
     }
 
@@ -33,6 +35,10 @@ class StockBalanceReportController extends Controller
 
         if ($request->input('analysis') === 'movement') {
             return $this->movementData($request, $filters, $movementAnalysis);
+        }
+
+        if ($request->input('analysis') === 'movement_stores') {
+            return response()->json(['data' => $movementAnalysis->storeBreakdown($filters)]);
         }
 
         $query = $reportService->consolidatedQuery($filters);
@@ -234,6 +240,7 @@ class StockBalanceReportController extends Controller
             'q' => ['nullable', 'string', 'max:150'],
             'movement_category' => ['nullable', 'string', 'in:fast,medium,slow,non_moving'],
             'days_cover' => ['nullable', 'string', 'in:up_to_7,8_to_14,15_to_30,31_to_60,over_60,unavailable'],
+            'store_id' => ResiStoreFilter::rule(),
         ], [
             'date_from.required' => 'Tanggal awal wajib diisi.',
             'date_to.required' => 'Tanggal akhir wajib diisi.',
@@ -258,6 +265,7 @@ class StockBalanceReportController extends Controller
             'q' => trim((string) ($validated['q'] ?? '')),
             'movement_category' => trim((string) ($validated['movement_category'] ?? '')),
             'days_cover' => trim((string) ($validated['days_cover'] ?? '')),
+            'store_id' => ResiStoreFilter::normalize($validated['store_id'] ?? null),
         ];
     }
 }

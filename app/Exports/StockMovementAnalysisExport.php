@@ -23,6 +23,7 @@ class StockMovementAnalysisExport implements WithMultipleSheets
             new StockMovementAnalysisSummarySheet($report),
             new StockMovementAnalysisTableSheet($report, 'Detail Semua SKU'),
             new StockMovementAnalysisTableSheet($report, 'Fokus Tindak Lanjut', true),
+            new StockMovementAnalysisStoreSheet($report),
         ];
     }
 }

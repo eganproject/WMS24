@@ -27,6 +27,13 @@
                         <option value="{{ $operator->id }}">{{ $operator->name }}</option>
                     @endforeach
                 </select>
+                <select class="form-select form-select-solid w-200px" id="filter_store">
+                    <option value="">Semua Toko</option>
+                    @foreach($stores as $store)
+                        <option value="{{ $store->id }}">{{ $store->name }}</option>
+                    @endforeach
+                    <option value="none">Tanpa Toko</option>
+                </select>
                 <button type="button" class="btn btn-light" id="filter_apply">Terapkan</button>
                 <button type="button" class="btn btn-light" id="filter_reset">Reset</button>
                 <button type="button" class="btn btn-success" id="export_excel"><i class="fas fa-file-excel me-1"></i>Export Excel</button>
@@ -94,18 +101,39 @@
                     </div>
                 </div>
             </div>
+            <div class="table-responsive mb-6">
+                <div class="fs-6 fw-bold mb-2">Rekap per Toko</div>
+                <table class="table table-row-dashed align-middle">
+                    <thead>
+                        <tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0">
+                            <th>Toko</th>
+                            <th class="text-end">Import Aktif</th>
+                            <th class="text-end">Sudah Scan Out</th>
+                            <th class="text-end">Belum Scan Out</th>
+                            <th class="text-end">Canceled</th>
+                            <th class="text-end">Progres</th>
+                        </tr>
+                    </thead>
+                    <tbody id="store_comparison_body">
+                        <tr>
+                            <td colspan="6" class="text-center text-muted py-6">Tidak ada data.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
             <div class="table-responsive">
                 <table class="table table-row-dashed align-middle">
                     <thead>
                         <tr class="text-start text-gray-400 fw-bolder fs-7 text-uppercase gs-0">
-                            <th width="35%">ID Pesanan</th>
-                            <th width="35%">No Resi</th>
-                            <th width="30%">Tanggal Upload</th>
+                            <th width="25%">ID Pesanan</th>
+                            <th width="25%">No Resi</th>
+                            <th width="25%">Toko</th>
+                            <th width="25%">Tanggal Upload</th>
                         </tr>
                     </thead>
                     <tbody id="missing_scan_out_body">
                         <tr>
-                            <td colspan="3" class="text-center text-muted py-6">Tidak ada data tertinggal.</td>
+                            <td colspan="4" class="text-center text-muted py-6">Tidak ada data tertinggal.</td>
                         </tr>
                     </tbody>
                 </table>
@@ -155,6 +183,9 @@
         const dateFromEl = document.getElementById('filter_date_from');
         const dateToEl = document.getElementById('filter_date_to');
         const operatorSelect = document.getElementById('filter_operator');
+        const storeSelect = document.getElementById('filter_store');
+        const storeComparisonBody = document.getElementById('store_comparison_body');
+        const escapeHtml = (value) => String(value ?? '-').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
         const searchInput = document.querySelector('[data-kt-filter="search"]');
         const applyBtn = document.getElementById('filter_apply');
         const resetBtn = document.getElementById('filter_reset');
@@ -207,13 +238,14 @@
             const paginated = samples.slice(start, start + perPage);
 
             if (!paginated.length) {
-                missingBody.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-6">Tidak ada data tertinggal.</td></tr>';
+                missingBody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-6">Tidak ada data tertinggal.</td></tr>';
             } else {
                 missingBody.innerHTML = paginated.map((sample) => `
                     <tr>
-                        <td>${sample.id_pesanan || '-'}</td>
-                        <td>${sample.no_resi || '-'}</td>
-                        <td>${sample.tanggal_upload || '-'}</td>
+                        <td>${escapeHtml(sample.id_pesanan || '-')}</td>
+                        <td>${escapeHtml(sample.no_resi || '-')}</td>
+                        <td>${escapeHtml(sample.store || '-')}</td>
+                        <td>${escapeHtml(sample.tanggal_upload || '-')}</td>
                     </tr>
                 `).join('');
             }
@@ -248,6 +280,22 @@
             if (comparisonMissingEl) comparisonMissingEl.textContent = missingTotal.toLocaleString('id-ID');
             if (comparisonCanceledEl) comparisonCanceledEl.textContent = canceledTotal.toLocaleString('id-ID');
 
+            const stores = Array.isArray(comparison?.stores) ? comparison.stores : [];
+            if (storeComparisonBody) {
+                storeComparisonBody.innerHTML = stores.length
+                    ? stores.map((row) => `
+                        <tr>
+                            <td class="fw-semibold">${escapeHtml(row.store)}</td>
+                            <td class="text-end">${Number(row.import_total || 0).toLocaleString('id-ID')}</td>
+                            <td class="text-end">${Number(row.scanned_total || 0).toLocaleString('id-ID')}</td>
+                            <td class="text-end">${Number(row.missing_total || 0).toLocaleString('id-ID')}</td>
+                            <td class="text-end">${Number(row.canceled_total || 0).toLocaleString('id-ID')}</td>
+                            <td class="text-end">${Number(row.scanned_percentage || 0).toLocaleString('id-ID')}%</td>
+                        </tr>
+                    `).join('')
+                    : '<tr><td colspan="6" class="text-center text-muted py-6">Tidak ada data.</td></tr>';
+            }
+
             comparisonState.samples = Array.isArray(comparison?.missing_samples) ? comparison.missing_samples : [];
             comparisonState.page = 1;
             renderMissingRows();
@@ -269,6 +317,7 @@
                     params.date_from = dateFromEl?.value || '';
                     params.date_to = dateToEl?.value || '';
                     params.operator_id = operatorSelect?.value || '';
+                    params.store_id = storeSelect?.value || '';
                     params.q = searchInput?.value || '';
                 }
             },
@@ -291,11 +340,13 @@
             date_from: dateFromEl?.value || '',
             date_to: dateToEl?.value || '',
             operator_id: operatorSelect?.value || '',
+            store_id: storeSelect?.value || '',
             q: searchInput?.value || '',
         });
 
         applyBtn?.addEventListener('click', reloadTable);
         operatorSelect?.addEventListener('change', reloadTable);
+        storeSelect?.addEventListener('change', reloadTable);
         searchInput?.addEventListener('keyup', (event) => {
             if (event.key === 'Enter') reloadTable();
         });
@@ -304,6 +355,7 @@
             if (fpFrom) fpFrom.clear(); else if (dateFromEl) dateFromEl.value = todayStr || '';
             if (fpTo) fpTo.clear(); else if (dateToEl) dateToEl.value = todayStr || '';
             if (operatorSelect) operatorSelect.value = '';
+            if (storeSelect) storeSelect.value = '';
             if (searchInput) searchInput.value = '';
             reloadTable();
         });

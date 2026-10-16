@@ -22,7 +22,14 @@
                         <option value="{{ $operator->id }}">{{ $operator->name }}</option>
                     @endforeach
                 </select>
-                <input type="text" class="form-control form-control-solid w-225px" id="filter_search" placeholder="Resi / pesanan / ekspedisi">
+                <select class="form-select form-select-solid w-200px" id="filter_store">
+                    <option value="">Semua Toko</option>
+                    @foreach($stores as $store)
+                        <option value="{{ $store->id }}">{{ $store->name }}</option>
+                    @endforeach
+                    <option value="none">Tanpa Toko</option>
+                </select>
+                <input type="text" class="form-control form-control-solid w-225px" id="filter_search" placeholder="Resi / pesanan / ekspedisi / toko">
                 <button type="button" class="btn btn-primary" id="filter_apply"><i class="fas fa-filter me-1"></i>Terapkan</button>
                 <button type="button" class="btn btn-light" id="filter_reset">Reset</button>
                 <button type="button" class="btn btn-success" id="export_excel"><i class="fas fa-file-excel me-1"></i>Export Excel</button>
@@ -115,6 +122,7 @@
             <ul class="nav nav-tabs nav-line-tabs nav-line-tabs-2x fs-6 fw-bold border-0">
                 <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab_hourly">Per Jam</a></li>
                 <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab_operator">Per Petugas</a></li>
+                <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab_store">Per Toko</a></li>
                 <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab_detail">Detail Resi</a></li>
             </ul>
         </div>
@@ -137,10 +145,18 @@
                     </table>
                 </div>
             </div>
+            <div class="tab-pane fade" id="tab_store">
+                <div class="table-responsive">
+                    <table class="table align-middle table-row-dashed fs-6 gy-4" id="store_table">
+                        <thead><tr class="text-gray-500 fw-bold fs-7 text-uppercase"><th>Toko</th><th class="text-end">Resi QC</th><th class="text-end">Porsi</th><th class="text-end">Petugas</th><th class="text-end">SKU</th><th class="text-end">Qty</th><th class="text-end">Durasi</th><th class="text-end">Reset</th><th class="text-end">Substitusi</th><th class="text-end">Double Scan</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
             <div class="tab-pane fade" id="tab_detail">
                 <div class="table-responsive">
                     <table class="table align-middle table-row-dashed fs-6 gy-4" id="detail_table">
-                        <thead><tr class="text-gray-500 fw-bold fs-7 text-uppercase"><th>Selesai</th><th>Petugas</th><th>ID Pesanan</th><th>No. Resi</th><th>Ekspedisi</th><th class="text-end">SKU</th><th class="text-end">Qty</th><th class="text-end">Durasi</th><th class="text-end">Reset</th><th class="text-end">Substitusi</th><th class="text-end">Double Scan</th></tr></thead>
+                        <thead><tr class="text-gray-500 fw-bold fs-7 text-uppercase"><th>Selesai</th><th>Petugas</th><th>ID Pesanan</th><th>No. Resi</th><th>Toko</th><th>Ekspedisi</th><th class="text-end">SKU</th><th class="text-end">Qty</th><th class="text-end">Durasi</th><th class="text-end">Reset</th><th class="text-end">Substitusi</th><th class="text-end">Double Scan</th></tr></thead>
                         <tbody></tbody>
                     </table>
                 </div>
@@ -162,6 +178,7 @@ document.addEventListener('DOMContentLoaded', () => {
         from: document.getElementById('filter_date_from'),
         to: document.getElementById('filter_date_to'),
         operator: document.getElementById('filter_operator'),
+        store: document.getElementById('filter_store'),
         search: document.getElementById('filter_search'),
         alert: document.getElementById('report_alert'),
     };
@@ -202,7 +219,7 @@ document.addEventListener('DOMContentLoaded', () => {
         data: [], searching: false, pageLength: 25, order: [[0, 'desc']],
         columns: [
             { data: 'completed_at', render: textRenderer }, { data: 'operator', render: textRenderer }, { data: 'id_pesanan', render: textRenderer },
-            { data: 'no_resi', render: textRenderer }, { data: 'expedition', render: textRenderer }, { data: 'total_sku', className: 'text-end' },
+            { data: 'no_resi', render: textRenderer }, { data: 'store', render: textRenderer }, { data: 'expedition', render: textRenderer }, { data: 'total_sku', className: 'text-end' },
             { data: 'total_qty', className: 'text-end' }, { data: 'duration_minutes', className: 'text-end', render: durationRenderer },
             { data: 'reset_count', className: 'text-end' }, { data: 'substitution_count', className: 'text-end' },
             { data: 'duplicate_attempts', className: 'text-end' },
@@ -210,8 +227,20 @@ document.addEventListener('DOMContentLoaded', () => {
         language: { emptyTable: 'Tidak ada detail QC pada filter ini.' }
     });
 
+    const storeTable = $('#store_table').DataTable({
+        data: [], searching: false, pageLength: 25, order: [[1, 'desc']],
+        columns: [
+            { data: 'store', render: textRenderer }, { data: 'total_resi', className: 'text-end' },
+            { data: 'percentage', className: 'text-end', render: (data, type) => type === 'display' ? `${decimal.format(Number(data) || 0)}%` : (Number(data) || 0) },
+            { data: 'total_operators', className: 'text-end' }, { data: 'total_sku', className: 'text-end' }, { data: 'total_qty', className: 'text-end' },
+            { data: 'avg_duration_minutes', className: 'text-end', render: durationRenderer }, { data: 'reset_count', className: 'text-end' },
+            { data: 'substitution_count', className: 'text-end' }, { data: 'duplicate_attempts', className: 'text-end' },
+        ],
+        language: { emptyTable: 'Tidak ada data toko pada filter ini.' }
+    });
+
     const filters = () => ({
-        date_from: els.from.value || '', date_to: els.to.value || '', operator_id: els.operator.value || '', q: els.search.value.trim(),
+        date_from: els.from.value || '', date_to: els.to.value || '', operator_id: els.operator.value || '', store_id: els.store.value || '', q: els.search.value.trim(),
     });
     const setText = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
 
@@ -274,6 +303,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderCharts(json.charts);
             hourlyTable.clear().rows.add(json.hourly || []).draw();
             operatorTable.clear().rows.add(json.operators || []).draw();
+            storeTable.clear().rows.add(json.stores || []).draw();
             detailTable.clear().rows.add(json.details || []).draw();
         } catch (error) {
             els.alert.textContent = error.message || 'Gagal memuat laporan QC.';
@@ -288,12 +318,13 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('filter_reset').addEventListener('click', () => {
         if (fromPicker) fromPicker.setDate(today); else els.from.value = today;
         if (toPicker) toPicker.setDate(today); else els.to.value = today;
-        els.operator.value = ''; els.search.value = ''; load();
+        els.operator.value = ''; els.store.value = ''; els.search.value = ''; load();
     });
     document.getElementById('export_excel').addEventListener('click', () => {
         window.location.href = `${exportUrl}?${new URLSearchParams(filters())}`;
     });
     els.operator.addEventListener('change', load);
+    els.store.addEventListener('change', load);
     els.search.addEventListener('keyup', event => { if (event.key === 'Enter') load(); });
     load();
 });

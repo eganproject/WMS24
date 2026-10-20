@@ -15,3 +15,9 @@ Schedule::command('attendance:webhook-logs:purge')
 Schedule::command('inventory:low-stock-snapshot --warehouse=all')
     ->dailyAt('07:00')
     ->withoutOverlapping();
+
+if (config('backup.enabled')) {
+    Schedule::command('db:backup')
+        ->dailyAt(config('backup.schedule_time', '01:00'))
+        ->withoutOverlapping(180);
+}

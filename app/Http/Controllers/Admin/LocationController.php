@@ -183,6 +183,8 @@ class LocationController extends Controller
             $inUse = Item::query()
                 ->where('location_id', $location->id)
                 ->orWhere('main_location_id', $location->id)
+                ->orWhere('secondary_location_id', $location->id)
+                ->orWhere('main_secondary_location_id', $location->id)
                 ->exists();
             if ($inUse) {
                 throw ValidationException::withMessages([
@@ -235,6 +237,8 @@ class LocationController extends Controller
                 'address' => $location->area?->code ?? $location->code,
             ]);
             Item::where('main_location_id', $location->id)->update(['main_location_id' => null]);
+            Item::where('secondary_location_id', $location->id)->update(['secondary_location_id' => null]);
+            Item::where('main_secondary_location_id', $location->id)->update(['main_secondary_location_id' => null]);
             $location->delete();
             DB::commit();
             return response()->json(['message' => 'Lokasi berhasil dihapus']);

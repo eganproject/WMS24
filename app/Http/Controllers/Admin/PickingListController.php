@@ -31,7 +31,7 @@ class PickingListController extends Controller
     public function data(Request $request)
     {
         $baseQuery = PickingList::query()
-            ->with('item', 'item.location.area', 'item.area')
+            ->with('item', 'item.location.area', 'item.secondaryLocation', 'item.area')
             ->orderBy('list_date', 'desc')
             ->orderBy('sku');
         $this->applyPackerExceptionFilter($baseQuery);
@@ -394,7 +394,7 @@ class PickingListController extends Controller
         }
 
         $query = PickingList::query()
-            ->with('item', 'item.location.area', 'item.area')
+            ->with('item', 'item.location.area', 'item.secondaryLocation', 'item.area')
             ->orderBy('list_date', 'desc')
             ->orderBy('sku');
         $this->applyPackerExceptionFilter($query);
@@ -417,7 +417,7 @@ class PickingListController extends Controller
         $rows = $query->get()->map(function ($row) {
             $item = $row->item;
             $area = $item?->resolvedArea();
-            $address = $item?->resolvedAddress() ?: '-';
+            $address = $item?->displayAddressLabel() ?: '-';
             return [
                 'sku' => $row->sku ?? '-',
                 'name' => $item?->name ?? '-',

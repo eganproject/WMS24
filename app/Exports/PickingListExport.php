@@ -20,7 +20,7 @@ class PickingListExport implements FromCollection, WithHeadings, WithMapping, Sh
     public function collection(): Collection
     {
         $query = PickingList::query()
-            ->with('item', 'item.location.area', 'item.area')
+            ->with('item', 'item.location.area', 'item.secondaryLocation', 'item.area')
             ->orderBy('list_date', 'desc')
             ->orderBy('sku');
         $query->whereNotIn('sku', QcScanException::query()->select('sku'));
@@ -72,7 +72,7 @@ class PickingListExport implements FromCollection, WithHeadings, WithMapping, Sh
     {
         $item = $row->item;
         $area = $item?->resolvedArea();
-        $address = $item?->resolvedAddress() ?: '-';
+        $address = $item?->displayAddressLabel() ?: '-';
         return [
             $row->sku ?? '-',
             $item?->name ?? '-',

@@ -52,6 +52,8 @@ class ItemStockController extends Controller
             'category',
             'location.area',
             'mainLocation',
+            'secondaryLocation',
+            'mainSecondaryLocation',
             'area',
             'bundleComponents.component',
             'stocks' => function ($q) use ($defaultId, $displayId, $damagedId) {
@@ -148,6 +150,8 @@ class ItemStockController extends Controller
                 'category' => $i->category?->name ?? '-',
                 'address' => $i->resolvedAddress(),
                 'main_address' => $i->mainAddress(),
+                'display_address_label' => $i->displayAddressLabel(),
+                'main_address_label' => $i->mainAddressLabel(),
                 'area_code' => $area?->code ?? '',
                 'rack_code' => $location?->rack_code ?? '',
                 'column_no' => $location?->column_no ?? '',

@@ -170,6 +170,38 @@
                         <div class="form-text">Boleh hanya area jika slot detail belum ada. Jika rack, kolom, atau baris diisi, semuanya wajib lengkap.</div>
                         <div class="invalid-feedback d-block" id="error_address"></div>
                     </div>
+                    <div class="separator separator-dashed my-7"></div>
+                    <div class="fw-bolder fs-6 mb-1">Alamat 2 <span class="text-muted fw-normal fs-7">(opsional)</span></div>
+                    <div class="text-muted fs-7 mb-5">Hanya informasi lokasi tambahan untuk gudang display. Tidak memengaruhi stok, penerimaan, atau transfer.</div>
+                    <div class="fv-row mb-7">
+                        <label class="fs-6 fw-bold form-label mb-2">Area</label>
+                        <select name="secondary_area_id" id="item_secondary_area_id" class="form-select form-select-solid" data-placeholder="Pilih area gudang display">
+                            <option value="">Pilih area gudang display</option>
+                            @foreach($areas as $area)
+                                <option value="{{ $area->id }}" data-code="{{ $area->code }}">{{ $area->code }} - {{ $area->name }}</option>
+                            @endforeach
+                        </select>
+                        <div class="invalid-feedback d-block" id="error_secondary_area_id"></div>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-4">
+                            <label class="fs-6 fw-bold form-label mb-2">Rack</label>
+                            <input type="text" class="form-control form-control-solid" name="secondary_rack_code" id="item_secondary_rack_code" />
+                            <div class="invalid-feedback d-block" id="error_secondary_rack_code"></div>
+                        </div>
+                        <div class="col-4">
+                            <label class="fs-6 fw-bold form-label mb-2">Kolom</label>
+                            <input type="number" min="1" class="form-control form-control-solid" name="secondary_column_no" id="item_secondary_column_no" />
+                            <div class="invalid-feedback d-block" id="error_secondary_column_no"></div>
+                        </div>
+                        <div class="col-4">
+                            <label class="fs-6 fw-bold form-label mb-2">Baris</label>
+                            <input type="number" min="1" class="form-control form-control-solid" name="secondary_row_no" id="item_secondary_row_no" />
+                            <div class="invalid-feedback d-block" id="error_secondary_row_no"></div>
+                        </div>
+                    </div>
+                    <div class="form-text">Jika diisi, area, rack, kolom, dan baris wajib lengkap. Kosongkan semua untuk menghapus alamat 2.</div>
+                    <div class="invalid-feedback d-block" id="error_secondary_address"></div>
                 </div>
             </div>
 
@@ -213,6 +245,38 @@
                     </div>
                     <div class="form-text">Jika diisi, area, rack, kolom, dan baris wajib lengkap. Kosongkan semua untuk menghapus lokasi gudang besar.</div>
                     <div class="invalid-feedback d-block" id="error_main_address"></div>
+                    <div class="separator separator-dashed my-7"></div>
+                    <div class="fw-bolder fs-6 mb-1">Alamat 2 <span class="text-muted fw-normal fs-7">(opsional)</span></div>
+                    <div class="text-muted fs-7 mb-5">Hanya informasi lokasi tambahan untuk gudang besar. Tidak memengaruhi stok, penerimaan, atau transfer.</div>
+                    <div class="fv-row mb-7">
+                        <label class="fs-6 fw-bold form-label mb-2">Area</label>
+                        <select name="main_secondary_area_id" id="item_main_secondary_area_id" class="form-select form-select-solid" data-placeholder="Pilih area gudang besar">
+                            <option value="">Pilih area gudang besar</option>
+                            @foreach($mainAreas as $area)
+                                <option value="{{ $area->id }}" data-code="{{ $area->code }}">{{ $area->code }} - {{ $area->name }}</option>
+                            @endforeach
+                        </select>
+                        <div class="invalid-feedback d-block" id="error_main_secondary_area_id"></div>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-4">
+                            <label class="fs-6 fw-bold form-label mb-2">Rack</label>
+                            <input type="text" class="form-control form-control-solid" name="main_secondary_rack_code" id="item_main_secondary_rack_code" />
+                            <div class="invalid-feedback d-block" id="error_main_secondary_rack_code"></div>
+                        </div>
+                        <div class="col-4">
+                            <label class="fs-6 fw-bold form-label mb-2">Kolom</label>
+                            <input type="number" min="1" class="form-control form-control-solid" name="main_secondary_column_no" id="item_main_secondary_column_no" />
+                            <div class="invalid-feedback d-block" id="error_main_secondary_column_no"></div>
+                        </div>
+                        <div class="col-4">
+                            <label class="fs-6 fw-bold form-label mb-2">Baris</label>
+                            <input type="number" min="1" class="form-control form-control-solid" name="main_secondary_row_no" id="item_main_secondary_row_no" />
+                            <div class="invalid-feedback d-block" id="error_main_secondary_row_no"></div>
+                        </div>
+                    </div>
+                    <div class="form-text">Jika diisi, area, rack, kolom, dan baris wajib lengkap. Kosongkan semua untuk menghapus alamat 2.</div>
+                    <div class="invalid-feedback d-block" id="error_main_secondary_address"></div>
                 </div>
             </div>
 
@@ -280,6 +344,29 @@
         const formMainRack = document.getElementById('item_main_rack_code');
         const formMainColumn = document.getElementById('item_main_column_no');
         const formMainRow = document.getElementById('item_main_row_no');
+        const secondarySlotGroups = ['secondary_', 'main_secondary_'].map((prefix) => ({
+            prefix,
+            area: document.getElementById(`item_${prefix}area_id`),
+            rack: document.getElementById(`item_${prefix}rack_code`),
+            column: document.getElementById(`item_${prefix}column_no`),
+            row: document.getElementById(`item_${prefix}row_no`),
+        }));
+        const setSelectValue = (select, val) => {
+            if (!select) return;
+            const normalized = (val === null || val === undefined || val === '' || val === 'null') ? '' : String(val);
+            select.value = normalized;
+            if (typeof $ !== 'undefined' && $(select).data('select2')) {
+                $(select).val(normalized).trigger('change');
+            }
+        };
+        const fillSecondarySlots = (item) => {
+            secondarySlotGroups.forEach((group) => {
+                setSelectValue(group.area, item?.[`${group.prefix}area_id`] ?? '');
+                if (group.rack) group.rack.value = item?.[`${group.prefix}rack_code`] || '';
+                if (group.column) group.column.value = item?.[`${group.prefix}column_no`] || '';
+                if (group.row) group.row.value = item?.[`${group.prefix}row_no`] || '';
+            });
+        };
         const formDescription = document.getElementById('item_description');
         const formSafetyStock = document.getElementById('item_safety_stock');
         const formKoliQty = document.getElementById('item_koli_qty');
@@ -341,6 +428,7 @@
             if (formMainRack) formMainRack.value = '';
             if (formMainColumn) formMainColumn.value = '';
             if (formMainRow) formMainRow.value = '';
+            fillSecondarySlots({});
         };
 
         const refreshExternalBarcodesEmpty = () => {
@@ -461,7 +549,7 @@
             if (bundleCard) bundleCard.style.display = isBundle ? '' : 'none';
             if (externalBarcodesCard) externalBarcodesCard.style.display = isBundle ? 'none' : '';
 
-            [formArea, formRack, formColumn, formRow, formAddress, formMainArea, formMainRack, formMainColumn, formMainRow, formKoliQty, formSafetyStock].forEach((field) => {
+            [formArea, formRack, formColumn, formRow, formAddress, formMainArea, formMainRack, formMainColumn, formMainRow, ...secondarySlotGroups.flatMap((g) => [g.area, g.rack, g.column, g.row]), formKoliQty, formSafetyStock].forEach((field) => {
                 if (!field) return;
                 field.disabled = isBundle;
             });
@@ -484,7 +572,7 @@
         };
 
         const clearErrors = () => {
-            ['error_sku','error_name','error_item_type','error_status','error_category_id','error_area_id','error_rack_code','error_column_no','error_row_no','error_address','error_main_area_id','error_main_rack_code','error_main_column_no','error_main_row_no','error_main_address','error_description','error_koli_qty','error_safety_stock','error_external_barcodes','error_bundle_components'].forEach(id => {
+            ['error_sku','error_name','error_item_type','error_status','error_category_id','error_area_id','error_rack_code','error_column_no','error_row_no','error_address','error_main_area_id','error_main_rack_code','error_main_column_no','error_main_row_no','error_main_address','error_secondary_area_id','error_secondary_rack_code','error_secondary_column_no','error_secondary_row_no','error_secondary_address','error_main_secondary_area_id','error_main_secondary_rack_code','error_main_secondary_column_no','error_main_secondary_row_no','error_main_secondary_address','error_description','error_koli_qty','error_safety_stock','error_external_barcodes','error_bundle_components'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.textContent = '';
             });
@@ -519,6 +607,9 @@
             $(formCategory).select2({ placeholder: 'Pilih kategori', allowClear: true, width: '100%' });
             $(formArea).select2({ placeholder: 'Pilih area', allowClear: true, width: '100%' });
             $(formMainArea).select2({ placeholder: 'Pilih area gudang besar', allowClear: true, width: '100%' });
+            secondarySlotGroups.forEach((group) => {
+                if (group.area) $(group.area).select2({ placeholder: group.area.dataset.placeholder || 'Pilih area', allowClear: true, width: '100%' });
+            });
         }
 
         const fillForm = (item) => {
@@ -536,6 +627,7 @@
             if (formMainRack) formMainRack.value = item?.main_rack_code || '';
             if (formMainColumn) formMainColumn.value = item?.main_column_no || '';
             if (formMainRow) formMainRow.value = item?.main_row_no || '';
+            fillSecondarySlots(item);
             if (formDescription) formDescription.value = item?.description || '';
             if (formKoliQty) formKoliQty.value = item?.koli_qty ?? '';
             if (formSafetyStock) formSafetyStock.value = item?.safety_stock ?? 0;

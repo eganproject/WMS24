@@ -99,8 +99,16 @@
                                     <td class="fw-bold">{{ $address !== '' ? $address : '-' }}</td>
                                 </tr>
                                 <tr>
+                                    <td class="text-muted">Alamat 2 Gudang Display</td>
+                                    <td class="fw-bold">{{ $item->secondaryLocation?->code ?? '-' }}</td>
+                                </tr>
+                                <tr>
                                     <td class="text-muted">Lokasi Gudang Besar</td>
                                     <td class="fw-bold">{{ $item->mainLocation?->code ?? '-' }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted">Alamat 2 Gudang Besar</td>
+                                    <td class="fw-bold">{{ $item->mainSecondaryLocation?->code ?? '-' }}</td>
                                 </tr>
                             @endunless
                             <tr>

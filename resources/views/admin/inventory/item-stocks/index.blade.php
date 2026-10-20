@@ -779,8 +779,8 @@
             detailText('item_detail_name', row.name);
             detailHtml('item_detail_type', renderItemTypeBadge(row.item_type));
             detailText('item_detail_category', row.category);
-            detailText('item_detail_address', row.address);
-            detailText('item_detail_main_address', row.main_address);
+            detailText('item_detail_address', row.display_address_label || row.address);
+            detailText('item_detail_main_address', row.main_address_label || row.main_address);
             detailText('item_detail_area', row.area_code);
             detailText('item_detail_rack', row.rack_code);
             detailText('item_detail_column', row.column_no);

@@ -68,18 +68,29 @@ class LocationService
      */
     public static function resolveMainWarehouseLocation(string $address): ?Location
     {
+        return self::resolveSlotLocation($address, WarehouseService::defaultWarehouseId(), 'lokasi gudang besar');
+    }
+
+    /**
+     * Resolve slot lengkap AREA-RACK-KOLOM-BARIS yang wajib milik gudang $warehouseId.
+     *
+     * @throws \InvalidArgumentException jika format salah atau area milik gudang lain.
+     */
+    public static function resolveSlotLocation(string $address, int $warehouseId, string $label): ?Location
+    {
         $address = trim($address);
         if ($address === '') {
             return null;
         }
 
         if (!self::parseAddress($address)) {
-            throw new \InvalidArgumentException('format lokasi gudang besar harus AREA-RACK-KOLOM-BARIS.');
+            throw new \InvalidArgumentException("format {$label} harus AREA-RACK-KOLOM-BARIS.");
         }
 
-        $location = self::resolveLocation($address, WarehouseService::defaultWarehouseId());
+        $location = self::resolveLocation($address, $warehouseId);
         if (!$location) {
-            throw new \InvalidArgumentException('area pada lokasi gudang besar bukan area gudang besar.');
+            $warehouseLabel = $warehouseId === WarehouseService::defaultWarehouseId() ? 'gudang besar' : 'gudang display';
+            throw new \InvalidArgumentException("area pada {$label} bukan area {$warehouseLabel}.");
         }
 
         return $location;

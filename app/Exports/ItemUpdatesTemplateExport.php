@@ -52,7 +52,7 @@ class ItemUpdatesTemplateExport implements FromCollection, WithHeadings, WithCus
     public function collection(): Collection
     {
         return Item::query()
-            ->with(['category.parent', 'location.area', 'mainLocation'])
+            ->with(['category.parent', 'location.area', 'mainLocation', 'secondaryLocation', 'mainSecondaryLocation'])
             ->orderBy('sku')
             ->get()
             ->map(function (Item $item) {
@@ -64,6 +64,8 @@ class ItemUpdatesTemplateExport implements FromCollection, WithHeadings, WithCus
                         'category' => [$item->category?->parent?->name ?? '', $item->category?->name ?? ''],
                         'address' => [$item->resolvedAddress()],
                         'main_address' => [$item->mainAddress()],
+                        'address_2' => [$item->secondaryAddress()],
+                        'main_address_2' => [$item->mainSecondaryAddress()],
                         'description' => [$item->description ?? ''],
                         'safety_stock' => [(int) ($item->safety_stock ?? 0)],
                         default => [],

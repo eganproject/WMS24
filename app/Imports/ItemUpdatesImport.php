@@ -125,6 +125,12 @@ class ItemUpdatesImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
                 case 'main_address':
                     $this->applyMainAddress($payload, $row, $item, $excelRow);
                     break;
+                case 'address_2':
+                    $this->applySecondarySlot($payload, $row, $item, $excelRow, 'address_2', 'secondary_location_id', WarehouseService::displayWarehouseId(), 'alamat 2 gudang display');
+                    break;
+                case 'main_address_2':
+                    $this->applySecondarySlot($payload, $row, $item, $excelRow, 'main_address_2', 'main_secondary_location_id', WarehouseService::defaultWarehouseId(), 'alamat 2 gudang besar');
+                    break;
                 case 'description':
                     $payload['description'] = $this->nullableTrim($row['description'] ?? null);
                     break;
@@ -225,6 +231,15 @@ class ItemUpdatesImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
     {
         try {
             $payload['main_location_id'] = LocationService::resolveMainWarehouseLocation((string) ($row['main_address'] ?? ''))?->id;
+        } catch (\InvalidArgumentException $e) {
+            $this->fail($excelRow, $item, $e->getMessage());
+        }
+    }
+
+    private function applySecondarySlot(array &$payload, Collection $row, Item $item, int $excelRow, string $header, string $column, int $warehouseId, string $label): void
+    {
+        try {
+            $payload[$column] = LocationService::resolveSlotLocation((string) ($row[$header] ?? ''), $warehouseId, $label)?->id;
         } catch (\InvalidArgumentException $e) {
             $this->fail($excelRow, $item, $e->getMessage());
         }

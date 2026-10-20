@@ -210,7 +210,9 @@ class AreaController extends Controller
             ->where('area_id', $area->id)
             ->when($locationIds->isNotEmpty(), function ($q) use ($locationIds) {
                 $q->orWhereIn('location_id', $locationIds)
-                    ->orWhereIn('main_location_id', $locationIds);
+                    ->orWhereIn('main_location_id', $locationIds)
+                    ->orWhereIn('secondary_location_id', $locationIds)
+                    ->orWhereIn('main_secondary_location_id', $locationIds);
             })
             ->exists();
     }

@@ -23,6 +23,8 @@ class Item extends Model
         'area_id',
         'location_id',
         'main_location_id',
+        'secondary_location_id',
+        'main_secondary_location_id',
         'address',
         'description',
         'safety_stock',
@@ -72,6 +74,52 @@ class Item extends Model
     public function mainAddress(): string
     {
         return (string) ($this->mainLocation?->code ?? '');
+    }
+
+    /**
+     * Alamat 2 di gudang display (opsional, hanya informasi).
+     */
+    public function secondaryLocation()
+    {
+        return $this->belongsTo(Location::class, 'secondary_location_id');
+    }
+
+    /**
+     * Alamat 2 di gudang besar (opsional, hanya informasi).
+     */
+    public function mainSecondaryLocation()
+    {
+        return $this->belongsTo(Location::class, 'main_secondary_location_id');
+    }
+
+    public function secondaryAddress(): string
+    {
+        return (string) ($this->secondaryLocation?->code ?? '');
+    }
+
+    public function mainSecondaryAddress(): string
+    {
+        return (string) ($this->mainSecondaryLocation?->code ?? '');
+    }
+
+    /**
+     * Alamat gudang display untuk ditampilkan: "Alamat 1 / Alamat 2" bila alamat 2 ada.
+     */
+    public function displayAddressLabel(): string
+    {
+        return self::joinAddresses($this->resolvedAddress(), $this->secondaryAddress());
+    }
+
+    public function mainAddressLabel(): string
+    {
+        return self::joinAddresses($this->mainAddress(), $this->mainSecondaryAddress());
+    }
+
+    public static function joinAddresses(string ...$addresses): string
+    {
+        $filtered = array_values(array_unique(array_filter(array_map('trim', $addresses), fn ($a) => $a !== '')));
+
+        return implode(' / ', $filtered);
     }
 
     public function resolvedArea(): ?Area

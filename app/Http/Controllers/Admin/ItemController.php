@@ -11,6 +11,7 @@ use App\Models\ItemBarcode;
 use App\Models\ItemBarcodeScanMiss;
 use App\Models\ItemStock;
 use App\Models\Area;
+use App\Models\Location;
 use App\Models\Warehouse;
 use App\Exports\ItemBarcodeTemplateExport;
 use App\Exports\ItemBundleTemplateExport;
@@ -69,6 +70,8 @@ class ItemController extends Controller
             'area',
             'location.area',
             'mainLocation.area',
+            'secondaryLocation.area',
+            'mainSecondaryLocation.area',
             'barcodes',
             'bundleComponents.component',
             'bundleParents.bundle',
@@ -103,7 +106,7 @@ class ItemController extends Controller
     {
         $itemPayload = null;
         if ($item) {
-            $item->load(['location', 'mainLocation', 'area', 'barcodes', 'bundleComponents']);
+            $item->load(['location', 'mainLocation', 'secondaryLocation', 'mainSecondaryLocation', 'area', 'barcodes', 'bundleComponents']);
             $location = $item->location;
             $mainLocation = $item->mainLocation;
             $itemPayload = [
@@ -122,6 +125,8 @@ class ItemController extends Controller
                 'main_rack_code' => $mainLocation?->rack_code ?? '',
                 'main_column_no' => $mainLocation?->column_no ?? '',
                 'main_row_no' => $mainLocation?->row_no ?? '',
+                ...$this->slotPayload('secondary_', $item->secondaryLocation),
+                ...$this->slotPayload('main_secondary_', $item->mainSecondaryLocation),
                 'description' => $item->description ?? '',
                 'safety_stock' => (int) ($item->safety_stock ?? 0),
                 'koli_qty' => $item->koli_qty !== null ? (int) $item->koli_qty : null,
@@ -159,7 +164,7 @@ class ItemController extends Controller
 
     public function data(Request $request)
     {
-        $query = Item::with(['category', 'location.area', 'mainLocation.area', 'area', 'barcodes', 'bundleComponents.component'])->orderBy('name');
+        $query = Item::with(['category', 'location.area', 'mainLocation.area', 'secondaryLocation.area', 'mainSecondaryLocation.area', 'area', 'barcodes', 'bundleComponents.component'])->orderBy('name');
 
         $statusFilter = (string) $request->input('status', 'active');
         if ($statusFilter === Item::STATUS_INACTIVE) {
@@ -187,6 +192,10 @@ class ItemController extends Controller
                         $this->applyTextSearch($areaQ, 'name', $search, $exact, 'or');
                     });
                 })->orWhereHas('mainLocation', function ($locQ) use ($search, $exact) {
+                    $this->applyTextSearch($locQ, 'code', $search, $exact);
+                })->orWhereHas('secondaryLocation', function ($locQ) use ($search, $exact) {
+                    $this->applyTextSearch($locQ, 'code', $search, $exact);
+                })->orWhereHas('mainSecondaryLocation', function ($locQ) use ($search, $exact) {
                     $this->applyTextSearch($locQ, 'code', $search, $exact);
                 })->orWhereHas('barcodes', function ($barcodeQ) use ($search, $exact) {
                     $this->applyTextSearch($barcodeQ, 'barcode_value', $search, $exact);
@@ -245,6 +254,10 @@ class ItemController extends Controller
                 'main_rack_code' => $mainLocation?->rack_code ?? '',
                 'main_column_no' => $mainLocation?->column_no ?? '',
                 'main_row_no' => $mainLocation?->row_no ?? '',
+                'secondary_address' => $i->secondaryAddress(),
+                'main_secondary_address' => $i->mainSecondaryAddress(),
+                'display_address_label' => $i->displayAddressLabel(),
+                'main_address_label' => $i->mainAddressLabel(),
                 'description' => $i->description ?? '',
                 'safety_stock' => (int) ($i->safety_stock ?? 0),
                 'koli_qty' => $i->koli_qty !== null ? (int) $i->koli_qty : null,
@@ -294,6 +307,16 @@ class ItemController extends Controller
             'main_column_no' => ['nullable', 'integer', 'min:1'],
             'main_row_no' => ['nullable', 'integer', 'min:1'],
             'main_address' => ['nullable', 'string'],
+            'secondary_area_id' => ['nullable', 'integer', 'exists:areas,id'],
+            'secondary_rack_code' => ['nullable', 'string', 'max:20'],
+            'secondary_column_no' => ['nullable', 'integer', 'min:1'],
+            'secondary_row_no' => ['nullable', 'integer', 'min:1'],
+            'secondary_address' => ['nullable', 'string'],
+            'main_secondary_area_id' => ['nullable', 'integer', 'exists:areas,id'],
+            'main_secondary_rack_code' => ['nullable', 'string', 'max:20'],
+            'main_secondary_column_no' => ['nullable', 'integer', 'min:1'],
+            'main_secondary_row_no' => ['nullable', 'integer', 'min:1'],
+            'main_secondary_address' => ['nullable', 'string'],
             'description' => ['nullable', 'string'],
             'safety_stock' => ['nullable', 'integer', 'min:0'],
             'koli_qty' => ['nullable', 'integer', 'min:0', 'max:4294967295'],
@@ -331,6 +354,7 @@ class ItemController extends Controller
         } else {
             $this->applyLocationPayload($validated);
             $this->applyMainLocationPayload($validated);
+            $this->applySecondaryLocationPayloads($validated);
             $externalBarcodes = $this->normalizeBarcodeRows($externalBarcodes, $validated['sku']);
         }
 
@@ -392,6 +416,16 @@ class ItemController extends Controller
             'main_column_no' => ['nullable', 'integer', 'min:1'],
             'main_row_no' => ['nullable', 'integer', 'min:1'],
             'main_address' => ['nullable', 'string'],
+            'secondary_area_id' => ['nullable', 'integer', 'exists:areas,id'],
+            'secondary_rack_code' => ['nullable', 'string', 'max:20'],
+            'secondary_column_no' => ['nullable', 'integer', 'min:1'],
+            'secondary_row_no' => ['nullable', 'integer', 'min:1'],
+            'secondary_address' => ['nullable', 'string'],
+            'main_secondary_area_id' => ['nullable', 'integer', 'exists:areas,id'],
+            'main_secondary_rack_code' => ['nullable', 'string', 'max:20'],
+            'main_secondary_column_no' => ['nullable', 'integer', 'min:1'],
+            'main_secondary_row_no' => ['nullable', 'integer', 'min:1'],
+            'main_secondary_address' => ['nullable', 'string'],
             'description' => ['nullable', 'string'],
             'safety_stock' => ['nullable', 'integer', 'min:0'],
             'koli_qty' => ['nullable', 'integer', 'min:0', 'max:4294967295'],
@@ -438,6 +472,7 @@ class ItemController extends Controller
         } else {
             $this->applyLocationPayload($validated);
             $this->applyMainLocationPayload($validated);
+            $this->applySecondaryLocationPayloads($validated);
             $externalBarcodes = $this->normalizeBarcodeRows($externalBarcodes, $validated['sku'], $item);
         }
 
@@ -982,24 +1017,59 @@ class ItemController extends Controller
     }
 
     /**
-     * Bin location gudang besar: wajib slot lengkap (area + rack + kolom + baris) atau kosong.
+     * Bin location gudang besar (Alamat 1): wajib slot lengkap (area + rack + kolom + baris) atau kosong.
      */
     private function applyMainLocationPayload(array &$validated): void
     {
-        $keys = ['main_area_id', 'main_rack_code', 'main_column_no', 'main_row_no', 'main_address'];
+        $this->applySlotLocationPayload(
+            $validated,
+            'main_',
+            'main_location_id',
+            WarehouseService::defaultWarehouseId(),
+            'lokasi gudang besar'
+        );
+    }
+
+    /**
+     * Alamat 2 gudang display dan gudang besar. Hanya informasi, aturannya sama: slot lengkap atau kosong.
+     */
+    private function applySecondaryLocationPayloads(array &$validated): void
+    {
+        $this->applySlotLocationPayload(
+            $validated,
+            'secondary_',
+            'secondary_location_id',
+            WarehouseService::displayWarehouseId(),
+            'alamat 2 gudang display'
+        );
+        $this->applySlotLocationPayload(
+            $validated,
+            'main_secondary_',
+            'main_secondary_location_id',
+            WarehouseService::defaultWarehouseId(),
+            'alamat 2 gudang besar'
+        );
+    }
+
+    private function applySlotLocationPayload(array &$validated, string $prefix, string $column, int $warehouseId, string $label): void
+    {
+        $keys = array_map(fn ($suffix) => $prefix.$suffix, ['area_id', 'rack_code', 'column_no', 'row_no', 'address']);
         $present = array_filter($keys, fn ($key) => array_key_exists($key, $validated));
         if ($present === []) {
             return;
         }
 
-        $areaId = $validated['main_area_id'] ?? null;
-        $rack = trim((string) ($validated['main_rack_code'] ?? ''));
-        $col = $validated['main_column_no'] ?? null;
-        $row = $validated['main_row_no'] ?? null;
-        $address = trim((string) ($validated['main_address'] ?? ''));
-        unset($validated['main_area_id'], $validated['main_rack_code'], $validated['main_column_no'], $validated['main_row_no'], $validated['main_address']);
+        [$areaKey, $rackKey, $colKey, $rowKey, $addressKey] = $keys;
+        $areaId = $validated[$areaKey] ?? null;
+        $rack = trim((string) ($validated[$rackKey] ?? ''));
+        $col = $validated[$colKey] ?? null;
+        $row = $validated[$rowKey] ?? null;
+        $address = trim((string) ($validated[$addressKey] ?? ''));
+        foreach ($keys as $key) {
+            unset($validated[$key]);
+        }
 
-        $mainWarehouseId = WarehouseService::defaultWarehouseId();
+        $warehouseLabel = $warehouseId === WarehouseService::defaultWarehouseId() ? 'gudang besar' : 'gudang display';
         $hasParts = ($areaId !== null && $areaId !== '') || $rack !== '' ||
             ($col !== null && $col !== '') ||
             ($row !== null && $row !== '');
@@ -1007,29 +1077,40 @@ class ItemController extends Controller
         if ($hasParts) {
             if ($areaId === null || $areaId === '' || $rack === '' || $col === null || $col === '' || $row === null || $row === '') {
                 throw ValidationException::withMessages([
-                    'main_rack_code' => 'Lengkapi area, rack, kolom, dan baris untuk lokasi gudang besar.',
+                    $rackKey => "Lengkapi area, rack, kolom, dan baris untuk {$label}.",
                 ]);
             }
 
             $area = Area::find((int) $areaId);
-            if (!$area || !LocationService::areaBelongsToWarehouse($area, $mainWarehouseId)) {
+            if (!$area || !LocationService::areaBelongsToWarehouse($area, $warehouseId)) {
                 throw ValidationException::withMessages([
-                    'main_area_id' => 'Area ini bukan area gudang besar.',
+                    $areaKey => "Area ini bukan area {$warehouseLabel}.",
                 ]);
             }
 
             $location = LocationService::resolveLocationFromParts($area->id, $rack, (int) $col, (int) $row);
-            $validated['main_location_id'] = $location?->id;
+            $validated[$column] = $location?->id;
             return;
         }
 
         try {
-            $validated['main_location_id'] = LocationService::resolveMainWarehouseLocation($address)?->id;
+            $validated[$column] = LocationService::resolveSlotLocation($address, $warehouseId, $label)?->id;
         } catch (\InvalidArgumentException $e) {
             throw ValidationException::withMessages([
-                'main_address' => ucfirst($e->getMessage()),
+                $addressKey => ucfirst($e->getMessage()),
             ]);
         }
+    }
+
+    private function slotPayload(string $prefix, ?Location $location): array
+    {
+        return [
+            $prefix.'address' => $location?->code ?? '',
+            $prefix.'area_id' => $location?->area_id,
+            $prefix.'rack_code' => $location?->rack_code ?? '',
+            $prefix.'column_no' => $location?->column_no ?? '',
+            $prefix.'row_no' => $location?->row_no ?? '',
+        ];
     }
 
     private function normalizeBundlePayload(array &$validated): void
@@ -1037,7 +1118,13 @@ class ItemController extends Controller
         $validated['area_id'] = null;
         $validated['location_id'] = null;
         $validated['main_location_id'] = null;
-        unset($validated['main_area_id'], $validated['main_rack_code'], $validated['main_column_no'], $validated['main_row_no'], $validated['main_address']);
+        $validated['secondary_location_id'] = null;
+        $validated['main_secondary_location_id'] = null;
+        foreach (['main_', 'secondary_', 'main_secondary_'] as $prefix) {
+            foreach (['area_id', 'rack_code', 'column_no', 'row_no', 'address'] as $suffix) {
+                unset($validated[$prefix.$suffix]);
+            }
+        }
         $validated['address'] = null;
         $validated['safety_stock'] = 0;
         $validated['koli_qty'] = null;

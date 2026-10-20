@@ -150,11 +150,12 @@
                         <li><strong>area</strong> (opsional, boleh berdiri sendiri sebagai alamat sementara)</li>
                         <li><strong>area</strong> + <strong>rack</strong> + <strong>column</strong> + <strong>row</strong> (opsional, jika ingin alamat detail; jika salah satu detail diisi maka semuanya wajib)</li>
                         <li><strong>main_address</strong> (opsional, bin location gudang besar dengan format lengkap <code>AREA-RACK-KOLOM-BARIS</code>, misalnya <code>GB1-A-01-02</code>; area harus area gudang besar)</li>
+                        <li><strong>address_2</strong> dan <strong>main_address_2</strong> (opsional, alamat ke-2 di gudang display dan gudang besar, format lengkap <code>AREA-RACK-KOLOM-BARIS</code>; hanya informasi)</li>
                         <li><strong>description</strong> (opsional)</li>
                     </ul>
                     <p class="text-muted small mb-1">Jika Anda menambahkan kolom <code>item_type</code>, nilainya hanya boleh <code>single</code>. Nilai <code>bundle</code> akan ditolak.</p>
                     <p class="text-muted small mb-1">Tambahkan kolom <code>external_barcodes</code> atau <code>barcode</code> jika ingin mengisi alias barcode/QR eksternal. Pisahkan banyak barcode dengan koma, titik koma, atau baris baru.</p>
-                    <p class="text-muted small mb-1">Contoh header: <code>sku,name,item_type,status,parent_category,category,stock_gudang_besar,stock_gudang_display,stock,safety_stock_gudang_besar,safety_stock_gudang_display,safety_stock,koli_qty,external_barcodes,area,rack,column,row,main_address,description</code></p>
+                    <p class="text-muted small mb-1">Contoh header: <code>sku,name,item_type,status,parent_category,category,stock_gudang_besar,stock_gudang_display,stock,safety_stock_gudang_besar,safety_stock_gudang_display,safety_stock,koli_qty,external_barcodes,area,rack,column,row,main_address,address_2,main_address_2,description</code></p>
                     <p class="text-muted small mb-1">Gunakan format Excel (.xlsx/.xls) dengan header di baris pertama.</p>
                     <p class="text-muted small mb-1">Jika kolom category dikosongkan, item otomatis dimasukkan ke kategori "Tanpa Kategori".</p>
                     <p class="text-muted small mb-0">Catatan: gunakan <code>area</code> saja jika baru tahu area umum. Jika ingin alamat detail, lengkapi <code>area</code>, <code>rack</code>, <code>column</code>, dan <code>row</code>.</p>
@@ -665,8 +666,8 @@
                 { data: 'type_label', render: (data, type, row) => row.item_type === 'bundle' ? '<span class="badge badge-light-primary">Bundle</span>' : '<span class="badge badge-light-success">Single</span>' },
                 { data: 'status_label', render: (data, type, row) => row.status === 'inactive' ? '<span class="badge badge-light-secondary">Nonaktif</span>' : '<span class="badge badge-light-success">Aktif</span>' },
                 { data: 'category' },
-                { data: 'address', render: (data) => data ? escapeHtml(data) : '-' },
-                { data: 'main_address', render: (data) => data ? escapeHtml(data) : '-' },
+                { data: 'display_address_label', render: (data) => data ? escapeHtml(data) : '-' },
+                { data: 'main_address_label', render: (data) => data ? escapeHtml(data) : '-' },
                 { data: 'description' },
                 { data: 'bundle_summary', render: (data)=> data || '-' },
                 { data: 'koli_qty', className:'text-end', render: (data, type, row)=> row.item_type === 'bundle' ? '-' : ((data === null || data === undefined || data === '') ? '-' : data) },

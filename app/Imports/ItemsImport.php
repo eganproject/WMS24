@@ -167,6 +167,29 @@ class ItemsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
                     ]);
                 }
             }
+            $secondarySlots = [
+                'secondary_location_id' => [['address_2', 'alamat_2'], WarehouseService::displayWarehouseId(), 'alamat 2 gudang display'],
+                'main_secondary_location_id' => [['main_address_2', 'lokasi_gudang_besar_2'], WarehouseService::defaultWarehouseId(), 'alamat 2 gudang besar'],
+            ];
+            foreach ($secondarySlots as $column => [$keys, $warehouseId, $label]) {
+                if (!$this->hasAnyKey($row, $keys)) {
+                    continue;
+                }
+                $value = '';
+                foreach ($keys as $key) {
+                    $value = trim((string) ($row[$key] ?? ''));
+                    if ($value !== '') {
+                        break;
+                    }
+                }
+                try {
+                    $payload[$column] = LocationService::resolveSlotLocation($value, $warehouseId, $label)?->id;
+                } catch (\InvalidArgumentException $e) {
+                    throw ValidationException::withMessages([
+                        'file' => "Baris {$excelRow} (SKU {$sku}): {$e->getMessage()}",
+                    ]);
+                }
+            }
             if ($hasAddressHeader || $hasLocationHeaders) {
                 $location = LocationService::resolveLocation($address);
                 if ($location) {

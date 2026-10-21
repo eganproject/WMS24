@@ -3,14 +3,20 @@
 namespace App\Http\Controllers\Mobile;
 
 use App\Http\Controllers\Controller;
+use App\Models\DamagedGood;
+use App\Models\DamagedGoodItem;
 use App\Models\InboundScanSession;
 use App\Models\InboundScanSessionItem;
 use App\Models\InboundTransaction;
 use App\Support\InboundKoliUnitService;
 use App\Support\InboundScanStatus;
 use App\Support\StockService;
+use App\Support\WarehouseService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class InboundScanController extends Controller
@@ -362,6 +368,8 @@ class InboundScanController extends Controller
                 }
             }
 
+            $this->recordDamagedGoodsForReturn($transaction, $items, $completedAt);
+
             $transaction->status = InboundScanStatus::COMPLETED;
             $transaction->approved_at = $completedAt;
             $transaction->approved_by = auth()->id();
@@ -467,6 +475,50 @@ class InboundScanController extends Controller
             'message' => 'Scan inbound berhasil direset.',
             'transaction' => $this->serializeTransactionDetail($transaction),
         ]);
+    }
+
+    /**
+     * Retur yang masuk ke Gudang Rusak juga harus tercatat sebagai barang rusak,
+     * supaya muncul di saldo barang rusak dan bisa dialokasikan.
+     */
+    private function recordDamagedGoodsForReturn(InboundTransaction $transaction, Collection $items, Carbon $completedAt): void
+    {
+        if ($transaction->type !== 'return') {
+            return;
+        }
+
+        $damagedWarehouseId = WarehouseService::damagedWarehouseId();
+        if ($damagedWarehouseId <= 0 || (int) $transaction->warehouse_id !== $damagedWarehouseId) {
+            return;
+        }
+
+        $rows = $items->filter(fn (InboundScanSessionItem $item) => (int) $item->scanned_qty > 0 && (int) $item->item_id > 0);
+        if ($rows->isEmpty()) {
+            return;
+        }
+
+        $damagedGood = DamagedGood::create([
+            'code' => 'DMG-'.$completedAt->format('YmdHis').'-'.Str::upper(Str::random(4)),
+            'source_type' => DamagedGood::SOURCE_INBOUND_RETURN,
+            'source_warehouse_id' => null,
+            'source_ref' => mb_substr(trim($transaction->code.($transaction->ref_no ? ' / '.$transaction->ref_no : '')), 0, 100),
+            'note' => $transaction->note,
+            'transacted_at' => $completedAt,
+            'created_by' => auth()->id(),
+            'status' => 'approved',
+            'approved_at' => $completedAt,
+            'approved_by' => auth()->id(),
+        ]);
+
+        foreach ($rows as $item) {
+            DamagedGoodItem::create([
+                'damaged_good_id' => $damagedGood->id,
+                'item_id' => (int) $item->item_id,
+                'qty' => (int) $item->scanned_qty,
+                'reason_code' => DamagedGoodItem::REASON_OTHER,
+                'note' => $item->note,
+            ]);
+        }
     }
 
     private function syncSessionItems(InboundScanSession $session, InboundTransaction $transaction): void

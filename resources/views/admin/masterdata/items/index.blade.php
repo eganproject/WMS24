@@ -70,6 +70,9 @@
                         </div>
                     </div>
                 </div>
+                <button type="button" class="btn btn-light-success me-3" id="btn_export_items">
+                    <i class="fas fa-file-excel me-2"></i>Export Excel
+                </button>
                 @if($canUpdate)
                     <button type="button" class="btn btn-light-dark me-3" id="btn_update_items_excel" data-bs-toggle="modal" data-bs-target="#modal_update_items_excel">Update Data Items</button>
                 @endif
@@ -464,6 +467,7 @@
     const deleteTpl = '{{ route('admin.masterdata.items.destroy', ':id') }}';
     const importUrl = '{{ route('admin.masterdata.items.import') }}';
     const itemUpdateTemplateUrl = '{{ route('admin.masterdata.items.update-template') }}';
+    const itemsExportUrl = '{{ route('admin.masterdata.items.export') }}';
     const itemUpdateImportUrl = '{{ route('admin.masterdata.items.update-import') }}';
     const barcodeImportUrl = '{{ route('admin.masterdata.items.barcode-import') }}';
     const barcodeMissesDataUrl = '{{ route('admin.masterdata.items.barcode-misses.data') }}';
@@ -703,6 +707,16 @@
         const reloadTable = (keepPage = false) => dt.ajax.reload(null, keepPage ? false : true);
 
         searchInput?.addEventListener('keyup', reloadTable);
+        document.getElementById('btn_export_items')?.addEventListener('click', () => {
+            const params = new URLSearchParams();
+            const q = searchInput?.value?.trim() || '';
+            if (q) params.set('q', q);
+            params.set('search_mode', window.resolveTableSearchMode ? window.resolveTableSearchMode(tableEl[0] || null) : 'contains');
+            const categoryId = categoryFilter?.value || '';
+            if (categoryId !== '') params.set('category_id', categoryId);
+            params.set('status', document.getElementById('filter_item_status')?.value || 'active');
+            window.location.href = `${itemsExportUrl}?${params.toString()}`;
+        });
         applyBtn?.addEventListener('click', reloadTable);
         categoryFilter?.addEventListener('change', reloadTable);
         document.getElementById('filter_item_status')?.addEventListener('change', reloadTable);

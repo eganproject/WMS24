@@ -16,6 +16,7 @@ use App\Models\Warehouse;
 use App\Exports\ItemBarcodeTemplateExport;
 use App\Exports\ItemBundleTemplateExport;
 use App\Exports\ItemUpdatesTemplateExport;
+use App\Exports\ItemsExport;
 use App\Exports\ItemsTemplateExport;
 use App\Imports\ItemBarcodesImport;
 use App\Imports\ItemBundleImport;
@@ -165,53 +166,8 @@ class ItemController extends Controller
     public function data(Request $request)
     {
         $query = Item::with(['category', 'location.area', 'mainLocation.area', 'secondaryLocation.area', 'mainSecondaryLocation.area', 'area', 'barcodes', 'bundleComponents.component'])->orderBy('name');
-
+        $this->applyListFilters($query, $request);
         $statusFilter = (string) $request->input('status', 'active');
-        if ($statusFilter === Item::STATUS_INACTIVE) {
-            $query->where('status', Item::STATUS_INACTIVE);
-        } elseif ($statusFilter !== 'all') {
-            $query->where('status', Item::STATUS_ACTIVE);
-        }
-
-        $search = trim((string) $request->input('q', ''));
-        if ($search !== '') {
-            $exact = $this->isExactSearch($request);
-            $query->where(function ($q) use ($search, $exact) {
-                $this->applyTextSearch($q, 'sku', $search, $exact);
-                $this->applyTextSearch($q, 'name', $search, $exact, 'or');
-                $this->applyTextSearch($q, 'address', $search, $exact, 'or');
-                $this->applyTextSearch($q, 'description', $search, $exact, 'or');
-                $q->orWhereHas('area', function ($areaQ) use ($search, $exact) {
-                    $this->applyTextSearch($areaQ, 'code', $search, $exact);
-                    $this->applyTextSearch($areaQ, 'name', $search, $exact, 'or');
-                })->orWhereHas('location', function ($locQ) use ($search, $exact) {
-                    $this->applyTextSearch($locQ, 'code', $search, $exact);
-                    $this->applyTextSearch($locQ, 'rack_code', $search, $exact, 'or');
-                    $locQ->orWhereHas('area', function ($areaQ) use ($search, $exact) {
-                        $this->applyTextSearch($areaQ, 'code', $search, $exact);
-                        $this->applyTextSearch($areaQ, 'name', $search, $exact, 'or');
-                    });
-                })->orWhereHas('mainLocation', function ($locQ) use ($search, $exact) {
-                    $this->applyTextSearch($locQ, 'code', $search, $exact);
-                })->orWhereHas('secondaryLocation', function ($locQ) use ($search, $exact) {
-                    $this->applyTextSearch($locQ, 'code', $search, $exact);
-                })->orWhereHas('mainSecondaryLocation', function ($locQ) use ($search, $exact) {
-                    $this->applyTextSearch($locQ, 'code', $search, $exact);
-                })->orWhereHas('barcodes', function ($barcodeQ) use ($search, $exact) {
-                    $this->applyTextSearch($barcodeQ, 'barcode_value', $search, $exact);
-                    $this->applyTextSearch($barcodeQ, 'source_name', $search, $exact, 'or');
-                });
-            });
-        }
-
-        $catFilter = $request->input('category_id');
-        if ($catFilter !== null && $catFilter !== '') {
-            if ((int)$catFilter === 0) {
-                $query->where('category_id', 0);
-            } else {
-                $query->where('category_id', (int)$catFilter);
-            }
-        }
 
         $recordsTotalQuery = Item::query();
         if ($statusFilter === Item::STATUS_INACTIVE) {
@@ -282,6 +238,69 @@ class ItemController extends Controller
             'recordsFiltered' => $recordsFiltered,
             'data' => $data,
         ]);
+    }
+
+    /**
+     * Export Excel data items sesuai filter halaman master items
+     * (pencarian, kategori, status), termasuk alamat gudang besar & gudang kecil.
+     */
+    public function export(Request $request)
+    {
+        $query = Item::with(['location', 'mainLocation', 'secondaryLocation', 'mainSecondaryLocation'])->orderBy('name');
+        $this->applyListFilters($query, $request);
+        $filename = 'items-'.now()->format('YmdHis').'.xlsx';
+
+        return Excel::download(new ItemsExport($query), $filename);
+    }
+
+    private function applyListFilters(\Illuminate\Database\Eloquent\Builder $query, Request $request): void
+    {
+        $statusFilter = (string) $request->input('status', 'active');
+        if ($statusFilter === Item::STATUS_INACTIVE) {
+            $query->where('status', Item::STATUS_INACTIVE);
+        } elseif ($statusFilter !== 'all') {
+            $query->where('status', Item::STATUS_ACTIVE);
+        }
+
+        $search = trim((string) $request->input('q', ''));
+        if ($search !== '') {
+            $exact = $this->isExactSearch($request);
+            $query->where(function ($q) use ($search, $exact) {
+                $this->applyTextSearch($q, 'sku', $search, $exact);
+                $this->applyTextSearch($q, 'name', $search, $exact, 'or');
+                $this->applyTextSearch($q, 'address', $search, $exact, 'or');
+                $this->applyTextSearch($q, 'description', $search, $exact, 'or');
+                $q->orWhereHas('area', function ($areaQ) use ($search, $exact) {
+                    $this->applyTextSearch($areaQ, 'code', $search, $exact);
+                    $this->applyTextSearch($areaQ, 'name', $search, $exact, 'or');
+                })->orWhereHas('location', function ($locQ) use ($search, $exact) {
+                    $this->applyTextSearch($locQ, 'code', $search, $exact);
+                    $this->applyTextSearch($locQ, 'rack_code', $search, $exact, 'or');
+                    $locQ->orWhereHas('area', function ($areaQ) use ($search, $exact) {
+                        $this->applyTextSearch($areaQ, 'code', $search, $exact);
+                        $this->applyTextSearch($areaQ, 'name', $search, $exact, 'or');
+                    });
+                })->orWhereHas('mainLocation', function ($locQ) use ($search, $exact) {
+                    $this->applyTextSearch($locQ, 'code', $search, $exact);
+                })->orWhereHas('secondaryLocation', function ($locQ) use ($search, $exact) {
+                    $this->applyTextSearch($locQ, 'code', $search, $exact);
+                })->orWhereHas('mainSecondaryLocation', function ($locQ) use ($search, $exact) {
+                    $this->applyTextSearch($locQ, 'code', $search, $exact);
+                })->orWhereHas('barcodes', function ($barcodeQ) use ($search, $exact) {
+                    $this->applyTextSearch($barcodeQ, 'barcode_value', $search, $exact);
+                    $this->applyTextSearch($barcodeQ, 'source_name', $search, $exact, 'or');
+                });
+            });
+        }
+
+        $catFilter = $request->input('category_id');
+        if ($catFilter !== null && $catFilter !== '') {
+            if ((int)$catFilter === 0) {
+                $query->where('category_id', 0);
+            } else {
+                $query->where('category_id', (int)$catFilter);
+            }
+        }
     }
 
     public function store(Request $request)

@@ -1165,13 +1165,6 @@
             }
         });
 
-        document.getElementById('btn_export_items')?.addEventListener('click', () => {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire('Info', 'Fitur export belum diimplementasikan.', 'info');
-            } else {
-                alert('Fitur export belum diimplementasikan.');
-            }
-        });
     });
 </script>
 @endpush

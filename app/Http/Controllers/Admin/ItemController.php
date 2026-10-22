@@ -250,7 +250,31 @@ class ItemController extends Controller
         $this->applyListFilters($query, $request);
         $filename = 'items-'.now()->format('YmdHis').'.xlsx';
 
-        return Excel::download(new ItemsExport($query), $filename);
+        return Excel::download(new ItemsExport($query, $this->exportFilterSummary($request)), $filename);
+    }
+
+    private function exportFilterSummary(Request $request): string
+    {
+        $status = (string) $request->input('status', 'active');
+        $parts = ['Status: '.match ($status) {
+            Item::STATUS_INACTIVE => 'Nonaktif',
+            'all' => 'Semua',
+            default => 'Aktif',
+        }];
+
+        $categoryId = $request->input('category_id');
+        if ($categoryId !== null && $categoryId !== '') {
+            $parts[] = 'Kategori: '.((int) $categoryId === 0
+                ? 'Tanpa Kategori'
+                : (Category::whereKey((int) $categoryId)->value('name') ?? '-'));
+        }
+
+        $search = trim((string) $request->input('q', ''));
+        if ($search !== '') {
+            $parts[] = sprintf('Pencarian: "%s"%s', $search, $this->isExactSearch($request) ? ' (persis)' : '');
+        }
+
+        return 'Filter: '.implode(' | ', $parts);
     }
 
     private function applyListFilters(\Illuminate\Database\Eloquent\Builder $query, Request $request): void

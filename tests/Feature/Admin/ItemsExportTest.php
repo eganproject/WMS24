@@ -48,15 +48,27 @@ class ItemsExportTest extends TestCase
         ItemStock::create(['item_id' => $item->id, 'warehouse_id' => $gbId, 'stock' => 150]);
         Item::create(['sku' => 'OFF1', 'name' => 'Nonaktif', 'item_type' => Item::TYPE_SINGLE, 'category_id' => 0, 'status' => Item::STATUS_INACTIVE]);
 
-        $export = new ItemsExport(Item::query()->where('status', Item::STATUS_ACTIVE)->orderBy('name'));
+        $export = new ItemsExport(Item::query()->where('status', Item::STATUS_ACTIVE)->orderBy('name'), 'Filter: Status: Aktif');
         $headings = $export->headings();
-        $this->assertSame(['ID', 'ADDRESS GB', 'ADDRESS GK', 'SKU', 'Nama', 'Tipe', 'Status'], array_slice($headings, 0, 7));
+        $this->assertSame(['ID', 'Alamat Gudang Besar (GB)', 'Alamat Gudang Kecil (GK)', 'SKU', 'Nama Item', 'Tipe', 'Status'], array_slice($headings, 0, 7));
 
         $rows = $export->collection();
         $this->assertCount(1, $rows);
-        $row = $export->map($rows->first());
-        $this->assertSame([$item->id, 'GB1-C-01-01', 'KAB-A-01-01 / KAB-B-01-01', 'SOK57', 'Paket Soket', 'single', 'Aktif', 150], array_slice($row, 0, 8));
+        $row = $rows->first();
+        $this->assertSame([$item->id, 'GB1-C-01-01', 'KAB-A-01-01 / KAB-B-01-01', 'SOK57', 'Paket Soket', 'Single', 'Aktif', 150], array_slice($row, 0, 8));
         $this->assertCount(count($headings), $row);
+
+        // File xlsx benar-benar terbentuk dengan judul, header di baris 6, dan data mulai baris 7.
+        $path = 'items-test.xlsx';
+        Excel::store($export, $path, 'local');
+        $sheet = \PhpOffice\PhpSpreadsheet\IOFactory::load(\Storage::disk('local')->path($path))->getActiveSheet();
+        $this->assertSame('Data Master Items', $sheet->getCell('A1')->getValue());
+        $this->assertSame('Alamat Gudang Besar (GB)', $sheet->getCell('B6')->getValue());
+        $this->assertSame('GB1-C-01-01', $sheet->getCell('B7')->getValue());
+        $this->assertSame('SOK57', $sheet->getCell('D7')->getValue());
+        $this->assertSame('TOTAL', $sheet->getCell('A8')->getValue());
+        $this->assertSame(150, (int) $sheet->getCell('H8')->getOldCalculatedValue());
+        \Storage::disk('local')->delete($path);
     }
 
     public function test_export_route_downloads_xlsx_with_filters(): void

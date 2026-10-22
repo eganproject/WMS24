@@ -13,6 +13,7 @@ class DamagedGood extends Model
     public const SOURCE_INBOUND_RETURN = 'inbound_return';
     public const SOURCE_CUSTOMER_RETURN = 'customer_return';
     public const SOURCE_TRANSFER_REJECT = 'transfer_reject';
+    public const SOURCE_STOCK_ADJUSTMENT = 'stock_adjustment';
     public const SOURCE_MANUAL = 'manual';
     public const SOURCE_LEGACY_DISPLAY = 'display';
 
@@ -73,6 +74,7 @@ class DamagedGood extends Model
             self::SOURCE_INBOUND_RETURN => 'Retur Inbound',
             self::SOURCE_CUSTOMER_RETURN => 'Retur Customer',
             self::SOURCE_TRANSFER_REJECT => 'Reject Transfer Gudang',
+            self::SOURCE_STOCK_ADJUSTMENT => 'Penyesuaian Stok',
             self::SOURCE_MANUAL => 'Manual',
             self::SOURCE_LEGACY_DISPLAY => 'Display (Legacy)',
         ];

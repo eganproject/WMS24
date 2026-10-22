@@ -135,7 +135,9 @@ class DamagedAllocationController extends Controller
             $query->skip($start)->take($length);
         }
 
-        $typeLabels = $this->typeLabels();
+        $typeLabels = $this->typeLabels() + [
+            DamagedStockService::ALLOCATION_TYPE_STOCK_ADJUSTMENT => 'Penyesuaian Stok',
+        ];
         $data = $query->get()->map(function (DamagedAllocation $row) use ($typeLabels) {
             $sourceLabel = ($row->sourceItems ?? collect())->map(function ($item) {
                 $sku = trim((string) ($item->item?->sku ?? ''));

@@ -304,6 +304,7 @@
             warehouse:       { label: 'Gudang',         cls: 'primary' },
             inbound_return:  { label: 'Retur Inbound',  cls: 'warning' },
             customer_return: { label: 'Retur Customer', cls: 'info'    },
+            stock_adjustment: { label: 'Penyesuaian Stok', cls: 'dark' },
             manual:          { label: 'Manual',         cls: 'secondary'},
         };
         const m = map[raw] || { label: raw || '-', cls: 'secondary' };

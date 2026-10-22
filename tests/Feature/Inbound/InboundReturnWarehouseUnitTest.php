@@ -5,12 +5,14 @@ namespace Tests\Feature\Inbound;
 use App\Http\Middleware\AuthorizeMenuPermission;
 use App\Imports\InboundReturnsImport;
 use App\Imports\InboundFormItemsImport;
+use App\Models\DamagedGood;
 use App\Models\InboundScanSession;
 use App\Models\InboundTransaction;
 use App\Models\Item;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\Warehouse;
+use App\Support\DamagedStockService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
@@ -144,6 +146,101 @@ class InboundReturnWarehouseUnitTest extends TestCase
             'inbound_transaction_id' => $transaction->id,
             'item_id' => $item->id,
         ]);
+    }
+
+    public function test_return_to_damaged_warehouse_is_recorded_as_damaged_goods_balance(): void
+    {
+        $admin = User::factory()->create(['is_active' => true]);
+        $scanner = $this->createScanner();
+        $damagedWarehouse = Warehouse::where('code', 'GUDANG_RUSAK')->firstOrFail();
+        $item = $this->createItem('RET-DMG-001', 12);
+
+        $this->actingAs($admin)
+            ->postJson(route('admin.inbound.returns.store'), [
+                'ref_no' => 'REF-RET-DMG-001',
+                'warehouse_id' => $damagedWarehouse->id,
+                'transacted_at' => now()->format('Y-m-d H:i:s'),
+                'items' => [[
+                    'item_id' => $item->id,
+                    'qty' => 3,
+                    'input_unit' => 'pcs',
+                ]],
+            ])
+            ->assertOk();
+
+        $transaction = InboundTransaction::firstOrFail();
+
+        $this->actingAs($scanner)
+            ->postJson(route('mobile.inbound-scan.open'), ['transaction_id' => $transaction->id])
+            ->assertOk();
+
+        $session = InboundScanSession::firstOrFail();
+        for ($scan = 1; $scan <= 3; $scan++) {
+            $this->actingAs($scanner)
+                ->postJson(route('mobile.inbound-scan.scan-sku'), [
+                    'session_id' => $session->id,
+                    'code' => $item->sku,
+                ])
+                ->assertOk();
+        }
+
+        $this->actingAs($scanner)
+            ->postJson(route('mobile.inbound-scan.complete'), ['session_id' => $session->id])
+            ->assertOk()
+            ->assertJsonPath('transaction.status', 'completed');
+
+        $this->assertDatabaseHas('item_stocks', [
+            'item_id' => $item->id,
+            'warehouse_id' => $damagedWarehouse->id,
+            'stock' => 3,
+        ]);
+
+        $damagedGood = DamagedGood::firstOrFail();
+        $this->assertSame(DamagedGood::SOURCE_INBOUND_RETURN, $damagedGood->source_type);
+        $this->assertSame('approved', $damagedGood->status);
+        $this->assertStringContainsString($transaction->code, (string) $damagedGood->source_ref);
+        $this->assertDatabaseHas('damaged_good_items', [
+            'damaged_good_id' => $damagedGood->id,
+            'item_id' => $item->id,
+            'qty' => 3,
+        ]);
+
+        $balance = DamagedStockService::availableSkuBalances()->firstWhere('item_id', $item->id);
+        $this->assertNotNull($balance);
+        $this->assertSame(3, $balance['remaining_qty']);
+    }
+
+    public function test_return_to_non_damaged_warehouse_does_not_create_damaged_goods(): void
+    {
+        $scanner = $this->createScanner();
+        $warehouse = Warehouse::where('code', 'GUDANG_DISPLAY')->firstOrFail();
+        $item = $this->createItem('RET-DSP-NODMG', 12);
+
+        $this->actingAs(User::factory()->create(['is_active' => true]))
+            ->postJson(route('admin.inbound.returns.store'), [
+                'warehouse_id' => $warehouse->id,
+                'transacted_at' => now()->format('Y-m-d H:i:s'),
+                'items' => [[
+                    'item_id' => $item->id,
+                    'qty' => 1,
+                    'input_unit' => 'pcs',
+                ]],
+            ])
+            ->assertOk();
+
+        $transaction = InboundTransaction::firstOrFail();
+        $this->actingAs($scanner)
+            ->postJson(route('mobile.inbound-scan.open'), ['transaction_id' => $transaction->id])
+            ->assertOk();
+        $session = InboundScanSession::firstOrFail();
+        $this->actingAs($scanner)
+            ->postJson(route('mobile.inbound-scan.scan-sku'), ['session_id' => $session->id, 'code' => $item->sku])
+            ->assertOk();
+        $this->actingAs($scanner)
+            ->postJson(route('mobile.inbound-scan.complete'), ['session_id' => $session->id])
+            ->assertOk();
+
+        $this->assertDatabaseCount('damaged_goods', 0);
     }
 
     public function test_koli_return_keeps_master_pack_conversion(): void

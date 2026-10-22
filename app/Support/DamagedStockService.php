@@ -2,11 +2,14 @@
 
 namespace App\Support;
 
+use App\Models\DamagedAllocation;
 use App\Models\DamagedGood;
 use App\Models\DamagedAllocationItem;
 use App\Models\DamagedGoodItem;
+use App\Models\StockAdjustment;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 
 class DamagedStockService
 {
@@ -14,6 +17,119 @@ class DamagedStockService
     public const AGE_BUCKET_8_30 = '8_30';
     public const AGE_BUCKET_31_60 = '31_60';
     public const AGE_BUCKET_61_PLUS = '61_plus';
+
+    public const ALLOCATION_TYPE_STOCK_ADJUSTMENT = 'stock_adjustment';
+
+    /**
+     * Penyesuaian stok di Gudang Rusak juga harus mengubah saldo barang rusak.
+     * Baris "in" dicatat sebagai barang rusak baru, baris "out" mengurangi saldo
+     * secara FIFO lewat alokasi yang langsung approved.
+     */
+    public static function recordStockAdjustment(StockAdjustment $adjustment, Collection $items, Carbon $approvedAt): void
+    {
+        $damagedWarehouseId = WarehouseService::damagedWarehouseId();
+        if ($damagedWarehouseId <= 0 || (int) $adjustment->warehouse_id !== $damagedWarehouseId) {
+            return;
+        }
+
+        $rows = $items
+            ->map(fn ($row) => [
+                'item_id' => (int) data_get($row, 'item_id'),
+                'direction' => data_get($row, 'direction') === 'out' ? 'out' : 'in',
+                'qty' => (int) data_get($row, 'qty'),
+                'note' => data_get($row, 'note'),
+            ])
+            ->filter(fn (array $row) => $row['item_id'] > 0 && $row['qty'] > 0)
+            ->values();
+
+        $inRows = $rows->where('direction', 'in')->values();
+        if ($inRows->isNotEmpty()) {
+            $damagedGood = DamagedGood::create([
+                'code' => self::generateCode('DMG', $approvedAt),
+                'source_type' => DamagedGood::SOURCE_STOCK_ADJUSTMENT,
+                'source_warehouse_id' => null,
+                'source_ref' => $adjustment->code,
+                'note' => $adjustment->note,
+                'transacted_at' => $approvedAt,
+                'created_by' => auth()->id(),
+                'status' => 'approved',
+                'approved_at' => $approvedAt,
+                'approved_by' => auth()->id(),
+            ]);
+
+            foreach ($inRows as $row) {
+                DamagedGoodItem::create([
+                    'damaged_good_id' => $damagedGood->id,
+                    'item_id' => $row['item_id'],
+                    'qty' => $row['qty'],
+                    'reason_code' => DamagedGoodItem::REASON_OTHER,
+                    'note' => $row['note'],
+                ]);
+            }
+        }
+
+        $outRows = $rows->where('direction', 'out')->values();
+        if ($outRows->isEmpty()) {
+            return;
+        }
+
+        $sourceLines = [];
+        foreach ($outRows->groupBy('item_id') as $itemId => $group) {
+            $qtyNeeded = (int) $group->sum('qty');
+            $note = $group->pluck('note')->filter()->implode('; ') ?: null;
+            $candidates = self::remainingSourceLinesQuery()
+                ->where('damaged_good_items.item_id', (int) $itemId)
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($candidates as $candidate) {
+                if ($qtyNeeded <= 0) {
+                    break;
+                }
+
+                $takeQty = min($qtyNeeded, (int) $candidate->remaining_qty);
+                if ($takeQty <= 0) {
+                    continue;
+                }
+
+                $sourceLines[] = [
+                    'damaged_good_item_id' => (int) $candidate->id,
+                    'item_id' => (int) $itemId,
+                    'qty' => $takeQty,
+                    'note' => $note,
+                ];
+                $qtyNeeded -= $takeQty;
+            }
+        }
+
+        if (empty($sourceLines)) {
+            return;
+        }
+
+        $allocation = DamagedAllocation::create([
+            'code' => self::generateCode('DGA', $approvedAt),
+            'type' => self::ALLOCATION_TYPE_STOCK_ADJUSTMENT,
+            'source_ref' => $adjustment->code,
+            'transacted_at' => $approvedAt,
+            'note' => trim('Penyesuaian stok '.$adjustment->code.'. '.($adjustment->note ?? '')),
+            'status' => 'approved',
+            'approved_at' => $approvedAt,
+            'created_by' => auth()->id(),
+            'approved_by' => auth()->id(),
+        ]);
+
+        foreach ($sourceLines as $line) {
+            DamagedAllocationItem::create($line + [
+                'damaged_allocation_id' => $allocation->id,
+                'line_type' => 'source',
+            ]);
+        }
+    }
+
+    private static function generateCode(string $prefix, Carbon $at): string
+    {
+        return $prefix.'-'.$at->format('YmdHis').'-'.Str::upper(Str::random(4));
+    }
 
     public static function approvedAllocationTotalsSubquery(?int $excludeAllocationId = null)
     {

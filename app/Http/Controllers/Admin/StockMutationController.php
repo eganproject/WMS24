@@ -283,6 +283,7 @@ class StockMutationController extends Controller
                         'return_supplier' => 'Retur Supplier',
                         'disposal' => 'Disposal',
                         'rework' => 'Rework SKU',
+                        'stock_adjustment' => 'Penyesuaian Stok',
                         default => $allocation->type,
                     };
                     $refParts = [];

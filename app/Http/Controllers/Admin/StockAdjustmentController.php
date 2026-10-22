@@ -9,6 +9,7 @@ use App\Models\StockAdjustment;
 use App\Models\StockAdjustmentItem;
 use App\Models\StockMutation;
 use App\Support\BundleService;
+use App\Support\DamagedStockService;
 use App\Imports\StockAdjustmentsImport;
 use App\Support\StockService;
 use App\Support\WarehouseService;
@@ -199,6 +200,8 @@ class StockAdjustmentController extends Controller
                         'created_by' => auth()->id(),
                     ]);
                 }
+
+                DamagedStockService::recordStockAdjustment($adjustment, collect($validated['items']), $approvedAt);
 
                 $adjustment->status = 'approved';
                 $adjustment->approved_at = $approvedAt;
@@ -465,6 +468,8 @@ class StockAdjustmentController extends Controller
                     ]);
                 }
             }
+
+            DamagedStockService::recordStockAdjustment($adjustment, $adjustment->items, $approvedAt);
 
             $adjustment->status = 'approved';
             $adjustment->approved_at = $approvedAt;

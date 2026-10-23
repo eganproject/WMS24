@@ -9,22 +9,42 @@ use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithCustomStartCell;
+use Maatwebsite\Excel\Concerns\WithCustomValueBinder;
 use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithStyles;
 use Maatwebsite\Excel\Concerns\WithTitle;
+use Maatwebsite\Excel\DefaultValueBinder;
 use Maatwebsite\Excel\Events\AfterSheet;
+use PhpOffice\PhpSpreadsheet\Cell\Cell;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-class CustomerReturnsExport implements FromCollection, WithHeadings, WithTitle, WithCustomStartCell, ShouldAutoSize, WithStyles, WithEvents
+class CustomerReturnsExport extends DefaultValueBinder implements FromCollection, WithHeadings, WithTitle, WithCustomStartCell, WithCustomValueBinder, ShouldAutoSize, WithStyles, WithEvents
 {
     private ?Collection $rows = null;
 
     public function __construct(private array $filters = [])
     {
+    }
+
+    /**
+     * Simpan semua nilai sebagai teks supaya nomor resi yang isinya angka semua
+     * tidak berubah jadi notasi ilmiah atau kehilangan nol di depan.
+     */
+    public function bindValue(Cell $cell, $value)
+    {
+        if ($value === null) {
+            $value = '';
+        }
+
+        $cell->setValueExplicit((string) $value, DataType::TYPE_STRING);
+
+        return true;
     }
 
     public function title(): string
@@ -142,7 +162,7 @@ class CustomerReturnsExport implements FromCollection, WithHeadings, WithTitle, 
                 $sheet->getStyle($range)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setRGB('E4E6EF');
                 $sheet->getStyle('A1:V'.$lastRow)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
                 $sheet->getStyle('J6:O'.$lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
-                $sheet->getStyle('J6:O'.$lastRow)->getNumberFormat()->setFormatCode('#,##0');
+                $sheet->getStyle('A6:V'.$lastRow)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
                 $sheet->getStyle('T6:V'.$lastRow)->getAlignment()->setWrapText(true);
                 $sheet->getStyle('A5:V5')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 

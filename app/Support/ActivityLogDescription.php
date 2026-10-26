@@ -130,6 +130,7 @@ class ActivityLogDescription
             'admin.inventory.damaged-goods' => 'Barang Rusak',
             'admin.inventory.damaged-allocations' => 'Alokasi Barang Rusak',
             'admin.inventory.rework-recipes' => 'Resep Rework',
+            'admin.inventory.good-reworks' => 'Rework Barang Bagus',
             'admin.inventory.resi-import' => 'Import Resi',
             'admin.inventory.customer-returns' => 'Retur Customer',
             'admin.inventory.picking-list' => 'Picking List',

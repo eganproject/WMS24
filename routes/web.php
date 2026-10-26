@@ -18,6 +18,7 @@ use App\Http\Controllers\Admin\StockAdjustmentController;
 use App\Http\Controllers\Admin\DamagedGoodsController;
 use App\Http\Controllers\Admin\DamagedAllocationController;
 use App\Http\Controllers\Admin\ReworkRecipeController;
+use App\Http\Controllers\Admin\GoodReworkController;
 use App\Http\Controllers\Admin\ResiImportController;
 use App\Http\Controllers\Admin\CustomerReturnController;
 use App\Http\Controllers\Admin\PickingListController;
@@ -295,6 +296,15 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::put('/damaged-allocations/{id}', [DamagedAllocationController::class, 'update'])->name('damaged-allocations.update');
         Route::delete('/damaged-allocations/{id}', [DamagedAllocationController::class, 'destroy'])->name('damaged-allocations.destroy');
         Route::post('/damaged-allocations/{id}/approve', [DamagedAllocationController::class, 'approve'])->name('damaged-allocations.approve');
+
+        // Rework Barang Bagus
+        Route::get('/good-reworks', [GoodReworkController::class, 'index'])->name('good-reworks.index');
+        Route::get('/good-reworks/data', [GoodReworkController::class, 'data'])->name('good-reworks.data');
+        Route::post('/good-reworks', [GoodReworkController::class, 'store'])->name('good-reworks.store');
+        Route::get('/good-reworks/{id}', [GoodReworkController::class, 'show'])->name('good-reworks.show');
+        Route::put('/good-reworks/{id}', [GoodReworkController::class, 'update'])->name('good-reworks.update');
+        Route::delete('/good-reworks/{id}', [GoodReworkController::class, 'destroy'])->name('good-reworks.destroy');
+        Route::post('/good-reworks/{id}/approve', [GoodReworkController::class, 'approve'])->name('good-reworks.approve');
 
         // Rework Recipes
         Route::get('/rework-recipes', [ReworkRecipeController::class, 'index'])->name('rework-recipes.index');

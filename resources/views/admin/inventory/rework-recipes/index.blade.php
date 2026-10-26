@@ -99,7 +99,7 @@
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <div>
                             <div class="fw-bolder fs-5">Input BOM</div>
-                            <div class="text-muted fs-7">Daftar item rusak yang harus tersedia untuk 1 batch recipe.</div>
+                            <div class="text-muted fs-7">Daftar item bahan yang harus tersedia untuk 1 batch recipe.</div>
                         </div>
                         <button type="button" class="btn btn-light" id="btn_add_recipe_input">Tambah Input</button>
                     </div>

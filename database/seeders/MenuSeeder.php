@@ -31,6 +31,7 @@ class MenuSeeder extends Seeder
             ['name' => 'Penyesuaian Stok', 'slug' => 'stock-adjustments', 'route' => 'admin.inventory.stock-adjustments.index', 'icon' => 'fas fa-sliders-h', 'parent_slug' => 'inventory', 'sort_order' => 12.5],
             ['name' => 'Barang Rusak', 'slug' => 'damaged-goods', 'route' => 'admin.inventory.damaged-goods.index', 'icon' => 'fas fa-exclamation-triangle', 'parent_slug' => 'inventory', 'sort_order' => 13],
             ['name' => 'Alokasi Barang Rusak', 'slug' => 'damaged-allocations', 'route' => 'admin.inventory.damaged-allocations.index', 'icon' => 'fas fa-recycle', 'parent_slug' => 'inventory', 'sort_order' => 13.25],
+            ['name' => 'Rework Barang Bagus', 'slug' => 'good-reworks', 'route' => 'admin.inventory.good-reworks.index', 'icon' => 'fas fa-tools', 'parent_slug' => 'inventory', 'sort_order' => 13.35],
             ['name' => 'Resep Rework', 'slug' => 'rework-recipes', 'route' => 'admin.inventory.rework-recipes.index', 'icon' => 'fas fa-flask', 'parent_slug' => 'inventory', 'sort_order' => 13.3],
             ['name' => 'Import Resi', 'slug' => 'resi-import', 'route' => 'admin.inventory.resi-import.index', 'icon' => 'fas fa-file-import', 'parent_slug' => 'inventory', 'sort_order' => 13.5],
             ['name' => 'Retur Customer', 'slug' => 'customer-returns', 'route' => 'admin.inventory.customer-returns.index', 'icon' => 'fas fa-box-open', 'parent_slug' => 'inventory', 'sort_order' => 14],

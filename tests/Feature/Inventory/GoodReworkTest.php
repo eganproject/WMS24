@@ -46,7 +46,7 @@ class GoodReworkTest extends TestCase
                 'target_warehouse_id' => $main->id,
                 'transacted_at' => now()->format('Y-m-d H:i'),
                 'input_items' => [['item_id' => $input->id, 'qty' => 4]],
-                'output_items' => [['item_id' => $output->id, 'qty' => 2]],
+                'output_items' => [['item_id' => $output->id, 'qty' => 12]],
             ])
             ->assertOk()
             ->assertJsonPath('status', 'pending');
@@ -60,7 +60,7 @@ class GoodReworkTest extends TestCase
 
         $this->assertSame('approved', $rework->fresh()->status);
         $this->assertSame(6, $this->stock($input, $display));
-        $this->assertSame(2, $this->stock($output, $main));
+        $this->assertSame(12, $this->stock($output, $main));
         $this->assertDatabaseHas('stock_mutations', [
             'source_type' => 'good_rework',
             'source_subtype' => 'rework_input',
@@ -114,6 +114,44 @@ class GoodReworkTest extends TestCase
         $this->assertSame('pending', $rework->fresh()->status);
         $this->assertSame(1, $this->stock($input, $display));
         $this->assertSame(0, $this->stock($output, $display));
+    }
+
+    public function test_main_warehouse_requires_whole_koli_quantities(): void
+    {
+        $user = $this->user();
+        $main = Warehouse::where('code', 'GUDANG_BESAR')->firstOrFail();
+        $display = Warehouse::where('code', 'GUDANG_DISPLAY')->firstOrFail();
+        $input = $this->createItem('GRW-KOLI-IN');
+        $output = $this->createItem('GRW-KOLI-OUT');
+        $payload = fn (int $source, int $target, int $inQty, int $outQty) => [
+            'source_warehouse_id' => $source,
+            'target_warehouse_id' => $target,
+            'transacted_at' => now()->format('Y-m-d H:i'),
+            'input_items' => [['item_id' => $input->id, 'qty' => $inQty]],
+            'output_items' => [['item_id' => $output->id, 'qty' => $outQty]],
+        ];
+
+        $this->actingAs($user)
+            ->postJson(route('admin.inventory.good-reworks.store'), $payload($main->id, $display->id, 5, 1))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('input_items.0.qty');
+
+        $this->actingAs($user)
+            ->postJson(route('admin.inventory.good-reworks.store'), $payload($display->id, $main->id, 1, 5))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('output_items.0.qty');
+
+        $this->assertDatabaseCount('good_reworks', 0);
+
+        $this->actingAs($user)
+            ->postJson(route('admin.inventory.good-reworks.store'), $payload($main->id, $main->id, 24, 12))
+            ->assertOk();
+
+        $this->actingAs($user)
+            ->postJson(route('admin.inventory.good-reworks.store'), $payload($display->id, $display->id, 5, 3))
+            ->assertOk();
+
+        $this->assertDatabaseCount('good_reworks', 2);
     }
 
     public function test_damaged_warehouse_cannot_be_used(): void

@@ -253,6 +253,7 @@ class StockBalanceReportService
             'opname' => 'Stok opname',
             'adjustment' => 'Penyesuaian stok',
             'damaged', 'damaged_allocation' => 'Barang rusak / alokasi rusak',
+            'good_rework' => 'Rework barang bagus',
             'qc_shipment' => 'Koreksi QC resi',
             default => 'Lainnya ('.$row->source_type.')',
         };

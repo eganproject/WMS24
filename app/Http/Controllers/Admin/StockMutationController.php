@@ -242,6 +242,26 @@ class StockMutationController extends Controller
                     })->values()->all();
                 }
                 break;
+            case 'good_rework':
+                $rework = \App\Models\GoodRework::with(['items.item', 'sourceWarehouse', 'targetWarehouse'])->find($mutation->source_id);
+                if ($rework) {
+                    $sourceSummary = [
+                        'label' => 'Rework Barang Bagus',
+                        'code' => $rework->code,
+                        'ref' => trim(($rework->sourceWarehouse?->name ?? '-').' -> '.($rework->targetWarehouse?->name ?? '-')),
+                        'date' => $rework->transacted_at?->format('Y-m-d H:i'),
+                        'note' => $rework->note ?? '-',
+                    ];
+                    $sourceItems = $rework->items->map(function ($row) {
+                        $dir = $row->line_type === 'input' ? 'BAHAN' : 'HASIL';
+                        return [
+                            'label' => trim(($row->item?->sku ?? '').' - '.($row->item?->name ?? '')).' ('.$dir.')',
+                            'qty' => (int) $row->qty,
+                            'note' => $row->note ?? '-',
+                        ];
+                    })->values()->all();
+                }
+                break;
             case 'damaged':
                 $damage = DamagedGood::with(['items.item', 'sourceWarehouse'])->find($mutation->source_id);
                 if ($damage) {

@@ -139,6 +139,7 @@
                         </div>
                         <button type="button" class="btn btn-light" id="btn_add_rework_input">Tambah Bahan</button>
                     </div>
+                    <div class="alert alert-light-warning py-3 fs-7 d-none" id="koli_hint_input">Gudang asal adalah Gudang Besar: qty bahan wajib kelipatan isi/koli.</div>
                     <div id="rework_input_items_container"></div>
                     <div class="invalid-feedback d-block" id="error_input_items"></div>
 
@@ -151,6 +152,7 @@
                         </div>
                         <button type="button" class="btn btn-light" id="btn_add_rework_output">Tambah Hasil</button>
                     </div>
+                    <div class="alert alert-light-warning py-3 fs-7 d-none" id="koli_hint_output">Gudang hasil adalah Gudang Besar: qty hasil wajib kelipatan isi/koli.</div>
                     <div id="rework_output_items_container"></div>
                     <div class="invalid-feedback d-block" id="error_output_items"></div>
 
@@ -186,7 +188,8 @@
     const csrfToken = '{{ csrf_token() }}';
     const canUpdate = {{ $canUpdate ? 'true' : 'false' }};
     const canDelete = {{ $canDelete ? 'true' : 'false' }};
-    const itemOptionsHtml = `@foreach($items as $item)<option value="{{ $item->id }}">{{ $item->sku }} - {{ $item->name }}</option>@endforeach`;
+    const itemOptionsHtml = `@foreach($items as $item)<option value="{{ $item->id }}" data-koli="{{ (int) $item->koli_qty }}">{{ $item->sku }} - {{ $item->name }}</option>@endforeach`;
+    const mainWarehouseId = {{ (int) ($mainWarehouseId ?? 0) }};
     const recipes = @json($recipes);
     const defaultWarehouseId = {{ (int) ($defaultWarehouseId ?? 0) }};
 
@@ -306,7 +309,19 @@
             fillRows(inputContainer, []);
             fillRows(outputContainer, []);
             clearErrors();
+            updateKoliHints();
         };
+
+        const updateKoliHints = () => {
+            const srcMain = String(sourceWarehouseEl.value) === String(mainWarehouseId);
+            const dstMain = String(targetWarehouseEl.value) === String(mainWarehouseId);
+            document.getElementById('koli_hint_input')?.classList.toggle('d-none', !srcMain);
+            document.getElementById('koli_hint_output')?.classList.toggle('d-none', !dstMain);
+        };
+        $(sourceWarehouseEl).on('change', updateKoliHints);
+        $(targetWarehouseEl).on('change', updateKoliHints);
+        sourceWarehouseEl.addEventListener('change', updateKoliHints);
+        targetWarehouseEl.addEventListener('change', updateKoliHints);
 
         initSelect2(sourceWarehouseEl, 'Pilih gudang');
         initSelect2(targetWarehouseEl, 'Pilih gudang');
@@ -328,6 +343,7 @@
             fillRows(inputContainer, scale(recipe.input_items));
             fillRows(outputContainer, scale(recipe.output_items));
             if (recipe.target_warehouse_id) setSelectValue(targetWarehouseEl, recipe.target_warehouse_id);
+            updateKoliHints();
         });
 
         [inputContainer, outputContainer].forEach((container) => {
@@ -438,6 +454,7 @@
                 fillRows(inputContainer, json.input_items);
                 fillRows(outputContainer, json.output_items);
                 clearErrors();
+                updateKoliHints();
                 form.querySelector('button[type="submit"]').classList.toggle('d-none', readOnly);
                 modal?.show();
             } catch (err) {

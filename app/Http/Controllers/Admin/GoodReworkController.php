@@ -58,10 +58,11 @@ class GoodReworkController extends Controller
             'items' => Item::query()
                 ->where('item_type', Item::TYPE_SINGLE)
                 ->orderBy('name')
-                ->get(['id', 'sku', 'name']),
+                ->get(['id', 'sku', 'name', 'koli_qty']),
             'warehouses' => $warehouses,
             'recipes' => $recipes,
             'defaultWarehouseId' => $defaultWarehouseId,
+            'mainWarehouseId' => WarehouseService::defaultWarehouseId(),
             'dataUrl' => route('admin.inventory.good-reworks.data'),
             'storeUrl' => route('admin.inventory.good-reworks.store'),
         ]);
@@ -414,6 +415,8 @@ class GoodReworkController extends Controller
             'Bundle tidak bisa dipakai di rework karena tidak memiliki stok fisik.'
         );
 
+        $this->assertWholeKoliForMainWarehouse($validated);
+
         $validated['recipe_id'] = !empty($validated['recipe_id']) ? (int) $validated['recipe_id'] : null;
         $validated['recipe_multiplier'] = $validated['recipe_id'] ? max(1, (int) ($validated['recipe_multiplier'] ?? 1)) : null;
         $validated['source_ref'] = $validated['source_ref'] ?? null;
@@ -421,6 +424,46 @@ class GoodReworkController extends Controller
         $validated['transacted_at'] = Carbon::parse($validated['transacted_at']);
 
         return $validated;
+    }
+
+    /**
+     * Gudang Besar menyimpan stok per koli. Sama seperti penyesuaian stok dan outbound manual,
+     * qty bahan/hasil yang keluar atau masuk Gudang Besar wajib kelipatan isi per koli.
+     */
+    private function assertWholeKoliForMainWarehouse(array $validated): void
+    {
+        $mainWarehouseId = WarehouseService::defaultWarehouseId();
+        $sides = [
+            'input_items' => ['warehouse_id' => (int) $validated['source_warehouse_id'], 'label' => 'bahan'],
+            'output_items' => ['warehouse_id' => (int) $validated['target_warehouse_id'], 'label' => 'hasil'],
+        ];
+
+        $itemIds = collect($validated['input_items'])->merge($validated['output_items'])->pluck('item_id')->unique()->all();
+        $items = Item::whereIn('id', $itemIds)->get(['id', 'sku', 'koli_qty'])->keyBy('id');
+
+        $errors = [];
+        foreach ($sides as $key => $side) {
+            if ($side['warehouse_id'] !== $mainWarehouseId) {
+                continue;
+            }
+
+            foreach ($validated[$key] as $idx => $row) {
+                $item = $items->get($row['item_id']);
+                $qtyPerKoli = (int) ($item?->koli_qty ?? 0);
+                $sku = $item?->sku ?? 'item';
+                if ($qtyPerKoli < 1) {
+                    $errors["{$key}.{$idx}.qty"] = "Isi/koli {$sku} belum diset. Item {$side['label']} di Gudang Besar wajib per koli.";
+                    continue;
+                }
+                if ((int) $row['qty'] % $qtyPerKoli !== 0) {
+                    $errors["{$key}.{$idx}.qty"] = "Qty {$side['label']} {$sku} di Gudang Besar harus kelipatan isi/koli ({$qtyPerKoli} pcs).";
+                }
+            }
+        }
+
+        if (!empty($errors)) {
+            throw ValidationException::withMessages($errors);
+        }
     }
 
     private function allowedWarehouses(): Collection

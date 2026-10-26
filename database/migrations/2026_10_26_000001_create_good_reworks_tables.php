@@ -67,10 +67,11 @@ return new class extends Migration {
             return;
         }
 
-        DB::table('menus')->updateOrInsert(
-            ['slug' => 'good-reworks'],
-            [
+        // Hanya menambah menu baru jika belum ada; menu yang sudah ada tidak diubah.
+        if (!DB::table('menus')->where('slug', 'good-reworks')->exists()) {
+            DB::table('menus')->insert([
                 'name' => 'Rework Barang Bagus',
+                'slug' => 'good-reworks',
                 'route' => 'admin.inventory.good-reworks.index',
                 'icon' => 'fas fa-tools',
                 'parent_id' => $inventoryMenuId,
@@ -78,8 +79,8 @@ return new class extends Migration {
                 'is_active' => true,
                 'updated_at' => now(),
                 'created_at' => now(),
-            ]
-        );
+            ]);
+        }
 
         if (!Schema::hasTable('roles') || !Schema::hasTable('permission_menu')) {
             return;
@@ -89,17 +90,24 @@ return new class extends Migration {
         $roleIds = DB::table('roles')->whereIn('slug', ['admin'])->pluck('id');
 
         foreach ($roleIds as $roleId) {
-            DB::table('permission_menu')->updateOrInsert(
-                ['role_id' => $roleId, 'menu_id' => $menuId],
-                [
-                    'can_view' => true,
-                    'can_create' => true,
-                    'can_update' => true,
-                    'can_delete' => true,
-                    'updated_at' => now(),
-                    'created_at' => now(),
-                ]
-            );
+            $exists = DB::table('permission_menu')
+                ->where('role_id', $roleId)
+                ->where('menu_id', $menuId)
+                ->exists();
+            if ($exists) {
+                continue;
+            }
+
+            DB::table('permission_menu')->insert([
+                'role_id' => $roleId,
+                'menu_id' => $menuId,
+                'can_view' => true,
+                'can_create' => true,
+                'can_update' => true,
+                'can_delete' => true,
+                'updated_at' => now(),
+                'created_at' => now(),
+            ]);
         }
     }
 };

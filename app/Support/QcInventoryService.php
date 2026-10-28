@@ -47,7 +47,7 @@ class QcInventoryService
             ->first();
 
         $currentStock = (int) ($stockRow?->stock ?? 0);
-        $reservedQty = self::reservedQtyForOpenQc($normalizedSku, $excludeQcId);
+        $reservedQty = self::reservedQtyForOpenQc((string) $item->sku, $excludeQcId);
 
         return [
             'available' => max(0, $currentStock - $reservedQty),
@@ -86,7 +86,8 @@ class QcInventoryService
     {
         $query = QcResiScanItem::query()
             ->join('qc_resi_scans', 'qc_resi_scans.id', '=', 'qc_resi_scan_items.qc_resi_scan_id')
-            ->whereRaw('LOWER(qc_resi_scan_items.sku) = ?', [strtolower(trim($sku))])
+            // Plain equality (case-insensitive under the utf8mb4_unicode_ci collation) so the sku index is used.
+            ->where('qc_resi_scan_items.sku', trim($sku))
             ->whereIn('qc_resi_scans.status', [QcTransitStatus::DRAFT, QcTransitStatus::HOLD]);
 
         if ($excludeQcId && $excludeQcId > 0) {

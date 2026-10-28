@@ -19,9 +19,11 @@ use App\Support\BundleService;
 use App\Support\PickingListBalanceService;
 use App\Support\QcTransitStatus;
 use App\Support\ResiOperationalStatus;
+use App\Support\SameDay;
 use App\Support\StockService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Maatwebsite\Excel\Facades\Excel;
@@ -29,6 +31,11 @@ use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 
 class ResiImportController extends Controller
 {
+    private const IMPORT_LOCK_KEY = 'resi-import:running';
+    private const IMPORT_CHUNK_SIZE = 200;
+    private const IMPORT_CHUNK_ATTEMPTS = 3;
+    private const IMPORT_LOCK_WAIT_SECONDS = 15;
+
     public function index(Request $request)
     {
         $today = now()->toDateString();
@@ -261,134 +268,383 @@ class ResiImportController extends Controller
             'file' => ['required', 'file', 'mimes:xlsx,xls', 'max:5120'],
         ]);
 
-        $import = new ResiImport();
-        DB::beginTransaction();
+        if (function_exists('set_time_limit')) {
+            @set_time_limit(300);
+        }
+
+        // Only one resi import at a time. Two imports of the same file used to wait on
+        // each other's row locks until MySQL gave up (error 1205 Lock wait timeout).
+        $lock = Cache::lock(self::IMPORT_LOCK_KEY, 600);
+        if (!$lock->get()) {
+            throw ValidationException::withMessages([
+                'file' => 'Masih ada import resi lain yang sedang berjalan. Tunggu sampai selesai, lalu coba lagi.',
+            ]);
+        }
+
+        $savedResi = 0;
+        $savedDetails = 0;
+        $restoreLockTimeout = $this->shortenLockWaitTimeout();
+
         try {
-            Excel::import($import, $request->file('file'));
-            $groups = $import->groups ?? [];
-            if (empty($groups)) {
-                throw ValidationException::withMessages([
-                    'file' => 'Tidak ada data valid untuk diimport',
-                ]);
-            }
-            $this->validateUniqueNoResi($groups);
-
-            $createdResi = 0;
-            $createdDetails = 0;
+            // 1) Read, validate and prepare everything first, outside any transaction.
+            //    Errors in the file stop the import before anything is saved.
+            $plan = $this->buildImportPlan($request->file('file'));
             $today = now()->toDateString();
-            $defaultKurirId = $this->resolveDefaultKurirId();
-            $storeIdsByName = $this->masterNameMap(Store::query()->get(['id', 'name']));
-            $channelIdsByName = $this->masterNameMap(Channel::query()->get(['id', 'name']));
 
-            foreach ($groups as $group) {
-                $existing = Resi::where('id_pesanan', $group['id_pesanan'])->first();
-                if ($existing) {
-                    $hasQc = QcResiScan::where('resi_id', $existing->id)->exists();
-                    $hasScanOut = ShipmentScanOut::where('resi_id', $existing->id)->exists();
-
-                    if ($hasQc || $hasScanOut) {
-                        throw ValidationException::withMessages([
-                            'file' => 'Resi dengan ID Pesanan '.$group['id_pesanan'].' sudah masuk proses operasional, import ulang diblokir.',
-                        ]);
-                    }
-                }
-
-                $oldTanggalUpload = $existing?->tanggal_upload?->format('Y-m-d');
-                $oldDetails = $existing
-                    ? ResiDetail::where('resi_id', $existing->id)->get(['sku', 'qty'])
-                    : collect();
-                $oldWasCanceled = $existing && ($existing->status ?? 'active') === 'canceled';
-
-                $tanggalPesanan = $this->parseTanggalPesanan($group['tanggal_pesanan'] ?? null);
-                if ($tanggalPesanan === null) {
-                    throw ValidationException::withMessages([
-                        'file' => 'Format tanggal_pembuatan tidak valid untuk ID Pesanan: '.$group['id_pesanan'],
-                    ]);
-                }
-
-                $payload = [
-                    'tanggal_pesanan' => $tanggalPesanan,
-                    'tanggal_upload' => $today,
-                    'uploader_id' => auth()->id(),
-                    'catatan_pembeli' => $group['catatan_pembeli'] ?? null,
-                ];
-                $importedStatus = $group['status'] ?? null;
-                if ($importedStatus === 'canceled') {
-                    $payload['status'] = 'canceled';
-                    $payload['canceled_at'] = $existing?->canceled_at ?? now();
-                    $payload['canceled_by'] = $existing?->canceled_by ?? auth()->id();
-                    $payload['cancel_reason'] = $group['status_raw']
-                        ? 'Status import: '.$group['status_raw']
-                        : 'Status import: dibatalkan';
-                    $payload['uncanceled_at'] = null;
-                    $payload['uncanceled_by'] = null;
-                } elseif ($importedStatus === 'active') {
-                    $payload['status'] = 'active';
-                    if (($existing?->status ?? 'active') === 'canceled') {
-                        $payload['uncanceled_at'] = now();
-                        $payload['uncanceled_by'] = auth()->id();
-                    }
-                }
-                $kurirId = $this->resolveKurirId($group['kurir'] ?? null, $defaultKurirId);
-                if ($kurirId) {
-                    $payload['kurir_id'] = $kurirId;
-                }
-                $storeId = $this->resolveStoreId($group['nama_toko'] ?? null, $storeIdsByName);
-                if ($storeId !== null) {
-                    $payload['store_id'] = $storeId;
-                }
-                $channelId = $this->resolveChannelId($group['channel'] ?? null, $channelIdsByName);
-                if ($channelId !== null) {
-                    $payload['channel_id'] = $channelId;
-                }
-                $noResi = isset($group['no_resi']) ? trim((string) $group['no_resi']) : '';
-                if ($noResi !== '') {
-                    $payload['no_resi'] = $noResi;
-                }
-
-                $resi = Resi::updateOrCreate(
-                    ['id_pesanan' => $group['id_pesanan']],
-                    $payload
+            // 2) Save in small chunks, each in its own short transaction, so row locks
+            //    are held for milliseconds instead of the whole import.
+            foreach (array_chunk($plan, self::IMPORT_CHUNK_SIZE) as $chunk) {
+                [$chunkResi, $chunkDetails] = DB::transaction(
+                    fn () => $this->writeImportChunk($chunk, $today),
+                    self::IMPORT_CHUNK_ATTEMPTS
                 );
-                $createdResi++;
-
-                ResiDetail::where('resi_id', $resi->id)->delete();
-                foreach ($group['items'] as $row) {
-                    ResiDetail::create([
-                        'resi_id' => $resi->id,
-                        'sku' => $row['sku'],
-                        'qty' => (int) $row['qty'],
-                    ]);
-                    $createdDetails++;
-                }
-
-                $newIsCanceled = ($resi->status ?? 'active') === 'canceled';
-
-                if ($existing && $oldTanggalUpload && !$oldWasCanceled) {
-                    $this->adjustPickingList($oldTanggalUpload, $oldDetails, -1);
-                }
-                if (!$newIsCanceled) {
-                    $this->adjustPickingList($today, $group['items'], 1);
-                }
+                $savedResi += $chunkResi;
+                $savedDetails += $chunkDetails;
             }
-
-            DB::commit();
 
             return response()->json([
                 'message' => 'Import resi berhasil',
-                'resis' => $createdResi,
-                'details' => $createdDetails,
+                'resis' => $savedResi,
+                'details' => $savedDetails,
             ]);
         } catch (ValidationException $e) {
-            DB::rollBack();
             throw $e;
         } catch (\Throwable $e) {
-            DB::rollBack();
+            report($e);
+
+            $message = $this->isLockTimeout($e)
+                ? 'Database sedang sibuk (data resi sedang dipakai proses lain seperti scan QC). Silakan coba import lagi beberapa saat.'
+                : 'Server gagal memproses import: '.$e->getMessage();
+            if ($savedResi > 0) {
+                $message .= " Sebagian data ({$savedResi} resi) sudah tersimpan. Import ulang file yang sama aman, data akan diperbarui.";
+            }
+
             return response()->json([
                 'message' => 'Gagal import resi',
-                'error' => $e->getMessage(),
+                'error' => $message,
+                'resis' => $savedResi,
+                'details' => $savedDetails,
             ], 500);
+        } finally {
+            $restoreLockTimeout();
+            $lock->release();
         }
+    }
+
+    /**
+     * Parse the Excel file and resolve everything needed to save it, using a fixed
+     * number of bulk queries instead of several queries per resi.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    private function buildImportPlan($file): array
+    {
+        $import = new ResiImport();
+        Excel::import($import, $file);
+        $groups = array_values($import->groups ?? []);
+        if (empty($groups)) {
+            throw ValidationException::withMessages([
+                'file' => 'Tidak ada data valid untuk diimport',
+            ]);
+        }
+        $this->validateUniqueNoResi($groups);
+
+        $userId = auth()->id();
+        $now = now();
+
+        $existingByKey = $this->loadExistingResiByIdPesanan(array_column($groups, 'id_pesanan'));
+        $existingIds = array_values(array_unique(array_map(fn (Resi $r) => (int) $r->id, $existingByKey)));
+        $operationalIds = $this->operationalResiIds($existingIds);
+        $oldDetailsByResi = $this->detailsByResiId($existingIds);
+
+        $plan = [];
+        $skusToExpand = [];
+        foreach ($groups as $group) {
+            $existing = $existingByKey[$this->idPesananKey($group['id_pesanan'])] ?? null;
+            if ($existing && isset($operationalIds[(int) $existing->id])) {
+                throw ValidationException::withMessages([
+                    'file' => 'Resi dengan ID Pesanan '.$group['id_pesanan'].' sudah masuk proses operasional, import ulang diblokir.',
+                ]);
+            }
+
+            $tanggalPesanan = $this->parseTanggalPesanan($group['tanggal_pesanan'] ?? null);
+            if ($tanggalPesanan === null) {
+                throw ValidationException::withMessages([
+                    'file' => 'Format tanggal_pembuatan tidak valid untuk ID Pesanan: '.$group['id_pesanan'],
+                ]);
+            }
+
+            $payload = [
+                'tanggal_pesanan' => $tanggalPesanan,
+                'tanggal_upload' => $now->toDateString(),
+                'uploader_id' => $userId,
+                'catatan_pembeli' => $group['catatan_pembeli'] ?? null,
+            ];
+            $importedStatus = $group['status'] ?? null;
+            if ($importedStatus === 'canceled') {
+                $payload['status'] = 'canceled';
+                $payload['canceled_at'] = $existing?->canceled_at ?? $now;
+                $payload['canceled_by'] = $existing?->canceled_by ?? $userId;
+                $payload['cancel_reason'] = $group['status_raw']
+                    ? 'Status import: '.$group['status_raw']
+                    : 'Status import: dibatalkan';
+                $payload['uncanceled_at'] = null;
+                $payload['uncanceled_by'] = null;
+            } elseif ($importedStatus === 'active') {
+                $payload['status'] = 'active';
+                if (($existing?->status ?? 'active') === 'canceled') {
+                    $payload['uncanceled_at'] = $now;
+                    $payload['uncanceled_by'] = $userId;
+                }
+            }
+            $noResi = isset($group['no_resi']) ? trim((string) $group['no_resi']) : '';
+            if ($noResi !== '') {
+                $payload['no_resi'] = $noResi;
+            }
+
+            $oldDate = $existing?->tanggal_upload?->format('Y-m-d');
+            $oldWasCanceled = $existing && ($existing->status ?? 'active') === 'canceled';
+            $oldItems = $existing ? ($oldDetailsByResi[(int) $existing->id] ?? []) : [];
+            $removeOld = $existing && $oldDate && !$oldWasCanceled;
+            $newStatus = $payload['status'] ?? ($existing?->status ?? 'active');
+            $addNew = $newStatus !== 'canceled';
+
+            if ($removeOld) {
+                array_push($skusToExpand, ...array_column($oldItems, 'sku'));
+            }
+            if ($addNew) {
+                array_push($skusToExpand, ...array_column($group['items'], 'sku'));
+            }
+
+            $plan[] = [
+                'group' => $group,
+                'existing_id' => $existing?->id,
+                'payload' => $payload,
+                'old_date' => $removeOld ? $oldDate : null,
+                'old_items' => $removeOld ? $oldItems : [],
+                'add_new' => $addNew,
+            ];
+        }
+
+        // Unknown SKUs / broken bundles fail here, before anything is written.
+        $unitRequirements = BundleService::unitRequirementsBySku($skusToExpand);
+
+        // Master data (kurir, toko, channel) resolved from in-memory maps.
+        $defaultKurirId = $this->resolveDefaultKurirId();
+        $kurirIdsByName = $this->masterNameMap(Kurir::query()->get(['id', 'name']));
+        $storeIdsByName = $this->masterNameMap(Store::query()->get(['id', 'name']));
+        $channelIdsByName = $this->masterNameMap(Channel::query()->get(['id', 'name']));
+
+        foreach ($plan as $i => $entry) {
+            $group = $entry['group'];
+            $kurirId = $this->resolveKurirIdFromMap($group['kurir'] ?? null, $defaultKurirId, $kurirIdsByName);
+            if ($kurirId) {
+                $plan[$i]['payload']['kurir_id'] = $kurirId;
+            }
+            $storeId = $this->resolveStoreId($group['nama_toko'] ?? null, $storeIdsByName);
+            if ($storeId !== null) {
+                $plan[$i]['payload']['store_id'] = $storeId;
+            }
+            $channelId = $this->resolveChannelId($group['channel'] ?? null, $channelIdsByName);
+            if ($channelId !== null) {
+                $plan[$i]['payload']['channel_id'] = $channelId;
+            }
+            $plan[$i]['old_requirements'] = $this->expandWithMap($entry['old_items'], $unitRequirements);
+            $plan[$i]['new_requirements'] = $entry['add_new']
+                ? $this->expandWithMap($group['items'], $unitRequirements)
+                : [];
+        }
+
+        return $plan;
+    }
+
+    /**
+     * Save one chunk of the import plan. Runs inside a short DB transaction.
+     *
+     * @param array<int,array<string,mixed>> $chunk
+     * @return array{0:int,1:int}
+     */
+    private function writeImportChunk(array $chunk, string $today): array
+    {
+        $now = now();
+        $existingIds = array_values(array_filter(array_column($chunk, 'existing_id')));
+        // Fresh copies inside the transaction, so a retried chunk never works on stale models.
+        $existingById = $existingIds
+            ? Resi::query()->whereIn('id', $existingIds)->get()->keyBy('id')
+            : collect();
+
+        if (!empty($existingIds)) {
+            ResiDetail::query()->whereIn('resi_id', $existingIds)->delete();
+        }
+
+        $savedResi = 0;
+        $detailRows = [];
+        $pickingChanges = [];
+
+        foreach ($chunk as $entry) {
+            $group = $entry['group'];
+            $resi = $entry['existing_id'] ? $existingById->get($entry['existing_id']) : null;
+            if ($resi) {
+                $resi->fill($entry['payload'])->save();
+            } else {
+                $resi = Resi::create(['id_pesanan' => $group['id_pesanan']] + $entry['payload']);
+            }
+            $savedResi++;
+
+            foreach ($group['items'] as $row) {
+                $detailRows[] = [
+                    'resi_id' => $resi->id,
+                    'sku' => $row['sku'],
+                    'qty' => (int) $row['qty'],
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
+            }
+
+            if ($entry['old_date']) {
+                foreach ($entry['old_requirements'] as $sku => $qty) {
+                    $pickingChanges[$entry['old_date']][$sku]['minus'] = ($pickingChanges[$entry['old_date']][$sku]['minus'] ?? 0) + $qty;
+                }
+            }
+            foreach ($entry['new_requirements'] as $sku => $qty) {
+                $pickingChanges[$today][$sku]['plus'] = ($pickingChanges[$today][$sku]['plus'] ?? 0) + $qty;
+            }
+        }
+
+        foreach (array_chunk($detailRows, 500) as $rows) {
+            ResiDetail::query()->insert($rows);
+        }
+
+        ksort($pickingChanges);
+        foreach ($pickingChanges as $date => $changes) {
+            $this->applyPickingChanges((string) $date, $changes);
+        }
+
+        return [$savedResi, count($detailRows)];
+    }
+
+    /**
+     * @param array<int,string> $idPesananList
+     * @return array<string,Resi> keyed by normalized id_pesanan
+     */
+    private function loadExistingResiByIdPesanan(array $idPesananList): array
+    {
+        $map = [];
+        $ids = array_values(array_unique(array_map(fn ($v) => trim((string) $v), $idPesananList)));
+        foreach (array_chunk($ids, 1000) as $chunk) {
+            Resi::query()
+                ->whereIn('id_pesanan', $chunk)
+                ->orderBy('id')
+                ->get()
+                ->each(function (Resi $resi) use (&$map) {
+                    $map[$this->idPesananKey($resi->id_pesanan)] ??= $resi;
+                });
+        }
+
+        return $map;
+    }
+
+    private function idPesananKey($idPesanan): string
+    {
+        return mb_strtolower(trim((string) $idPesanan));
+    }
+
+    /**
+     * Resi ids that already have QC or scan out.
+     *
+     * @param array<int,int> $resiIds
+     * @return array<int,true>
+     */
+    private function operationalResiIds(array $resiIds): array
+    {
+        $ids = [];
+        foreach (array_chunk($resiIds, 1000) as $chunk) {
+            foreach (QcResiScan::query()->whereIn('resi_id', $chunk)->pluck('resi_id') as $id) {
+                $ids[(int) $id] = true;
+            }
+            foreach (ShipmentScanOut::query()->whereIn('resi_id', $chunk)->pluck('resi_id') as $id) {
+                $ids[(int) $id] = true;
+            }
+        }
+
+        return $ids;
+    }
+
+    /**
+     * @param array<int,int> $resiIds
+     * @return array<int,array<int,array{sku:string,qty:int}>>
+     */
+    private function detailsByResiId(array $resiIds): array
+    {
+        $map = [];
+        foreach (array_chunk($resiIds, 1000) as $chunk) {
+            ResiDetail::query()
+                ->whereIn('resi_id', $chunk)
+                ->orderBy('id')
+                ->get(['resi_id', 'sku', 'qty'])
+                ->each(function ($row) use (&$map) {
+                    $map[(int) $row->resi_id][] = ['sku' => (string) $row->sku, 'qty' => (int) $row->qty];
+                });
+        }
+
+        return $map;
+    }
+
+    /**
+     * @param iterable<int,array{sku:string,qty:int}> $items
+     * @param array<string,array<int,array{sku:string,qty:int}>> $unitRequirements
+     * @return array<string,int> physical sku => qty
+     */
+    private function expandWithMap(iterable $items, array $unitRequirements): array
+    {
+        $result = [];
+        foreach ($items as $row) {
+            $sku = trim((string) ($row['sku'] ?? ''));
+            $qty = (int) ($row['qty'] ?? 0);
+            if ($sku === '' || $qty <= 0) {
+                continue;
+            }
+            foreach ($unitRequirements[mb_strtolower($sku)] ?? [] as $req) {
+                $result[$req['sku']] = ($result[$req['sku']] ?? 0) + $req['qty'] * $qty;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * MySQL waits 50 seconds for a row lock by default. For the import we would rather
+     * fail fast and let DB::transaction() retry the small chunk.
+     *
+     * @return callable restores the previous value
+     */
+    private function shortenLockWaitTimeout(): callable
+    {
+        if (DB::connection()->getDriverName() !== 'mysql') {
+            return static fn () => null;
+        }
+
+        try {
+            $previous = (int) DB::selectOne('SELECT @@SESSION.innodb_lock_wait_timeout AS t')->t;
+            DB::statement('SET SESSION innodb_lock_wait_timeout = '.self::IMPORT_LOCK_WAIT_SECONDS);
+        } catch (\Throwable) {
+            return static fn () => null;
+        }
+
+        return static function () use ($previous) {
+            try {
+                DB::statement('SET SESSION innodb_lock_wait_timeout = '.max(1, $previous));
+            } catch (\Throwable) {
+                // ignore
+            }
+        };
+    }
+
+    private function isLockTimeout(\Throwable $e): bool
+    {
+        $message = $e->getMessage();
+
+        return str_contains($message, 'Lock wait timeout') || str_contains($message, 'Deadlock found');
     }
 
     /**
@@ -603,7 +859,7 @@ class ResiImportController extends Controller
             $listDate = $resi->tanggal_upload?->format('Y-m-d') ?? now()->toDateString();
             if (($resi->status ?? 'active') !== 'canceled' && $details->isNotEmpty()) {
                 $this->adjustPickingList($listDate, $details, -1);
-                PickingList::whereDate('list_date', $listDate)
+                SameDay::apply(PickingList::query(), 'list_date', $listDate)
                     ->whereIn('sku', $details->pluck('sku')->filter()->unique()->values()->all())
                     ->where('qty', '<=', 0)
                     ->where('remaining_qty', '<=', 0)
@@ -766,126 +1022,158 @@ class ResiImportController extends Controller
 
     private function adjustPickingList(string $date, $items, int $direction): void
     {
-        $expandedRows = BundleService::expandSkuRows($items);
-        $grouped = [];
-        foreach ($expandedRows as $row) {
+        $changes = [];
+        foreach (BundleService::expandSkuRows($items) as $row) {
             $sku = trim((string) ($row['sku'] ?? ''));
             $qty = (int) ($row['qty'] ?? 0);
             if ($sku === '' || $qty <= 0) {
                 continue;
             }
-            $grouped[$sku] = ($grouped[$sku] ?? 0) + $qty;
+            $key = $direction < 0 ? 'minus' : 'plus';
+            $changes[$sku][$key] = ($changes[$sku][$key] ?? 0) + $qty;
         }
 
-        foreach ($grouped as $sku => $qty) {
-            $delta = $direction * $qty;
-            $listRow = PickingList::whereDate('list_date', $date)
-                ->where('sku', $sku)
-                ->lockForUpdate()
-                ->first();
+        $this->applyPickingChanges($date, $changes);
+    }
 
-            $newQty = $listRow
-                ? max(0, (int) $listRow->qty + $delta)
-                : ($delta > 0 ? $delta : 0);
-            $balances = $this->getPickingBalances($date, $sku, $newQty);
+    /**
+     * Apply picking list changes for many SKUs of one date with a handful of queries.
+     * Rows are locked through the (list_date, sku) unique index in SKU order, so only
+     * the touched rows are locked and concurrent writers always lock in the same order.
+     *
+     * @param array<string,array{minus?:int,plus?:int}> $changes physical sku => qty to remove / add
+     */
+    private function applyPickingChanges(string $date, array $changes): void
+    {
+        if (empty($changes)) {
+            return;
+        }
+        ksort($changes, SORT_STRING | SORT_FLAG_CASE);
+        $skus = array_map('strval', array_keys($changes));
+
+        $listRows = SameDay::apply(PickingList::query(), 'list_date', $date)
+            ->whereIn('sku', $skus)
+            ->orderBy('sku')
+            ->lockForUpdate()
+            ->get()
+            ->keyBy(fn ($row) => mb_strtolower((string) $row->sku));
+        $exceptionRows = SameDay::apply(PickingListException::query(), 'list_date', $date)
+            ->whereIn('sku', $skus)
+            ->orderBy('sku')
+            ->lockForUpdate()
+            ->get()
+            ->keyBy(fn ($row) => mb_strtolower((string) $row->sku));
+        $pickedBySku = $this->pickedQtyMap($date, $skus);
+        $substitutedBySku = $this->substitutedOutQtyMap($date, $skus);
+
+        foreach ($changes as $sku => $change) {
+            $sku = (string) $sku;
+            $key = mb_strtolower($sku);
+            $listRow = $listRows->get($key);
+            $currentQty = (int) ($listRow?->qty ?? 0);
+            // Same order as before: remove the old upload first, then add the new one.
+            $newQty = max(0, max(0, $currentQty - (int) ($change['minus'] ?? 0)) + (int) ($change['plus'] ?? 0));
+
+            $pickedQty = (int) ($pickedBySku[$key] ?? 0);
+            if ($newQty <= 0) {
+                $remaining = 0;
+                $exceptionQty = $pickedQty;
+            } else {
+                $effectivePicked = $pickedQty + (int) ($substitutedBySku[$key] ?? 0);
+                $remaining = max(0, $newQty - $effectivePicked);
+                $exceptionQty = max(0, $pickedQty - $newQty);
+            }
 
             if ($listRow) {
                 $listRow->qty = $newQty;
-                $listRow->remaining_qty = $balances['remaining'];
+                $listRow->remaining_qty = $remaining;
                 if ($listRow->qty <= 0 && $listRow->remaining_qty <= 0) {
                     $listRow->delete();
                 } else {
                     $listRow->save();
                 }
-            } elseif ($delta > 0) {
+            } elseif ($newQty > 0) {
                 PickingList::create([
                     'list_date' => $date,
                     'sku' => $sku,
-                    'qty' => $delta,
-                    'remaining_qty' => $balances['remaining'],
+                    'qty' => $newQty,
+                    'remaining_qty' => $remaining,
                 ]);
             }
-            $this->syncPickingException($date, $sku, $balances['exception']);
+
+            $exception = $exceptionRows->get($key);
+            if ($exceptionQty > 0) {
+                if ($exception) {
+                    $exception->qty = $exceptionQty;
+                    $exception->save();
+                } else {
+                    PickingListException::create([
+                        'list_date' => $date,
+                        'sku' => $sku,
+                        'qty' => $exceptionQty,
+                    ]);
+                }
+            } elseif ($exception) {
+                $exception->delete();
+            }
         }
     }
 
-    private function getPickingBalances(string $date, string $sku, int $listQty): array
+    /**
+     * @param array<int,string> $skus
+     * @return array<string,int> lower-case sku => qty picked (QC passed) for resi uploaded on $date
+     */
+    private function pickedQtyMap(string $date, array $skus): array
     {
-        if ($listQty <= 0) {
-            return [
-                'remaining' => 0,
-                'exception' => $this->getPickedQty($date, $sku),
-            ];
-        }
+        $knownSkus = Item::query()
+            ->whereIn('sku', $skus)
+            ->pluck('sku')
+            ->mapWithKeys(fn ($sku) => [mb_strtolower((string) $sku) => true]);
 
-        $pickedQty = $this->getPickedQty($date, $sku);
-        $effectivePickedQty = $pickedQty + $this->getSubstitutedOutQty($date, $sku);
-        $remaining = $listQty - $effectivePickedQty;
-        if ($remaining < 0) {
-            $remaining = 0;
-        }
-        $exception = $pickedQty - $listQty;
-        if ($exception < 0) {
-            $exception = 0;
-        }
-
-        return [
-            'remaining' => $remaining,
-            'exception' => $exception,
-        ];
-    }
-
-    private function getPickedQty(string $date, string $sku): int
-    {
-        $itemId = Item::where('sku', $sku)->value('id');
-        if (!$itemId) {
-            return 0;
-        }
-
-        return (int) DB::table('qc_resi_scan_items as qci')
+        $query = DB::table('qc_resi_scan_items as qci')
             ->join('qc_resi_scans as qc', 'qc.id', '=', 'qci.qc_resi_scan_id')
             ->join('resis as r', 'r.id', '=', 'qc.resi_id')
-            ->where('qc.status', 'passed')
-            ->whereDate('r.tanggal_upload', $date)
-            ->where('qci.sku', $sku)
-            ->sum('qci.expected_qty');
+            ->where('qc.status', 'passed');
+
+        $map = [];
+        SameDay::apply($query, 'r.tanggal_upload', $date)
+            ->whereIn('qci.sku', $skus)
+            ->groupBy('qci.sku')
+            ->select('qci.sku', DB::raw('SUM(qci.expected_qty) as total'))
+            ->get()
+            ->each(function ($row) use (&$map, $knownSkus) {
+                $key = mb_strtolower((string) $row->sku);
+                if ($knownSkus->has($key)) {
+                    $map[$key] = ($map[$key] ?? 0) + (int) $row->total;
+                }
+            });
+
+        return $map;
     }
 
-    private function getSubstitutedOutQty(string $date, string $sku): int
+    /**
+     * @param array<int,string> $skus
+     * @return array<string,int> lower-case sku => qty substituted out for resi uploaded on $date
+     */
+    private function substitutedOutQtyMap(string $date, array $skus): array
     {
-        return (int) DB::table('qc_resi_scan_substitutions as sub')
+        $query = DB::table('qc_resi_scan_substitutions as sub')
             ->join('qc_resi_scans as qc', 'qc.id', '=', 'sub.qc_resi_scan_id')
             ->join('resis as r', 'r.id', '=', 'qc.resi_id')
-            ->where('qc.status', 'passed')
-            ->whereDate('r.tanggal_upload', $date)
-            ->where('sub.original_sku', $sku)
-            ->sum('sub.qty');
-    }
+            ->where('qc.status', 'passed');
 
-    private function syncPickingException(string $date, string $sku, int $exceptionQty): void
-    {
-        $exception = PickingListException::whereDate('list_date', $date)
-            ->where('sku', $sku)
-            ->lockForUpdate()
-            ->first();
+        $map = [];
+        SameDay::apply($query, 'r.tanggal_upload', $date)
+            ->whereIn('sub.original_sku', $skus)
+            ->groupBy('sub.original_sku')
+            ->select('sub.original_sku as sku', DB::raw('SUM(sub.qty) as total'))
+            ->get()
+            ->each(function ($row) use (&$map) {
+                $key = mb_strtolower((string) $row->sku);
+                $map[$key] = ($map[$key] ?? 0) + (int) $row->total;
+            });
 
-        if ($exceptionQty > 0) {
-            if ($exception) {
-                $exception->qty = $exceptionQty;
-                $exception->save();
-            } else {
-                PickingListException::create([
-                    'list_date' => $date,
-                    'sku' => $sku,
-                    'qty' => $exceptionQty,
-                ]);
-            }
-            return;
-        }
-
-        if ($exception) {
-            $exception->delete();
-        }
+        return $map;
     }
 
     /**
@@ -939,8 +1227,9 @@ class ResiImportController extends Controller
 
     private function applyUploadDateRange($query, string $dateFrom, string $dateTo, string $column = 'tanggal_upload'): void
     {
-        $query->whereDate($column, '>=', $dateFrom)
-            ->whereDate($column, '<=', $dateTo);
+        // Plain range instead of whereDate() so the tanggal_upload index can be used.
+        $query->where($column, '>=', $dateFrom)
+            ->where($column, '<', Carbon::parse($dateTo)->addDay()->toDateString());
     }
 
     private function uploadDateRangeLabel(string $dateFrom, string $dateTo): string
@@ -1032,15 +1321,21 @@ class ResiImportController extends Controller
         return $kurir->id;
     }
 
-    private function resolveKurirId($rawName, ?int $defaultId): ?int
+    /** @param array<string,int> $knownIds */
+    private function resolveKurirIdFromMap($rawName, ?int $defaultId, array &$knownIds): ?int
     {
         $name = trim((string) $rawName);
         if ($name === '') {
             return $defaultId;
         }
 
+        $key = $this->normalizeMasterName($name);
+        if (isset($knownIds[$key])) {
+            return $knownIds[$key];
+        }
+
         $kurir = Kurir::firstOrCreate(['name' => $name]);
-        return $kurir->id ?? $defaultId;
+        return $knownIds[$key] = (int) $kurir->id;
     }
 
     /**

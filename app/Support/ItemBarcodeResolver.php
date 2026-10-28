@@ -14,10 +14,16 @@ class ItemBarcodeResolver
             return null;
         }
 
+        // Exact match first: it uses the unique index on items.sku.
+        // LOWER(sku) cannot use an index, so it is only a fallback.
         $item = Item::query()
-            ->whereRaw('LOWER(sku) = ?', [$normalized])
+            ->where('sku', trim($code))
             ->where('item_type', Item::TYPE_SINGLE)
-            ->first();
+            ->first()
+            ?? Item::query()
+                ->whereRaw('LOWER(sku) = ?', [$normalized])
+                ->where('item_type', Item::TYPE_SINGLE)
+                ->first();
 
         if ($item) {
             return $item;

@@ -210,6 +210,7 @@ class BundleService
     public static function expandSkuRows(iterable $rows): array
     {
         $grouped = [];
+        $cleanRows = [];
 
         foreach ($rows as $row) {
             $sku = trim((string) ($row['sku'] ?? $row->sku ?? ''));
@@ -217,11 +218,14 @@ class BundleService
             if ($sku === '' || $qty <= 0) {
                 continue;
             }
+            $cleanRows[] = [$sku, $qty];
+        }
 
-            $item = Item::query()
-                ->where('sku', $sku)
-                ->with('bundleComponents.component')
-                ->first();
+        // Load every SKU in one query instead of one query per row.
+        $itemsBySku = self::loadItemsBySku(array_column($cleanRows, 0));
+
+        foreach ($cleanRows as [$sku, $qty]) {
+            $item = $itemsBySku[mb_strtolower($sku)] ?? null;
 
             if (!$item) {
                 throw ValidationException::withMessages([
@@ -240,6 +244,68 @@ class BundleService
         }
 
         return array_values($grouped);
+    }
+
+    /**
+     * Physical requirements for ONE unit of each SKU, loaded in a single query.
+     * Lets bulk callers (resi import) expand thousands of rows without a query per row.
+     *
+     * @param iterable<int,string> $skus
+     * @return array<string,array<int,array{sku:string,qty:int}>> keyed by lower-case SKU
+     */
+    public static function unitRequirementsBySku(iterable $skus): array
+    {
+        $clean = [];
+        foreach ($skus as $sku) {
+            $sku = trim((string) $sku);
+            if ($sku !== '') {
+                $clean[mb_strtolower($sku)] ??= $sku;
+            }
+        }
+
+        $itemsBySku = self::loadItemsBySku(array_values($clean));
+        $map = [];
+        foreach ($clean as $key => $sku) {
+            $item = $itemsBySku[$key] ?? null;
+            if (!$item) {
+                throw ValidationException::withMessages([
+                    'sku' => "SKU {$sku} tidak ditemukan di master item.",
+                ]);
+            }
+
+            $map[$key] = array_map(
+                fn (array $req) => ['sku' => $req['sku'], 'qty' => (int) $req['qty']],
+                self::expandItem($item, 1)
+            );
+        }
+
+        return $map;
+    }
+
+    /**
+     * @param array<int,string> $skus
+     * @return array<string,Item> keyed by lower-case SKU
+     */
+    private static function loadItemsBySku(array $skus): array
+    {
+        $skus = array_values(array_unique($skus));
+        if (empty($skus)) {
+            return [];
+        }
+
+        $map = [];
+        foreach (array_chunk($skus, 500) as $chunk) {
+            Item::query()
+                ->whereIn('sku', $chunk)
+                ->with('bundleComponents.component')
+                ->orderBy('id')
+                ->get()
+                ->each(function (Item $item) use (&$map) {
+                    $map[mb_strtolower((string) $item->sku)] ??= $item;
+                });
+        }
+
+        return $map;
     }
 
     public static function expandItemRows(iterable $rows): array

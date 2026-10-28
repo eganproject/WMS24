@@ -18,8 +18,7 @@ class PickingListBalanceService
             ->values();
 
         foreach ($uniqueSkus as $sku) {
-            $listRow = PickingList::query()
-                ->whereDate('list_date', $date)
+            $listRow = SameDay::apply(PickingList::query(), 'list_date', $date)
                 ->where('sku', $sku)
                 ->lockForUpdate()
                 ->first();
@@ -54,19 +53,19 @@ class PickingListBalanceService
             return 0;
         }
 
-        return (int) DB::table('qc_resi_scan_items as qci')
+        $query = DB::table('qc_resi_scan_items as qci')
             ->join('qc_resi_scans as qc', 'qc.id', '=', 'qci.qc_resi_scan_id')
             ->join('resis as r', 'r.id', '=', 'qc.resi_id')
-            ->where('qc.status', 'passed')
-            ->whereDate('r.tanggal_upload', $date)
+            ->where('qc.status', 'passed');
+
+        return (int) SameDay::apply($query, 'r.tanggal_upload', $date)
             ->where('qci.sku', $sku)
             ->sum('qci.expected_qty');
     }
 
     private static function syncException(string $date, string $sku, int $exceptionQty): void
     {
-        $exception = PickingListException::query()
-            ->whereDate('list_date', $date)
+        $exception = SameDay::apply(PickingListException::query(), 'list_date', $date)
             ->where('sku', $sku)
             ->lockForUpdate()
             ->first();
@@ -95,11 +94,12 @@ class PickingListBalanceService
 
     private static function substitutedOutQty(string $date, string $sku): int
     {
-        return (int) DB::table('qc_resi_scan_substitutions as sub')
+        $query = DB::table('qc_resi_scan_substitutions as sub')
             ->join('qc_resi_scans as qc', 'qc.id', '=', 'sub.qc_resi_scan_id')
             ->join('resis as r', 'r.id', '=', 'qc.resi_id')
-            ->where('qc.status', 'passed')
-            ->whereDate('r.tanggal_upload', $date)
+            ->where('qc.status', 'passed');
+
+        return (int) SameDay::apply($query, 'r.tanggal_upload', $date)
             ->where('sub.original_sku', $sku)
             ->sum('sub.qty');
     }

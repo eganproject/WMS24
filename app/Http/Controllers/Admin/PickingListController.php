@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Support\SameDay;
 use App\Http\Controllers\Controller;
 use App\Exports\PickingListExport;
 use App\Models\Item;
@@ -213,7 +214,7 @@ class PickingListController extends Controller
         try {
             $requiredRows = DB::table('resi_details as rd')
                 ->join('resis as r', 'r.id', '=', 'rd.resi_id')
-                ->whereDate('r.tanggal_upload', $listDate)
+                ->where(fn ($q) => SameDay::apply($q, 'r.tanggal_upload', $listDate))
                 ->where(function ($q) {
                     $q->whereNull('r.status')
                         ->orWhere('r.status', '!=', 'canceled');
@@ -235,7 +236,7 @@ class PickingListController extends Controller
                 ->join('qc_resi_scans as qc', 'qc.id', '=', 'qci.qc_resi_scan_id')
                 ->join('resis as r', 'r.id', '=', 'qc.resi_id')
                 ->where('qc.status', 'passed')
-                ->whereDate('r.tanggal_upload', $listDate)
+                ->where(fn ($q) => SameDay::apply($q, 'r.tanggal_upload', $listDate))
                 ->select('qci.sku', DB::raw('SUM(qci.expected_qty) as qty'))
                 ->groupBy('qci.sku')
                 ->get();
@@ -254,7 +255,7 @@ class PickingListController extends Controller
                 ->join('qc_resi_scans as qc', 'qc.id', '=', 'sub.qc_resi_scan_id')
                 ->join('resis as r', 'r.id', '=', 'qc.resi_id')
                 ->where('qc.status', 'passed')
-                ->whereDate('r.tanggal_upload', $listDate)
+                ->where(fn ($q) => SameDay::apply($q, 'r.tanggal_upload', $listDate))
                 ->select('sub.original_sku', DB::raw('SUM(sub.qty) as qty'))
                 ->groupBy('sub.original_sku')
                 ->get();
@@ -410,7 +411,7 @@ class PickingListController extends Controller
             });
         }
 
-        $query->whereDate('list_date', $date);
+        SameDay::apply($query, 'list_date', $date);
         $this->applyAreaFilter($query, $request);
         $this->applyStatusFilter($query, $request);
 
@@ -570,7 +571,7 @@ class PickingListController extends Controller
             ->join('qc_resi_scans as qc', 'qc.id', '=', 'qci.qc_resi_scan_id')
             ->join('resis as r', 'r.id', '=', 'qc.resi_id')
             ->where('qc.status', 'passed')
-            ->whereDate('r.tanggal_upload', $date)
+            ->where(fn ($q) => SameDay::apply($q, 'r.tanggal_upload', $date))
             ->where('qci.sku', $sku)
             ->sum('qci.expected_qty');
     }
@@ -581,7 +582,7 @@ class PickingListController extends Controller
             ->join('qc_resi_scans as qc', 'qc.id', '=', 'sub.qc_resi_scan_id')
             ->join('resis as r', 'r.id', '=', 'qc.resi_id')
             ->where('qc.status', 'passed')
-            ->whereDate('r.tanggal_upload', $date)
+            ->where(fn ($q) => SameDay::apply($q, 'r.tanggal_upload', $date))
             ->where('sub.original_sku', $sku)
             ->sum('sub.qty');
     }
@@ -619,7 +620,7 @@ class PickingListController extends Controller
         try {
             if ($date) {
                 $target = Carbon::parse($date)->toDateString();
-                $query->whereDate('list_date', $target);
+                SameDay::apply($query, 'list_date', $target);
             }
         } catch (\Throwable) {
             // ignore invalid date filters

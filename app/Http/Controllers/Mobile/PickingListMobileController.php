@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Mobile;
 
+use App\Support\SameDay;
 use App\Http\Controllers\Controller;
 use App\Models\Area;
 use App\Models\QcScanException;
@@ -44,7 +45,7 @@ class PickingListMobileController extends Controller
 
         $query = PickingList::query()
             ->with('item', 'item.location.area', 'item.secondaryLocation', 'item.area')
-            ->whereDate('list_date', $date)
+            ->where(fn ($q) => SameDay::apply($q, 'list_date', $date))
             ->orderBy('sku');
         $this->applyPackerExceptionFilter($query);
 

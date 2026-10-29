@@ -84,17 +84,29 @@ class QcInventoryService
 
     public static function reservedQtyForOpenQc(string $sku, ?int $excludeQcId = null): int
     {
-        $query = QcResiScanItem::query()
-            ->join('qc_resi_scans', 'qc_resi_scans.id', '=', 'qc_resi_scan_items.qc_resi_scan_id')
-            // Plain equality (case-insensitive under the utf8mb4_unicode_ci collation) so the sku index is used.
-            ->where('qc_resi_scan_items.sku', trim($sku))
-            ->whereIn('qc_resi_scans.status', [QcTransitStatus::DRAFT, QcTransitStatus::HOLD]);
-
-        if ($excludeQcId && $excludeQcId > 0) {
-            $query->where('qc_resi_scans.id', '!=', $excludeQcId);
+        // Callers lock the item_stocks row of this SKU first, which already serializes
+        // every reservation of the SKU. So only the items of OPEN QCs are locked here,
+        // by exact (qc_resi_scan_id, sku) key. Locking through the sku index or a join
+        // would also lock finished QCs and block other operators' QC and scan out.
+        $openQcIds = QcResiScan::query()
+            ->whereIn('status', [QcTransitStatus::DRAFT, QcTransitStatus::HOLD])
+            ->when($excludeQcId && $excludeQcId > 0, fn ($q) => $q->where('id', '!=', $excludeQcId))
+            ->pluck('id')
+            ->all();
+        if (empty($openQcIds)) {
+            return 0;
         }
 
-        return (int) $query->lockForUpdate()->sum('qc_resi_scan_items.scanned_qty');
+        $total = 0;
+        foreach (array_chunk($openQcIds, 500) as $chunk) {
+            $total += (int) QcResiScanItem::query()
+                ->whereIn('qc_resi_scan_id', $chunk)
+                ->where('sku', trim($sku))
+                ->lockForUpdate()
+                ->sum('scanned_qty');
+        }
+
+        return $total;
     }
 
     private static function isExceptionSku(string $sku): bool

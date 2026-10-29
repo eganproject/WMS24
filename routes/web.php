@@ -118,11 +118,11 @@ Route::middleware('auth')->prefix('mobile')->as('mobile.')->group(function () {
     Route::post('/inbound-scan/complete', [InboundScanController::class, 'complete'])->name('inbound-scan.complete');
     Route::post('/inbound-scan/reset', [InboundScanController::class, 'reset'])->name('inbound-scan.reset');
     Route::get('/qc', [QcScanController::class, 'index'])->name('qc.index');
-    Route::post('/qc/scan', [QcScanController::class, 'scanResi'])->name('qc.scan');
-    Route::post('/qc/scan-sku', [QcScanController::class, 'scanSku'])->name('qc.scan-sku');
-    Route::post('/qc/hold', [QcScanController::class, 'hold'])->name('qc.hold');
-    Route::post('/qc/complete', [QcScanController::class, 'complete'])->name('qc.complete');
-    Route::post('/qc/reset', [QcScanController::class, 'reset'])->name('qc.reset');
+    Route::post('/qc/scan', [QcScanController::class, 'scanResi'])->name('qc.scan')->middleware('db.short-lock');
+    Route::post('/qc/scan-sku', [QcScanController::class, 'scanSku'])->name('qc.scan-sku')->middleware('db.short-lock');
+    Route::post('/qc/hold', [QcScanController::class, 'hold'])->name('qc.hold')->middleware('db.short-lock');
+    Route::post('/qc/complete', [QcScanController::class, 'complete'])->name('qc.complete')->middleware('db.short-lock');
+    Route::post('/qc/reset', [QcScanController::class, 'reset'])->name('qc.reset')->middleware('db.short-lock');
     Route::get('/scan-out', [ScanOutController::class, 'index'])->name('scan-out.index');
     Route::post('/scan-out/scan', [ScanOutController::class, 'scan'])->name('scan-out.scan');
     Route::get('/scan-out/history', [ScanOutController::class, 'history'])->name('scan-out.history');
@@ -452,12 +452,12 @@ Route::middleware(['auth', 'verified', 'menu.permission'])->prefix('admin')->as(
         Route::post('/returns/{id}/approve', [OutboundController::class, 'returnsApprove'])->name('returns.approve');
 
         Route::get('/qc-scan', [QcScanWorkbenchController::class, 'index'])->name('qc-scan.index');
-        Route::post('/qc-scan/scan', [QcScanWorkbenchController::class, 'scanResi'])->name('qc-scan.scan');
-        Route::post('/qc-scan/scan-sku', [QcScanWorkbenchController::class, 'scanSku'])->name('qc-scan.scan-sku');
-        Route::post('/qc-scan/substitute', [QcScanWorkbenchController::class, 'substitute'])->name('qc-scan.substitute');
-        Route::post('/qc-scan/hold', [QcScanWorkbenchController::class, 'hold'])->name('qc-scan.hold');
-        Route::post('/qc-scan/complete', [QcScanWorkbenchController::class, 'complete'])->name('qc-scan.complete');
-        Route::post('/qc-scan/reset', [QcScanWorkbenchController::class, 'reset'])->name('qc-scan.reset');
+        Route::post('/qc-scan/scan', [QcScanWorkbenchController::class, 'scanResi'])->name('qc-scan.scan')->middleware('db.short-lock');
+        Route::post('/qc-scan/scan-sku', [QcScanWorkbenchController::class, 'scanSku'])->name('qc-scan.scan-sku')->middleware('db.short-lock');
+        Route::post('/qc-scan/substitute', [QcScanWorkbenchController::class, 'substitute'])->name('qc-scan.substitute')->middleware('db.short-lock');
+        Route::post('/qc-scan/hold', [QcScanWorkbenchController::class, 'hold'])->name('qc-scan.hold')->middleware('db.short-lock');
+        Route::post('/qc-scan/complete', [QcScanWorkbenchController::class, 'complete'])->name('qc-scan.complete')->middleware('db.short-lock');
+        Route::post('/qc-scan/reset', [QcScanWorkbenchController::class, 'reset'])->name('qc-scan.reset')->middleware('db.short-lock');
         Route::get('/scan-out', [ScanOutWorkbenchController::class, 'index'])->name('scan-out.index');
         Route::post('/scan-out/scan', [ScanOutWorkbenchController::class, 'scan'])->name('scan-out.scan');
         Route::get('/scan-out/recent', [ScanOutWorkbenchController::class, 'recent'])->name('scan-out.recent');

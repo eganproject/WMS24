@@ -423,16 +423,33 @@
         return 'Terjadi kesalahan.';
     };
 
+    const REQUEST_TIMEOUT_MS = 20000;
+
     const fetchJson = async (url, options = {}) => {
-        const res = await fetch(url, {
-            credentials: 'same-origin',
-            headers: {
-                'Accept': 'application/json',
-                'X-CSRF-TOKEN': csrfToken,
-                ...(options.headers || {}),
-            },
-            ...options,
-        });
+        // Without a timeout a stuck connection leaves the screen on "Memproses..." forever.
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+        let res;
+        try {
+            res = await fetch(url, {
+                credentials: 'same-origin',
+                ...options,
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                    ...(options.headers || {}),
+                },
+                signal: controller.signal,
+            });
+        } catch (err) {
+            const error = new Error(err?.name === 'AbortError'
+                ? 'Server tidak merespons. Periksa koneksi lalu scan ulang resi untuk memuat data terbaru sebelum melanjutkan.'
+                : 'Koneksi ke server terputus. Periksa jaringan lalu coba lagi.');
+            error.status = 0;
+            throw error;
+        } finally {
+            clearTimeout(timer);
+        }
 
         const text = await res.text();
         let json = null;
@@ -624,7 +641,12 @@
         el.pickerEmployee.focus();
     };
 
+    let resiBusy = false;
+    let skuBusy = false;
+
     const submitResi = async () => {
+        // Scanners can send Enter twice; never run two requests for the same scan.
+        if (resiBusy) return;
         unlockScanSound();
         const pickerEmployeeId = parseInt(el.pickerEmployee.value || '0', 10);
         if (!pickerEmployeeId) {
@@ -643,6 +665,7 @@
             return;
         }
 
+        resiBusy = true;
         el.btnScanResi.disabled = true;
         setStatus(el.resiStatus, 'Memproses resi...', 'pending');
 
@@ -672,11 +695,13 @@
             showError(error.message || 'Gagal memproses resi.', error.details || []);
             setStatus(el.resiStatus, error.message || 'Gagal memproses resi.', 'error');
         } finally {
+            resiBusy = false;
             el.btnScanResi.disabled = false;
         }
     };
 
     const submitSku = async () => {
+        if (skuBusy) return;
         unlockScanSound();
         if (!qcState.id) {
             playErrorSound();
@@ -699,6 +724,7 @@
             return;
         }
 
+        skuBusy = true;
         el.btnScanSku.disabled = true;
         setStatus(el.skuStatus, 'Memproses SKU...', 'pending');
 
@@ -727,6 +753,7 @@
             showError(error.message || 'Gagal memproses SKU.', error.details || []);
             setStatus(el.skuStatus, error.message || 'Gagal memproses SKU.', 'error');
         } finally {
+            skuBusy = false;
             el.btnScanSku.disabled = false;
         }
     };

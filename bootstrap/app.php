@@ -10,6 +10,7 @@ use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\LogUserActivity;
 use App\Http\Middleware\OutboundManualApiAccess;
 use App\Http\Middleware\RestrictMobileAccess;
+use App\Http\Middleware\ShortDbLockWait;
 use App\Http\Middleware\StockApiAccess;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -37,6 +38,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'user.active' => EnsureUserIsActive::class,
             'menu.permission' => AuthorizeMenuPermission::class,
             'restrict.mobile' => RestrictMobileAccess::class,
+            'db.short-lock' => ShortDbLockWait::class,
             'stock.api.access' => StockApiAccess::class,
             'outbound.manual.api.access' => OutboundManualApiAccess::class,
         ]);

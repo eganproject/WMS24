@@ -872,17 +872,35 @@
         return 'Terjadi kesalahan.';
     };
 
+    const REQUEST_TIMEOUT_MS = 20000;
+
     const fetchJson = async (url, payload) => {
-        const res = await fetch(url, {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': csrfToken,
-            },
-            body: JSON.stringify(payload),
-        });
+        // Without a timeout a stuck connection leaves the screen on "Memproses..." forever.
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+        let res;
+        try {
+            res = await fetch(url, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                },
+                body: JSON.stringify(payload),
+                signal: controller.signal,
+            });
+        } catch (error) {
+            const err = new Error(error?.name === 'AbortError'
+                ? 'Server tidak merespons. Periksa koneksi lalu scan ulang resi untuk memuat data terbaru sebelum melanjutkan.'
+                : 'Koneksi ke server terputus. Periksa jaringan lalu coba lagi.');
+            err.status = 0;
+            err.details = [];
+            throw err;
+        } finally {
+            clearTimeout(timer);
+        }
 
         const text = await res.text();
         let json = null;

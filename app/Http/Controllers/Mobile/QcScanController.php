@@ -126,9 +126,14 @@ class QcScanController extends Controller
 
         DB::beginTransaction();
         try {
-            $qc = QcResiScan::where('resi_id', $resi->id)
-                ->lockForUpdate()
-                ->first();
+            // Serialize QC start per resi by locking the resi row (a plain record lock).
+            // A locking read on qc_resi_scans.resi_id that finds nothing takes a gap lock;
+            // two operators starting two new resi at once then deadlock on the insert.
+            Resi::query()->whereKey($resi->id)->lockForUpdate()->first(['id']);
+            $existingQcId = QcResiScan::where('resi_id', $resi->id)->value('id');
+            $qc = $existingQcId
+                ? QcResiScan::query()->whereKey($existingQcId)->lockForUpdate()->first()
+                : null;
 
             if ($qc && !in_array($qc->status, [QcTransitStatus::DRAFT, QcTransitStatus::HOLD], true)) {
                 $this->recordDuplicateResiScanAttempt($request, $qc, $type, $code);

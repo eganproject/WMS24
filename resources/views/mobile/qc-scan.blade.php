@@ -430,6 +430,7 @@
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
         let res;
+        let text = '';
         try {
             res = await fetch(url, {
                 credentials: 'same-origin',
@@ -441,6 +442,8 @@
                 },
                 signal: controller.signal,
             });
+            // The body read is covered by the same timeout: a response can stall mid-body too.
+            text = await res.text();
         } catch (err) {
             const error = new Error(err?.name === 'AbortError'
                 ? 'Server tidak merespons. Periksa koneksi lalu scan ulang resi untuk memuat data terbaru sebelum melanjutkan.'
@@ -451,7 +454,6 @@
             clearTimeout(timer);
         }
 
-        const text = await res.text();
         let json = null;
         try { json = JSON.parse(text); } catch (err) { json = null; }
 

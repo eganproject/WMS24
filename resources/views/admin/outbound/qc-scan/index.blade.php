@@ -879,6 +879,7 @@
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
         let res;
+        let text = '';
         try {
             res = await fetch(url, {
                 method: 'POST',
@@ -891,6 +892,8 @@
                 body: JSON.stringify(payload),
                 signal: controller.signal,
             });
+            // The body read is covered by the same timeout: a response can stall mid-body too.
+            text = await res.text();
         } catch (error) {
             const err = new Error(error?.name === 'AbortError'
                 ? 'Server tidak merespons. Periksa koneksi lalu scan ulang resi untuk memuat data terbaru sebelum melanjutkan.'
@@ -902,7 +905,6 @@
             clearTimeout(timer);
         }
 
-        const text = await res.text();
         let json = null;
         try { json = JSON.parse(text); } catch (error) { json = null; }
 
@@ -1621,10 +1623,17 @@
             if (shouldAutoComplete()) {
                 pendingAutoComplete = true;
                 setStatusBox(el.qcStatus, 'Semua SKU sudah terpenuhi. Menyelesaikan QC otomatis...', 'pending');
-                window.setTimeout(() => {
+                // Wait for any running action (hold/reset) instead of silently skipping
+                // auto-complete and leaving "Menyelesaikan QC otomatis..." on screen.
+                const runAutoComplete = () => {
+                    if (actionBusy) {
+                        window.setTimeout(runAutoComplete, 300);
+                        return;
+                    }
                     pendingAutoComplete = false;
                     completeQc({ auto: true });
-                }, 180);
+                };
+                window.setTimeout(runAutoComplete, 180);
             } else {
                 focusSku();
             }
@@ -1710,10 +1719,17 @@
             if (shouldAutoComplete()) {
                 pendingAutoComplete = true;
                 setStatusBox(el.qcStatus, 'Semua SKU terpenuhi. Menyelesaikan QC otomatis...', 'pending');
-                window.setTimeout(() => {
+                // Wait for any running action (hold/reset) instead of silently skipping
+                // auto-complete and leaving "Menyelesaikan QC otomatis..." on screen.
+                const runAutoComplete = () => {
+                    if (actionBusy) {
+                        window.setTimeout(runAutoComplete, 300);
+                        return;
+                    }
                     pendingAutoComplete = false;
                     completeQc({ auto: true });
-                }, 180);
+                };
+                window.setTimeout(runAutoComplete, 180);
             } else {
                 focusSku();
             }

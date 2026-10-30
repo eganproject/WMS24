@@ -131,6 +131,9 @@ class ItemController extends Controller
                 'description' => $item->description ?? '',
                 'safety_stock' => (int) ($item->safety_stock ?? 0),
                 'koli_qty' => $item->koli_qty !== null ? (int) $item->koli_qty : null,
+                'weight_per_pcs' => $item->weight_per_pcs,
+                'weight_per_koli' => $item->weight_per_koli,
+                'cbm_per_koli' => $item->cbm_per_koli,
                 'bundle_components' => $item->bundleComponents->map(fn ($row) => [
                     'component_item_id' => (int) $row->component_item_id,
                     'required_qty' => (int) $row->required_qty,
@@ -363,6 +366,9 @@ class ItemController extends Controller
             'description' => ['nullable', 'string'],
             'safety_stock' => ['nullable', 'integer', 'min:0'],
             'koli_qty' => ['nullable', 'integer', 'min:0', 'max:4294967295'],
+            'weight_per_pcs' => ['nullable', 'numeric', 'min:0', 'max:9999999.999'],
+            'weight_per_koli' => ['nullable', 'numeric', 'min:0', 'max:9999999.999'],
+            'cbm_per_koli' => ['nullable', 'numeric', 'min:0', 'max:999999.999999'],
             'bundle_components' => ['nullable', 'array'],
             'bundle_components.*.component_item_id' => ['nullable', 'integer', 'exists:items,id'],
             'bundle_components.*.required_qty' => ['nullable', 'integer', 'min:1'],
@@ -384,6 +390,7 @@ class ItemController extends Controller
                 ? null
                 : max(0, (int) $validated['koli_qty']);
         }
+        $this->normalizeMeasurementPayload($validated);
 
         $bundleComponents = $validated['bundle_components'] ?? [];
         $externalBarcodes = $validated['external_barcodes'] ?? [];
@@ -472,6 +479,9 @@ class ItemController extends Controller
             'description' => ['nullable', 'string'],
             'safety_stock' => ['nullable', 'integer', 'min:0'],
             'koli_qty' => ['nullable', 'integer', 'min:0', 'max:4294967295'],
+            'weight_per_pcs' => ['nullable', 'numeric', 'min:0', 'max:9999999.999'],
+            'weight_per_koli' => ['nullable', 'numeric', 'min:0', 'max:9999999.999'],
+            'cbm_per_koli' => ['nullable', 'numeric', 'min:0', 'max:999999.999999'],
             'bundle_components' => ['nullable', 'array'],
             'bundle_components.*.component_item_id' => ['nullable', 'integer', 'exists:items,id'],
             'bundle_components.*.required_qty' => ['nullable', 'integer', 'min:1'],
@@ -493,6 +503,7 @@ class ItemController extends Controller
                 ? null
                 : max(0, (int) $validated['koli_qty']);
         }
+        $this->normalizeMeasurementPayload($validated);
 
         $bundleComponents = $validated['bundle_components'] ?? [];
         $externalBarcodes = $validated['external_barcodes'] ?? [];
@@ -1156,6 +1167,20 @@ class ItemController extends Controller
         ];
     }
 
+    /**
+     * Berat & CBM bersifat opsional: kosong disimpan sebagai NULL.
+     */
+    private function normalizeMeasurementPayload(array &$validated): void
+    {
+        foreach (['weight_per_pcs', 'weight_per_koli', 'cbm_per_koli'] as $field) {
+            if (!array_key_exists($field, $validated)) {
+                continue;
+            }
+            $value = $validated[$field];
+            $validated[$field] = ($value === null || trim((string) $value) === '') ? null : trim((string) $value);
+        }
+    }
+
     private function normalizeBundlePayload(array &$validated): void
     {
         $validated['area_id'] = null;
@@ -1171,6 +1196,9 @@ class ItemController extends Controller
         $validated['address'] = null;
         $validated['safety_stock'] = 0;
         $validated['koli_qty'] = null;
+        $validated['weight_per_pcs'] = null;
+        $validated['weight_per_koli'] = null;
+        $validated['cbm_per_koli'] = null;
         unset($validated['rack_code'], $validated['column_no'], $validated['row_no']);
     }
 

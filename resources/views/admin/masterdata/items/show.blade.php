@@ -5,6 +5,15 @@
     $canUpdate = Perm::can(auth()->user(), 'admin.masterdata.items.index', 'update');
     $isBundle = $item->isBundle();
     $location = $item->location;
+    // Tampilkan desimal tanpa nol di belakang, mis. 12.500 -> "12,5 kg".
+    $formatMeasure = function ($value, int $decimals, string $unit): string {
+        if ($value === null || $value === '') {
+            return '-';
+        }
+        $text = rtrim(rtrim(number_format((float) $value, $decimals, ',', '.'), '0'), ',');
+
+        return $text.' '.$unit;
+    };
 @endphp
 
 @section('title', 'Detail Item '.$item->sku)
@@ -109,6 +118,18 @@
                                 <tr>
                                     <td class="text-muted">Alamat 2 Gudang Besar</td>
                                     <td class="fw-bold">{{ $item->mainSecondaryLocation?->code ?? '-' }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted">Berat per Koli</td>
+                                    <td class="fw-bold">{{ $formatMeasure($item->weight_per_koli, 3, 'kg') }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted">CBM per Koli</td>
+                                    <td class="fw-bold">{{ $formatMeasure($item->cbm_per_koli, 6, 'm³') }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted">Berat per Pcs</td>
+                                    <td class="fw-bold">{{ $formatMeasure($item->weight_per_pcs, 3, 'kg') }}</td>
                                 </tr>
                             @endunless
                             <tr>

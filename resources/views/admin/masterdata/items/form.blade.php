@@ -283,7 +283,7 @@
             <div class="card mb-6">
                 <div class="card-header border-0 pt-6">
                     <div class="card-title flex-column">
-                        <h3 class="fw-bolder mb-1">Koli &amp; Stok Pengaman</h3>
+                        <h3 class="fw-bolder mb-1">Koli, Berat &amp; Stok Pengaman</h3>
                         <div class="text-muted fs-7">Dipakai saat input inbound per koli dan peringatan stok.</div>
                     </div>
                 </div>
@@ -293,6 +293,26 @@
                         <input type="number" min="0" class="form-control form-control-solid" name="koli_qty" id="item_koli_qty" placeholder="Contoh: 24" />
                         <div class="form-text">Isi 0 atau kosong jika tidak menggunakan koli.</div>
                         <div class="invalid-feedback d-block" id="error_koli_qty"></div>
+                    </div>
+                    <div class="row g-4 mb-7">
+                        <div class="col-md-6">
+                            <label class="fs-6 fw-bold form-label mb-2">Berat per Koli (kg)</label>
+                            <input type="number" min="0" step="0.001" class="form-control form-control-solid" name="weight_per_koli" id="item_weight_per_koli" placeholder="Opsional, contoh: 12.5" />
+                            <div class="invalid-feedback d-block" id="error_weight_per_koli"></div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="fs-6 fw-bold form-label mb-2">CBM per Koli (m³)</label>
+                            <input type="number" min="0" step="0.000001" class="form-control form-control-solid" name="cbm_per_koli" id="item_cbm_per_koli" placeholder="Opsional, contoh: 0.045" />
+                            <div class="invalid-feedback d-block" id="error_cbm_per_koli"></div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="fs-6 fw-bold form-label mb-2">Berat per Pcs (kg)</label>
+                            <input type="number" min="0" step="0.001" class="form-control form-control-solid" name="weight_per_pcs" id="item_weight_per_pcs" placeholder="Opsional, contoh: 0.5" />
+                            <div class="invalid-feedback d-block" id="error_weight_per_pcs"></div>
+                        </div>
+                        <div class="col-12">
+                            <div class="form-text">Berat dan CBM opsional, kosongkan jika belum ada datanya. CBM = panjang × lebar × tinggi koli dalam meter.</div>
+                        </div>
                     </div>
                     <div class="fv-row">
                         <label class="fs-6 fw-bold form-label mb-2">Jumlah Stok Pengaman</label>
@@ -370,6 +390,10 @@
         const formDescription = document.getElementById('item_description');
         const formSafetyStock = document.getElementById('item_safety_stock');
         const formKoliQty = document.getElementById('item_koli_qty');
+        const formWeightPerKoli = document.getElementById('item_weight_per_koli');
+        const formCbmPerKoli = document.getElementById('item_cbm_per_koli');
+        const formWeightPerPcs = document.getElementById('item_weight_per_pcs');
+        const measurementFields = [formWeightPerKoli, formCbmPerKoli, formWeightPerPcs];
         const externalBarcodesCard = document.getElementById('external_barcodes_card');
         const externalBarcodesContainer = document.getElementById('external_barcodes_container');
         const externalBarcodesEmpty = document.getElementById('external_barcodes_empty');
@@ -549,7 +573,7 @@
             if (bundleCard) bundleCard.style.display = isBundle ? '' : 'none';
             if (externalBarcodesCard) externalBarcodesCard.style.display = isBundle ? 'none' : '';
 
-            [formArea, formRack, formColumn, formRow, formAddress, formMainArea, formMainRack, formMainColumn, formMainRow, ...secondarySlotGroups.flatMap((g) => [g.area, g.rack, g.column, g.row]), formKoliQty, formSafetyStock].forEach((field) => {
+            [formArea, formRack, formColumn, formRow, formAddress, formMainArea, formMainRack, formMainColumn, formMainRow, ...secondarySlotGroups.flatMap((g) => [g.area, g.rack, g.column, g.row]), formKoliQty, ...measurementFields, formSafetyStock].forEach((field) => {
                 if (!field) return;
                 field.disabled = isBundle;
             });
@@ -562,6 +586,7 @@
                 if (formAddress) formAddress.value = '';
                 resetMainLocation();
                 if (formKoliQty) formKoliQty.value = '';
+                measurementFields.forEach((field) => { if (field) field.value = ''; });
                 if (formSafetyStock) formSafetyStock.value = 0;
                 ensureBundleComponentRow();
                 syncBundleComponentFieldNames();
@@ -572,7 +597,7 @@
         };
 
         const clearErrors = () => {
-            ['error_sku','error_name','error_item_type','error_status','error_category_id','error_area_id','error_rack_code','error_column_no','error_row_no','error_address','error_main_area_id','error_main_rack_code','error_main_column_no','error_main_row_no','error_main_address','error_secondary_area_id','error_secondary_rack_code','error_secondary_column_no','error_secondary_row_no','error_secondary_address','error_main_secondary_area_id','error_main_secondary_rack_code','error_main_secondary_column_no','error_main_secondary_row_no','error_main_secondary_address','error_description','error_koli_qty','error_safety_stock','error_external_barcodes','error_bundle_components'].forEach(id => {
+            ['error_sku','error_name','error_item_type','error_status','error_category_id','error_area_id','error_rack_code','error_column_no','error_row_no','error_address','error_main_area_id','error_main_rack_code','error_main_column_no','error_main_row_no','error_main_address','error_secondary_area_id','error_secondary_rack_code','error_secondary_column_no','error_secondary_row_no','error_secondary_address','error_main_secondary_area_id','error_main_secondary_rack_code','error_main_secondary_column_no','error_main_secondary_row_no','error_main_secondary_address','error_description','error_koli_qty','error_weight_per_koli','error_cbm_per_koli','error_weight_per_pcs','error_safety_stock','error_external_barcodes','error_bundle_components'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.textContent = '';
             });
@@ -612,6 +637,13 @@
             });
         }
 
+        // "12.500" -> "12.5"; kosong tetap kosong.
+        const formatDecimal = (value) => {
+            if (value === null || value === undefined || value === '') return '';
+            const num = Number(value);
+            return Number.isFinite(num) ? String(num) : '';
+        };
+
         const fillForm = (item) => {
             formId.value = item?.id ?? '';
             if (formSku) formSku.value = item?.sku || '';
@@ -630,6 +662,9 @@
             fillSecondarySlots(item);
             if (formDescription) formDescription.value = item?.description || '';
             if (formKoliQty) formKoliQty.value = item?.koli_qty ?? '';
+            if (formWeightPerKoli) formWeightPerKoli.value = formatDecimal(item?.weight_per_koli);
+            if (formCbmPerKoli) formCbmPerKoli.value = formatDecimal(item?.cbm_per_koli);
+            if (formWeightPerPcs) formWeightPerPcs.value = formatDecimal(item?.weight_per_pcs);
             if (formSafetyStock) formSafetyStock.value = item?.safety_stock ?? 0;
             setCategoryValue(item?.category_id ?? '0');
             clearExternalBarcodes();

@@ -14,6 +14,7 @@ use App\Models\StockMutation;
 use App\Models\Supplier;
 use App\Models\Warehouse;
 use App\Support\BundleService;
+use App\Support\DeliveryNoteNumber;
 use App\Support\OutboundKoliExpectation;
 use App\Support\OutboundManualQcStatus;
 use App\Support\OutboundManualReport;
@@ -220,7 +221,7 @@ class OutboundController extends Controller
                     'recipient_name' => $group['recipient_name'] ?? null,
                     'recipient_phone' => $group['recipient_phone'] ?? null,
                     'recipient_address' => $group['recipient_address'] ?? null,
-                    'surat_jalan_no' => $this->resolveDeliveryNoteNo($group['surat_jalan_no'] ?? null, 'SJ-OUT-MNL'),
+                    'surat_jalan_no' => $this->resolveDeliveryNoteNo($group['surat_jalan_no'] ?? null, 'SJ-OUT-MNL', 'manual'),
                     'surat_jalan_at' => $suratJalanAt,
                     'note' => $group['note'] ?? null,
                     'warehouse_id' => $warehouseId,
@@ -441,7 +442,7 @@ class OutboundController extends Controller
             'showRecipientFields' => $type === 'manual',
             'deliveryNotePrefixMap' => [
                 'picker' => 'SJ-OUT-PCK',
-                'manual' => 'SJ-OUT-MNL',
+                'manual' => DeliveryNoteNumber::MANUAL_PREFIX,
                 'return' => 'SJ-OUT-RET',
             ],
             'typeOptions' => $typeOptions,
@@ -748,7 +749,7 @@ class OutboundController extends Controller
                 'recipient_name' => $validated['recipient_name'] ?? null,
                 'recipient_phone' => $validated['recipient_phone'] ?? null,
                 'recipient_address' => $validated['recipient_address'] ?? null,
-                'surat_jalan_no' => $this->resolveDeliveryNoteNo($validated['surat_jalan_no'] ?? null, 'SJ-'.$prefix),
+                'surat_jalan_no' => $this->resolveDeliveryNoteNo($validated['surat_jalan_no'] ?? null, 'SJ-'.$prefix, $type),
                 'surat_jalan_at' => $validated['surat_jalan_at'] ?? null,
                 'note' => $validated['note'] ?? null,
                 'warehouse_id' => $warehouseId,
@@ -822,7 +823,7 @@ class OutboundController extends Controller
                 'recipient_name' => $validated['recipient_name'] ?? null,
                 'recipient_phone' => $validated['recipient_phone'] ?? null,
                 'recipient_address' => $validated['recipient_address'] ?? null,
-                'surat_jalan_no' => $this->resolveDeliveryNoteNo($validated['surat_jalan_no'] ?? null, 'SJ-'.$this->prefixForType($type)),
+                'surat_jalan_no' => $this->resolveDeliveryNoteNo($validated['surat_jalan_no'] ?? null, 'SJ-'.$this->prefixForType($type), $type),
                 'surat_jalan_at' => $validated['surat_jalan_at'] ?? null,
                 'note' => $validated['note'] ?? null,
                 'warehouse_id' => $warehouseId,
@@ -1226,11 +1227,16 @@ class OutboundController extends Controller
         };
     }
 
-    private function resolveDeliveryNoteNo(?string $value, string $prefix): string
+    private function resolveDeliveryNoteNo(?string $value, string $prefix, ?string $type = null): string
     {
         $value = trim((string) $value);
+        if ($value !== '') {
+            return $value;
+        }
 
-        return $value !== '' ? $value : $this->generateCode($prefix);
+        return $type === 'manual'
+            ? DeliveryNoteNumber::nextManual()
+            : $this->generateCode($prefix);
     }
 
     private function normalizeNullableText(mixed $value): ?string

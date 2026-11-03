@@ -907,6 +907,11 @@
         };
 
         const generateDeliveryNoteNo = (flowType = '') => {
+            // Outbound manual: nomor dibuat server saat simpan (SJM-YYMMDD-NNNN), kosongkan saja.
+            if (flowType === 'manual') {
+                if (suratJalanNoEl) suratJalanNoEl.placeholder = 'Otomatis saat disimpan (contoh: SJM-261103-0001)';
+                return '';
+            }
             const prefix = deliveryNotePrefixMap?.[flowType] || 'SJ';
             const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
             const pad = (n) => String(n).padStart(2, '0');

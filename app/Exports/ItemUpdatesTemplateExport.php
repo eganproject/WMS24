@@ -68,6 +68,7 @@ class ItemUpdatesTemplateExport implements FromCollection, WithHeadings, WithCus
                         'main_address_2' => [$item->mainSecondaryAddress()],
                         'description' => [$item->description ?? ''],
                         'safety_stock' => [(int) ($item->safety_stock ?? 0)],
+                        'weight_per_pcs', 'weight_per_koli', 'cbm_per_koli' => [$item->{$field} !== null ? (float) $item->{$field} : ''],
                         default => [],
                     };
                     $row = array_merge($row, $values);

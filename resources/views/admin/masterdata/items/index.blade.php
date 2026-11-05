@@ -70,53 +70,55 @@
                         </div>
                     </div>
                 </div>
-                <button type="button" class="btn btn-light" data-kt-menu-trigger="click" data-kt-menu-placement="bottom-end" id="btn_items_data_menu">
-                    <i class="fas fa-file-excel me-2"></i>Import / Export
-                    <i class="fas fa-chevron-down ms-2 fs-8"></i>
-                </button>
-                <div class="menu menu-sub menu-sub-dropdown menu-column menu-rounded menu-gray-700 menu-state-bg-light-primary fw-bold fs-6 w-250px py-3" data-kt-menu="true">
-                    <div class="menu-item px-3">
-                        <div class="menu-content text-muted fs-8 text-uppercase px-3 pb-1">Excel</div>
+                <div>
+                    <button type="button" class="btn btn-light" data-kt-menu-trigger="click" data-kt-menu-placement="bottom-end" id="btn_items_data_menu">
+                        <i class="fas fa-file-excel me-2"></i>Import / Export
+                        <i class="fas fa-chevron-down ms-2 fs-8"></i>
+                    </button>
+                    <div class="menu menu-sub menu-sub-dropdown menu-column menu-rounded menu-gray-700 menu-state-bg-light-primary fw-bold fs-6 w-250px py-3" data-kt-menu="true">
+                        <div class="menu-item px-3">
+                            <div class="menu-content text-muted fs-8 text-uppercase px-3 pb-1">Excel</div>
+                        </div>
+                        <div class="menu-item px-3">
+                            <a href="#" class="menu-link px-3" id="btn_export_items">
+                                <i class="fas fa-download me-3 text-success"></i>Export Excel
+                            </a>
+                        </div>
+                        @if($canUpdate)
+                            <div class="menu-item px-3">
+                                <a href="#" class="menu-link px-3" id="btn_update_items_excel" data-bs-toggle="modal" data-bs-target="#modal_update_items_excel">
+                                    <i class="fas fa-edit me-3 text-dark"></i>Update Data Items
+                                </a>
+                            </div>
+                        @endif
+                        @if($canCreate)
+                            <div class="separator my-2"></div>
+                            <div class="menu-item px-3">
+                                <div class="menu-content text-muted fs-8 text-uppercase px-3 pb-1">Import</div>
+                            </div>
+                            <div class="menu-item px-3">
+                                <a href="#" class="menu-link px-3" id="btn_import_items" data-bs-toggle="modal" data-bs-target="#modal_import_items">
+                                    <i class="fas fa-upload me-3 text-primary"></i>Import Items
+                                </a>
+                            </div>
+                            <div class="menu-item px-3">
+                                <a href="#" class="menu-link px-3" id="btn_import_barcodes" data-bs-toggle="modal" data-bs-target="#modal_import_barcodes">
+                                    <i class="fas fa-barcode me-3 text-success"></i>Import Barcode Alias
+                                </a>
+                            </div>
+                            <div class="menu-item px-3">
+                                <a href="#" class="menu-link px-3" id="btn_import_bundle" data-bs-toggle="modal" data-bs-target="#modal_import_bundle">
+                                    <i class="fas fa-boxes me-3 text-warning"></i>Import Bundle
+                                </a>
+                            </div>
+                            <div class="separator my-2"></div>
+                            <div class="menu-item px-3">
+                                <a href="#" class="menu-link px-3" id="btn_open_barcode_misses" data-bs-toggle="modal" data-bs-target="#modal_barcode_misses">
+                                    <i class="fas fa-question-circle me-3 text-info"></i>Barcode Tidak Dikenal
+                                </a>
+                            </div>
+                        @endif
                     </div>
-                    <div class="menu-item px-3">
-                        <a href="#" class="menu-link px-3" id="btn_export_items">
-                            <i class="fas fa-download me-3 text-success"></i>Export Excel
-                        </a>
-                    </div>
-                    @if($canUpdate)
-                        <div class="menu-item px-3">
-                            <a href="#" class="menu-link px-3" id="btn_update_items_excel" data-bs-toggle="modal" data-bs-target="#modal_update_items_excel">
-                                <i class="fas fa-edit me-3 text-dark"></i>Update Data Items
-                            </a>
-                        </div>
-                    @endif
-                    @if($canCreate)
-                        <div class="separator my-2"></div>
-                        <div class="menu-item px-3">
-                            <div class="menu-content text-muted fs-8 text-uppercase px-3 pb-1">Import</div>
-                        </div>
-                        <div class="menu-item px-3">
-                            <a href="#" class="menu-link px-3" id="btn_import_items" data-bs-toggle="modal" data-bs-target="#modal_import_items">
-                                <i class="fas fa-upload me-3 text-primary"></i>Import Items
-                            </a>
-                        </div>
-                        <div class="menu-item px-3">
-                            <a href="#" class="menu-link px-3" id="btn_import_barcodes" data-bs-toggle="modal" data-bs-target="#modal_import_barcodes">
-                                <i class="fas fa-barcode me-3 text-success"></i>Import Barcode Alias
-                            </a>
-                        </div>
-                        <div class="menu-item px-3">
-                            <a href="#" class="menu-link px-3" id="btn_import_bundle" data-bs-toggle="modal" data-bs-target="#modal_import_bundle">
-                                <i class="fas fa-boxes me-3 text-warning"></i>Import Bundle
-                            </a>
-                        </div>
-                        <div class="separator my-2"></div>
-                        <div class="menu-item px-3">
-                            <a href="#" class="menu-link px-3" id="btn_open_barcode_misses" data-bs-toggle="modal" data-bs-target="#modal_barcode_misses">
-                                <i class="fas fa-question-circle me-3 text-info"></i>Barcode Tidak Dikenal
-                            </a>
-                        </div>
-                    @endif
                 </div>
                 @if($canCreate)
                     <a href="{{ route('admin.masterdata.items.create') }}" class="btn btn-primary" id="btn_open_create_item">

@@ -186,6 +186,50 @@ class ItemUpdatesImportTest extends TestCase
         $this->assertSame('0.045000', $item->cbm_per_koli);
     }
 
+    public function test_import_dimensions_recompute_volume_and_reject_partial(): void
+    {
+        $item = Item::create([
+            'sku' => 'SKU-DIM-IMP',
+            'name' => 'Dim',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+            'cbm_per_koli' => 0.001,
+        ]);
+
+        (new ItemUpdatesImport(['volume_per_koli', 'dimensions']))->collection(collect([
+            new Collection([
+                'sku' => $item->sku,
+                'volume_per_koli' => '1',
+                'length_per_koli' => '40,5',
+                'width_per_koli' => 20,
+                'height_per_koli' => '10',
+            ]),
+        ]));
+
+        $item->refresh();
+        $this->assertSame('40.50', $item->length_per_koli);
+        $this->assertSame(8100, $item->volumePerKoliCm3());
+
+        try {
+            (new ItemUpdatesImport(['dimensions']))->collection(collect([
+                new Collection(['sku' => $item->sku, 'length_per_koli' => '10', 'width_per_koli' => '', 'height_per_koli' => '']),
+            ]));
+            $this->fail('Dimensi tidak lengkap seharusnya ditolak.');
+        } catch (ValidationException $exception) {
+            $this->assertStringContainsString('lengkap', $exception->errors()['file'][0] ?? '');
+        }
+
+        (new ItemUpdatesImport(['dimensions']))->collection(collect([
+            new Collection(['sku' => $item->sku, 'length_per_koli' => '', 'width_per_koli' => '', 'height_per_koli' => '']),
+        ]));
+        $item->refresh();
+        $this->assertNull($item->length_per_koli);
+        $this->assertSame(8100, $item->volumePerKoliCm3());
+
+        $export = new ItemUpdatesTemplateExport(['dimensions']);
+        $this->assertSame(['sku', 'length_per_koli', 'width_per_koli', 'height_per_koli'], $export->headings());
+    }
+
     public function test_import_rejects_locked_or_unexpected_columns(): void
     {
         Item::create([

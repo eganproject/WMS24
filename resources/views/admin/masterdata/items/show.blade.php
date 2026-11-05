@@ -127,6 +127,10 @@
                                     <td class="fw-bold">{{ $formatMeasure($item->weight_per_koli, 3, 'kg') }}</td>
                                 </tr>
                                 <tr>
+                                    <td class="text-muted">Dimensi Koli (P × L × T)</td>
+                                    <td class="fw-bold">{{ $item->dimensionsLabel() !== '' ? $item->dimensionsLabel() : '-' }}</td>
+                                </tr>
+                                <tr>
                                     <td class="text-muted">Volume per Koli</td>
                                     <td class="fw-bold">{{ $formatMeasure($item->volumePerKoliCm3(), 0, 'cm³') }}</td>
                                 </tr>

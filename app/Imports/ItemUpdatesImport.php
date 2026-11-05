@@ -141,6 +141,9 @@ class ItemUpdatesImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
                 case 'weight_per_koli':
                     $payload[$field] = $this->parseMeasurement($row, $item, $excelRow, $field);
                     break;
+                case 'dimensions':
+                    $this->applyDimensions($payload, $row, $item, $excelRow);
+                    break;
                 case 'volume_per_koli':
                     // Diinput dalam cm³, disimpan sebagai m³ di cbm_per_koli.
                     $payload['cbm_per_koli'] = Item::cm3ToCbm($this->parseMeasurement($row, $item, $excelRow, $field));
@@ -265,6 +268,35 @@ class ItemUpdatesImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
         }
 
         return (int) $value;
+    }
+
+    /**
+     * P, L, T harus lengkap atau kosong semua. Jika lengkap, volume ikut dihitung ulang.
+     */
+    private function applyDimensions(array &$payload, Collection $row, Item $item, int $excelRow): void
+    {
+        $values = [];
+        foreach (Item::DIMENSION_FIELDS as $field) {
+            $value = $this->parseMeasurement($row, $item, $excelRow, $field);
+            if ($value !== null && (float) $value <= 0) {
+                $this->fail($excelRow, $item, "{$field} harus lebih dari 0 atau dikosongkan.");
+            }
+            $values[$field] = $value;
+        }
+
+        $filled = count(array_filter($values, fn ($value) => $value !== null));
+        if ($filled > 0 && $filled < 3) {
+            $this->fail($excelRow, $item, 'isi length_per_koli, width_per_koli, dan height_per_koli lengkap, atau kosongkan ketiganya.');
+        }
+
+        $payload = array_merge($payload, $values);
+        $volume = Item::volumeFromDimensions(...array_values($values));
+        if ($volume !== null) {
+            if ($volume > Item::MAX_VOLUME_CM3) {
+                $this->fail($excelRow, $item, 'volume dari panjang × lebar × tinggi terlalu besar.');
+            }
+            $payload['cbm_per_koli'] = Item::cm3ToCbm($volume);
+        }
     }
 
     /**

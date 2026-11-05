@@ -32,6 +32,9 @@ class Item extends Model
         'weight_per_pcs',
         'weight_per_koli',
         'cbm_per_koli',
+        'length_per_koli',
+        'width_per_koli',
+        'height_per_koli',
     ];
 
     protected $casts = [
@@ -40,6 +43,9 @@ class Item extends Model
         'weight_per_pcs' => 'decimal:3',
         'weight_per_koli' => 'decimal:3',
         'cbm_per_koli' => 'decimal:6',
+        'length_per_koli' => 'decimal:2',
+        'width_per_koli' => 'decimal:2',
+        'height_per_koli' => 'decimal:2',
     ];
 
     /**
@@ -52,6 +58,34 @@ class Item extends Model
     public function volumePerKoliCm3(): ?int
     {
         return $this->cbm_per_koli === null ? null : (int) round((float) $this->cbm_per_koli * self::CM3_PER_M3);
+    }
+
+    public const DIMENSION_FIELDS = ['length_per_koli', 'width_per_koli', 'height_per_koli'];
+    public const MAX_DIMENSION_CM = 999999.99;
+
+    /**
+     * Volume (cm³) dari panjang × lebar × tinggi. Null jika salah satu dimensi kosong.
+     */
+    public static function volumeFromDimensions(float|int|string|null $length, float|int|string|null $width, float|int|string|null $height): ?float
+    {
+        foreach ([$length, $width, $height] as $value) {
+            if ($value === null || $value === '') {
+                return null;
+            }
+        }
+
+        return (float) $length * (float) $width * (float) $height;
+    }
+
+    public function dimensionsLabel(): string
+    {
+        $values = array_map(fn (string $field) => $this->{$field}, self::DIMENSION_FIELDS);
+        if (in_array(null, $values, true)) {
+            return '';
+        }
+        $format = fn ($value) => rtrim(rtrim(number_format((float) $value, 2, ',', '.'), '0'), ',');
+
+        return implode(' × ', array_map($format, $values)).' cm';
     }
 
     public static function cm3ToCbm(float|int|string|null $cm3): ?string

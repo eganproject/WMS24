@@ -14,6 +14,9 @@ class ItemUpdateFields
         'weight_per_pcs' => [3, 9999999.999],
         'weight_per_koli' => [3, 9999999.999],
         'volume_per_koli' => [0, 999999999999],
+        'length_per_koli' => [2, 999999.99],
+        'width_per_koli' => [2, 999999.99],
+        'height_per_koli' => [2, 999999.99],
     ];
 
     private const DEFINITIONS = [
@@ -28,7 +31,8 @@ class ItemUpdateFields
         'safety_stock' => ['label' => 'Stok Pengaman', 'headers' => ['safety_stock'], 'description' => 'Bilangan bulat minimal 0.'],
         'weight_per_pcs' => ['label' => 'Berat per Pcs (kg)', 'headers' => ['weight_per_pcs'], 'description' => 'Angka dalam kg, maksimal 3 desimal, misalnya 0.5. Kosongkan untuk menghapus.'],
         'weight_per_koli' => ['label' => 'Berat per Koli (kg)', 'headers' => ['weight_per_koli'], 'description' => 'Angka dalam kg, maksimal 3 desimal, misalnya 12.5. Kosongkan untuk menghapus.'],
-        'volume_per_koli' => ['label' => 'Volume per Koli (cm³)', 'headers' => ['volume_per_koli'], 'description' => 'Angka dalam cm³ (panjang × lebar × tinggi dalam cm), misalnya 45000. Kosongkan untuk menghapus.'],
+        'volume_per_koli' => ['label' => 'Volume per Koli (cm³)', 'headers' => ['volume_per_koli'], 'description' => 'Angka dalam cm³ (panjang × lebar × tinggi dalam cm), misalnya 45000. Kosongkan untuk menghapus. Jika Dimensi Koli juga dipilih dan terisi lengkap, volume diambil dari P × L × T.'],
+        'dimensions' => ['label' => 'Dimensi Koli P × L × T (cm)', 'headers' => ['length_per_koli', 'width_per_koli', 'height_per_koli'], 'description' => 'Panjang, lebar, tinggi koli dalam cm. Jika lengkap, volume dihitung otomatis. Kosongkan ketiganya untuk menghapus.'],
     ];
 
     public static function definitions(): array

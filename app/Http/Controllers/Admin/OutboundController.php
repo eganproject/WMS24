@@ -16,6 +16,7 @@ use App\Models\Warehouse;
 use App\Support\BundleService;
 use App\Support\OutboundKoliExpectation;
 use App\Support\OutboundManualQcStatus;
+use App\Support\OutboundManualStockPlanner;
 use App\Support\OutboundManualReport;
 use App\Support\Permission;
 use App\Support\StockService;
@@ -208,7 +209,7 @@ class OutboundController extends Controller
                 if ($warehouseId <= 0) {
                     $warehouseId = WarehouseService::displayWarehouseId();
                 }
-                StockService::assertSellableAvailable($group['items'], $warehouseId);
+                OutboundManualStockPlanner::assertAvailable($group['items'], $warehouseId);
                 $transactedAt = $this->parseOptionalImportedDate($group['transacted_at'] ?? null, 'transacted_at') ?? now();
                 $suratJalanAt = $this->parseOptionalImportedDate($group['surat_jalan_at'] ?? null, 'surat_jalan_at');
 
@@ -733,7 +734,11 @@ class OutboundController extends Controller
 
         $prefix = $this->prefixForType($type);
 
-        StockService::assertSellableAvailable($validated['items'], $warehouseId);
+        if ($type === 'manual') {
+            OutboundManualStockPlanner::assertAvailable($validated['items'], $warehouseId);
+        } else {
+            StockService::assertSellableAvailable($validated['items'], $warehouseId);
+        }
 
         $code = $this->generateCode($prefix);
         $transactedAt = $validated['transacted_at'] ?? now();
@@ -801,7 +806,11 @@ class OutboundController extends Controller
             $warehouseId = WarehouseService::displayWarehouseId();
         }
 
-        StockService::assertSellableAvailable($validated['items'], $warehouseId);
+        if ($type === 'manual') {
+            OutboundManualStockPlanner::assertAvailable($validated['items'], $warehouseId, $id);
+        } else {
+            StockService::assertSellableAvailable($validated['items'], $warehouseId);
+        }
 
         DB::beginTransaction();
         try {

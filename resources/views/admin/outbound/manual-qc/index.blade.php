@@ -207,6 +207,8 @@
                     <div class="manual-qc-progress-bar" id="summary_progress"></div>
                 </div>
 
+                <div id="replenishment_panel" class="alert mb-5" style="display:none;"></div>
+
                 <form id="scan_form" class="mb-5">
                     <div class="manual-qc-scan-box">
                         <input type="text" class="form-control form-control-solid manual-qc-sku" id="sku_input" autocomplete="off" placeholder="SKU">
@@ -329,6 +331,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         ${row.surat_jalan_no ? `<span>SJ ${escapeHtml(row.surat_jalan_no)}${row.surat_jalan_at ? ` | ${escapeHtml(row.surat_jalan_at)}` : ''}</span>` : ''}
                         <span>${escapeHtml(row.transacted_at || '-')}</span>
                         <span>Qty ${row.summary?.scanned_qty ?? 0}/${row.summary?.expected_qty ?? 0}</span>
+                        ${replenishmentBadge(row.replenishment_state)}
                     </div>
                 </button>
             `).join('');
@@ -361,6 +364,39 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    const replenishmentBadge = (state) => {
+        if (state === 'needs_transfer') return '<span class="badge badge-light-danger">Perlu transfer</span>';
+        if (state === 'waiting_transfer') return '<span class="badge badge-light-info">Menunggu transfer diterima</span>';
+        return '';
+    };
+
+    const renderReplenishment = (replenishment) => {
+        const panel = document.getElementById('replenishment_panel');
+        if (!panel) return;
+        if (!replenishment || replenishment.state === 'ready' || !(replenishment.items || []).length) {
+            panel.style.display = 'none';
+            panel.innerHTML = '';
+            return;
+        }
+        const needsTransfer = replenishment.state === 'needs_transfer';
+        panel.className = `alert ${needsTransfer ? 'alert-danger' : 'alert-info'} mb-5`;
+        const lines = replenishment.items.map((line) => {
+            const detail = line.state === 'needs_transfer'
+                ? `kurang ${line.shortfall_qty} pcs${line.recommended_koli > 0 ? ` &rarr; transfer ${line.recommended_koli} koli (${line.recommended_transfer_qty} pcs)` : ' (isi/koli belum diset)'}`
+                : `menunggu transfer ${line.incoming_transfer_qty} pcs diterima`;
+            return `<li><span class="fw-bolder">${escapeHtml(line.sku || '-')}</span>: butuh ${line.required_qty}, Display ${line.display_available_qty}, ${detail}</li>`;
+        }).join('');
+        const button = needsTransfer && replenishment.transfer_url
+            ? `<a href="${escapeHtml(replenishment.transfer_url)}" target="_blank" rel="noopener" class="btn btn-sm btn-danger mt-3">Buat transfer dari Gudang Besar</a>`
+            : '';
+        panel.innerHTML = `
+            <div class="fw-bolder mb-2">${needsTransfer ? 'Stok Gudang Display kurang, perlu transfer dari Gudang Besar' : 'Transfer dari Gudang Besar sedang berjalan'}</div>
+            <ul class="mb-0 ps-5">${lines}</ul>
+            ${button}
+        `;
+        panel.style.display = '';
+    };
+
     const renderTransaction = (transaction) => {
         emptyState.style.display = 'none';
         workbench.style.display = '';
@@ -380,6 +416,7 @@ document.addEventListener('DOMContentLoaded', () => {
         summaryScanned.textContent = scanned.toLocaleString('id-ID');
         summaryRemaining.textContent = remaining.toLocaleString('id-ID');
         summaryProgress.style.width = expected > 0 ? `${Math.min(100, Math.round((scanned / expected) * 100))}%` : '0%';
+        renderReplenishment(transaction.replenishment);
 
         itemRows.innerHTML = (transaction.items || []).map((row) => {
             const target = Number(row.expected_qty || 0);

@@ -103,7 +103,7 @@ class OutboundManualApiTest extends TestCase
             ->assertJsonPath('error.code', 'VALIDATION_ERROR')
             ->assertJsonPath(
                 'error.details.qty.0',
-                'Stok tidak mencukupi untuk SKU SKU-API-OUT-1. Tersedia 2, dibutuhkan 3.',
+                'Stok tidak mencukupi untuk SKU SKU-API-OUT-1. Tersedia 2 (Display 2 + Gudang Besar 0), dibutuhkan 3.',
             );
 
         $this->assertDatabaseCount('outbound_transactions', 0);

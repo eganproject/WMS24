@@ -11,7 +11,7 @@ use App\Models\Warehouse;
 use App\Support\BundleService;
 use App\Support\OutboundKoliExpectation;
 use App\Support\OutboundManualQcStatus;
-use App\Support\StockService;
+use App\Support\OutboundManualStockPlanner;
 use App\Support\WarehouseService;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
@@ -47,7 +47,7 @@ class OutboundManualApiService
                     return $this->replay($existing, $requestHash);
                 }
 
-                StockService::assertSellableAvailable($normalized['items'], $normalized['warehouse']->id);
+                OutboundManualStockPlanner::assertAvailable($normalized['items'], (int) $normalized['warehouse']->id);
 
                 $transaction = OutboundTransaction::create([
                     'code' => $this->generateCode('OUT-MNL'),

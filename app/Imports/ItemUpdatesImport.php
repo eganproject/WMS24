@@ -137,6 +137,14 @@ class ItemUpdatesImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
                 case 'safety_stock':
                     $payload['safety_stock'] = $this->parseSafetyStock($row, $item, $excelRow);
                     break;
+                case 'weight_per_pcs':
+                case 'weight_per_koli':
+                    $payload[$field] = $this->parseMeasurement($row, $item, $excelRow, $field);
+                    break;
+                case 'volume_per_koli':
+                    // Diinput dalam cm³, disimpan sebagai m³ di cbm_per_koli.
+                    $payload['cbm_per_koli'] = Item::cm3ToCbm($this->parseMeasurement($row, $item, $excelRow, $field));
+                    break;
             }
         }
 
@@ -257,6 +265,45 @@ class ItemUpdatesImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
         }
 
         return (int) $value;
+    }
+
+    /**
+     * Berat/volume opsional: kosong => NULL. Menerima koma sebagai pemisah desimal (12,5).
+     */
+    private function parseMeasurement(Collection $row, Item $item, int $excelRow, string $field): ?string
+    {
+        [$decimals, $max] = ItemUpdateFields::MEASUREMENTS[$field];
+        $raw = $row[$field] ?? null;
+        if (is_int($raw) || is_float($raw)) {
+            $value = (float) $raw;
+        } else {
+            $text = str_replace(' ', '', trim((string) ($raw ?? '')));
+            if ($text === '') {
+                return null;
+            }
+            if ($decimals === 0 && preg_match('/^\d{1,3}([.,]\d{3})+$/', $text)) {
+                // Volume bilangan bulat: "45.000" / "45,000" dibaca sebagai 45000.
+                $text = str_replace(['.', ','], '', $text);
+            } elseif (!str_contains($text, '.') && substr_count($text, ',') === 1) {
+                $text = str_replace(',', '.', $text);
+            }
+            if (!is_numeric($text)) {
+                $this->fail($excelRow, $item, "{$field} harus berupa angka.");
+            }
+            $value = (float) $text;
+        }
+
+        if ($value < 0 || $value > $max) {
+            $this->fail($excelRow, $item, "{$field} harus antara 0 dan {$max}.");
+        }
+        if ($value > 0 && $item->isBundle()) {
+            $this->fail($excelRow, $item, "{$field} tidak berlaku untuk item bundle. Kosongkan nilainya.");
+        }
+        if ($item->isBundle()) {
+            return null;
+        }
+
+        return number_format($value, $decimals, '.', '');
     }
 
     private function nullableTrim(mixed $value): ?string

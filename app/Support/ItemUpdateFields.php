@@ -6,6 +6,16 @@ use InvalidArgumentException;
 
 class ItemUpdateFields
 {
+    /**
+     * Field berat/volume: nama field => [jumlah desimal, nilai maksimal].
+     * Berat dalam kg, volume dalam cm³ (bilangan bulat).
+     */
+    public const MEASUREMENTS = [
+        'weight_per_pcs' => [3, 9999999.999],
+        'weight_per_koli' => [3, 9999999.999],
+        'volume_per_koli' => [0, 999999999999],
+    ];
+
     private const DEFINITIONS = [
         'name' => ['label' => 'Nama Item', 'headers' => ['name'], 'description' => 'Nama item baru. Nilai tidak boleh kosong.'],
         'status' => ['label' => 'Status', 'headers' => ['status'], 'description' => 'Gunakan active atau inactive.'],
@@ -16,6 +26,9 @@ class ItemUpdateFields
         'main_address_2' => ['label' => 'Alamat 2 Gudang Besar', 'headers' => ['main_address_2'], 'description' => 'Alamat ke-2 gudang besar format AREA-RACK-KOLOM-BARIS. Hanya informasi. Kosongkan untuk menghapus.'],
         'description' => ['label' => 'Deskripsi', 'headers' => ['description'], 'description' => 'Deskripsi bebas untuk item.'],
         'safety_stock' => ['label' => 'Stok Pengaman', 'headers' => ['safety_stock'], 'description' => 'Bilangan bulat minimal 0.'],
+        'weight_per_pcs' => ['label' => 'Berat per Pcs (kg)', 'headers' => ['weight_per_pcs'], 'description' => 'Angka dalam kg, maksimal 3 desimal, misalnya 0.5. Kosongkan untuk menghapus.'],
+        'weight_per_koli' => ['label' => 'Berat per Koli (kg)', 'headers' => ['weight_per_koli'], 'description' => 'Angka dalam kg, maksimal 3 desimal, misalnya 12.5. Kosongkan untuk menghapus.'],
+        'volume_per_koli' => ['label' => 'Volume per Koli (cm³)', 'headers' => ['volume_per_koli'], 'description' => 'Angka dalam cm³ (panjang × lebar × tinggi dalam cm), misalnya 45000. Kosongkan untuk menghapus.'],
     ];
 
     public static function definitions(): array

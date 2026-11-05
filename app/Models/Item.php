@@ -42,6 +42,27 @@ class Item extends Model
         'cbm_per_koli' => 'decimal:6',
     ];
 
+    /**
+     * Volume per koli disimpan di kolom cbm_per_koli dalam m³ (6 desimal = presisi 1 cm³),
+     * tetapi ditampilkan dan diinput dalam cm³.
+     */
+    public const CM3_PER_M3 = 1000000;
+    public const MAX_VOLUME_CM3 = 999999999999;
+
+    public function volumePerKoliCm3(): ?int
+    {
+        return $this->cbm_per_koli === null ? null : (int) round((float) $this->cbm_per_koli * self::CM3_PER_M3);
+    }
+
+    public static function cm3ToCbm(float|int|string|null $cm3): ?string
+    {
+        if ($cm3 === null || $cm3 === '') {
+            return null;
+        }
+
+        return number_format(round((float) $cm3) / self::CM3_PER_M3, 6, '.', '');
+    }
+
     public function category()
     {
         return $this->belongsTo(Category::class, 'category_id');

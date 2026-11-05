@@ -93,6 +93,99 @@ class ItemUpdatesImportTest extends TestCase
         $this->assertSame(12, $item->koli_qty);
     }
 
+    public function test_import_updates_weight_and_volume_and_can_clear_them(): void
+    {
+        $item = Item::create([
+            'sku' => 'SKU-WEIGHT-001',
+            'name' => 'Item Berat',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+            'koli_qty' => 24,
+            'weight_per_koli' => 5,
+        ]);
+
+        $import = new ItemUpdatesImport(['weight_per_pcs', 'weight_per_koli', 'volume_per_koli']);
+        $import->collection(collect([
+            new Collection([
+                'sku' => $item->sku,
+                'weight_per_pcs' => 0.5,
+                'weight_per_koli' => '12,25',
+                'volume_per_koli' => '45.000',
+            ]),
+        ]));
+
+        $item->refresh();
+        $this->assertSame('0.500', $item->weight_per_pcs);
+        $this->assertSame('12.250', $item->weight_per_koli);
+        $this->assertSame('0.045000', $item->cbm_per_koli);
+        $this->assertSame(24, $item->koli_qty);
+        $this->assertSame('Item Berat', $item->name);
+
+        (new ItemUpdatesImport(['weight_per_koli']))->collection(collect([
+            new Collection(['sku' => $item->sku, 'weight_per_koli' => '']),
+        ]));
+
+        $item->refresh();
+        $this->assertNull($item->weight_per_koli);
+        $this->assertSame('0.500', $item->weight_per_pcs);
+        $this->assertSame('0.045000', $item->cbm_per_koli);
+    }
+
+    public function test_import_rejects_invalid_weight_and_bundle_weight(): void
+    {
+        Item::create(['sku' => 'SKU-WEIGHT-BAD', 'name' => 'X', 'item_type' => Item::TYPE_SINGLE, 'category_id' => 0]);
+        Item::create(['sku' => 'SKU-WEIGHT-BUNDLE', 'name' => 'B', 'item_type' => Item::TYPE_BUNDLE, 'category_id' => 0]);
+
+        foreach ([
+            ['SKU-WEIGHT-BAD', 'abc', 'harus berupa angka'],
+            ['SKU-WEIGHT-BAD', '-1', 'harus antara 0'],
+            ['SKU-WEIGHT-BUNDLE', '2', 'tidak berlaku untuk item bundle'],
+        ] as [$sku, $value, $message]) {
+            try {
+                (new ItemUpdatesImport(['weight_per_koli', 'volume_per_koli']))->collection(collect([
+                    new Collection(['sku' => $sku, 'weight_per_koli' => $value, 'volume_per_koli' => '']),
+                ]));
+                $this->fail("Nilai {$value} seharusnya ditolak.");
+            } catch (ValidationException $exception) {
+                $this->assertStringContainsString($message, $exception->errors()['file'][0] ?? '');
+            }
+        }
+    }
+
+    public function test_weight_template_roundtrip_keeps_values_unchanged(): void
+    {
+        $item = Item::create([
+            'sku' => 'SKU-WEIGHT-RT',
+            'name' => 'RT',
+            'item_type' => Item::TYPE_SINGLE,
+            'category_id' => 0,
+            'weight_per_pcs' => 0.5,
+            'cbm_per_koli' => 0.045,
+        ]);
+        $fields = ['weight_per_pcs', 'weight_per_koli', 'volume_per_koli'];
+
+        $export = new ItemUpdatesTemplateExport($fields);
+        $this->assertSame(['sku', 'weight_per_pcs', 'weight_per_koli', 'volume_per_koli'], $export->headings());
+        $this->assertSame(['SKU-WEIGHT-RT', 0.5, '', 45000], $export->collection()->first());
+
+        $path = tempnam(sys_get_temp_dir(), 'item-update-');
+        file_put_contents($path, Excel::raw($export, ExcelFormat::XLSX));
+        try {
+            $response = $this->withoutMiddleware()->postJson(route('admin.masterdata.items.update-import'), [
+                'fields' => $fields,
+                'file' => new UploadedFile($path, 'items-update.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true),
+            ]);
+        } finally {
+            @unlink($path);
+        }
+
+        $response->assertOk()->assertJsonPath('updated', 0)->assertJsonPath('unchanged', 1);
+        $item->refresh();
+        $this->assertSame('0.500', $item->weight_per_pcs);
+        $this->assertNull($item->weight_per_koli);
+        $this->assertSame('0.045000', $item->cbm_per_koli);
+    }
+
     public function test_import_rejects_locked_or_unexpected_columns(): void
     {
         Item::create([

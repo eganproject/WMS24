@@ -139,8 +139,11 @@ class ItemUpdatesImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
                     break;
                 case 'weight_per_pcs':
                 case 'weight_per_koli':
-                case 'cbm_per_koli':
                     $payload[$field] = $this->parseMeasurement($row, $item, $excelRow, $field);
+                    break;
+                case 'volume_per_koli':
+                    // Diinput dalam cm³, disimpan sebagai m³ di cbm_per_koli.
+                    $payload['cbm_per_koli'] = Item::cm3ToCbm($this->parseMeasurement($row, $item, $excelRow, $field));
                     break;
             }
         }
@@ -265,7 +268,7 @@ class ItemUpdatesImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
     }
 
     /**
-     * Berat/CBM opsional: kosong => NULL. Menerima koma sebagai pemisah desimal (12,5).
+     * Berat/volume opsional: kosong => NULL. Menerima koma sebagai pemisah desimal (12,5).
      */
     private function parseMeasurement(Collection $row, Item $item, int $excelRow, string $field): ?string
     {
@@ -278,7 +281,10 @@ class ItemUpdatesImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             if ($text === '') {
                 return null;
             }
-            if (!str_contains($text, '.') && substr_count($text, ',') === 1) {
+            if ($decimals === 0 && preg_match('/^\d{1,3}([.,]\d{3})+$/', $text)) {
+                // Volume bilangan bulat: "45.000" / "45,000" dibaca sebagai 45000.
+                $text = str_replace(['.', ','], '', $text);
+            } elseif (!str_contains($text, '.') && substr_count($text, ',') === 1) {
                 $text = str_replace(',', '.', $text);
             }
             if (!is_numeric($text)) {

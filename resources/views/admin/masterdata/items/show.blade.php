@@ -10,7 +10,10 @@
         if ($value === null || $value === '') {
             return '-';
         }
-        $text = rtrim(rtrim(number_format((float) $value, $decimals, ',', '.'), '0'), ',');
+        $text = number_format((float) $value, $decimals, ',', '.');
+        if ($decimals > 0) {
+            $text = rtrim(rtrim($text, '0'), ',');
+        }
 
         return $text.' '.$unit;
     };
@@ -124,8 +127,8 @@
                                     <td class="fw-bold">{{ $formatMeasure($item->weight_per_koli, 3, 'kg') }}</td>
                                 </tr>
                                 <tr>
-                                    <td class="text-muted">CBM per Koli</td>
-                                    <td class="fw-bold">{{ $formatMeasure($item->cbm_per_koli, 6, 'm³') }}</td>
+                                    <td class="text-muted">Volume per Koli</td>
+                                    <td class="fw-bold">{{ $formatMeasure($item->volumePerKoliCm3(), 0, 'cm³') }}</td>
                                 </tr>
                                 <tr>
                                     <td class="text-muted">Berat per Pcs</td>

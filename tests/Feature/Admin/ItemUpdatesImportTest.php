@@ -93,7 +93,7 @@ class ItemUpdatesImportTest extends TestCase
         $this->assertSame(12, $item->koli_qty);
     }
 
-    public function test_import_updates_weight_and_cbm_and_can_clear_them(): void
+    public function test_import_updates_weight_and_volume_and_can_clear_them(): void
     {
         $item = Item::create([
             'sku' => 'SKU-WEIGHT-001',
@@ -104,13 +104,13 @@ class ItemUpdatesImportTest extends TestCase
             'weight_per_koli' => 5,
         ]);
 
-        $import = new ItemUpdatesImport(['weight_per_pcs', 'weight_per_koli', 'cbm_per_koli']);
+        $import = new ItemUpdatesImport(['weight_per_pcs', 'weight_per_koli', 'volume_per_koli']);
         $import->collection(collect([
             new Collection([
                 'sku' => $item->sku,
                 'weight_per_pcs' => 0.5,
                 'weight_per_koli' => '12,25',
-                'cbm_per_koli' => 0.045000000000000005,
+                'volume_per_koli' => '45.000',
             ]),
         ]));
 
@@ -142,8 +142,8 @@ class ItemUpdatesImportTest extends TestCase
             ['SKU-WEIGHT-BUNDLE', '2', 'tidak berlaku untuk item bundle'],
         ] as [$sku, $value, $message]) {
             try {
-                (new ItemUpdatesImport(['weight_per_koli']))->collection(collect([
-                    new Collection(['sku' => $sku, 'weight_per_koli' => $value]),
+                (new ItemUpdatesImport(['weight_per_koli', 'volume_per_koli']))->collection(collect([
+                    new Collection(['sku' => $sku, 'weight_per_koli' => $value, 'volume_per_koli' => '']),
                 ]));
                 $this->fail("Nilai {$value} seharusnya ditolak.");
             } catch (ValidationException $exception) {
@@ -162,11 +162,11 @@ class ItemUpdatesImportTest extends TestCase
             'weight_per_pcs' => 0.5,
             'cbm_per_koli' => 0.045,
         ]);
-        $fields = ['weight_per_pcs', 'weight_per_koli', 'cbm_per_koli'];
+        $fields = ['weight_per_pcs', 'weight_per_koli', 'volume_per_koli'];
 
         $export = new ItemUpdatesTemplateExport($fields);
-        $this->assertSame(['sku', 'weight_per_pcs', 'weight_per_koli', 'cbm_per_koli'], $export->headings());
-        $this->assertSame(['SKU-WEIGHT-RT', 0.5, '', 0.045], $export->collection()->first());
+        $this->assertSame(['sku', 'weight_per_pcs', 'weight_per_koli', 'volume_per_koli'], $export->headings());
+        $this->assertSame(['SKU-WEIGHT-RT', 0.5, '', 45000], $export->collection()->first());
 
         $path = tempnam(sys_get_temp_dir(), 'item-update-');
         file_put_contents($path, Excel::raw($export, ExcelFormat::XLSX));

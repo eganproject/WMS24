@@ -301,9 +301,9 @@
                             <div class="invalid-feedback d-block" id="error_weight_per_koli"></div>
                         </div>
                         <div class="col-md-6">
-                            <label class="fs-6 fw-bold form-label mb-2">CBM per Koli (m³)</label>
-                            <input type="number" min="0" step="0.000001" class="form-control form-control-solid" name="cbm_per_koli" id="item_cbm_per_koli" placeholder="Opsional, contoh: 0.045" />
-                            <div class="invalid-feedback d-block" id="error_cbm_per_koli"></div>
+                            <label class="fs-6 fw-bold form-label mb-2">Volume per Koli (cm³)</label>
+                            <input type="number" min="0" step="1" class="form-control form-control-solid" name="volume_per_koli" id="item_volume_per_koli" placeholder="Opsional, contoh: 45000" />
+                            <div class="invalid-feedback d-block" id="error_volume_per_koli"></div>
                         </div>
                         <div class="col-md-6">
                             <label class="fs-6 fw-bold form-label mb-2">Berat per Pcs (kg)</label>
@@ -311,7 +311,7 @@
                             <div class="invalid-feedback d-block" id="error_weight_per_pcs"></div>
                         </div>
                         <div class="col-12">
-                            <div class="form-text">Berat dan CBM opsional, kosongkan jika belum ada datanya. CBM = panjang × lebar × tinggi koli dalam meter.</div>
+                            <div class="form-text">Berat dan volume opsional, kosongkan jika belum ada datanya. Volume = panjang × lebar × tinggi koli dalam cm (contoh 50 × 30 × 30 = 45000).</div>
                         </div>
                     </div>
                     <div class="fv-row">
@@ -391,9 +391,9 @@
         const formSafetyStock = document.getElementById('item_safety_stock');
         const formKoliQty = document.getElementById('item_koli_qty');
         const formWeightPerKoli = document.getElementById('item_weight_per_koli');
-        const formCbmPerKoli = document.getElementById('item_cbm_per_koli');
+        const formVolumePerKoli = document.getElementById('item_volume_per_koli');
         const formWeightPerPcs = document.getElementById('item_weight_per_pcs');
-        const measurementFields = [formWeightPerKoli, formCbmPerKoli, formWeightPerPcs];
+        const measurementFields = [formWeightPerKoli, formVolumePerKoli, formWeightPerPcs];
         const externalBarcodesCard = document.getElementById('external_barcodes_card');
         const externalBarcodesContainer = document.getElementById('external_barcodes_container');
         const externalBarcodesEmpty = document.getElementById('external_barcodes_empty');
@@ -597,7 +597,7 @@
         };
 
         const clearErrors = () => {
-            ['error_sku','error_name','error_item_type','error_status','error_category_id','error_area_id','error_rack_code','error_column_no','error_row_no','error_address','error_main_area_id','error_main_rack_code','error_main_column_no','error_main_row_no','error_main_address','error_secondary_area_id','error_secondary_rack_code','error_secondary_column_no','error_secondary_row_no','error_secondary_address','error_main_secondary_area_id','error_main_secondary_rack_code','error_main_secondary_column_no','error_main_secondary_row_no','error_main_secondary_address','error_description','error_koli_qty','error_weight_per_koli','error_cbm_per_koli','error_weight_per_pcs','error_safety_stock','error_external_barcodes','error_bundle_components'].forEach(id => {
+            ['error_sku','error_name','error_item_type','error_status','error_category_id','error_area_id','error_rack_code','error_column_no','error_row_no','error_address','error_main_area_id','error_main_rack_code','error_main_column_no','error_main_row_no','error_main_address','error_secondary_area_id','error_secondary_rack_code','error_secondary_column_no','error_secondary_row_no','error_secondary_address','error_main_secondary_area_id','error_main_secondary_rack_code','error_main_secondary_column_no','error_main_secondary_row_no','error_main_secondary_address','error_description','error_koli_qty','error_weight_per_koli','error_volume_per_koli','error_weight_per_pcs','error_safety_stock','error_external_barcodes','error_bundle_components'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.textContent = '';
             });
@@ -663,7 +663,7 @@
             if (formDescription) formDescription.value = item?.description || '';
             if (formKoliQty) formKoliQty.value = item?.koli_qty ?? '';
             if (formWeightPerKoli) formWeightPerKoli.value = formatDecimal(item?.weight_per_koli);
-            if (formCbmPerKoli) formCbmPerKoli.value = formatDecimal(item?.cbm_per_koli);
+            if (formVolumePerKoli) formVolumePerKoli.value = formatDecimal(item?.volume_per_koli);
             if (formWeightPerPcs) formWeightPerPcs.value = formatDecimal(item?.weight_per_pcs);
             if (formSafetyStock) formSafetyStock.value = item?.safety_stock ?? 0;
             setCategoryValue(item?.category_id ?? '0');

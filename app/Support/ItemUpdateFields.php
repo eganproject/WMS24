@@ -7,13 +7,13 @@ use InvalidArgumentException;
 class ItemUpdateFields
 {
     /**
-     * Field berat/CBM: nama kolom => [jumlah desimal, nilai maksimal].
-     * Batas mengikuti kolom DECIMAL di tabel items.
+     * Field berat/volume: nama field => [jumlah desimal, nilai maksimal].
+     * Berat dalam kg, volume dalam cm³ (bilangan bulat).
      */
     public const MEASUREMENTS = [
         'weight_per_pcs' => [3, 9999999.999],
         'weight_per_koli' => [3, 9999999.999],
-        'cbm_per_koli' => [6, 999999.999999],
+        'volume_per_koli' => [0, 999999999999],
     ];
 
     private const DEFINITIONS = [
@@ -28,7 +28,7 @@ class ItemUpdateFields
         'safety_stock' => ['label' => 'Stok Pengaman', 'headers' => ['safety_stock'], 'description' => 'Bilangan bulat minimal 0.'],
         'weight_per_pcs' => ['label' => 'Berat per Pcs (kg)', 'headers' => ['weight_per_pcs'], 'description' => 'Angka dalam kg, maksimal 3 desimal, misalnya 0.5. Kosongkan untuk menghapus.'],
         'weight_per_koli' => ['label' => 'Berat per Koli (kg)', 'headers' => ['weight_per_koli'], 'description' => 'Angka dalam kg, maksimal 3 desimal, misalnya 12.5. Kosongkan untuk menghapus.'],
-        'cbm_per_koli' => ['label' => 'CBM per Koli (m³)', 'headers' => ['cbm_per_koli'], 'description' => 'Angka dalam m³, maksimal 6 desimal, misalnya 0.045. Kosongkan untuk menghapus.'],
+        'volume_per_koli' => ['label' => 'Volume per Koli (cm³)', 'headers' => ['volume_per_koli'], 'description' => 'Angka dalam cm³ (panjang × lebar × tinggi dalam cm), misalnya 45000. Kosongkan untuk menghapus.'],
     ];
 
     public static function definitions(): array

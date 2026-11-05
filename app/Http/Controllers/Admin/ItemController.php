@@ -133,7 +133,7 @@ class ItemController extends Controller
                 'koli_qty' => $item->koli_qty !== null ? (int) $item->koli_qty : null,
                 'weight_per_pcs' => $item->weight_per_pcs,
                 'weight_per_koli' => $item->weight_per_koli,
-                'cbm_per_koli' => $item->cbm_per_koli,
+                'volume_per_koli' => $item->volumePerKoliCm3(),
                 'bundle_components' => $item->bundleComponents->map(fn ($row) => [
                     'component_item_id' => (int) $row->component_item_id,
                     'required_qty' => (int) $row->required_qty,
@@ -368,7 +368,7 @@ class ItemController extends Controller
             'koli_qty' => ['nullable', 'integer', 'min:0', 'max:4294967295'],
             'weight_per_pcs' => ['nullable', 'numeric', 'min:0', 'max:9999999.999'],
             'weight_per_koli' => ['nullable', 'numeric', 'min:0', 'max:9999999.999'],
-            'cbm_per_koli' => ['nullable', 'numeric', 'min:0', 'max:999999.999999'],
+            'volume_per_koli' => ['nullable', 'numeric', 'min:0', 'max:'.Item::MAX_VOLUME_CM3],
             'bundle_components' => ['nullable', 'array'],
             'bundle_components.*.component_item_id' => ['nullable', 'integer', 'exists:items,id'],
             'bundle_components.*.required_qty' => ['nullable', 'integer', 'min:1'],
@@ -481,7 +481,7 @@ class ItemController extends Controller
             'koli_qty' => ['nullable', 'integer', 'min:0', 'max:4294967295'],
             'weight_per_pcs' => ['nullable', 'numeric', 'min:0', 'max:9999999.999'],
             'weight_per_koli' => ['nullable', 'numeric', 'min:0', 'max:9999999.999'],
-            'cbm_per_koli' => ['nullable', 'numeric', 'min:0', 'max:999999.999999'],
+            'volume_per_koli' => ['nullable', 'numeric', 'min:0', 'max:'.Item::MAX_VOLUME_CM3],
             'bundle_components' => ['nullable', 'array'],
             'bundle_components.*.component_item_id' => ['nullable', 'integer', 'exists:items,id'],
             'bundle_components.*.required_qty' => ['nullable', 'integer', 'min:1'],
@@ -1172,7 +1172,13 @@ class ItemController extends Controller
      */
     private function normalizeMeasurementPayload(array &$validated): void
     {
-        foreach (['weight_per_pcs', 'weight_per_koli', 'cbm_per_koli'] as $field) {
+        // Volume diinput dalam cm³, disimpan sebagai m³ di cbm_per_koli.
+        if (array_key_exists('volume_per_koli', $validated)) {
+            $validated['cbm_per_koli'] = Item::cm3ToCbm($validated['volume_per_koli']);
+            unset($validated['volume_per_koli']);
+        }
+
+        foreach (['weight_per_pcs', 'weight_per_koli'] as $field) {
             if (!array_key_exists($field, $validated)) {
                 continue;
             }

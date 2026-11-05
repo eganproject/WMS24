@@ -6,7 +6,7 @@ use App\Models\Item;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
-class ItemWeightCbmTest extends TestCase
+class ItemWeightVolumeTest extends TestCase
 {
     use RefreshDatabase;
 
@@ -19,7 +19,7 @@ class ItemWeightCbmTest extends TestCase
             ]);
     }
 
-    public function test_item_without_weight_and_cbm_is_still_valid(): void
+    public function test_item_without_weight_and_volume_is_still_valid(): void
     {
         $this->admin()->postJson(route('admin.masterdata.items.store'), [
             'sku' => 'SKU-NOW',
@@ -33,7 +33,7 @@ class ItemWeightCbmTest extends TestCase
         $this->assertNull($item->cbm_per_koli);
     }
 
-    public function test_item_stores_weight_and_cbm_and_shows_them_on_detail(): void
+    public function test_item_stores_weight_and_volume_and_shows_them_on_detail(): void
     {
         $this->admin()->postJson(route('admin.masterdata.items.store'), [
             'sku' => 'SKU-W',
@@ -42,7 +42,7 @@ class ItemWeightCbmTest extends TestCase
             'koli_qty' => 24,
             'weight_per_pcs' => '0.5',
             'weight_per_koli' => '12.25',
-            'cbm_per_koli' => '0.045',
+            'volume_per_koli' => '45000',
         ])->assertOk();
 
         $item = Item::where('sku', 'SKU-W')->firstOrFail();
@@ -53,12 +53,13 @@ class ItemWeightCbmTest extends TestCase
         $this->admin()->get(route('admin.masterdata.items.show', $item))
             ->assertOk()
             ->assertSee('12,25 kg')
-            ->assertSee('0,045 m³')
+            ->assertSee('45.000 cm³')
             ->assertSee('0,5 kg');
 
         $this->admin()->get(route('admin.masterdata.items.edit', $item))
             ->assertOk()
-            ->assertSee('item_weight_per_koli');
+            ->assertSee('item_volume_per_koli')
+            ->assertSee('"volume_per_koli":45000', false);
     }
 
     public function test_update_can_clear_values_and_rejects_negative(): void
@@ -86,7 +87,7 @@ class ItemWeightCbmTest extends TestCase
             'item_type' => Item::TYPE_SINGLE,
             'weight_per_pcs' => '',
             'weight_per_koli' => '',
-            'cbm_per_koli' => '',
+            'volume_per_koli' => '',
         ])->assertOk();
 
         $item->refresh();

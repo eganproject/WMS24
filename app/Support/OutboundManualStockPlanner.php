@@ -61,10 +61,17 @@ class OutboundManualStockPlanner
             $need = (int) $requirement['qty'];
             $s = $snapshot[$itemId];
 
+            $perKoli = (int) ($koliQty[$itemId] ?? 0);
             $displayFree = $s['display'] + $s['incoming'] - $s['reserved_display'];
-            // Order Display lain yang belum tertutup stok Display akan mengambil dari Gudang Besar.
-            $mainFree = max(0, $s['main'] - $s['reserved_main'] - max(0, -$displayFree));
-            $displayFree = max(0, $displayFree);
+            // Order Display lain yang belum tertutup stok Display akan mengambil dari Gudang Besar,
+            // dan transfernya per koli utuh.
+            // Sisa koli dari transfer itu ikut masuk Display dan bisa dipakai order berikutnya.
+            $displayDeficit = max(0, -$displayFree);
+            if ($displayDeficit > 0 && $perKoli > 0) {
+                $displayDeficit = (int) ceil($displayDeficit / $perKoli) * $perKoli;
+            }
+            $mainFree = max(0, $s['main'] - $s['reserved_main'] - $displayDeficit);
+            $displayFree = max(0, $displayFree + $displayDeficit);
 
             if ($warehouseId === $mainId) {
                 if ($need > $mainFree) {
@@ -88,7 +95,6 @@ class OutboundManualStockPlanner
                 ]);
             }
 
-            $perKoli = (int) ($koliQty[$itemId] ?? 0);
             if ($perKoli < 1) {
                 throw ValidationException::withMessages([
                     'qty' => "Stok Display SKU {$sku} kurang {$shortfall} pcs dan isi/koli item belum diset, jadi transfer dari Gudang Besar belum bisa dibuat.",
@@ -152,56 +158,68 @@ class OutboundManualStockPlanner
         $items = Item::query()->whereIn('id', $itemIds)->get(['id', 'sku', 'name', 'koli_qty'])->keyBy('id');
 
         $prior = [];
+        // Transfer yang direkomendasikan untuk order lebih awal (koli utuh) juga menutup order berikutnya.
+        $planned = [];
         foreach ($queue as $row) {
             $txId = $row['transaction_id'];
-            if (in_array($txId, $targetIds, true)) {
-                $lines = [];
-                $state = self::STATE_READY;
-                foreach ($row['items'] as $itemId => $need) {
-                    $s = $snapshot[$itemId];
-                    $before = $prior[$itemId] ?? 0;
-                    $onHand = $s['display'] - $before;
-                    if ($onHand >= $need) {
-                        continue;
-                    }
-
-                    $withIncoming = $s['display'] + $s['incoming'] - $before;
-                    $item = $items->get($itemId);
-                    $perKoli = (int) ($item?->koli_qty ?? 0);
-                    if ($withIncoming >= $need) {
-                        $lineState = self::STATE_WAITING_TRANSFER;
-                        $shortfall = 0;
-                    } else {
-                        $lineState = self::STATE_NEEDS_TRANSFER;
-                        $shortfall = $need - max(0, $withIncoming);
-                    }
-                    $koli = $shortfall > 0 && $perKoli > 0 ? (int) ceil($shortfall / $perKoli) : 0;
-
-                    if ($lineState === self::STATE_NEEDS_TRANSFER) {
-                        $state = self::STATE_NEEDS_TRANSFER;
-                    } elseif ($state === self::STATE_READY) {
-                        $state = self::STATE_WAITING_TRANSFER;
-                    }
-
-                    $lines[] = [
-                        'item_id' => (int) $itemId,
-                        'sku' => $item?->sku,
-                        'name' => $item?->name,
-                        'required_qty' => (int) $need,
-                        'display_available_qty' => max(0, $onHand),
-                        'incoming_transfer_qty' => (int) $s['incoming'],
-                        'shortfall_qty' => (int) $shortfall,
-                        'qty_per_koli' => $perKoli,
-                        'recommended_koli' => $koli,
-                        'recommended_transfer_qty' => $koli * $perKoli,
-                        'state' => $lineState,
-                    ];
+            // Semua order di antrian dihitung (bukan hanya target) supaya urutan dan rencana transfer benar.
+            $lines = [];
+            $state = self::STATE_READY;
+            foreach ($row['items'] as $itemId => $need) {
+                $s = $snapshot[$itemId];
+                $before = $prior[$itemId] ?? 0;
+                $onHand = $s['display'] - $before;
+                if ($onHand >= $need) {
+                    continue;
                 }
 
+                $incoming = (int) $s['incoming'];
+                $plannedQty = (int) ($planned[$itemId] ?? 0);
+                $item = $items->get($itemId);
+                $perKoli = (int) ($item?->koli_qty ?? 0);
+                $coveredByEarlierPlan = false;
+                if ($s['display'] + $incoming - $before >= $need) {
+                    $lineState = self::STATE_WAITING_TRANSFER;
+                    $shortfall = 0;
+                } else {
+                    // Belum ada transfer nyata; bisa jadi sisa koli dari rekomendasi order sebelumnya cukup.
+                    $lineState = self::STATE_NEEDS_TRANSFER;
+                    $shortfall = max(0, $need - max(0, $s['display'] + $incoming + $plannedQty - $before));
+                    $coveredByEarlierPlan = $shortfall === 0;
+                }
+                $koli = $shortfall > 0 && $perKoli > 0 ? (int) ceil($shortfall / $perKoli) : 0;
+
+                if ($lineState === self::STATE_NEEDS_TRANSFER) {
+                    $state = self::STATE_NEEDS_TRANSFER;
+                } elseif ($state === self::STATE_READY) {
+                    $state = self::STATE_WAITING_TRANSFER;
+                }
+
+                $lines[] = [
+                    'item_id' => (int) $itemId,
+                    'sku' => $item?->sku,
+                    'name' => $item?->name,
+                    'required_qty' => (int) $need,
+                    'display_available_qty' => max(0, $onHand),
+                    'incoming_transfer_qty' => (int) $incoming,
+                    'shortfall_qty' => (int) $shortfall,
+                    'qty_per_koli' => $perKoli,
+                    'recommended_koli' => $koli,
+                    'recommended_transfer_qty' => $koli * $perKoli,
+                    'covered_by_earlier_order' => $coveredByEarlierPlan,
+                    'state' => $lineState,
+                ];
+            }
+
+            if (in_array($txId, $targetIds, true)) {
                 $result[$txId] = [
                     'state' => $state,
                     'items' => $lines,
                 ];
+            }
+
+            foreach ($lines as $line) {
+                $planned[$line['item_id']] = ($planned[$line['item_id']] ?? 0) + $line['recommended_transfer_qty'];
             }
 
             foreach ($row['items'] as $itemId => $need) {

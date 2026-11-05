@@ -155,6 +155,7 @@ Request baru menghasilkan HTTP `201`:
           "shortfall_qty": 1,
           "recommended_koli": 1,
           "recommended_transfer_qty": 12,
+          "covered_by_earlier_order": false,
           "state": "needs_transfer"
         }
       ]
@@ -163,7 +164,7 @@ Request baru menghasilkan HTTP `201`:
 }
 ```
 
-`replenishment.state`: `ready` (stok Display cukup), `needs_transfer` (perlu transfer dari Gudang Besar), atau `waiting_transfer` (transfer sudah dibuat dan menunggu diterima di Display). `replenishment` bernilai `null` untuk order dari gudang selain Display atau yang sudah selesai.
+`replenishment.state`: `ready` (stok Display cukup), `needs_transfer` (perlu transfer dari Gudang Besar), atau `waiting_transfer` (transfer sudah dibuat dan menunggu diterima di Display). `covered_by_earlier_order: true` berarti kekurangan SKU itu sudah tertutup sisa koli dari rekomendasi transfer order sebelumnya, jadi tidak perlu koli tambahan. `replenishment` bernilai `null` untuk order dari gudang selain Display atau yang sudah selesai.
 
 Mengirim ulang `external_id` dengan payload yang sama tidak membuat transaksi baru. API mengembalikan data lama dengan HTTP `200` dan `meta.idempotent_replay: true`. Jika `external_id` yang sama dikirim dengan payload berbeda, API mengembalikan HTTP `409` dengan kode `IDEMPOTENCY_CONFLICT`.
 

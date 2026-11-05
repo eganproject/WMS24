@@ -8,6 +8,7 @@ use App\Models\OutboundQcSessionItem;
 use App\Models\OutboundTransaction;
 use App\Support\OutboundManualQcStatus;
 use App\Support\OutboundManualStockPlanner;
+use App\Support\Permission;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -466,7 +467,12 @@ class OutboundManualQcController extends Controller
             return $status;
         }
 
-        $status['transfer_url'] = OutboundManualStockPlanner::transferUrl($transaction, $status['items']);
+        // Tombol transfer hanya untuk user yang boleh membuat transfer gudang.
+        $canTransfer = auth()->user()
+            && Permission::can(auth()->user(), 'admin.inventory.stock-transfers.index', 'create');
+        $status['transfer_url'] = $canTransfer
+            ? OutboundManualStockPlanner::transferUrl($transaction, $status['items'])
+            : null;
 
         return $status;
     }

@@ -381,14 +381,23 @@ document.addEventListener('DOMContentLoaded', () => {
         const needsTransfer = replenishment.state === 'needs_transfer';
         panel.className = `alert ${needsTransfer ? 'alert-danger' : 'alert-info'} mb-5`;
         const lines = replenishment.items.map((line) => {
-            const detail = line.state === 'needs_transfer'
-                ? `kurang ${line.shortfall_qty} pcs${line.recommended_koli > 0 ? ` &rarr; transfer ${line.recommended_koli} koli (${line.recommended_transfer_qty} pcs)` : ' (isi/koli belum diset)'}`
-                : `menunggu transfer ${line.incoming_transfer_qty} pcs diterima`;
+            let detail = `menunggu transfer ${line.incoming_transfer_qty} pcs diterima`;
+            if (line.state === 'needs_transfer') {
+                if (line.covered_by_earlier_order) {
+                    detail = 'ikut tertutup sisa koli dari transfer order sebelumnya';
+                } else if (line.recommended_koli > 0) {
+                    detail = `kurang ${line.shortfall_qty} pcs &rarr; transfer ${line.recommended_koli} koli (${line.recommended_transfer_qty} pcs)`;
+                } else {
+                    detail = `kurang ${line.shortfall_qty} pcs (isi/koli belum diset)`;
+                }
+            }
             return `<li><span class="fw-bolder">${escapeHtml(line.sku || '-')}</span>: butuh ${line.required_qty}, Display ${line.display_available_qty}, ${detail}</li>`;
         }).join('');
         const button = needsTransfer && replenishment.transfer_url
             ? `<a href="${escapeHtml(replenishment.transfer_url)}" target="_blank" rel="noopener" class="btn btn-sm btn-danger mt-3">Buat transfer dari Gudang Besar</a>`
-            : '';
+            : (needsTransfer && replenishment.items.some((line) => line.recommended_koli > 0)
+                ? '<div class="mt-3 fs-7">Minta tim gudang membuat transfer Gudang Besar &rarr; Gudang Display.</div>'
+                : '');
         panel.innerHTML = `
             <div class="fw-bolder mb-2">${needsTransfer ? 'Stok Gudang Display kurang, perlu transfer dari Gudang Besar' : 'Transfer dari Gudang Besar sedang berjalan'}</div>
             <ul class="mb-0 ps-5">${lines}</ul>

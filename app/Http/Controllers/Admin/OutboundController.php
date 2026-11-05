@@ -734,9 +734,7 @@ class OutboundController extends Controller
 
         $prefix = $this->prefixForType($type);
 
-        if ($type === 'manual') {
-            OutboundManualStockPlanner::assertAvailable($validated['items'], $warehouseId);
-        } else {
+        if ($type !== 'manual') {
             StockService::assertSellableAvailable($validated['items'], $warehouseId);
         }
 
@@ -745,6 +743,11 @@ class OutboundController extends Controller
 
         DB::beginTransaction();
         try {
+            if ($type === 'manual') {
+                // Di dalam transaksi supaya baris stok terkunci dan order bersamaan tidak lolos ganda.
+                OutboundManualStockPlanner::assertAvailable($validated['items'], $warehouseId);
+            }
+
             $tx = OutboundTransaction::create([
                 'code' => $code,
                 'type' => $type,
@@ -806,9 +809,7 @@ class OutboundController extends Controller
             $warehouseId = WarehouseService::displayWarehouseId();
         }
 
-        if ($type === 'manual') {
-            OutboundManualStockPlanner::assertAvailable($validated['items'], $warehouseId, $id);
-        } else {
+        if ($type !== 'manual') {
             StockService::assertSellableAvailable($validated['items'], $warehouseId);
         }
 
@@ -819,6 +820,10 @@ class OutboundController extends Controller
                 DB::rollBack();
 
                 return response()->json(['message' => 'Data sudah masuk tahap QC/selesai dan tidak bisa diubah'], 422);
+            }
+
+            if ($type === 'manual') {
+                OutboundManualStockPlanner::assertAvailable($validated['items'], $warehouseId, $id);
             }
 
             StockService::rollbackBySource('outbound', $tx->id);

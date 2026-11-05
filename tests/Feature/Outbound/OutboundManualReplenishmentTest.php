@@ -121,11 +121,53 @@ class OutboundManualReplenishmentTest extends TestCase
             ->assertStatus(422)
             ->assertJsonPath(
                 'error.details.qty.0',
-                'Stok tidak mencukupi untuk SKU SKU-RPL-1. Tersedia 7 (Display 0 + Gudang Besar 7), dibutuhkan 8.',
+                'Stok tidak mencukupi untuk SKU SKU-RPL-1. Tersedia 7 (Display 7 + Gudang Besar 0), dibutuhkan 8.',
             );
 
+        // 1 koli (12 pcs) untuk order pertama menyisakan 7 pcs di Display, cukup untuk order 7 pcs.
         $this->postJson('/api/v1/outbound/manuals', $this->payload('OMS-RPL-3', 7), $this->headers())
+            ->assertCreated()
+            ->assertJsonPath('data.replenishment.state', 'needs_transfer')
+            ->assertJsonPath('data.replenishment.items.0.recommended_koli', 0)
+            ->assertJsonPath('data.replenishment.items.0.covered_by_earlier_order', true);
+
+        $this->postJson('/api/v1/outbound/manuals', $this->payload('OMS-RPL-4', 1), $this->headers())
             ->assertStatus(422);
+    }
+
+    public function test_admin_edit_excludes_its_own_reservation(): void
+    {
+        $user = User::factory()->create();
+        $item = $this->createItem('SKU-RPL-1', 12);
+        $this->setStock($this->display, $item, 10);
+
+        $transaction = OutboundTransaction::create([
+            'code' => 'OUT-MNL-TEST-EDIT',
+            'type' => 'manual',
+            'warehouse_id' => $this->display->id,
+            'transacted_at' => now(),
+            'status' => OutboundManualQcStatus::PENDING_QC,
+        ]);
+        OutboundItem::create(['outbound_transaction_id' => $transaction->id, 'item_id' => $item->id, 'qty' => 8]);
+
+        $this->withoutMiddleware();
+        $payload = [
+            'warehouse_id' => $this->display->id,
+            'transacted_at' => now()->format('Y-m-d H:i'),
+            'items' => [['item_id' => $item->id, 'qty' => 9]],
+        ];
+
+        $this->actingAs($user)
+            ->putJson(route('admin.outbound.manuals.update', $transaction->id), $payload)
+            ->assertOk();
+
+        $this->assertDatabaseHas('outbound_items', ['outbound_transaction_id' => $transaction->id, 'qty' => 9]);
+
+        $payload['items'][0]['qty'] = 11;
+        $this->actingAs($user)
+            ->postJson(route('admin.outbound.manuals.store'), $payload)
+            ->assertStatus(422)
+            ->assertJsonPath('errors.qty.0', 'Stok tidak mencukupi untuk SKU SKU-RPL-1. Tersedia 1 (Display 1 + Gudang Besar 0), dibutuhkan 11.');
     }
 
     public function test_pending_transfer_to_display_changes_state_to_waiting(): void

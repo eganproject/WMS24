@@ -62,6 +62,7 @@ class OutboundManualResource extends JsonResource
                 'shortfall_qty' => $line['shortfall_qty'],
                 'recommended_koli' => $line['recommended_koli'],
                 'recommended_transfer_qty' => $line['recommended_transfer_qty'],
+                'covered_by_earlier_order' => $line['covered_by_earlier_order'],
                 'state' => $line['state'],
             ])->values()->all(),
         ];

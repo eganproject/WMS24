@@ -506,11 +506,12 @@
         overflow-wrap: anywhere;
     }
     .qc-item-name {
-        color: #64748b;
-        font-size: 12px;
-        line-height: 1.35;
-        margin-top: 4px;
-        max-width: 360px;
+        color: #334155;
+        font-size: 17px;
+        font-weight: 600;
+        line-height: 1.4;
+        margin-top: 6px;
+        max-width: 520px;
         overflow-wrap: anywhere;
     }
     .qc-progress-pill {

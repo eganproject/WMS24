@@ -134,6 +134,9 @@ class ItemController extends Controller
                 'weight_per_pcs' => $item->weight_per_pcs,
                 'weight_per_koli' => $item->weight_per_koli,
                 'volume_per_koli' => $item->volumePerKoliCm3(),
+                'length_per_koli' => $item->length_per_koli,
+                'width_per_koli' => $item->width_per_koli,
+                'height_per_koli' => $item->height_per_koli,
                 'bundle_components' => $item->bundleComponents->map(fn ($row) => [
                     'component_item_id' => (int) $row->component_item_id,
                     'required_qty' => (int) $row->required_qty,
@@ -369,6 +372,9 @@ class ItemController extends Controller
             'weight_per_pcs' => ['nullable', 'numeric', 'min:0', 'max:9999999.999'],
             'weight_per_koli' => ['nullable', 'numeric', 'min:0', 'max:9999999.999'],
             'volume_per_koli' => ['nullable', 'numeric', 'min:0', 'max:'.Item::MAX_VOLUME_CM3],
+            'length_per_koli' => ['nullable', 'numeric', 'gt:0', 'max:'.Item::MAX_DIMENSION_CM],
+            'width_per_koli' => ['nullable', 'numeric', 'gt:0', 'max:'.Item::MAX_DIMENSION_CM],
+            'height_per_koli' => ['nullable', 'numeric', 'gt:0', 'max:'.Item::MAX_DIMENSION_CM],
             'bundle_components' => ['nullable', 'array'],
             'bundle_components.*.component_item_id' => ['nullable', 'integer', 'exists:items,id'],
             'bundle_components.*.required_qty' => ['nullable', 'integer', 'min:1'],
@@ -482,6 +488,9 @@ class ItemController extends Controller
             'weight_per_pcs' => ['nullable', 'numeric', 'min:0', 'max:9999999.999'],
             'weight_per_koli' => ['nullable', 'numeric', 'min:0', 'max:9999999.999'],
             'volume_per_koli' => ['nullable', 'numeric', 'min:0', 'max:'.Item::MAX_VOLUME_CM3],
+            'length_per_koli' => ['nullable', 'numeric', 'gt:0', 'max:'.Item::MAX_DIMENSION_CM],
+            'width_per_koli' => ['nullable', 'numeric', 'gt:0', 'max:'.Item::MAX_DIMENSION_CM],
+            'height_per_koli' => ['nullable', 'numeric', 'gt:0', 'max:'.Item::MAX_DIMENSION_CM],
             'bundle_components' => ['nullable', 'array'],
             'bundle_components.*.component_item_id' => ['nullable', 'integer', 'exists:items,id'],
             'bundle_components.*.required_qty' => ['nullable', 'integer', 'min:1'],
@@ -1168,24 +1177,44 @@ class ItemController extends Controller
     }
 
     /**
-     * Berat & CBM bersifat opsional: kosong disimpan sebagai NULL.
+     * Berat, dimensi & volume bersifat opsional: kosong disimpan sebagai NULL.
+     * Jika P, L, T lengkap, volume dihitung otomatis dari P × L × T.
      */
     private function normalizeMeasurementPayload(array &$validated): void
     {
-        // Volume diinput dalam cm³, disimpan sebagai m³ di cbm_per_koli.
-        if (array_key_exists('volume_per_koli', $validated)) {
-            $validated['cbm_per_koli'] = Item::cm3ToCbm($validated['volume_per_koli']);
-            unset($validated['volume_per_koli']);
-        }
-
-        foreach (['weight_per_pcs', 'weight_per_koli'] as $field) {
+        foreach (['weight_per_pcs', 'weight_per_koli', ...Item::DIMENSION_FIELDS] as $field) {
             if (!array_key_exists($field, $validated)) {
                 continue;
             }
             $value = $validated[$field];
             $validated[$field] = ($value === null || trim((string) $value) === '') ? null : trim((string) $value);
         }
+
+        $dimensions = array_map(fn ($field) => $validated[$field] ?? null, Item::DIMENSION_FIELDS);
+        $filled = count(array_filter($dimensions, fn ($value) => $value !== null));
+        if ($filled > 0 && $filled < 3) {
+            throw ValidationException::withMessages([
+                'length_per_koli' => 'Isi panjang, lebar, dan tinggi koli lengkap, atau kosongkan ketiganya.',
+            ]);
+        }
+
+        $volume = Item::volumeFromDimensions(...$dimensions);
+        if ($volume !== null) {
+            if ($volume > Item::MAX_VOLUME_CM3) {
+                throw ValidationException::withMessages([
+                    'length_per_koli' => 'Volume dari panjang × lebar × tinggi terlalu besar.',
+                ]);
+            }
+            $validated['volume_per_koli'] = $volume;
+        }
+
+        // Volume diinput dalam cm³, disimpan sebagai m³ di cbm_per_koli.
+        if (array_key_exists('volume_per_koli', $validated)) {
+            $validated['cbm_per_koli'] = Item::cm3ToCbm($validated['volume_per_koli']);
+            unset($validated['volume_per_koli']);
+        }
     }
+
 
     private function normalizeBundlePayload(array &$validated): void
     {
@@ -1205,6 +1234,9 @@ class ItemController extends Controller
         $validated['weight_per_pcs'] = null;
         $validated['weight_per_koli'] = null;
         $validated['cbm_per_koli'] = null;
+        foreach (Item::DIMENSION_FIELDS as $field) {
+            $validated[$field] = null;
+        }
         unset($validated['rack_code'], $validated['column_no'], $validated['row_no']);
     }
 

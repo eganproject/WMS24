@@ -70,6 +70,10 @@ class ItemUpdatesTemplateExport implements FromCollection, WithHeadings, WithCus
                         'safety_stock' => [(int) ($item->safety_stock ?? 0)],
                         'weight_per_pcs', 'weight_per_koli' => [$item->{$field} !== null ? (float) $item->{$field} : ''],
                         'volume_per_koli' => [$item->volumePerKoliCm3() ?? ''],
+                        'dimensions' => array_map(
+                            fn (string $column) => $item->{$column} !== null ? (float) $item->{$column} : '',
+                            Item::DIMENSION_FIELDS
+                        ),
                         default => [],
                     };
                     $row = array_merge($row, $values);

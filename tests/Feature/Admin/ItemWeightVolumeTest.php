@@ -114,4 +114,49 @@ class ItemWeightVolumeTest extends TestCase
 
         $this->assertSame('10.000', $item->fresh()->weight_per_koli);
     }
+
+    public function test_dimensions_compute_volume_and_show_on_detail(): void
+    {
+        $this->admin()->postJson(route('admin.masterdata.items.store'), [
+            'sku' => 'SKU-DIM',
+            'name' => 'Item Dimensi',
+            'item_type' => Item::TYPE_SINGLE,
+            'length_per_koli' => '50',
+            'width_per_koli' => '30',
+            'height_per_koli' => '30',
+            'volume_per_koli' => '1',
+        ])->assertOk();
+
+        $item = Item::where('sku', 'SKU-DIM')->firstOrFail();
+        $this->assertSame('50.00', $item->length_per_koli);
+        $this->assertSame('30.00', $item->width_per_koli);
+        $this->assertSame('30.00', $item->height_per_koli);
+        $this->assertSame(45000, $item->volumePerKoliCm3());
+
+        $this->admin()->get(route('admin.masterdata.items.show', $item))
+            ->assertOk()
+            ->assertSee('50 × 30 × 30 cm')
+            ->assertSee('45.000 cm³');
+    }
+
+    public function test_partial_dimensions_are_rejected_and_manual_volume_still_works(): void
+    {
+        $this->admin()->postJson(route('admin.masterdata.items.store'), [
+            'sku' => 'SKU-DIM-PART',
+            'name' => 'X',
+            'item_type' => Item::TYPE_SINGLE,
+            'length_per_koli' => '50',
+        ])->assertStatus(422)->assertJsonValidationErrors('length_per_koli');
+
+        $this->admin()->postJson(route('admin.masterdata.items.store'), [
+            'sku' => 'SKU-DIM-MANUAL',
+            'name' => 'Y',
+            'item_type' => Item::TYPE_SINGLE,
+            'volume_per_koli' => '1200',
+        ])->assertOk();
+
+        $item = Item::where('sku', 'SKU-DIM-MANUAL')->firstOrFail();
+        $this->assertNull($item->length_per_koli);
+        $this->assertSame(1200, $item->volumePerKoliCm3());
+    }
 }

@@ -29,11 +29,17 @@ class Item extends Model
         'description',
         'safety_stock',
         'koli_qty',
+        'weight_per_pcs',
+        'weight_per_koli',
+        'cbm_per_koli',
     ];
 
     protected $casts = [
         'safety_stock' => 'integer',
         'koli_qty' => 'integer',
+        'weight_per_pcs' => 'decimal:3',
+        'weight_per_koli' => 'decimal:3',
+        'cbm_per_koli' => 'decimal:6',
     ];
 
     public function category()

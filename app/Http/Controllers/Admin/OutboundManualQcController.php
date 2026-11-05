@@ -7,6 +7,8 @@ use App\Models\OutboundQcSession;
 use App\Models\OutboundQcSessionItem;
 use App\Models\OutboundTransaction;
 use App\Support\OutboundManualQcStatus;
+use App\Support\OutboundManualStockPlanner;
+use App\Support\Permission;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -58,9 +60,15 @@ class OutboundManualQcController extends Controller
             });
         }
 
+        $transactions = $builder->get();
+        $replenishment = OutboundManualStockPlanner::statusFor($transactions);
+
         return response()->json([
-            'transactions' => $builder->get()
-                ->map(fn (OutboundTransaction $transaction) => $this->serializeTransactionSummary($transaction))
+            'transactions' => $transactions
+                ->map(fn (OutboundTransaction $transaction) => $this->serializeTransactionSummary(
+                    $transaction,
+                    $replenishment[(int) $transaction->id] ?? null,
+                ))
                 ->values(),
         ]);
     }
@@ -282,6 +290,15 @@ class OutboundManualQcController extends Controller
                 ], 422);
             }
 
+            try {
+                OutboundManualStockPlanner::assertReadyForQcComplete($transaction);
+            } catch (ValidationException $e) {
+                DB::rollBack();
+                return response()->json([
+                    'message' => collect($e->errors())->flatten()->first() ?? $e->getMessage(),
+                ], 422);
+            }
+
             $completedAt = now();
             $transaction->status = OutboundManualQcStatus::PENDING;
             $transaction->approved_at = null;
@@ -416,7 +433,7 @@ class OutboundManualQcController extends Controller
         ])->findOrFail($id);
     }
 
-    private function serializeTransactionSummary(OutboundTransaction $transaction): array
+    private function serializeTransactionSummary(OutboundTransaction $transaction, ?array $replenishment = null): array
     {
         $expectedQty = (int) $transaction->items->sum('qty');
         $sessionItems = $transaction->qcSession?->items ?? collect();
@@ -434,12 +451,30 @@ class OutboundManualQcController extends Controller
             'warehouse' => $transaction->warehouse?->name ?? '-',
             'transacted_at' => $transaction->transacted_at?->format('Y-m-d H:i'),
             'status' => $transaction->status ?? OutboundManualQcStatus::PENDING,
+            'replenishment_state' => $replenishment['state'] ?? null,
             'summary' => [
                 'expected_qty' => $expectedQty,
                 'scanned_qty' => $scannedQty,
                 'remaining_qty' => max(0, $expectedQty - $scannedQty),
             ],
         ];
+    }
+
+    private function serializeReplenishment(OutboundTransaction $transaction): ?array
+    {
+        $status = OutboundManualStockPlanner::statusFor([$transaction])[(int) $transaction->id] ?? null;
+        if (! $status || $status['state'] === OutboundManualStockPlanner::STATE_READY) {
+            return $status;
+        }
+
+        // Tombol transfer hanya untuk user yang boleh membuat transfer gudang.
+        $canTransfer = auth()->user()
+            && Permission::can(auth()->user(), 'admin.inventory.stock-transfers.index', 'create');
+        $status['transfer_url'] = $canTransfer
+            ? OutboundManualStockPlanner::transferUrl($transaction, $status['items'])
+            : null;
+
+        return $status;
     }
 
     private function serializeTransactionDetail(OutboundTransaction $transaction): array
@@ -463,6 +498,7 @@ class OutboundManualQcController extends Controller
             'warehouse' => $transaction->warehouse?->name ?? '-',
             'transacted_at' => $transaction->transacted_at?->format('Y-m-d H:i'),
             'status' => $transaction->status ?? OutboundManualQcStatus::PENDING,
+            'replenishment' => $this->serializeReplenishment($transaction),
             'session' => [
                 'id' => $session?->id,
                 'started_at' => $session?->started_at?->format('Y-m-d H:i'),

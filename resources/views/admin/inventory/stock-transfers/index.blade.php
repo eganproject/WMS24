@@ -915,10 +915,10 @@
             setQuickItemsVisible(true);
             updateQuickItemHint();
             itemsContainer.innerHTML = '';
-            createItemRow({
-                item_id: prefill?.item_id || '',
-                qty: prefill?.qty ?? '',
-            });
+            const prefillItems = Array.isArray(prefill?.items) && prefill.items.length
+                ? prefill.items
+                : [{ item_id: prefill?.item_id || '', qty: prefill?.qty ?? '' }];
+            prefillItems.forEach((item) => createItemRow(item));
             clearErrors();
             validateUniqueItems();
             syncAllKoliMode();
@@ -955,7 +955,22 @@
 
         const params = new URLSearchParams(window.location.search);
         const prefillItemId = params.get('item_id');
-        if (prefillItemId) {
+        // items=ID:KOLI,ID:KOLI (dari rekomendasi transfer outbound manual)
+        const prefillItemsParam = params.get('items');
+        if (prefillItemsParam) {
+            const items = prefillItemsParam.split(',')
+                .map((part) => part.split(':').map((value) => parseInt(value, 10)))
+                .filter(([itemId, koli]) => Number.isFinite(itemId) && itemId > 0 && Number.isFinite(koli) && koli > 0)
+                .map(([itemId, koli]) => ({ item_id: itemId, koli }));
+            if (items.length) {
+                openPrefill({
+                    items,
+                    from_warehouse_id: params.get('from') || '',
+                    to_warehouse_id: params.get('to') || '',
+                    note: params.get('note') || '',
+                });
+            }
+        } else if (prefillItemId) {
             const qty = parseInt(params.get('qty') || '0', 10);
             openPrefill({
                 item_id: parseInt(prefillItemId, 10),

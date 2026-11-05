@@ -9,6 +9,11 @@ class WarehouseService
     /** @var array<string,int|null> */
     private static array $codeCache = [];
 
+    public static function flushCache(): void
+    {
+        self::$codeCache = [];
+    }
+
     public static function defaultWarehouseCode(): string
     {
         return (string) config('inventory.default_warehouse_code', 'GUDANG_BESAR');
@@ -30,7 +35,11 @@ class WarehouseService
             return self::$codeCache[$code];
         }
         $id = Warehouse::where('code', $code)->value('id');
-        self::$codeCache[$code] = $id ? (int) $id : null;
+        if (! $id) {
+            // Jangan cache gudang yang belum ada, supaya gudang yang dibuat belakangan tetap terbaca.
+            return null;
+        }
+        self::$codeCache[$code] = (int) $id;
         return self::$codeCache[$code];
     }
 

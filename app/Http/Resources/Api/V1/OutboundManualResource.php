@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\Api\V1;
 
+use App\Support\OutboundManualStockPlanner;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -39,7 +40,31 @@ class OutboundManualResource extends JsonResource
                 'qty' => (int) $row->qty,
                 'note' => $row->note,
             ])->values(),
+            'replenishment' => $this->replenishment(),
             'created_at' => $this->created_at?->toIso8601String(),
+        ];
+    }
+
+    /** Info kekurangan stok Gudang Display; null bila order bukan dari Display atau sudah selesai. */
+    private function replenishment(): ?array
+    {
+        $status = OutboundManualStockPlanner::statusFor([$this->resource])[(int) $this->id] ?? null;
+        if (! $status) {
+            return null;
+        }
+
+        return [
+            'state' => $status['state'],
+            'items' => collect($status['items'])->map(fn (array $line) => [
+                'sku' => $line['sku'],
+                'required_qty' => $line['required_qty'],
+                'display_available_qty' => $line['display_available_qty'],
+                'shortfall_qty' => $line['shortfall_qty'],
+                'recommended_koli' => $line['recommended_koli'],
+                'recommended_transfer_qty' => $line['recommended_transfer_qty'],
+                'covered_by_earlier_order' => $line['covered_by_earlier_order'],
+                'state' => $line['state'],
+            ])->values()->all(),
         ];
     }
 }

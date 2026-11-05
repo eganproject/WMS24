@@ -106,6 +106,16 @@ Untuk `GUDANG_BESAR` (sesuai `inventory.default_warehouse_code`), setiap item wa
 }
 ```
 
+## Validasi Stok
+
+Order manual yang belum di-approve belum memotong stok, tetapi qty-nya dihitung sebagai stok yang sudah dipesan. Jadi dua order tidak bisa memakai stok yang sama.
+
+- **`GUDANG_DISPLAY`**: stok yang divalidasi adalah Gudang Display + Gudang Besar (dikurangi order manual lain yang masih terbuka). Barang tetap diambil dari Gudang Display. Jika stok Display kurang, order tetap diterima dan `data.replenishment.state` bernilai `needs_transfer`, lengkap dengan rekomendasi koli yang perlu ditransfer dari Gudang Besar. Transfer harus koli utuh, jadi order ditolak bila Gudang Besar tidak cukup untuk jumlah koli yang dibutuhkan atau isi/koli item belum diset.
+- **`GUDANG_BESAR`**: hanya stok Gudang Besar yang divalidasi (wajib koli), seperti sebelumnya.
+- Gudang lain: hanya stok gudang tersebut.
+
+Transfer Gudang Besar → Display yang sudah dibuat tetapi belum di-QC dihitung sebagai stok yang sedang menuju Display (`state: waiting_transfer`). QC outbound manual baru bisa diselesaikan setelah stok Gudang Display cukup.
+
 ## Respons
 
 Request baru menghasilkan HTTP `201`:
@@ -134,10 +144,27 @@ Request baru menghasilkan HTTP `201`:
         "qty": 2,
         "note": null
       }
-    ]
+    ],
+    "replenishment": {
+      "state": "needs_transfer",
+      "items": [
+        {
+          "sku": "SKU-001",
+          "required_qty": 2,
+          "display_available_qty": 1,
+          "shortfall_qty": 1,
+          "recommended_koli": 1,
+          "recommended_transfer_qty": 12,
+          "covered_by_earlier_order": false,
+          "state": "needs_transfer"
+        }
+      ]
+    }
   }
 }
 ```
+
+`replenishment.state`: `ready` (stok Display cukup), `needs_transfer` (perlu transfer dari Gudang Besar), atau `waiting_transfer` (transfer sudah dibuat dan menunggu diterima di Display). `covered_by_earlier_order: true` berarti kekurangan SKU itu sudah tertutup sisa koli dari rekomendasi transfer order sebelumnya, jadi tidak perlu koli tambahan. `replenishment` bernilai `null` untuk order dari gudang selain Display atau yang sudah selesai.
 
 Mengirim ulang `external_id` dengan payload yang sama tidak membuat transaksi baru. API mengembalikan data lama dengan HTTP `200` dan `meta.idempotent_replay: true`. Jika `external_id` yang sama dikirim dengan payload berbeda, API mengembalikan HTTP `409` dengan kode `IDEMPOTENCY_CONFLICT`.
 
@@ -164,7 +191,7 @@ Contoh error validasi:
     "message": "Data outbound manual tidak valid.",
     "details": {
       "qty": [
-        "Stok tidak mencukupi untuk SKU SKU-001. Tersedia 1, dibutuhkan 2."
+        "Stok tidak mencukupi untuk SKU SKU-001. Tersedia 1 (Display 1 + Gudang Besar 0), dibutuhkan 2."
       ]
     }
   }

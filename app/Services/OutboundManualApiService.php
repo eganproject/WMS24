@@ -9,6 +9,7 @@ use App\Models\OutboundTransaction;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Support\BundleService;
+use App\Support\DeliveryNoteNumber;
 use App\Support\OutboundKoliExpectation;
 use App\Support\OutboundManualQcStatus;
 use App\Support\OutboundManualStockPlanner;
@@ -60,7 +61,7 @@ class OutboundManualApiService
                     'recipient_phone' => $normalized['recipient_phone'],
                     'recipient_address' => $normalized['recipient_address'],
                     'surat_jalan_no' => $normalized['surat_jalan_no']
-                        ?: $this->generateCode('SJ-OUT-MNL'),
+                        ?: DeliveryNoteNumber::nextManual(),
                     'surat_jalan_at' => $normalized['surat_jalan_at'],
                     'note' => $normalized['note'],
                     'warehouse_id' => $normalized['warehouse']->id,

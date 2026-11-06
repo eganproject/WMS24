@@ -32,7 +32,7 @@
                     <option value="50">50</option>
                     <option value="100">100</option>
                 </select>
-                <button type="button" class="btn btn-light-primary me-3" data-kt-menu-trigger="click" data-kt-menu-placement="bottom-end">
+                <button type="button" class="btn btn-light-primary" data-kt-menu-trigger="click" data-kt-menu-placement="bottom-end">
                     <span class="svg-icon svg-icon-2">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
                             <path d="M19.0759 3H4.72777C3.95892 3 3.47768 3.83148 3.86067 4.49814L8.56967 12.6949C9.17923 13.7559 9.5 14.9582 9.5 16.1819V19.5072C9.5 20.2189 10.2223 20.7028 10.8805 20.432L13.8805 19.1977C14.2553 19.0435 14.5 18.6783 14.5 18.273V13.8372C14.5 12.8089 14.8171 11.8056 15.408 10.964L19.8943 4.57465C20.3596 3.912 19.8856 3 19.0759 3Z" fill="black" />
@@ -70,17 +70,57 @@
                         </div>
                     </div>
                 </div>
-                <button type="button" class="btn btn-light-success me-3" id="btn_export_items">
-                    <i class="fas fa-file-excel me-2"></i>Export Excel
-                </button>
-                @if($canUpdate)
-                    <button type="button" class="btn btn-light-dark me-3" id="btn_update_items_excel" data-bs-toggle="modal" data-bs-target="#modal_update_items_excel">Update Data Items</button>
-                @endif
+                <div>
+                    <button type="button" class="btn btn-light" data-kt-menu-trigger="click" data-kt-menu-placement="bottom-end" id="btn_items_data_menu">
+                        <i class="fas fa-file-excel me-2"></i>Import / Export
+                        <i class="fas fa-chevron-down ms-2 fs-8"></i>
+                    </button>
+                    <div class="menu menu-sub menu-sub-dropdown menu-column menu-rounded menu-gray-700 menu-state-bg-light-primary fw-bold fs-6 w-250px py-3" data-kt-menu="true">
+                        <div class="menu-item px-3">
+                            <div class="menu-content text-muted fs-8 text-uppercase px-3 pb-1">Excel</div>
+                        </div>
+                        <div class="menu-item px-3">
+                            <a href="#" class="menu-link px-3" id="btn_export_items">
+                                <i class="fas fa-download me-3 text-success"></i>Export Excel
+                            </a>
+                        </div>
+                        @if($canUpdate)
+                            <div class="menu-item px-3">
+                                <a href="#" class="menu-link px-3" id="btn_update_items_excel" data-bs-toggle="modal" data-bs-target="#modal_update_items_excel">
+                                    <i class="fas fa-edit me-3 text-dark"></i>Update Data Items
+                                </a>
+                            </div>
+                        @endif
+                        @if($canCreate)
+                            <div class="separator my-2"></div>
+                            <div class="menu-item px-3">
+                                <div class="menu-content text-muted fs-8 text-uppercase px-3 pb-1">Import</div>
+                            </div>
+                            <div class="menu-item px-3">
+                                <a href="#" class="menu-link px-3" id="btn_import_items" data-bs-toggle="modal" data-bs-target="#modal_import_items">
+                                    <i class="fas fa-upload me-3 text-primary"></i>Import Items
+                                </a>
+                            </div>
+                            <div class="menu-item px-3">
+                                <a href="#" class="menu-link px-3" id="btn_import_barcodes" data-bs-toggle="modal" data-bs-target="#modal_import_barcodes">
+                                    <i class="fas fa-barcode me-3 text-success"></i>Import Barcode Alias
+                                </a>
+                            </div>
+                            <div class="menu-item px-3">
+                                <a href="#" class="menu-link px-3" id="btn_import_bundle" data-bs-toggle="modal" data-bs-target="#modal_import_bundle">
+                                    <i class="fas fa-boxes me-3 text-warning"></i>Import Bundle
+                                </a>
+                            </div>
+                            <div class="separator my-2"></div>
+                            <div class="menu-item px-3">
+                                <a href="#" class="menu-link px-3" id="btn_open_barcode_misses" data-bs-toggle="modal" data-bs-target="#modal_barcode_misses">
+                                    <i class="fas fa-question-circle me-3 text-info"></i>Barcode Tidak Dikenal
+                                </a>
+                            </div>
+                        @endif
+                    </div>
+                </div>
                 @if($canCreate)
-                    <button type="button" class="btn btn-light-primary me-3" id="btn_import_items" data-bs-toggle="modal" data-bs-target="#modal_import_items">Import Items</button>
-                    <button type="button" class="btn btn-light-success me-3" id="btn_import_barcodes" data-bs-toggle="modal" data-bs-target="#modal_import_barcodes">Import Barcode Alias</button>
-                    <button type="button" class="btn btn-light-warning me-3" id="btn_import_bundle" data-bs-toggle="modal" data-bs-target="#modal_import_bundle">Import Bundle</button>
-                    <button type="button" class="btn btn-light-info me-3" id="btn_open_barcode_misses" data-bs-toggle="modal" data-bs-target="#modal_barcode_misses">Barcode Tidak Dikenal</button>
                     <a href="{{ route('admin.masterdata.items.create') }}" class="btn btn-primary" id="btn_open_create_item">
                         Add Item
                     </a>
@@ -707,7 +747,8 @@
         const reloadTable = (keepPage = false) => dt.ajax.reload(null, keepPage ? false : true);
 
         searchInput?.addEventListener('keyup', reloadTable);
-        document.getElementById('btn_export_items')?.addEventListener('click', () => {
+        document.getElementById('btn_export_items')?.addEventListener('click', (e) => {
+            e.preventDefault();
             const params = new URLSearchParams();
             const q = searchInput?.value?.trim() || '';
             if (q) params.set('q', q);

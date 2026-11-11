@@ -36,6 +36,7 @@ class DeliveryNoteFeatureTest extends TestCase
             'recipient_name' => 'Penerima Test',
             'recipient_phone' => '0800000001',
             'recipient_address' => 'Jl. Surat Jalan No. 1',
+            'ekspedisi' => 'Lalamove Prioritas',
             'surat_jalan_no' => 'SJ-OUT-MNL-TEST',
             'surat_jalan_at' => now()->toDateString(),
             'warehouse_id' => $warehouse->id,
@@ -75,7 +76,9 @@ class DeliveryNoteFeatureTest extends TestCase
             ->assertSee('Penerima Test')
             ->assertSee('Jl. Surat Jalan No. 1')
             ->assertSee('SKU-SJ-001')
-            ->assertSee('Barang Surat Jalan');
+            ->assertSee('Barang Surat Jalan')
+            ->assertSee('Ekspedisi:')
+            ->assertSee('Lalamove Prioritas');
 
         $this->actingAs($user)
             ->get(route('admin.outbound.delivery-notes.print', $transaction->id))

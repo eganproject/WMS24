@@ -60,6 +60,7 @@ class OutboundManualApiService
                     'recipient_name' => $normalized['recipient_name'],
                     'recipient_phone' => $normalized['recipient_phone'],
                     'recipient_address' => $normalized['recipient_address'],
+                    'ekspedisi' => $normalized['ekspedisi'],
                     'surat_jalan_no' => $normalized['surat_jalan_no']
                         ?: DeliveryNoteNumber::nextManual(),
                     'surat_jalan_at' => $normalized['surat_jalan_at'],
@@ -175,6 +176,7 @@ class OutboundManualApiService
             'recipient_name' => $this->nullableText($payload['recipient_name'] ?? null),
             'recipient_phone' => $this->nullableText($payload['recipient_phone'] ?? null),
             'recipient_address' => $this->nullableText($payload['recipient_address'] ?? null),
+            'ekspedisi' => $this->nullableText($payload['ekspedisi'] ?? null),
             'note' => $this->nullableText($payload['note'] ?? null),
             'items' => $items,
         ];
@@ -193,7 +195,7 @@ class OutboundManualApiService
             ->values()
             ->all();
 
-        return hash('sha256', json_encode([
+        $hashPayload = [
             'warehouse_code' => $payload['warehouse_code'],
             'transacted_at' => $payload['transacted_at']->toIso8601String(),
             'ref_no' => $payload['ref_no'],
@@ -204,7 +206,14 @@ class OutboundManualApiService
             'recipient_address' => $payload['recipient_address'],
             'note' => $payload['note'],
             'items' => $items,
-        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
+        ];
+
+        // Hanya ikut di-hash bila terisi, agar hash transaksi lama (sebelum field ini ada) tetap cocok saat replay.
+        if ($payload['ekspedisi'] !== null) {
+            $hashPayload['ekspedisi'] = $payload['ekspedisi'];
+        }
+
+        return hash('sha256', json_encode($hashPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
     }
 
     private function replay(OutboundTransaction $transaction, string $requestHash): array

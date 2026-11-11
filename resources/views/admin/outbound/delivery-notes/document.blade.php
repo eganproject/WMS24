@@ -358,6 +358,11 @@
                 <div class="dn-note">
                     <strong>Catatan:</strong><br>
                     {{ $transaction->note ?: 'Barang telah diterima/diserahkan sesuai daftar item di atas.' }}
+                    @if($transaction->ekspedisi)
+                        <br><br>
+                        <strong>Ekspedisi:</strong><br>
+                        {{ $transaction->ekspedisi }}
+                    @endif
                 </div>
 
                 <div class="dn-signatures">

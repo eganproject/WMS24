@@ -46,6 +46,7 @@ class StoreOutboundManualRequest extends FormRequest
             'recipient_name' => ['nullable', 'string', 'max:150'],
             'recipient_phone' => ['nullable', 'string', 'max:50'],
             'recipient_address' => ['nullable', 'string', 'max:1000'],
+            'ekspedisi' => ['nullable', 'string', 'max:150'],
             'note' => ['nullable', 'string'],
             'items' => ['required', 'array', 'min:1', 'max:500'],
             'items.*.sku' => ['required', 'string', 'max:100', 'distinct', 'exists:items,sku'],

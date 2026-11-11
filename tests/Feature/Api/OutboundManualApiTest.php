@@ -92,6 +92,32 @@ class OutboundManualApiTest extends TestCase
         $this->assertDatabaseCount('outbound_items', 1);
     }
 
+    public function test_it_stores_optional_ekspedisi_and_keeps_it_in_idempotency(): void
+    {
+        $warehouse = $this->createWarehouse('GUDANG_DISPLAY');
+        $item = $this->createItem('SKU-API-OUT-1');
+        $this->setStock($warehouse, $item, 10);
+
+        $payload = $this->payload();
+        $payload['ekspedisi'] = 'Lalamove Prioritas';
+
+        $this->postJson('/api/v1/outbound/manuals', $payload, $this->headers())
+            ->assertCreated()
+            ->assertJsonPath('data.ekspedisi', 'Lalamove Prioritas');
+
+        $this->assertSame('Lalamove Prioritas', OutboundTransaction::query()->firstOrFail()->ekspedisi);
+
+        $this->postJson('/api/v1/outbound/manuals', $payload, $this->headers())
+            ->assertOk()
+            ->assertJsonPath('meta.idempotent_replay', true);
+
+        $payload['ekspedisi'] = 'JNE Reguler';
+
+        $this->postJson('/api/v1/outbound/manuals', $payload, $this->headers())
+            ->assertStatus(409)
+            ->assertJsonPath('error.code', 'IDEMPOTENCY_CONFLICT');
+    }
+
     public function test_it_rejects_insufficient_stock(): void
     {
         $warehouse = $this->createWarehouse('GUDANG_DISPLAY');

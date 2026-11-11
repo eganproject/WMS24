@@ -19,6 +19,7 @@ class OutboundTransaction extends Model
         'recipient_name',
         'recipient_phone',
         'recipient_address',
+        'ekspedisi',
         'surat_jalan_no',
         'surat_jalan_at',
         'transacted_at',

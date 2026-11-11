@@ -25,6 +25,7 @@ class OutboundManualResource extends JsonResource
                 'phone' => $this->recipient_phone,
                 'address' => $this->recipient_address,
             ],
+            'ekspedisi' => $this->ekspedisi,
             'note' => $this->note,
             'warehouse' => [
                 'code' => $this->warehouse?->code,

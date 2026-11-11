@@ -47,6 +47,7 @@ Contoh body:
   "recipient_name": "Budi",
   "recipient_phone": "081234567890",
   "recipient_address": "Jl. Contoh No. 1, Jakarta",
+  "ekspedisi": "Lalamove Prioritas",
   "note": "Kirim sebelum pukul 17.00",
   "items": [
     {
@@ -95,6 +96,8 @@ Field wajib:
 | `items.*.qty` | Qty satuan, integer minimal 1. |
 
 Field lainnya opsional. Jika `surat_jalan_no` tidak dikirim, WMS membuat nomor surat jalan otomatis.
+
+`ekspedisi` (opsional, maksimal 150 karakter) adalah nama ekspedisi/layanan kirim, misalnya `Lalamove Prioritas`. Nilainya disimpan di outbound, dikembalikan di `data.ekspedisi`, dan dicetak di kotak **Catatan** surat jalan di bawah teks catatan.
 
 Untuk `GUDANG_BESAR` (sesuai `inventory.default_warehouse_code`), setiap item wajib mengirim `koli`. Nilai `qty` harus sama dengan `koli × isi per koli` pada master item, misalnya:
 
